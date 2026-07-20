@@ -33,6 +33,7 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-hook-form": "^7.80.0",
+    "react-hot-toast": "^2.6.0",
     "react-phone-number-input": "^3.4.13",
     "react-redux": "^9.2.0",
     "react-router-dom": "^7.9.5",

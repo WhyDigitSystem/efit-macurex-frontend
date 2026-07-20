@@ -30,6 +30,7 @@ import ScreenAccess from "./components/masters/screenAccess/screenAccess";
 import CreateCompanyPage from "./components/masters/createCompany/companyMaster";
 import BranchMaster from "./components/masters/branch/BranchMaster";
 import RolesAndResponsibilitySetup from "./components/masters/rolesResponsibilities/RolesAndResponsibilitySetup";
+import LocationMasterList from "./components/masters/location/LocationMasterList";
 
 // Theme initializer component
 const ThemeInitializer = () => {
@@ -92,7 +93,7 @@ const AppContent = () => {
                       <Route path="/city" element={<CityMaster />} />
                       <Route path="/department" element={<DepartmentMaster />} />
                       <Route path="/designation" element={<DesignationMaster />} />
-
+ <Route path="/location" element={<LocationMasterList/>} />
 
 
                       <Route path="/financial-year" element={<FinYear />} />
