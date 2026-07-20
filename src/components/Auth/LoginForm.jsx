@@ -7,6 +7,9 @@ import {
   Shield,
   Building2,
   User,
+  ShoppingCart,
+  Package,
+  BarChart3,
 } from "lucide-react";
 import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
@@ -38,11 +41,13 @@ const AuthForm = () => {
 
   const getScreenAccess = async (orgId, role) => {
     try {
-      console.log('Fetching screen access for:', { orgId, role });
-      const response = await apiClient.get(`/api/roles/getRolesPermissionHeaderByRoleandOrgid?orgid=${orgId}&role=${role}`);
+      console.log("Fetching screen access for:", { orgId, role });
+      const response = await apiClient.get(
+        `/api/roles/getRolesPermissionHeaderByRoleandOrgid?orgid=${orgId}&role=${role}`,
+      );
 
       const userList = response?.paramObjectsMap?.userVO;
-      console.log('Screen Access Response:', userList);
+      console.log("Screen Access Response:", userList);
 
       if (Array.isArray(userList) && userList.length > 0) {
         const rolePermissions = userList[0]?.rolesPermissionVO || [];
@@ -53,15 +58,15 @@ const AuthForm = () => {
             screenName: screen.screenName,
             canRead: screen.canRead,
             canWrite: screen.canWrite,
-            canDelete: screen.canDelete
+            canDelete: screen.canDelete,
           };
         });
 
-        localStorage.setItem('screenAccess', JSON.stringify(screenAccessMap));
-        console.log('Screen access stored successfully:', screenAccessMap);
+        localStorage.setItem("screenAccess", JSON.stringify(screenAccessMap));
+        console.log("Screen access stored successfully:", screenAccessMap);
       }
     } catch (error) {
-      console.error('Error fetching screen permissions:', error);
+      console.error("Error fetching screen permissions:", error);
     }
   };
 
@@ -107,7 +112,7 @@ const AuthForm = () => {
           token: userVO.token,
           userData: userVO,
           ...response.data,
-        })
+        }),
       );
 
       // Store user data in localStorage exactly like your original component
@@ -164,15 +169,14 @@ const AuthForm = () => {
 
         // Navigate based on user type
         const userType = userVO?.userType;
-        console.log('userTypeee', userType)
-        if (userType === 'SADMIN') {
-          navigate('/new-entries');
+        console.log("userTypeee", userType);
+        if (userType === "SADMIN") {
+          navigate("/new-entries");
         } else {
-          navigate('/');
+          navigate("/");
         }
         window.location.reload(true);
       }
-
     } catch (error) {
       console.error("Login API error:", error);
       const errorMsg =
@@ -238,7 +242,7 @@ const AuthForm = () => {
               Welcome Back
             </h2>
             <p className="text-sm text-gray-400">
-             Access your ERP dashboard securely.
+              Access your ERP dashboard securely.
             </p>
           </div>
 
@@ -340,7 +344,9 @@ const AuthForm = () => {
         </div>
 
         <div className="flex-1 flex items-center justify-center p-2 relative z-10">
-          <div className="max-w-md w-full -mt-6"> {/* Added -mt-6 here */}
+          <div className="max-w-md w-full -mt-6">
+            {" "}
+            {/* Added -mt-6 here */}
             <div className="text-center mb-4">
               <div className="w-40 h-40 mx-auto flex items-center justify-center">
                 <img
@@ -361,54 +367,59 @@ const AuthForm = () => {
                 Inventory • Procurement • Sales • Finance • HR • Reports
               </p>
             </div>
-
             <div className="space-y-3">
-              {/* Inbound */}
-              <div className="bg-white/5 backdrop-blur-md rounded-xl p-4 border border-white/10 hover:bg-white/10 transition-all duration-300 group">
+              {/* Procurement */}
+              <div className="bg-white/5 backdrop-blur-md rounded-xl p-4 border border-emerald-500/20 hover:bg-white/10 hover:border-emerald-400/40 transition-all duration-300 group">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-emerald-500 rounded-lg flex items-center justify-center group-hover:scale-105 transition-transform">
-                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15l5 5 5-5M12 20V4" />
-                    </svg>
+                  <div className="w-11 h-11 bg-gradient-to-br from-emerald-500 to-green-600 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                    <ShoppingCart className="w-5 h-5 text-white" />
                   </div>
+
                   <div className="text-left">
-                    <h4 className="text-white font-semibold text-base">Inbound Operations</h4>
-                    <p className="text-blue-100/80 text-xs">
-                      GRN, Putaway & Receiving Management
+                    <h4 className="text-white font-semibold text-base">
+                      Procurement
+                    </h4>
+
+                    <p className="text-emerald-100/80 text-xs">
+                      Purchase Orders, Vendors & Goods Receipt
                     </p>
                   </div>
                 </div>
               </div>
 
-              {/* Outbound */}
-              <div className="bg-white/5 backdrop-blur-md rounded-xl p-4 border border-white/10 hover:bg-white/10 transition-all duration-300 group">
+              {/*   Inventory Management */}
+              <div className="bg-white/5 backdrop-blur-md rounded-xl p-4 border border-sky-500/20 hover:bg-white/10 hover:border-sky-400/40 transition-all duration-300 group">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center group-hover:scale-105 transition-transform">
-                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" />
-                    </svg>
+                  <div className="w-11 h-11 bg-gradient-to-br from-sky-500 to-cyan-600 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                    <Package className="w-5 h-5 text-white" />
                   </div>
+
                   <div className="text-left">
-                    <h4 className="text-white font-semibold text-base">Outbound Operations</h4>
-                    <p className="text-blue-100/80 text-xs">
-                      Picking, Packing & Dispatch Management
+                    <h4 className="text-white font-semibold text-base">
+                      Inventory Management
+                    </h4>
+
+                    <p className="text-sky-100/80 text-xs">
+                      Real-time Stock, Warehouse & Bin Tracking
                     </p>
                   </div>
                 </div>
               </div>
 
-              {/* Inventory */}
-              <div className="bg-white/5 backdrop-blur-md rounded-xl p-4 border border-white/10 hover:bg-white/10 transition-all duration-300 group">
+              {/* Business Analytics */}
+              <div className="bg-white/5 backdrop-blur-md rounded-xl p-4 border border-violet-500/20 hover:bg-white/10 hover:border-violet-400/40 transition-all duration-300 group">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center group-hover:scale-105 transition-transform">
-                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7L12 3 4 7m16 0v10l-8 4m8-14l-8 4m0 10l-8-4V7m8 14V11M4 7l8 4" />
-                    </svg>
+                  <div className="w-11 h-11 bg-gradient-to-br from-violet-500 to-fuchsia-600 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                    <BarChart3 className="w-5 h-5 text-white" />
                   </div>
+
                   <div className="text-left">
-                    <h4 className="text-white font-semibold text-base">Inventory Control</h4>
-                    <p className="text-blue-100/80 text-xs">
-                      Stock Tracking, Bin Management & Reports
+                    <h4 className="text-white font-semibold text-base">
+                      Business Analytics
+                    </h4>
+
+                    <p className="text-violet-100/80 text-xs">
+                      Dashboards, Reports & Performance Insights
                     </p>
                   </div>
                 </div>
@@ -420,7 +431,10 @@ const AuthForm = () => {
 
       {/* Add the star animation styles */}
       <style jsx>{`
-        .starsec, .starthird, .starfourth, .starfifth {
+        .starsec,
+        .starthird,
+        .starfourth,
+        .starfifth {
           position: absolute;
           width: 3px;
           height: 3px;
@@ -428,36 +442,70 @@ const AuthForm = () => {
           animation: animStar 150s linear infinite;
         }
 
-        .starthird { animation-duration: 100s; }
-        .starfourth { animation-duration: 50s; }
-        .starfifth { animation-duration: 80s; }
+        .starthird {
+          animation-duration: 100s;
+        }
+        .starfourth {
+          animation-duration: 50s;
+        }
+        .starfifth {
+          animation-duration: 80s;
+        }
 
         @keyframes animStar {
-          0% { transform: translateY(0px); }
-          100% { transform: translateY(-2000px); }
+          0% {
+            transform: translateY(0px);
+          }
+          100% {
+            transform: translateY(-2000px);
+          }
         }
 
         /* Add the star patterns from your original CSS */
         .starsec {
-          box-shadow: 571px 173px #00bcd4, 1732px 143px #00bcd4, 1745px 454px #ff5722,
-            234px 784px #00bcd4, 1793px 1123px #ff9800, 1076px 504px #03a9f4,
-            633px 601px #ff5722, 350px 630px #ffeb3b, 1164px 782px #00bcd4,
-            76px 690px #3f51b5, 1825px 701px #cddc39, 1646px 578px #ffeb3b;
+          box-shadow:
+            571px 173px #00bcd4,
+            1732px 143px #00bcd4,
+            1745px 454px #ff5722,
+            234px 784px #00bcd4,
+            1793px 1123px #ff9800,
+            1076px 504px #03a9f4,
+            633px 601px #ff5722,
+            350px 630px #ffeb3b,
+            1164px 782px #00bcd4,
+            76px 690px #3f51b5,
+            1825px 701px #cddc39,
+            1646px 578px #ffeb3b;
         }
 
         .starthird {
-          box-shadow: 544px 293px #2196f3, 445px 1061px #673ab7, 928px 47px #00bcd4,
-            168px 1410px #8bc34a, 777px 782px #9c27b0, 1235px 1941px #9c27b0;
+          box-shadow:
+            544px 293px #2196f3,
+            445px 1061px #673ab7,
+            928px 47px #00bcd4,
+            168px 1410px #8bc34a,
+            777px 782px #9c27b0,
+            1235px 1941px #9c27b0;
         }
 
         .starfourth {
-          box-shadow: 104px 1690px #8bc34a, 1167px 1338px #e91e63, 345px 1652px #009688,
-            1682px 1196px #f44336, 1995px 494px #8bc34a, 428px 798px #ff5722;
+          box-shadow:
+            104px 1690px #8bc34a,
+            1167px 1338px #e91e63,
+            345px 1652px #009688,
+            1682px 1196px #f44336,
+            1995px 494px #8bc34a,
+            428px 798px #ff5722;
         }
 
         .starfifth {
-          box-shadow: 340px 1623px #f44336, 605px 349px #9c27b0, 1339px 1344px #673ab7,
-            1102px 1745px #3f51b5, 1592px 1676px #2196f3, 419px 1024px #ff9800;
+          box-shadow:
+            340px 1623px #f44336,
+            605px 349px #9c27b0,
+            1339px 1344px #673ab7,
+            1102px 1745px #3f51b5,
+            1592px 1676px #2196f3,
+            419px 1024px #ff9800;
         }
       `}</style>
     </div>

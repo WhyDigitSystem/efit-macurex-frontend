@@ -10,6 +10,7 @@ import {
   FileText,
   Settings,
   AlertTriangle,
+  Building2
 } from "lucide-react";
 import { useSelector } from "react-redux";
 import { NavLink } from "react-router-dom";
@@ -67,8 +68,9 @@ const Sidebar = () => {
       <nav className="h-full flex flex-col">
         {/* Brand */}
         <div className="flex items-center justify-center gap-3 mb-4 mt-4">
-          <div className="w-12 h-12 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl shadow-md flex items-center justify-center">
-            <Lottie animationData={truckAnimation} loop autoplay />
+          <div className="w-10 h-10 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 rounded-xl shadow-md flex items-center justify-center">
+            {/* <Lottie animationData={truckAnimation} loop autoplay /> */}
+            <Building2 size="20" className="text-white" />
           </div>
 
           {sidebarOpen && (
@@ -77,7 +79,7 @@ const Sidebar = () => {
                ERP
               </h1>
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                Logistics Management
+                Enterprise Resource Planning
               </p>
             </div>
           )}
