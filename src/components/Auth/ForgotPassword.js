@@ -7,6 +7,7 @@ import {
   Mail,
   Shield,
   Truck,
+  Building2
 } from "lucide-react";
 import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
@@ -137,11 +138,11 @@ const ForgotPassword = ({ onBackToLogin }) => {
           <div className="text-center mb-8">
             <div className="flex items-center justify-center gap-3 mb-4">
               <div className="w-12 h-12 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-                <Truck className="h-6 w-6 text-white" />
+                <Building2 className="h-6 w-6 text-white" />
               </div>
               <div className="text-left">
                 <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                  Efit WMS
+                  Efit ERP
                 </h1>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
                   Password Recovery
@@ -363,13 +364,14 @@ const ForgotPassword = ({ onBackToLogin }) => {
         <div className="flex-1 flex items-center justify-center p-8">
           <div className="max-w-md w-full">
             <div className="text-center mb-8">
-              <div className="w-32 h-32 mx-auto mb-6 bg-gradient-to-br from-white/10 to-white/5 rounded-2xl backdrop-blur-md border border-white/10 p-4 shadow-xl">
-                <Lottie
+              <div className="w-32 h-32 mx-auto mb-6 bg-gradient-to-br from-white/10 to-white/5 rounded-2xl backdrop-blur-md border border-white/10 p-4 shadow-xl flex items-center justify-center">
+                {/* <Lottie
                   animationData={truckAnimation}
                   loop={true}
                   autoplay={true}
                   style={{ width: "100%", height: "100%" }}
-                />
+                /> */}
+                <Building2 size='50' className="text-white" />
               </div>
               <h3 className="text-2xl font-bold text-white mb-4 leading-tight">
                 Secure Account Recovery
