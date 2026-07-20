@@ -1,134 +1,122 @@
 import { clsx } from "clsx";
 import Lottie from "lottie-react";
-import {
-  LayoutDashboard,
-  BookOpenCheck,
-  PackagePlus,
-  PackageCheck,
-  Wrench,
-  Boxes,
-  FileText,
-  Settings,
-  AlertTriangle,
-} from "lucide-react";
+import { LayoutDashboard, BookOpenCheck } from "lucide-react";
 import { useSelector } from "react-redux";
 import { NavLink } from "react-router-dom";
-import truckAnimation from "../../assets/lottieflow-ecommerce.json";
 import { hasScreenAccess } from "../../utils/accessControl";
 
 const Sidebar = () => {
   const sidebarOpen = useSelector((state) => state.ui.sidebarOpen);
-  const userType = localStorage.getItem("userType")?.toUpperCase();
+  const user = useSelector((state) => state.auth.user);
+
+  const userType =
+    user?.type?.toUpperCase() ||
+    localStorage.getItem("userType")?.toUpperCase();
 
   const navigation = [
     {
       name: "Dashboard",
       href: "/",
       icon: LayoutDashboard,
-      iconColor: "text-blue-500",
-      textColor: "text-blue-600 dark:text-blue-400",
-      borderColor: "border-blue-300 dark:border-blue-700",
-      bgColor: "bg-blue-50 dark:bg-blue-900/20",
+      bgColor:
+        "bg-gradient-to-br from-indigo-600 to-cyan-500 dark:from-indigo-500 dark:to-cyan-400",
       screenCode: "DASHBOARD",
     },
     {
       name: "Masters",
       href: "/masters",
       icon: BookOpenCheck,
-      iconColor: "text-emerald-500",
-      textColor: "text-emerald-600 dark:text-emerald-400",
-      borderColor: "border-emerald-300 dark:border-emerald-700",
-      bgColor: "bg-emerald-50 dark:bg-emerald-900/20",
+      bgColor:
+        "bg-gradient-to-br from-emerald-600 to-teal-500 dark:from-emerald-500 dark:to-teal-400",
       screenCode: "MASTERS",
     },
-    
   ];
 
+  // Permission filtering
   const filteredNavigation = navigation.filter((item) => {
+    // Super Admin
     if (userType === "SADMIN") {
-      return item.screenCode === "SETUP";
+      return true;
     }
 
     return hasScreenAccess(item.screenCode);
   });
 
-  if (filteredNavigation.length === 0) {
+  if (!user || filteredNavigation.length === 0) {
     return null;
   }
 
   return (
     <aside
-      aria-label="Sidebar Navigation"
+      id="sidebar"
       className={clsx(
-        "bg-white dark:bg-gray-900 border-r border-gray-100 dark:border-gray-800 transition-all duration-300 h-full",
-        sidebarOpen ? "w-64" : "w-20",
+        "bg-white dark:bg-gray-900 border-r border-gray-100 dark:border-gray-800 flex flex-col",
+
+        // Mobile
+        "absolute md:relative left-0 top-14 md:top-auto z-40",
+        "h-[calc(100%-3.5rem)] md:h-full",
+
+        sidebarOpen ? "w-[170px]" : "w-20",
+
+        // Animation
+        "transform md:transform-none",
+        "transition-transform duration-300 ease-in-out md:transition-all md:duration-300",
+
+        sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
+
+        "flex-shrink-0",
       )}
     >
-      <nav className="h-full flex flex-col">
-        {/* Brand */}
-        <div className="flex items-center justify-center gap-3 mb-4 mt-4">
-          <div className="w-12 h-12 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl shadow-md flex items-center justify-center">
-            <Lottie animationData={truckAnimation} loop autoplay />
-          </div>
+      {/* ================= Navigation ================= */}
+      <div className="mt-2 flex-1 px-1.5 space-y-0.5 overflow-y-auto">
+        {filteredNavigation.map((item) => {
+          const Icon = item.icon;
 
-          {sidebarOpen && (
-            <div>
-              <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-               ERP
-              </h1>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Logistics Management
-              </p>
-            </div>
-          )}
-        </div>
+          return (
+            <NavLink
+              key={item.name}
+              to={item.href}
+              className={({ isActive }) =>
+                clsx(
+                  "flex transition-all duration-200 group border",
+                  isActive
+                    ? "border-blue-300 dark:border-blue-700 bg-gray-100/50 dark:bg-gray-800/50"
+                    : "border-transparent hover:border-gray-200 dark:hover:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800",
+                  sidebarOpen
+                    ? "items-center px-2 py-1.5 rounded-md"
+                    : "flex-col items-center justify-center gap-0.5 px-1 py-2 rounded-md",
+                )
+              }
+            >
+              {/* Icon */}
+              <div className={clsx("rounded-md p-1.5", item.bgColor)}>
+                <Icon className="h-4 w-4 text-white" />
+              </div>
 
-        
-
-        {/* Links */}
-        <div className="flex-1 p-2 space-y-1 overflow-y-auto">
-          {filteredNavigation.map((item) => {
-            const Icon = item.icon;
-
-            return (
-              <NavLink
-                key={item.name}
-                to={item.href}
-                className={({ isActive }) =>
-                  clsx(
-                    "transition-all duration-200 border group hover:shadow-sm",
-                    isActive
-                      ? `${item.borderColor} ${item.bgColor} ${item.textColor}`
-                      : "border-transparent hover:border-gray-200 dark:hover:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400",
-                    sidebarOpen
-                      ? "flex items-center px-3 py-1 rounded-lg"
-                      : "flex flex-col items-center justify-center px-2 py-1 rounded-lg",
-                  )
-                }
-              >
-                <Icon className={`h-4 w-4 ${item.iconColor}`} />
-
-                {sidebarOpen ? (
-                  <span className="ml-3 text-[15px]">{item.name}</span>
-                ) : (
-                  <span className="mt-1 text-[12px] text-center leading-tight break-words">
-                    {item.name}
-                  </span>
+              {/* Label */}
+              <span
+                className={clsx(
+                  "font-medium text-gray-600 dark:text-gray-300",
+                  sidebarOpen
+                    ? "ml-2.5 text-sm"
+                    : "text-[10px] leading-tight text-center",
                 )}
-              </NavLink>
-            );
-          })}
-        </div>
+              >
+                {item.name}
+              </span>
+            </NavLink>
+          );
+        })}
+      </div>
 
-        {/* Version */}
-        {sidebarOpen && (
-          <div className="p-4 border-t border-gray-100 dark:border-gray-800">
-            <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
-              v1.0.0
-            </p>
-          </div>
-        )}
-      </nav>
+      {/* ================= Footer ================= */}
+      {sidebarOpen && (
+        <div className="px-2 py-2 border-t border-gray-100 dark:border-gray-800">
+          <p className="text-center text-xs text-gray-500 dark:text-gray-400">
+            Version 1.0
+          </p>
+        </div>
+      )}
     </aside>
   );
 };
