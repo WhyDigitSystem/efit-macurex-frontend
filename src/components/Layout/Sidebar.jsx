@@ -13,31 +13,57 @@ const Sidebar = () => {
     user?.type?.toUpperCase() ||
     localStorage.getItem("userType")?.toUpperCase();
 
-  const navigation = [
-    {
-      name: "Dashboard",
-      href: "/",
-      icon: LayoutDashboard,
-      bgColor:
-        "bg-gradient-to-br from-indigo-600 to-cyan-500 dark:from-indigo-500 dark:to-cyan-400",
-      screenCode: "DASHBOARD",
-    },
-    {
-      name: "Masters",
-      href: "/masters",
-      icon: BookOpenCheck,
-      bgColor:
-        "bg-gradient-to-br from-emerald-600 to-teal-500 dark:from-emerald-500 dark:to-teal-400",
-      screenCode: "MASTERS",
-    },
-  ];
+  const userEmail =
+    user?.email?.toLowerCase() || localStorage.getItem("email")?.toLowerCase();
+
+  // Special menu for sadmin@gmail.com
+  const isMainSAdmin = userEmail === "sadmin@gmail.com";
+
+  const navigation = isMainSAdmin
+    ? [
+        {
+          name: "Dashboard",
+          href: "/",
+          icon: LayoutDashboard,
+          bgColor:
+            "bg-gradient-to-br from-indigo-600 to-cyan-500 dark:from-indigo-500 dark:to-cyan-400",
+          screenCode: "DASHBOARD",
+        },
+        {
+          name: "Add Company",
+          href: "/new-entries",
+          icon: BookOpenCheck,
+          bgColor:
+            "bg-gradient-to-br from-emerald-600 to-teal-500 dark:from-emerald-500 dark:to-teal-400",
+          screenCode: "COMPANY",
+        },
+      ]
+    : [
+        {
+          name: "Dashboard",
+          href: "/",
+          icon: LayoutDashboard,
+          bgColor:
+            "bg-gradient-to-br from-indigo-600 to-cyan-500 dark:from-indigo-500 dark:to-cyan-400",
+          screenCode: "DASHBOARD",
+        },
+        {
+          name: "Masters",
+          href: "/masters",
+          icon: BookOpenCheck,
+          bgColor:
+            "bg-gradient-to-br from-emerald-600 to-teal-500 dark:from-emerald-500 dark:to-teal-400",
+          screenCode: "MASTERS",
+        },
+      ];
 
   // Permission filtering
   const filteredNavigation = navigation.filter((item) => {
-    // Super Admin
-    if (userType === "SADMIN") {
-      return true;
-    }
+    // For sadmin@gmail.com show only Dashboard & Add Company
+    if (isMainSAdmin) return true;
+
+    // Other Super Admins
+    if (userType === "SADMIN") return true;
 
     return hasScreenAccess(item.screenCode);
   });

@@ -1,4 +1,6 @@
 import React from "react";
+import SuperAdminDashboard from "./SuperAdminDashboard"; 
+
 import KPI from "../components/KPICards/DashboardKPI";
 import InventoryTrendChart from "../components/dashboardCharts/InventoryTrendChart ";
 import ChartCard from "../components/dashboardCharts/ChartCard ";
@@ -10,11 +12,21 @@ import {
   PackageX,
   TimerReset,
   Ban,
-  Truck,
-  Target,
 } from "lucide-react";
+
 const Dashboard = () => {
- 
+  // Read logged-in user from localStorage
+  const user = JSON.parse(localStorage.getItem("user") || "{}");
+
+  // Change this according to your stored object
+  const email = (user?.email || "").toLowerCase();
+
+  // Show Super Admin Dashboard
+  if (email === "sadmin@gmail.com") {
+    return <SuperAdminDashboard />;
+  }
+
+  // Normal Dashboard
   const kpiData = [
     {
       title: "Total Inventory",
@@ -59,34 +71,31 @@ const Dashboard = () => {
       bgColor: "bg-purple-50 dark:bg-purple-500/10",
     },
   ];
-  return (
-    <>
-      <section className="dashboad py-2 px-8">
-        {/*  */}
-        <section className="kpi_cards">
-          <div className="mb-2">
-            <span className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-gray-400">
-              OverView
-            </span>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
-            {kpiData.map((item, index) => (
-              <KPI key={index} {...item} />
-            ))}
-          </div>
-        </section>
 
-        <section className="Graph mt-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <InventoryTrendChart />
-            {/* chart card */}
-            <ChartCard />
-            <PieChart />
-            {/*  */}
-          </div>
-        </section>
+  return (
+    <section className="dashboard py-2 px-8">
+      <section className="kpi_cards">
+        <div className="mb-2">
+          <span className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-gray-400">
+            Overview
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+          {kpiData.map((item, index) => (
+            <KPI key={index} {...item} />
+          ))}
+        </div>
       </section>
-    </>
+
+      <section className="Graph mt-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <InventoryTrendChart />
+          <ChartCard />
+          <PieChart />
+        </div>
+      </section>
+    </section>
   );
 };
 
