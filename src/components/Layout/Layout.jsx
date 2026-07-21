@@ -2,6 +2,7 @@ import React from 'react'
 import { useSelector } from 'react-redux'
 import Header from './Header'
 import Sidebar from './Sidebar'
+import SupportTickets from "./SupportCenter";
 
 const Layout = ({ children }) => {
   const { isAuthenticated } = useSelector((state) => state.auth)
@@ -25,6 +26,8 @@ const Layout = ({ children }) => {
         <main className="flex-1 overflow-y-auto px-2 py-2">
           {children}
         </main>
+
+        <SupportTickets />
       </div>
     </div>
   );

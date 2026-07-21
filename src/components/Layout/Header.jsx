@@ -152,64 +152,45 @@ const Header = () => {
               <Menu className="h-5 w-5 text-gray-600 dark:text-gray-400" />
             </button>
           </div>
-         {/* Middle ERP Information */}
-<div className="flex-1 mx-3 overflow-hidden hidden lg:block">
-  <div className="flex items-center gap-1.5 overflow-x-auto whitespace-nowrap scrollbar-hide">
-    <span
-      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full
+
+          {/* Right section */}
+          <div className="flex items-center space-x-3">
+            <GlobalSelectionDropdown />
+            {/* ERP Information  */}
+            <div className="flex-1 mx-3 overflow-hidden hidden lg:block">
+              <div className="flex items-center gap-1.5 overflow-x-auto whitespace-nowrap scrollbar-hide">
+                <span
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full
       bg-emerald-50 dark:bg-emerald-900/30
       text-emerald-700 dark:text-emerald-300
       border border-gray-300 dark:border-gray-600
       text-xs font-medium"
-    >
-      <Building2 className="h-3.5 w-3.5" />
-      {loginBranch || "Branch"}
-    </span>
+                >
+                  <Building2 className="h-3.5 w-3.5" />
+                  {loginBranch || "Branch"}
+                </span>
 
-    <span
-      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full
+                <span
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full
       bg-amber-50 dark:bg-amber-900/30
       text-amber-700 dark:text-amber-300
       border border-gray-300 dark:border-gray-600
       text-xs font-medium"
-    >
-      <UserCog className="h-3.5 w-3.5" />
-      {loginCustomer || "Customer"}
-    </span>
+                >
+                  <UserCog className="h-3.5 w-3.5" />
+                  {loginCustomer || "Customer"}
+                </span>
 
-    <span
-      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full
+                <span
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full
       bg-blue-50 dark:bg-blue-900/30
       text-blue-700 dark:text-blue-300
       border border-gray-300 dark:border-gray-600
       text-xs font-medium"
-    >
-      <Calendar className="h-3.5 w-3.5" />
-      {loginFinYear}
-    </span>
-  </div>
-</div>
-          {/* Right section */}
-          <div className="flex items-center space-x-3">
-            <GlobalSelectionDropdown />
-            {/* Date & time */}
-            <div className="hidden xl:block">
-              <div className="flex items-center space-x-2.5 px-3 py-1 bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700/50 rounded-lg transition-colors">
-                <span className="relative flex h-1.5 w-1.5 items-center justify-center">
-                  <span className="absolute h-2.5 w-2.5 rounded-full bg-green-500/25 animate-ping [animation-duration:3s]" />
-                  <span className="relative h-1.5 w-1.5 rounded-full bg-green-500" />
+                >
+                  <Calendar className="h-3.5 w-3.5" />
+                  {loginFinYear}
                 </span>
-                <div className="text-sm tabular-nums">
-                  <span className="font-medium text-gray-900 dark:text-white">
-                    {formatTime(currentDateTime)}
-                  </span>
-                  <span className="text-gray-300 dark:text-gray-600 mx-1.5">
-                    |
-                  </span>
-                  <span className="text-gray-500 dark:text-gray-400">
-                    {formatDate(currentDateTime)}
-                  </span>
-                </div>
               </div>
             </div>
 

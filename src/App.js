@@ -31,6 +31,13 @@ import CreateCompanyPage from "./components/masters/createCompany/companyMaster"
 import BranchMaster from "./components/masters/branch/BranchMaster";
 import RolesAndResponsibilitySetup from "./components/masters/rolesResponsibilities/RolesAndResponsibilitySetup";
 import LocationMasterList from "./components/masters/location/LocationMasterList";
+import CompanyMasterList from "./components/masters/company/CompanyMasterList";
+import FinancialYearMasterList from "./components/masters/financialYear/FinancialYearMasterList";
+import PartyMasterList from "./components/masters/party/PartyMasterList";
+import ItemMasterList from "./components/masters/item/ItemMasterList";
+import UnitMasterList from "./components/masters/unit/UnitMasterList";
+import UnitConversionMasterList from "./components/masters/unitConversion/UnitConversionMasterList";
+import EmployeeMasterList from "./components/masters/employee/EmployeeMasterList";
 
 // Theme initializer component
 const ThemeInitializer = () => {
@@ -94,6 +101,14 @@ const AppContent = () => {
                       <Route path="/department" element={<DepartmentMaster />} />
                       <Route path="/designation" element={<DesignationMaster />} />
  <Route path="/location" element={<LocationMasterList/>} />
+        <Route path="/location" element={<LocationMasterList/>} />
+        <Route path="/company" element={<CompanyMasterList/>} />  
+        <Route path="/financialyear" element={<FinancialYearMasterList/>} />
+        <Route path="/party" element={<PartyMasterList/>} />
+         <Route path="/item" element={<ItemMasterList/>} />
+        <Route path="/unit" element={<UnitMasterList/>} />
+        <Route path="/unitconversion" element={<UnitConversionMasterList/>} />
+        <Route path="/employee" element={<EmployeeMasterList/>} />    
 
 
                       <Route path="/financial-year" element={<FinYear />} />
