@@ -38,6 +38,14 @@ import ItemMasterList from "./components/masters/item/ItemMasterList";
 import UnitMasterList from "./components/masters/unit/UnitMasterList";
 import UnitConversionMasterList from "./components/masters/unitConversion/UnitConversionMasterList";
 import EmployeeMasterList from "./components/masters/employee/EmployeeMasterList";
+import LocationMaster from "./components/masters/location/LocationMaster";
+import PartyMaster from "./components/masters/party/PartyMaster"
+import ItemMaster from "./components/masters/item/ItemMaster";
+import EmployeeMaster from "./components/masters/employee/EmployeeMaster";
+import CompanyMaster from "./components/masters/company/CompanyMaster";
+import FinancialYearMaster from "./components/masters/financialYear/FinancialYearMaster";
+import UnitMaster from "./components/masters/unit/UnitMaster";
+import UnitConversionMaster from "./components/masters/unitConversion/UnitConversionMaster";
 
 // Theme initializer component
 const ThemeInitializer = () => {
@@ -100,15 +108,15 @@ const AppContent = () => {
                       <Route path="/city" element={<CityMaster />} />
                       <Route path="/department" element={<DepartmentMaster />} />
                       <Route path="/designation" element={<DesignationMaster />} />
- <Route path="/location" element={<LocationMasterList/>} />
-        <Route path="/location" element={<LocationMasterList/>} />
-        <Route path="/company" element={<CompanyMasterList/>} />  
-        <Route path="/financialyear" element={<FinancialYearMasterList/>} />
-        <Route path="/party" element={<PartyMasterList/>} />
-         <Route path="/item" element={<ItemMasterList/>} />
-        <Route path="/unit" element={<UnitMasterList/>} />
-        <Route path="/unitconversion" element={<UnitConversionMasterList/>} />
-        <Route path="/employee" element={<EmployeeMasterList/>} />    
+ <Route path="/location" element={<LocationMaster/>} />
+        {/* <Route path="/location" element={<LocationMasterList/>} /> */}
+        <Route path="/company" element={<CompanyMaster/>} />  
+        <Route path="/financialyear" element={<FinancialYearMaster/>} />
+        <Route path="/party" element={<PartyMaster/>} />
+         <Route path="/item" element={<ItemMaster/>} />
+        <Route path="/unit" element={<UnitMaster/>} />
+        <Route path="/unitconversion" element={<UnitConversionMaster/>} />
+        <Route path="/employee" element={<EmployeeMaster/>} />    
 
 
                       <Route path="/financial-year" element={<FinYear />} />

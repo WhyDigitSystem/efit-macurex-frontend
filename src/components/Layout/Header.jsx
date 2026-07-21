@@ -155,7 +155,6 @@ const Header = () => {
 
           {/* Right section */}
           <div className="flex items-center space-x-3">
-            <GlobalSelectionDropdown />
             {/* ERP Information  */}
             <div className="flex-1 mx-3 overflow-hidden hidden lg:block">
               <div className="flex items-center gap-1.5 overflow-x-auto whitespace-nowrap scrollbar-hide">
@@ -193,7 +192,7 @@ const Header = () => {
                 </span>
               </div>
             </div>
-
+            <GlobalSelectionDropdown />
             {/* Theme toggle */}
             <button
               onClick={toggleTheme}

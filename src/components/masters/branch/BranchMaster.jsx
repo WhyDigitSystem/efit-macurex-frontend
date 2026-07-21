@@ -35,6 +35,7 @@ const BranchMaster = () => {
                     onAddNew={handleAddNew}
                     onEdit={handleEdit}
                     refreshTrigger={refreshTrigger}
+                    onBack={() => window.history.back()}
                 />
             ) : (
                 <BranchMasterForm

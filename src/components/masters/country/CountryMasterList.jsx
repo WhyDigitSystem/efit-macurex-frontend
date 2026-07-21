@@ -91,14 +91,14 @@ const CountryMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
 
   return (
     <CommonListViewTable
-      title="Country Master"
-      subtitle="Manage Countries"
+      title="Country"
       data={countryData}
       loading={loading}
       columns={columns}
       searchFields={searchFields}
       filterOptions={filterOptions}
       defaultFilter="all"
+      
       onBack={onBack}
       onAddNew={onAddNew}
       onEdit={handleEdit}

@@ -1,9 +1,8 @@
 import { useState } from "react";
-import StateMasterList from "./StateMasterList";
-import StateMasterForm from "./StateMasterForm";
-import stateAPI from "../../../api/stateAPI";
+import FinancialYearMasterList from "./FinancialYearMasterList";
+import FinancialYearMasterForm from "./FinancialYearMasterForm";
 
-const StateMaster = () => {
+const FinancialYearMaster = () => {
   const [screen, setScreen] = useState("list");
   const [editData, setEditData] = useState(null);
 
@@ -21,20 +20,10 @@ const StateMaster = () => {
     setScreen("list");
   };
 
-  const handleSave = async (payload) => {
-    try {
-      await stateAPI.createState(payload); // Create/Update
-      handleBack();
-    } catch (error) {
-      console.error("Error saving state:", error);
-      throw error;
-    }
-  };
-
   return (
     <>
       {screen === "list" && (
-        <StateMasterList
+        <FinancialYearMasterList
           onAddNew={handleAddNew}
           onEdit={handleEdit}
           onBack={() => window.history.back()}
@@ -42,14 +31,13 @@ const StateMaster = () => {
       )}
 
       {screen === "form" && (
-        <StateMasterForm
+        <FinancialYearMasterForm
           editData={editData}
           onBack={handleBack}
-          onSave={handleSave}
         />
       )}
     </>
   );
 };
 
-export default StateMaster;
+export default FinancialYearMaster;

@@ -244,7 +244,7 @@ const CityMasterForm = ({ onBack, onSave, editData }) => {
   }));
 
   return (
-    <div className="p-4 max-w-7xl mx-auto">
+    <div className="p-2 max-w-7xl">
       {/* HEADER */}
       <div className="flex items-center gap-2 mb-4">
         <button

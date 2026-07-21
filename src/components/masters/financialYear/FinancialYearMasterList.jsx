@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 
-const FinancialYearMasterList = ({ onAddNew, onEdit }) => {
+const FinancialYearMasterList = ({ onAddNew, onEdit,onBack }) => {
   const [financialYearData, setFinancialYearData] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -182,14 +182,14 @@ const FinancialYearMasterList = ({ onAddNew, onEdit }) => {
 
   return (
     <CommonListViewTable
-      title="Financial Year Master"
-      subtitle="Manage Financial Years"
+      title="Financial Year "
       data={financialYearData}
       loading={loading}
       columns={columns}
       searchFields={searchFields}
       filterOptions={filterOptions}
       defaultFilter="all"
+      onBack={onBack}
       onAddNew={onAddNew}
       onEdit={handleEdit}
       onView={false}

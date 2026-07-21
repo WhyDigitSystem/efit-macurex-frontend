@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 
-const UnitConversionMasterList = ({ onAddNew, onEdit }) => {
+const UnitConversionMasterList = ({ onAddNew, onEdit,onBack }) => {
   const [conversionData, setConversionData] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -182,6 +182,7 @@ const UnitConversionMasterList = ({ onAddNew, onEdit }) => {
       searchFields={searchFields}
       filterOptions={filterOptions}
       defaultFilter="all"
+      onBack={onBack}
       onAddNew={onAddNew}
       onEdit={handleEdit}
       onView={false}

@@ -3,12 +3,11 @@ import { designationAPI } from "../../../api/designationAPI";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import { toast } from "../../../utils/toast";
 
-const DesignationListView = ({ onAddNew, onEdit }) => {
+const DesignationListView = ({ onAddNew, onEdit,onBack }) => {
   const [designationData, setDesignationData] = useState([]);
   const [loading, setLoading] = useState(false);
 
   const ORG_ID = parseInt(localStorage.getItem("orgId"));
-
 
   const loadDesignations = useCallback(async () => {
     try {
@@ -19,14 +18,12 @@ const DesignationListView = ({ onAddNew, onEdit }) => {
       let designations = [];
 
       if (response?.status === true) {
-        designations =
-          response.paramObjectsMap?.designationVO || [];
+        designations = response.paramObjectsMap?.designationVO || [];
       }
 
       designations.sort((a, b) => (b.id || 0) - (a.id || 0));
 
       setDesignationData(designations);
-
     } catch (error) {
       console.error("Failed to load designations:", error);
       setDesignationData([]);
@@ -36,15 +33,11 @@ const DesignationListView = ({ onAddNew, onEdit }) => {
     }
   }, [ORG_ID]);
 
-
   useEffect(() => {
     loadDesignations();
   }, [loadDesignations]);
 
-
-
   const columns = [
-    
     {
       key: "designation",
       label: "Designation Name",
@@ -88,15 +81,7 @@ const DesignationListView = ({ onAddNew, onEdit }) => {
     },
   ];
 
-
-
-  const searchFields = [
-    "designationCode",
-    "designation",
-    "code",
-  ];
-
-
+  const searchFields = ["designationCode", "designation", "code"];
 
   const filterOptions = [
     {
@@ -120,39 +105,26 @@ const DesignationListView = ({ onAddNew, onEdit }) => {
     },
   ];
 
-
-
   return (
     <CommonListViewTable
-      title="Designation Master"
-      subtitle="Manage Designations"
-
+      title="Designation"
       data={designationData}
       loading={loading}
-
       columns={columns}
-
       searchFields={searchFields}
-
       filterOptions={filterOptions}
       defaultFilter="all"
-
+      onBack={onBack}
       onAddNew={onAddNew}
       onEdit={onEdit}
-
       onView={false}
-
       showSerialNumber={true}
-
       itemsPerPageOptions={[5, 10, 20, 50, 100]}
       defaultItemsPerPage={10}
-
       emptyMessage="No Designations found"
       loadingMessage="Loading Designations..."
-
       enableRefresh={true}
       onRefresh={loadDesignations}
-
       enableExport={true}
       exportFileName="Designations"
     />

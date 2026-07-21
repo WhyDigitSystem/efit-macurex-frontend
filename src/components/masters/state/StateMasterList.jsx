@@ -3,7 +3,7 @@ import { stateAPI } from "../../../api/stateAPI";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import { toast } from "../../../utils/toast";
 
-const StateMasterList = ({ onAddNew, onEdit,onBack }) => {
+const StateMasterList = ({ onAddNew, onEdit, onBack }) => {
   const [stateData, setStateData] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -28,7 +28,6 @@ const StateMasterList = ({ onAddNew, onEdit,onBack }) => {
       states.sort((a, b) => (b.id || 0) - (a.id || 0));
 
       setStateData(states);
-
     } catch (error) {
       console.error("Failed to load states:", error);
       setStateData([]);
@@ -38,11 +37,9 @@ const StateMasterList = ({ onAddNew, onEdit,onBack }) => {
     }
   }, [ORG_ID]);
 
-
   useEffect(() => {
     loadStates();
   }, [loadStates]);
-
 
   const columns = [
     {
@@ -103,7 +100,6 @@ const StateMasterList = ({ onAddNew, onEdit,onBack }) => {
     },
   ];
 
-
   const searchFields = [
     "stateCode",
     "stateName",
@@ -111,7 +107,6 @@ const StateMasterList = ({ onAddNew, onEdit,onBack }) => {
     "country",
     "region",
   ];
-
 
   const filterOptions = [
     {
@@ -135,38 +130,26 @@ const StateMasterList = ({ onAddNew, onEdit,onBack }) => {
     },
   ];
 
-
   return (
     <CommonListViewTable
-      title="State Master"
-      subtitle="Manage States"
-
+      title="State"
       data={stateData}
       loading={loading}
-
       columns={columns}
-
       searchFields={searchFields}
-
       filterOptions={filterOptions}
       defaultFilter="all"
-onBack={onBack}
+      onBack={onBack}
       onAddNew={onAddNew}
       onEdit={onEdit}
-
       onView={false}
-
       showSerialNumber={true}
-
       itemsPerPageOptions={[5, 10, 20, 50, 100]}
       defaultItemsPerPage={10}
-
       emptyMessage="No States found"
       loadingMessage="Loading States..."
-
       enableRefresh={true}
       onRefresh={loadStates}
-
       enableExport={true}
       exportFileName="States"
     />

@@ -3,12 +3,11 @@ import { departmentAPI } from "../../../api/departmentAPI";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import { toast } from "../../../utils/toast";
 
-const DepartmentListView = ({ onAddNew, onEdit }) => {
+const DepartmentListView = ({ onAddNew, onEdit,onBack }) => {
   const [departmentData, setDepartmentData] = useState([]);
   const [loading, setLoading] = useState(false);
 
   const ORG_ID = parseInt(localStorage.getItem("orgId"));
-
 
   const loadDepartments = useCallback(async () => {
     try {
@@ -25,7 +24,6 @@ const DepartmentListView = ({ onAddNew, onEdit }) => {
       departments.sort((a, b) => (b.id || 0) - (a.id || 0));
 
       setDepartmentData(departments);
-
     } catch (error) {
       console.error("Failed to load departments:", error);
       setDepartmentData([]);
@@ -35,12 +33,9 @@ const DepartmentListView = ({ onAddNew, onEdit }) => {
     }
   }, [ORG_ID]);
 
-
   useEffect(() => {
     loadDepartments();
   }, [loadDepartments]);
-
-
 
   const columns = [
     {
@@ -93,14 +88,7 @@ const DepartmentListView = ({ onAddNew, onEdit }) => {
     },
   ];
 
-
-
-  const searchFields = [
-    "code",
-    "departmentName",
-  ];
-
-
+  const searchFields = ["code", "departmentName"];
 
   const filterOptions = [
     {
@@ -124,39 +112,27 @@ const DepartmentListView = ({ onAddNew, onEdit }) => {
     },
   ];
 
-
-
   return (
     <CommonListViewTable
-      title="Department Master"
-      subtitle="Manage Departments"
-
+      title="Department"
+    
       data={departmentData}
       loading={loading}
-
       columns={columns}
-
       searchFields={searchFields}
-
       filterOptions={filterOptions}
       defaultFilter="all"
-
+      onBack={onBack}
       onAddNew={onAddNew}
       onEdit={onEdit}
-
       onView={false}
-
       showSerialNumber={true}
-
       itemsPerPageOptions={[5, 10, 20, 50, 100]}
       defaultItemsPerPage={10}
-
       emptyMessage="No Departments found"
       loadingMessage="Loading Departments..."
-
       enableRefresh={true}
       onRefresh={loadDepartments}
-
       enableExport={true}
       exportFileName="Departments"
     />

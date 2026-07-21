@@ -277,7 +277,7 @@ const BranchMasterForm = ({ onBack, onSaveSuccess, editData }) => {
     }));
 
     return (
-        <div className="p-6 max-w-7xl mx-auto">
+        <div className="p-2 max-w-7xl">
             {/* HEADER - Similar to CarrierMasterForm */}
             <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-4">

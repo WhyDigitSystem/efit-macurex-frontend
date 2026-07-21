@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 
-const CompanyMasterList = ({ onAddNew, onEdit }) => {
+const CompanyMasterList = ({ onAddNew, onEdit,onBack}) => {
   const [companyData, setCompanyData] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -184,14 +184,14 @@ const CompanyMasterList = ({ onAddNew, onEdit }) => {
 
   return (
     <CommonListViewTable
-      title="Company Master"
-      subtitle="Manage Companies"
+      title="Company"
       data={companyData}
       loading={loading}
       columns={columns}
       searchFields={searchFields}
       filterOptions={filterOptions}
       defaultFilter="all"
+      onBack={onBack}
       onAddNew={onAddNew}
       onEdit={handleEdit}
       onView={false}

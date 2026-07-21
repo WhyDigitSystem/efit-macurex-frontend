@@ -3,7 +3,7 @@ import masterAPI from "../../../api/cityAPI";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import { toast } from "../../../utils/toast";
 
-const CityMasterList = ({ onAddNew, onEdit }) => {
+const CityMasterList = ({ onAddNew, onEdit,onBack }) => {
   const [cityData, setCityData] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -129,14 +129,14 @@ const CityMasterList = ({ onAddNew, onEdit }) => {
 
   return (
     <CommonListViewTable
-      title="City Master"
-      subtitle="Manage Cities"
+      title="City"
       data={cityData}
       loading={loading}
       columns={columns}
       searchFields={searchFields}
       filterOptions={filterOptions}
       defaultFilter="all"
+      onBack={onBack}
       onAddNew={onAddNew}
       onEdit={handleEdit}
       onView={false}

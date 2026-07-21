@@ -126,8 +126,8 @@ const BranchMasterList = ({ onAddNew, onEdit, refreshTrigger, onBack }) => {
 
   return (
     <CommonListViewTable
-      title="Branch Master"
-      subtitle="Manage Branches"
+      title="Branch"
+      
       data={branchData}
       loading={loading}
       columns={columns}

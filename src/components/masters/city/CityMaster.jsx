@@ -44,7 +44,7 @@ const CityMaster = ({ onBack }) => {
         <CityMasterList
           onAddNew={handleAddNew}
           onEdit={handleEdit}
-          onBack={onBack}
+          onBack={() => window.history.back()}
         />
       )}
       
