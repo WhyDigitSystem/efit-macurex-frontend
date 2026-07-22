@@ -150,12 +150,22 @@ const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
 /* ---------------------------------------------------------------------------- */
 /* Generic dynamic table (Contact Whom / Address Book / Sales-Purchase Item)   */
 
-const DynamicTable = ({ title, columns, rows, onCellChange, onAddRow, onRemoveRow }) => {
+const DynamicTable = ({
+  title,
+  columns,
+  rows,
+  onCellChange,
+  onAddRow,
+  onRemoveRow,
+}) => {
   const cellInputClasses =
-    "w-full h-[28px] px-1.5 rounded border text-xs leading-none bg-transparent " +
-    "border-transparent hover:border-gray-300 dark:hover:border-gray-600 " +
+    "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
+    "bg-white dark:bg-gray-900 " +
+    "border-gray-300 dark:border-gray-600 " +
+    "text-gray-900 dark:text-gray-100 " +
+    "placeholder-gray-400 dark:placeholder-gray-500 " +
     "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
-    "text-gray-900 dark:text-gray-100 transition-colors";
+    "dark:focus:ring-blue-400 dark:focus:border-blue-400";
 
   return (
     <div>
@@ -184,6 +194,7 @@ const DynamicTable = ({ title, columns, rows, onCellChange, onAddRow, onRemoveRo
               <th className="px-2 py-2 text-left font-semibold text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700 w-10">
                 S.No
               </th>
+
               {columns.map((col) => (
                 <th
                   key={col.key}
@@ -192,6 +203,7 @@ const DynamicTable = ({ title, columns, rows, onCellChange, onAddRow, onRemoveRo
                   {col.label}
                 </th>
               ))}
+
               <th className="px-2 py-2 border-b border-gray-200 dark:border-gray-700 w-10"></th>
             </tr>
           </thead>
@@ -202,14 +214,18 @@ const DynamicTable = ({ title, columns, rows, onCellChange, onAddRow, onRemoveRo
                 key={idx}
                 className="border-b last:border-b-0 border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900/40"
               >
-                <td className="px-2 py-1 text-gray-500 dark:text-gray-400">{idx + 1}</td>
+                <td className="px-2 py-1 text-gray-500 dark:text-gray-400">
+                  {idx + 1}
+                </td>
 
                 {columns.map((col) => (
-                  <td key={col.key} className="px-1 py-1 min-w-[140px]">
+                  <td key={col.key} className="px-2 py-1 min-w-[150px]">
                     {col.type === "select" ? (
                       <select
                         value={row[col.key]}
-                        onChange={(e) => onCellChange(idx, col.key, e.target.value)}
+                        onChange={(e) =>
+                          onCellChange(idx, col.key, e.target.value)
+                        }
                         className={cellInputClasses}
                       >
                         <option value="">-- Select --</option>
@@ -223,7 +239,9 @@ const DynamicTable = ({ title, columns, rows, onCellChange, onAddRow, onRemoveRo
                       <input
                         type="text"
                         value={row[col.key]}
-                        onChange={(e) => onCellChange(idx, col.key, e.target.value)}
+                        onChange={(e) =>
+                          onCellChange(idx, col.key, e.target.value)
+                        }
                         className={cellInputClasses}
                       />
                     )}
@@ -571,15 +589,17 @@ const PartyMasterForm = ({ data, onBack }) => {
             <div>
               <SectionHeader>Party Details</SectionHeader>
               <div className={fieldGrid}>
+               
                 <Field
                   type="select"
-                  label="Party Category(s)"
+                  label="Party Category"
                   name="partyCategories"
                   value={general.partyCategories}
                   onChange={handlePartyCategoriesChange}
+                  error={fieldErrors.salutation}
                   options={PARTY_CATEGORIES}
-                  multiple
-                  className="col-span-2"
+                  required
+                   className="col-span-2"
                 />
                 <Field
                   type="select"
@@ -835,17 +855,17 @@ const PartyMasterForm = ({ data, onBack }) => {
             </div>
 
             <div>
-              <SectionHeader>Address &amp; Compliance</SectionHeader>
+              
               <div className={fieldGrid}>
                 <Field
-                  type="textarea"
+                 
                   label="Address"
                   name="address"
                   value={general.address}
                   onChange={handleGeneralChange}
                   error={fieldErrors.address}
                   required
-                  className="col-span-2 md:col-span-4 xl:col-span-6"
+                  className="col-span-2 "
                 />
                 <Field
                   type="select"
@@ -1031,20 +1051,20 @@ const PartyMasterForm = ({ data, onBack }) => {
                 onChange={handleSupplierChange}
               />
               <Field
-                type="textarea"
+               
                 label="Scope Of Supply"
                 name="scopeOfSupply"
                 value={supplier.scopeOfSupply}
                 onChange={handleSupplierChange}
-                className="col-span-2 md:col-span-4 xl:col-span-6"
+                className="col-span-2 "
               />
               <Field
-                type="textarea"
+                
                 label="Basis Of Approval"
                 name="basisOfApproval"
                 value={supplier.basisOfApproval}
                 onChange={handleSupplierChange}
-                className="col-span-2 md:col-span-4 xl:col-span-6"
+                className="col-span-2 "
               />
             </div>
           </div>
@@ -1074,21 +1094,21 @@ const PartyMasterForm = ({ data, onBack }) => {
                 name="addressLine1"
                 value={shipping.addressLine1}
                 onChange={handleShippingChange}
-                className="col-span-2 md:col-span-4 xl:col-span-6"
+                className="col-span-2 "
               />
               <Field
                 label="Address Line 2"
                 name="addressLine2"
                 value={shipping.addressLine2}
                 onChange={handleShippingChange}
-                className="col-span-2 md:col-span-4 xl:col-span-6"
+                className="col-span-2 "
               />
               <Field
                 label="Address Line 3"
                 name="addressLine3"
                 value={shipping.addressLine3}
                 onChange={handleShippingChange}
-                className="col-span-2 md:col-span-4 xl:col-span-6"
+                className="col-span-2 "
               />
               <Field
                 type="select"
@@ -1099,6 +1119,7 @@ const PartyMasterForm = ({ data, onBack }) => {
                 options={CITIES}
               />
               <Field
+              
                 label="PinCode"
                 name="pincode"
                 value={shipping.pincode}
