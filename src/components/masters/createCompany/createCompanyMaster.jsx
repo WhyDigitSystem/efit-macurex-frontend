@@ -25,40 +25,7 @@ const COMPANY_SIZE_OPTIONS = [
   "500+ employees",
 ];
 
-const STORAGE_LIMIT_OPTIONS = [
-  "5 GB",
-  "10 GB",
-  "25 GB",
-  "50 GB",
-  "100 GB",
-  "Unlimited",
-];
-
 const PLAN_OPTIONS = ["Free", "Starter", "Professional", "Enterprise"];
-
-const COUNTRY_OPTIONS = ["India"];
-
-const STATE_OPTIONS = [
-  "Karnataka",
-  "Maharashtra",
-  "Delhi",
-  "Tamil Nadu",
-  "Telangana",
-  "Gujarat",
-  "West Bengal",
-  "Uttar Pradesh",
-];
-
-const CITY_OPTIONS = {
-  Karnataka: ["Bengaluru", "Mysuru", "Mangaluru"],
-  Maharashtra: ["Mumbai", "Pune", "Nagpur"],
-  Delhi: ["New Delhi"],
-  "Tamil Nadu": ["Chennai", "Coimbatore"],
-  Telangana: ["Hyderabad"],
-  Gujarat: ["Ahmedabad", "Surat"],
-  "West Bengal": ["Kolkata"],
-  "Uttar Pradesh": ["Lucknow", "Noida"],
-};
 
 const CreateCompanyForm = ({ editData, onBack }) => {
   const [editingId, setEditingId] = useState(editData?.id || null);
@@ -78,31 +45,18 @@ const CreateCompanyForm = ({ editData, onBack }) => {
     companyName: "",
     companyCode: "",
     companyEmail: "",
-    mobileCountryCode: "+91",
-    mobileNumber: "",
-    gstNumber: "",
-    panNumber: "",
-    cinNumber: "",
-    website: "",
     industryType: "",
     companySize: "",
-    country: "India",
-    state: "",
-    city: "",
-    pincode: "",
-    registeredAddress: "",
 
     // Subscription Details
     selectPlan: "",
     trialPeriodDays: "30",
     maxUsers: "10",
-    storageLimit: "",
     status: "Active",
 
     // Admin Account
     adminName: "",
     adminEmail: "",
-    adminMobileCountryCode: "+91",
     adminMobileNumber: "",
     password: "",
     confirmPassword: "",
@@ -264,38 +218,24 @@ const CreateCompanyForm = ({ editData, onBack }) => {
 
       const payload = {
         ...(editingId && { id: editingId }),
-        active: formData.status === "Active",
-        address: formData.registeredAddress,
-        city: formData.city,
-        companyCode: formData.companyCode,
-        companyName: formData.companyName,
-        ceo: "",
-        country: formData.country,
-        createdBy: loginUserName,
-        currency: "",
-        email: formData.adminEmail,
-        employeeName: formData.adminName,
-        mainCurrency: "",
-        note: "",
-        password: encryptPassword(formData.password || "Wds@2022"),
-        phone: `${formData.adminMobileCountryCode}${formData.adminMobileNumber}`,
-        state: formData.state,
-        gst: formData.gstNumber,
-        webSite: formData.website,
-        zip: formData.pincode,
-        orgId: orgId,
 
-        // Additional fields captured from the new UI
+        companyName: formData.companyName,
+        companyCode: formData.companyCode,
         companyEmail: formData.companyEmail,
-        companyMobile: `${formData.mobileCountryCode}${formData.mobileNumber}`,
-        panNumber: formData.panNumber,
-        cinNumber: formData.cinNumber,
         industryType: formData.industryType,
         companySize: formData.companySize,
+
         selectPlan: formData.selectPlan,
-        trialPeriodDays: formData.trialPeriodDays,
-        maxUsers: formData.maxUsers,
-        storageLimit: formData.storageLimit,
+        trialPeriod: Number(formData.trialPeriodDays),
+        maxUsers: Number(formData.maxUsers),
+        active: formData.status === "Active",
+
+        adminName: formData.adminName,
+        adminEmail: formData.adminEmail,
+        adminMobileNo: formData.adminMobileNumber,
+
+        password: encryptPassword(formData.password),
+        conformPassword: encryptPassword(formData.confirmPassword),
       };
 
       const response = editingId
@@ -310,9 +250,11 @@ const CreateCompanyForm = ({ editData, onBack }) => {
         );
         onBack();
       } else {
-        addToast(
-          response?.paramObjectsMap?.errorMessage || "Failed to save company",
-        );
+        const msg =
+          response?.errors?.[0]?.shortMessage ||
+          response?.errors?.[0]?.longMessage ||
+          "Failed to save company";
+        addToast(msg);
       }
     } catch (err) {
       console.error("Error saving company:", err);
@@ -426,11 +368,9 @@ const CreateCompanyForm = ({ editData, onBack }) => {
                 type="text"
                 name="companyCode"
                 value={formData.companyCode}
-                disabled
-                placeholder="Auto generated"
-                className={`${cls(
-                  "companyCode",
-                )} h-8 px-2 text-sm rounded-md opacity-60 cursor-not-allowed`}
+                onChange={handleInputChange}
+                placeholder="Enter company code"
+                className={`${cls("companyName")} h-8 px-2 text-sm rounded-md`}
               />
             </div>
 
@@ -812,15 +752,10 @@ const CreateCompanyForm = ({ editData, onBack }) => {
           >
             Cancel
           </button>
+
           <button
             type="submit"
-            disabled={loading}
-            className="px-4 py-2 rounded-lg border border-blue-600 text-blue-600 dark:text-blue-400 text-xs font-medium hover:bg-blue-50 dark:hover:bg-blue-950/40 transition-colors disabled:opacity-50"
-          >
-            {loading ? "Saving..." : "Save Company"}
-          </button>
-          <button
-            type="submit"
+            onClick={() => console.log("Button clicked")}
             disabled={loading}
             className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium transition-colors disabled:opacity-50"
           >

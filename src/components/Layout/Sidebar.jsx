@@ -13,11 +13,8 @@ const Sidebar = () => {
     user?.type?.toUpperCase() ||
     localStorage.getItem("userType")?.toUpperCase();
 
-  const userEmail =
-    user?.email?.toLowerCase() || localStorage.getItem("email")?.toLowerCase();
-
   // Special menu for sadmin@gmail.com
-  const isMainSAdmin = userEmail === "sadmin@gmail.com";
+  const isMainSAdmin = userType === "SADMIN";
 
   const navigation = isMainSAdmin
     ? [

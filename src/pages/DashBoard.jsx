@@ -1,10 +1,10 @@
 import React from "react";
-import SuperAdminDashboard from "./SuperAdminDashboard"; 
+import SuperAdminDashboard from "./SuperAdminDashboard";
 
 import KPI from "../components/KPICards/DashboardKPI";
 import InventoryTrendChart from "../components/dashboardCharts/InventoryTrendChart ";
 import ChartCard from "../components/dashboardCharts/ChartCard ";
-import PieChart from '../components/dashboardCharts/InventoryStatusPieChart'
+import PieChart from "../components/dashboardCharts/InventoryStatusPieChart";
 import {
   Boxes,
   FileClock,
@@ -18,11 +18,13 @@ const Dashboard = () => {
   // Read logged-in user from localStorage
   const user = JSON.parse(localStorage.getItem("user") || "{}");
 
-  // Change this according to your stored object
-  const email = (user?.email || "").toLowerCase();
+  console.log(user);
+  console.log(user.userData);
+  console.log(user.userData?.userType);
 
-  // Show Super Admin Dashboard
-  if (email === "sadmin@gmail.com") {
+  const userType = (user.userData?.userType || "").trim().toLowerCase();
+
+  if (userType === "sadmin") {
     return <SuperAdminDashboard />;
   }
 

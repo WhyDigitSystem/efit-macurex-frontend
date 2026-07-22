@@ -15,9 +15,11 @@ const controlClasses =
   "dark:focus:ring-blue-400 dark:focus:border-blue-400 " +
   "disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed";
 
-const labelClasses = "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
+const labelClasses =
+  "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
-const fieldGrid = "grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-x-3 gap-y-2 items-start";
+const fieldGrid =
+  "grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-x-3 gap-y-2 items-start";
 
 /* ---------------------------------------------------------------------------- */
 /* Shared building blocks                                                      */
@@ -47,7 +49,11 @@ const Field = ({
           value={value}
           onChange={onChange}
           multiple={multiple}
-          className={multiple ? controlClasses.replace("h-[30px]", "h-[64px]") : controlClasses}
+          className={
+            multiple
+              ? controlClasses.replace("h-[30px]", "h-[64px]")
+              : controlClasses
+          }
         >
           {!multiple && <option value="">Select {label}</option>}
           {(options || []).map((opt) => (
@@ -57,7 +63,11 @@ const Field = ({
           ))}
         </select>
 
-        {error && <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">{error}</p>}
+        {error && (
+          <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
+            {error}
+          </p>
+        )}
       </div>
     );
   }
@@ -86,7 +96,11 @@ const Field = ({
           }
         />
 
-        {error && <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">{error}</p>}
+        {error && (
+          <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
+            {error}
+          </p>
+        )}
       </div>
     );
   }
@@ -98,9 +112,19 @@ const Field = ({
         {required && <span className="text-red-500"> *</span>}
       </label>
 
-      <input type={type} name={name} value={value} onChange={onChange} className={controlClasses} />
+      <input
+        type={type}
+        name={name}
+        value={value}
+        onChange={onChange}
+        className={controlClasses}
+      />
 
-      {error && <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">{error}</p>}
+      {error && (
+        <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
+          {error}
+        </p>
+      )}
     </div>
   );
 };
@@ -273,24 +297,53 @@ const DynamicTable = ({
 
 const PARTY_CATEGORIES = ["SUPPLIER", "CUSTOMER", "TRANSPORTER", "CONTRACTOR"];
 const SALUTATIONS = ["Mr.", "Mrs.", "Ms.", "M/s.", "Dr."];
-const PARTY_TYPES = ["PVT.LTD", "LTD", "LLP", "PROPRIETORSHIP", "PARTNERSHIP", "INDIVIDUAL"];
+const PARTY_TYPES = [
+  "PVT.LTD",
+  "LTD",
+  "LLP",
+  "PROPRIETORSHIP",
+  "PARTNERSHIP",
+  "INDIVIDUAL",
+];
 const ACCOUNT_NAMES = ["Sundry Creditors", "Sundry Debtors"];
 const YES_NO = ["YES", "NO"];
 const GROUP_INDIVIDUAL = ["Group", "Individual"];
-const SUPPLIER_CATEGORIES = ["LOCAL SUPPLIER", "IMPORT SUPPLIER", "SERVICE PROVIDER"];
+const SUPPLIER_CATEGORIES = [
+  "LOCAL SUPPLIER",
+  "IMPORT SUPPLIER",
+  "SERVICE PROVIDER",
+];
 const PLANT_IDS = ["BANGALORE", "CHENNAI", "PUNE", "DELHI"];
 const GST_TYPES = ["Registered", "Unregistered", "Composition"];
-const GST_STATES = ["Karnataka", "Maharashtra", "Tamil Nadu", "Delhi", "Gujarat"];
+const GST_STATES = [
+  "Karnataka",
+  "Maharashtra",
+  "Tamil Nadu",
+  "Delhi",
+  "Gujarat",
+];
 const BELONGS_TO = ["APPLIANCES", "ELECTRICALS", "PACKAGING", "RAW MATERIAL"];
 const ZONE_IDS = ["North", "South", "East", "West"];
 const IF_GROUPS = ["Group A", "Group B", "Group C"];
 const CITIES = ["Bangalore", "Chennai", "Mumbai", "Delhi", "Pune"];
-const COUNTRIES = ["India", "United States", "United Kingdom", "UAE", "Singapore"];
+const COUNTRIES = [
+  "India",
+  "United States",
+  "United Kingdom",
+  "UAE",
+  "Singapore",
+];
 const ECC_TYPES = ["Manufacturer", "Dealer", "Trader"];
 const ISO_STATUS = ["Certified", "In Progress", "Not Applicable", "Expired"];
 const ITEM_CODES = ["RM-001", "RM-002", "PKG-001", "SVC-001"];
 const MODE_OF_PAYMENT = ["NEFT", "RTGS", "Cheque", "Cash", "IMPS"];
-const CONTACT_PURPOSES = ["Sales", "Accounts", "Logistics", "Quality", "Management"];
+const CONTACT_PURPOSES = [
+  "Sales",
+  "Accounts",
+  "Logistics",
+  "Quality",
+  "Management",
+];
 const ADDRESS_TYPES = ["Registered Office", "Branch", "Factory", "Warehouse"];
 
 /* ---------------------------------------------------------------------------- */
@@ -430,18 +483,29 @@ const PartyMasterForm = ({ data, onBack }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
 
-  const [general, setGeneral] = useState({ ...emptyGeneralInfo(), ...data?.general });
-  const [supplier, setSupplier] = useState({ ...emptySupplierDetails(), ...data?.supplier });
-  const [shipping, setShipping] = useState({ ...emptyShippingAddress(), ...data?.shipping });
+  const [general, setGeneral] = useState({
+    ...emptyGeneralInfo(),
+    ...data?.general,
+  });
+  const [supplier, setSupplier] = useState({
+    ...emptySupplierDetails(),
+    ...data?.supplier,
+  });
+  const [shipping, setShipping] = useState({
+    ...emptyShippingAddress(),
+    ...data?.shipping,
+  });
   const [bank, setBank] = useState({ ...emptyBankDetails(), ...data?.bank });
 
   const [contactRows, setContactRows] = useState(
-    data?.contactWhom?.length ? data.contactWhom : [emptyContactRow()]
+    data?.contactWhom?.length ? data.contactWhom : [emptyContactRow()],
   );
   const [addressBookRows, setAddressBookRows] = useState(
-    data?.addressBook?.length ? data.addressBook : [emptyAddressBookRow()]
+    data?.addressBook?.length ? data.addressBook : [emptyAddressBookRow()],
   );
-  const [itemRows, setItemRows] = useState(data?.items?.length ? data.items : [emptyItemRow()]);
+  const [itemRows, setItemRows] = useState(
+    data?.items?.length ? data.items : [emptyItemRow()],
+  );
 
   /* -- generic handlers for the plain-object tabs -- */
   const makeChangeHandler = (setter) => (e) => {
@@ -463,13 +527,18 @@ const PartyMasterForm = ({ data, onBack }) => {
   /* -- generic handlers for dynamic-table tabs -- */
   const makeTableHandlers = (setter, emptyRow) => ({
     onCellChange: (idx, key, value) =>
-      setter((prev) => prev.map((row, i) => (i === idx ? { ...row, [key]: value } : row))),
+      setter((prev) =>
+        prev.map((row, i) => (i === idx ? { ...row, [key]: value } : row)),
+      ),
     onAddRow: () => setter((prev) => [...prev, emptyRow()]),
     onRemoveRow: (idx) => setter((prev) => prev.filter((_, i) => i !== idx)),
   });
 
   const contactHandlers = makeTableHandlers(setContactRows, emptyContactRow);
-  const addressBookHandlers = makeTableHandlers(setAddressBookRows, emptyAddressBookRow);
+  const addressBookHandlers = makeTableHandlers(
+    setAddressBookRows,
+    emptyAddressBookRow,
+  );
   const itemHandlers = makeTableHandlers(setItemRows, emptyItemRow);
 
   const validate = () => {
@@ -478,13 +547,16 @@ const PartyMasterForm = ({ data, onBack }) => {
     if (!general.partyName.trim()) errors.partyName = "Party Name is required";
     if (!general.salutation) errors.salutation = "Salutation is required";
     if (!general.partyType) errors.partyType = "Party Type is required";
-    if (!general.groupIndividual) errors.groupIndividual = "This field is required";
-    if (!general.supplierCategory) errors.supplierCategory = "Supplier Category is required";
+    if (!general.groupIndividual)
+      errors.groupIndividual = "This field is required";
+    if (!general.supplierCategory)
+      errors.supplierCategory = "Supplier Category is required";
     if (!general.plantId) errors.plantId = "Plant ID is required";
     if (!general.excisable) errors.excisable = "This field is required";
     if (!general.gstType) errors.gstType = "GST Type is required";
     if (!general.gstState) errors.gstState = "GST State is required";
-    if (!general.gstStateId.trim()) errors.gstStateId = "GST State ID is required";
+    if (!general.gstStateId.trim())
+      errors.gstStateId = "GST State ID is required";
     if (!general.isIgstAppl) errors.isIgstAppl = "This field is required";
     if (!general.belongsTo) errors.belongsTo = "This field is required";
     if (!general.address.trim()) errors.address = "Address is required";
@@ -493,7 +565,10 @@ const PartyMasterForm = ({ data, onBack }) => {
     if (!general.country) errors.country = "Country is required";
     if (!general.eccType) errors.eccType = "ECC Type is required";
 
-    if (general.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(general.email.trim()))
+    if (
+      general.email &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(general.email.trim())
+    )
       errors.email = "Enter a valid email address";
 
     setFieldErrors(errors);
@@ -582,14 +657,12 @@ const PartyMasterForm = ({ data, onBack }) => {
 
       {/* Card */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
-
         {/* ---------------- General Info ---------------- */}
         {activeTab === "general" && (
           <>
             <div>
               <SectionHeader>Party Details</SectionHeader>
               <div className={fieldGrid}>
-               
                 <Field
                   type="select"
                   label="Party Category"
@@ -599,7 +672,7 @@ const PartyMasterForm = ({ data, onBack }) => {
                   error={fieldErrors.salutation}
                   options={PARTY_CATEGORIES}
                   required
-                   className="col-span-2"
+                  className="col-span-2"
                 />
                 <Field
                   type="select"
@@ -737,7 +810,12 @@ const PartyMasterForm = ({ data, onBack }) => {
                   options={GST_TYPES}
                   required
                 />
-                <Field label="GSTN No" name="gstnNo" value={general.gstnNo} onChange={handleGeneralChange} />
+                <Field
+                  label="GSTN No"
+                  name="gstnNo"
+                  value={general.gstnNo}
+                  onChange={handleGeneralChange}
+                />
                 <Field
                   type="select"
                   label="GST State"
@@ -855,10 +933,8 @@ const PartyMasterForm = ({ data, onBack }) => {
             </div>
 
             <div>
-              
               <div className={fieldGrid}>
                 <Field
-                 
                   label="Address"
                   name="address"
                   value={general.address}
@@ -917,7 +993,12 @@ const PartyMasterForm = ({ data, onBack }) => {
                   value={general.website}
                   onChange={handleGeneralChange}
                 />
-                <Field label="CINNO" name="cinNo" value={general.cinNo} onChange={handleGeneralChange} />
+                <Field
+                  label="CINNO"
+                  name="cinNo"
+                  value={general.cinNo}
+                  onChange={handleGeneralChange}
+                />
                 <Field
                   type="number"
                   label="Over Due Int. %"
@@ -931,8 +1012,18 @@ const PartyMasterForm = ({ data, onBack }) => {
                   value={general.introdBy}
                   onChange={handleGeneralChange}
                 />
-                <Field label="CST No." name="cstNo" value={general.cstNo} onChange={handleGeneralChange} />
-                <Field label="ECC. No" name="eccNo" value={general.eccNo} onChange={handleGeneralChange} />
+                <Field
+                  label="CST No."
+                  name="cstNo"
+                  value={general.cstNo}
+                  onChange={handleGeneralChange}
+                />
+                <Field
+                  label="ECC. No"
+                  name="eccNo"
+                  value={general.eccNo}
+                  onChange={handleGeneralChange}
+                />
                 <Field
                   type="select"
                   label="ECC Type"
@@ -943,11 +1034,36 @@ const PartyMasterForm = ({ data, onBack }) => {
                   options={ECC_TYPES}
                   required
                 />
-                <Field label="PAN" name="pan" value={general.pan} onChange={handleGeneralChange} />
-                <Field label="ESI No." name="esiNo" value={general.esiNo} onChange={handleGeneralChange} />
-                <Field label="TIN No." name="tinNo" value={general.tinNo} onChange={handleGeneralChange} />
-                <Field label="KST No." name="kstNo" value={general.kstNo} onChange={handleGeneralChange} />
-                <Field label="Phone" name="phone" value={general.phone} onChange={handleGeneralChange} />
+                <Field
+                  label="PAN"
+                  name="pan"
+                  value={general.pan}
+                  onChange={handleGeneralChange}
+                />
+                <Field
+                  label="ESI No."
+                  name="esiNo"
+                  value={general.esiNo}
+                  onChange={handleGeneralChange}
+                />
+                <Field
+                  label="TIN No."
+                  name="tinNo"
+                  value={general.tinNo}
+                  onChange={handleGeneralChange}
+                />
+                <Field
+                  label="KST No."
+                  name="kstNo"
+                  value={general.kstNo}
+                  onChange={handleGeneralChange}
+                />
+                <Field
+                  label="Phone"
+                  name="phone"
+                  value={general.phone}
+                  onChange={handleGeneralChange}
+                />
                 <Field
                   label="Contact Person"
                   name="contactPerson"
@@ -955,8 +1071,18 @@ const PartyMasterForm = ({ data, onBack }) => {
                   onChange={handleGeneralChange}
                   className="col-span-2"
                 />
-                <Field label="Mobile" name="mobile" value={general.mobile} onChange={handleGeneralChange} />
-                <Field label="Fax" name="fax" value={general.fax} onChange={handleGeneralChange} />
+                <Field
+                  label="Mobile"
+                  name="mobile"
+                  value={general.mobile}
+                  onChange={handleGeneralChange}
+                />
+                <Field
+                  label="Fax"
+                  name="fax"
+                  value={general.fax}
+                  onChange={handleGeneralChange}
+                />
                 <Field
                   type="date"
                   label="Eff. from"
@@ -974,7 +1100,12 @@ const PartyMasterForm = ({ data, onBack }) => {
           <DynamicTable
             title="Contact Whom"
             columns={[
-              { key: "purpose", label: "Purpose", type: "select", options: CONTACT_PURPOSES },
+              {
+                key: "purpose",
+                label: "Purpose",
+                type: "select",
+                options: CONTACT_PURPOSES,
+              },
               { key: "contactName", label: "Contact Name" },
               { key: "designation", label: "Designation" },
               { key: "phone", label: "Phone" },
@@ -992,7 +1123,12 @@ const PartyMasterForm = ({ data, onBack }) => {
           <DynamicTable
             title="Address Book"
             columns={[
-              { key: "type", label: "Type", type: "select", options: ADDRESS_TYPES },
+              {
+                key: "type",
+                label: "Type",
+                type: "select",
+                options: ADDRESS_TYPES,
+              },
               { key: "name", label: "Name" },
               { key: "address", label: "Address" },
               { key: "phone", label: "Phone" },
@@ -1051,7 +1187,6 @@ const PartyMasterForm = ({ data, onBack }) => {
                 onChange={handleSupplierChange}
               />
               <Field
-               
                 label="Scope Of Supply"
                 name="scopeOfSupply"
                 value={supplier.scopeOfSupply}
@@ -1059,7 +1194,6 @@ const PartyMasterForm = ({ data, onBack }) => {
                 className="col-span-2 "
               />
               <Field
-                
                 label="Basis Of Approval"
                 name="basisOfApproval"
                 value={supplier.basisOfApproval}
@@ -1075,7 +1209,12 @@ const PartyMasterForm = ({ data, onBack }) => {
           <DynamicTable
             title="Sales/Purchase/S.C/L.C Item"
             columns={[
-              { key: "itemCode", label: "Item Code", type: "select", options: ITEM_CODES },
+              {
+                key: "itemCode",
+                label: "Item Code",
+                type: "select",
+                options: ITEM_CODES,
+              },
               { key: "itemDescription", label: "Item Description" },
               { key: "unit", label: "Unit" },
             ]}
@@ -1119,7 +1258,6 @@ const PartyMasterForm = ({ data, onBack }) => {
                 options={CITIES}
               />
               <Field
-              
                 label="PinCode"
                 name="pincode"
                 value={shipping.pincode}
@@ -1171,7 +1309,12 @@ const PartyMasterForm = ({ data, onBack }) => {
                 onChange={handleBankChange}
                 options={MODE_OF_PAYMENT}
               />
-              <Field label="Branch" name="branch" value={bank.branch} onChange={handleBankChange} />
+              <Field
+                label="Branch"
+                name="branch"
+                value={bank.branch}
+                onChange={handleBankChange}
+              />
               <Field
                 label="IFSC / SWIFT Code"
                 name="ifscSwiftCode"
