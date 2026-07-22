@@ -247,75 +247,100 @@ const BankDetailsTable = ({
       </div>
 
       <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg">
-        <table className="w-full text-xs border-collapse">
-          <thead>
-            <tr className="bg-gray-50 dark:bg-gray-900/60">
-              <th className="px-2 py-2 text-left font-semibold text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700 w-10">
-                S.No
-              </th>
-              {BANK_COLUMNS.map((col) => (
-                <th
-                  key={col.key}
-                  className="px-2 py-2 text-left font-semibold text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700 whitespace-nowrap"
-                >
-                  {col.label}
-                </th>
-              ))}
-              <th className="px-2 py-2 text-center font-semibold text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700 whitespace-nowrap">
-                Primary Account
-              </th>
-              <th className="px-2 py-2 border-b border-gray-200 dark:border-gray-700 w-10"></th>
-            </tr>
-          </thead>
+  <table className="w-full text-xs border-collapse">
+    <thead>
+      <tr className="bg-gray-50 dark:bg-gray-900/60">
+        <th className="px-2 py-2 text-left font-semibold text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700 w-10">
+          S.No
+        </th>
 
-          <tbody>
-            {rows.map((row, idx) => (
-              <tr
-                key={idx}
-                className="border-b last:border-b-0 border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900/40"
+        {BANK_COLUMNS.map((col) => (
+          <th
+            key={col.key}
+            className="px-2 py-2 text-left font-semibold text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700 whitespace-nowrap"
+          >
+            {col.label}
+          </th>
+        ))}
+
+        <th className="px-2 py-2 text-center font-semibold text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700 whitespace-nowrap">
+          Primary Account
+        </th>
+
+        <th className="px-2 py-2 border-b border-gray-200 dark:border-gray-700 w-10"></th>
+      </tr>
+    </thead>
+
+    <tbody>
+      {rows.map((row, idx) => (
+        <tr
+          key={idx}
+          className="border-b border-gray-100 dark:border-gray-800 last:border-b-0 hover:bg-gray-50 dark:hover:bg-gray-900/40"
+        >
+          <td className="px-2 py-1 text-gray-500 dark:text-gray-400">
+            {idx + 1}
+          </td>
+
+          {BANK_COLUMNS.map((col) => (
+            <td key={col.key} className="px-2 py-1 min-w-[150px]">
+              <input
+                type="text"
+                value={row[col.key]}
+                onChange={(e) =>
+                  onCellChange(idx, col.key, e.target.value)
+                }
+                className="
+                  w-full
+                  h-[30px]
+                  px-2
+                  rounded
+                  border
+                  border-gray-300
+                  dark:border-gray-600
+                  bg-white
+                  dark:bg-gray-900
+                  text-xs
+                  text-gray-900
+                  dark:text-gray-100
+                  placeholder-gray-400
+                  dark:placeholder-gray-500
+                  transition-colors
+                  focus:outline-none
+                  focus:ring-1
+                  focus:ring-blue-500
+                  focus:border-blue-500
+                  dark:focus:ring-blue-400
+                  dark:focus:border-blue-400
+                "
+              />
+            </td>
+          ))}
+
+          <td className="px-2 py-1 text-center">
+            <input
+              type="checkbox"
+              checked={row.primary}
+              onChange={() => onSetPrimary(idx)}
+              className="h-3.5 w-3.5 accent-blue-600 dark:accent-blue-500 cursor-pointer"
+            />
+          </td>
+
+          <td className="px-2 py-1 text-center">
+            {rows.length > 1 && (
+              <button
+                type="button"
+                onClick={() => onRemoveRow(idx)}
+                className="text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
               >
-                <td className="px-2 py-1 text-gray-500 dark:text-gray-400">
-                  {idx + 1}
-                </td>
-
-                {BANK_COLUMNS.map((col) => (
-                  <td key={col.key} className="px-1 py-1 min-w-[120px]">
-                    <input
-                      type="text"
-                      value={row[col.key]}
-                      onChange={(e) =>
-                        onCellChange(idx, col.key, e.target.value)
-                      }
-                      className={cellInputClasses}
-                    />
-                  </td>
-                ))}
-
-                <td className="px-2 py-1 text-center">
-                  <input
-                    type="checkbox"
-                    checked={row.primary}
-                    onChange={() => onSetPrimary(idx)}
-                    className="h-3.5 w-3.5 accent-blue-600 dark:accent-blue-500 cursor-pointer"
-                  />
-                </td>
-
-                <td className="px-2 py-1 text-center">
-                  {rows.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => onRemoveRow(idx)}
-                      className="text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+</div>
     </div>
   );
 };

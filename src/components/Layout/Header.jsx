@@ -20,7 +20,7 @@ import { useNavigate } from "react-router-dom";
 import { useTheme } from "../../hooks/useTheme";
 import { logout } from "../../store/slices/authSlice";
 import { toggleSidebar } from "../../store/slices/uiSlice";
-import logo from "../../assets/logo.png"
+
 import efitlogo from "../../assets/EfitLogo.png";
 
 const Header = () => {
@@ -135,11 +135,11 @@ const Header = () => {
         <div className="flex items-center justify-between gap-4 h-14">
           {/* Left section */}
           <div className="flex items-center space-x-4">
-           <div className="w-30 h-20 flex-shrink-0">
+            <div className="w-28 h-12 flex-shrink-0">
               <img
-                src={logo}
+                src={efitlogo}
                 alt="Logo"
-                className=" h-full object-contain"
+                className="w-full h-full object-contain"
               />
             </div>
 
