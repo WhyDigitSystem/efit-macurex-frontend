@@ -295,7 +295,7 @@ const CreateCompanyForm = ({ editData, onBack }) => {
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center gap-2">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            {editingId ? "Edit Company" : "Create Company"}
+            {editingId ? "Edit Company" : "Company"}
           </h2>
           <span className="text-xs text-orange-500 dark:text-orange-400">
             • {editingId ? "Editing" : "New Entry"}
@@ -312,20 +312,20 @@ const CreateCompanyForm = ({ editData, onBack }) => {
       <form onSubmit={handleSubmit}>
         {/* Section 1: Company Information */}
         <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700">
-          <SectionHeader num={1} title="Company Information" />
+          <SectionHeader num={1} title="Basic Info" />
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 mt-1.5">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-2 mt-1.5">
             {/* Company Name */}
             <div>
               <label className={`${label} mb-1 text-xs`}>
-                Company Name {req}
+                Name {req}
               </label>
               <input
                 type="text"
                 name="companyName"
                 value={formData.companyName}
                 onChange={handleInputChange}
-                placeholder="Enter company name"
+                placeholder="Company Name"
                 className={`${cls("companyName")} h-8 px-2 text-sm rounded-md`}
               />
               {errMsg("companyName")}
@@ -333,13 +333,13 @@ const CreateCompanyForm = ({ editData, onBack }) => {
 
             {/* Company Code */}
             <div>
-              <label className={`${label} mb-1 text-xs`}>Company Code</label>
+              <label className={`${label} mb-1 text-xs`}>Code</label>
               <input
                 type="text"
                 name="companyCode"
                 value={formData.companyCode}
                 onChange={handleInputChange}
-                placeholder="Enter company code"
+                placeholder="Company Code"
                 className={`${cls("companyName")} h-8 px-2 text-sm rounded-md`}
               />
             </div>
@@ -347,14 +347,14 @@ const CreateCompanyForm = ({ editData, onBack }) => {
             {/* Company Email */}
             <div>
               <label className={`${label} mb-1 text-xs`}>
-                Company Email {req}
+                Email {req}
               </label>
               <input
                 type="email"
                 name="companyEmail"
                 value={formData.companyEmail}
                 onChange={handleInputChange}
-                placeholder="Enter company email"
+                placeholder="Company Email"
                 className={`${cls("companyEmail")} h-8 px-2 text-sm rounded-md`}
               />
               {errMsg("companyEmail")}
@@ -370,7 +370,7 @@ const CreateCompanyForm = ({ editData, onBack }) => {
                 value={formData.industryType}
                 onChange={handleInputChange}
                 options={INDUSTRY_OPTIONS}
-                placeholder="Select industry"
+                placeholder="Select Industry"
                 className="h-8 text-sm"
               />
               {errMsg("industryType")}
@@ -379,14 +379,14 @@ const CreateCompanyForm = ({ editData, onBack }) => {
             {/* Company Size */}
             <div>
               <label className={`${label} mb-1 text-xs`}>
-                Company Size {req}
+                Size {req}
               </label>
               <Select
                 name="companySize"
                 value={formData.companySize}
                 onChange={handleInputChange}
                 options={COMPANY_SIZE_OPTIONS}
-                placeholder="Select company size"
+                placeholder="Select Company Size"
                 className="h-8 text-sm"
               />
               {errMsg("companySize")}
@@ -556,12 +556,12 @@ const CreateCompanyForm = ({ editData, onBack }) => {
             <div className="mt-2 flex items-start gap-2 rounded-md border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/40 p-2">
               <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-600 dark:text-blue-400" />
               <p className="text-[11px] text-blue-700 dark:text-blue-300">
-                You can change subscription details later from company settings.
+                You can change subscription details later from company setup.
               </p>
             </div>
 
             {/* Next Button */}
-            <div className="mt-2 flex justify-end">
+            {/* <div className="mt-2 flex justify-end">
               <button
                 type="button"
                 onClick={() => setActiveStep(3)}
@@ -569,7 +569,7 @@ const CreateCompanyForm = ({ editData, onBack }) => {
               >
                 Next: Admin Account →
               </button>
-            </div>
+            </div> */}
           </div>
         )}
 
@@ -580,14 +580,14 @@ const CreateCompanyForm = ({ editData, onBack }) => {
               {/* Admin Name */}
               <div>
                 <label className={`${label} mb-1 text-xs`}>
-                  Admin Name {req}
+                  Name {req}
                 </label>
                 <input
                   type="text"
                   name="adminName"
                   value={formData.adminName}
                   onChange={handleInputChange}
-                  placeholder="Enter admin full name"
+                  placeholder="Admin Name"
                   className={`${cls("adminName")} h-8 px-2 text-sm`}
                 />
                 {errMsg("adminName")}
@@ -603,7 +603,7 @@ const CreateCompanyForm = ({ editData, onBack }) => {
                   name="adminEmail"
                   value={formData.adminEmail}
                   onChange={handleInputChange}
-                  placeholder="Enter admin email"
+                  placeholder="Admin Email"
                   className={`${cls("adminEmail")} h-8 px-2 text-sm`}
                 />
                 {errMsg("adminEmail")}
@@ -612,7 +612,7 @@ const CreateCompanyForm = ({ editData, onBack }) => {
               {/* Mobile Number */}
               <div>
                 <label className={`${label} mb-1 text-xs`}>
-                  Mobile Number {req}
+                  Mobile No {req}
                 </label>
 
                 <input
@@ -629,7 +629,8 @@ const CreateCompanyForm = ({ editData, onBack }) => {
                       adminMobileNumber: value,
                     }));
                   }}
-                  placeholder="Enter mobile number"
+
+                  placeholder="Mobile No"
                   maxLength={10}
                   className={`${cls("adminMobileNumber")} h-8 px-2 text-sm`}
                 />
@@ -649,7 +650,7 @@ const CreateCompanyForm = ({ editData, onBack }) => {
                     name="password"
                     value={formData.password}
                     onChange={handleInputChange}
-                    placeholder="Enter password"
+                    placeholder="Password"
                     className={`${cls("password")} h-8 px-2 pr-8 text-sm`}
                   />
 
@@ -729,7 +730,7 @@ const CreateCompanyForm = ({ editData, onBack }) => {
             disabled={loading}
             className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium transition-colors disabled:opacity-50"
           >
-            {loading ? "Saving..." : "Save & Invite Admin"}
+            {loading ? "Saving..." : "Save"}
           </button>
         </div>
       </form>
