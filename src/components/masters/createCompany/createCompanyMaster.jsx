@@ -100,12 +100,7 @@ const CreateCompanyForm = ({ editData, onBack }) => {
   };
 
   // Fields that belong to each step, used to decide which tab to jump to on error
-  const step2Fields = [
-    "selectPlan",
-    "trialPeriodDays",
-    "maxUsers",
-    "storageLimit",
-  ];
+  const step2Fields = ["selectPlan", "trialPeriodDays", "maxUsers"];
   const step3Fields = [
     "adminName",
     "adminEmail",
@@ -113,12 +108,10 @@ const CreateCompanyForm = ({ editData, onBack }) => {
     "password",
     "confirmPassword",
   ];
-
   const validateForm = () => {
     const newErrors = {};
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const nameRegex = /^[A-Za-z ]*$/;
-    const pincodeRegex = /^[0-9]{4,10}$/;
 
     if (!formData.companyName) {
       newErrors.companyName = "Company Name is required";
@@ -134,33 +127,12 @@ const CreateCompanyForm = ({ editData, onBack }) => {
       newErrors.companyEmail = "Invalid email format";
     }
 
-    if (!formData.mobileNumber) {
-      newErrors.mobileNumber = "Mobile Number is required";
-    } else if (!/^[0-9]{10}$/.test(formData.mobileNumber)) {
-      newErrors.mobileNumber = "Enter a valid 10-digit mobile number";
-    }
-
     if (!formData.industryType)
       newErrors.industryType = "Industry Type is required";
     if (!formData.companySize)
       newErrors.companySize = "Company Size is required";
-    if (!formData.country) newErrors.country = "Country is required";
-    if (!formData.state) newErrors.state = "State is required";
-    if (!formData.city) newErrors.city = "City is required";
-
-    if (!formData.pincode) {
-      newErrors.pincode = "Pincode is required";
-    } else if (!pincodeRegex.test(formData.pincode)) {
-      newErrors.pincode = "Enter a valid pincode";
-    }
-
-    if (!formData.registeredAddress) {
-      newErrors.registeredAddress = "Registered Address is required";
-    }
 
     if (!formData.selectPlan) newErrors.selectPlan = "Please select a plan";
-    if (!formData.storageLimit)
-      newErrors.storageLimit = "Please select a storage limit";
 
     if (!formData.adminName) {
       newErrors.adminName = "Admin Name is required";
@@ -198,7 +170,6 @@ const CreateCompanyForm = ({ editData, onBack }) => {
 
     setErrors(newErrors);
 
-    // Auto-jump to whichever tab has the first error, so the user can see it
     const firstErrorKey = Object.keys(newErrors)[0];
     if (firstErrorKey) {
       if (step3Fields.includes(firstErrorKey)) setActiveStep(3);
@@ -207,7 +178,6 @@ const CreateCompanyForm = ({ editData, onBack }) => {
 
     return Object.keys(newErrors).length === 0;
   };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
 

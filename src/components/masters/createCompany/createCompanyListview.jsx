@@ -2,7 +2,7 @@
 import { Pencil, Plus, Search, Eye } from "lucide-react";
 import { useEffect, useState } from "react";
 import { superAdminAPI } from "../../../api/superAdminApi";
-const CreateCompanyListview = ({ onAddNew, onEdit }) => {
+const CreateCompanyListview = ({ onAddNew, onEdit, onView }) => {
   const [search, setSearch] = useState("");
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -206,7 +206,7 @@ const CreateCompanyListview = ({ onAddNew, onEdit }) => {
                       </td>
 
                       <td className="p-2 text-gray-700 dark:text-gray-300">
-                        {company.phoneNo || "-"}
+                        {company.adminMobileNo || "-"}
                       </td>
 
                       <td className="p-2 text-gray-700 dark:text-gray-300">
@@ -225,15 +225,10 @@ const CreateCompanyListview = ({ onAddNew, onEdit }) => {
                         </span>
                       </td>
 
-                      <td className="p-2 flex justify-center gap-3">
+                      <td className="p-2 flex justify-center items-center gap-3">
                         <Pencil
                           className="h-4 w-4 text-blue-500 hover:text-blue-600 cursor-pointer"
                           onClick={() => onEdit(company)}
-                        />
-
-                        <Eye
-                          className="h-4 w-4 text-gray-500 hover:text-gray-600 cursor-pointer"
-                          onClick={() => console.log(company)}
                         />
                       </td>
                     </tr>

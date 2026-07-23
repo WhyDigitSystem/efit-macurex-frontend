@@ -20,6 +20,18 @@ export const superAdminAPI = {
       throw error;
     }
   },
+  updateCompany: async (companyDTO) => {
+    try {
+      const res = await apiClient.put(
+        "/api/commonmaster/updateCompany",
+        companyDTO,
+      );
+      return res;
+    } catch (error) {
+      console.error("Error updating company:", error);
+      throw error;
+    }
+  },
 };
 
 export default superAdminAPI;
