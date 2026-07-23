@@ -1,6 +1,8 @@
 import { ArrowLeft, Save, X, Plus, Trash2, UploadCloud } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-// import { masterAPI } from "../../../api/companyAPI";
+import { superAdminAPI } from "../../../api/superAdminApi";
+import { companySetupAPI } from "../../../api/companySetupApi";
+import { useToast } from "../../Toast/ToastContext";
 
 /* ---------------------------------------------------------------------------- */
 /* Shared design tokens                                                        */
@@ -17,11 +19,29 @@ const controlClasses =
   "dark:focus:ring-blue-400 dark:focus:border-blue-400 " +
   "disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed";
 
+const controlErrClasses =
+  "border-red-500 dark:border-red-500 focus:ring-red-500 focus:border-red-500";
+
 const labelClasses =
   "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
 const fieldGrid =
   "grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-x-3 gap-y-2 items-start";
+
+/* ---------------------------------------------------------------------------- */
+/* Validation regexes / helpers (shared)                                       */
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_REGEX = /^[0-9]{10}$/;
+const WEBSITE_REGEX = /^(https?:\/\/)?([\w-]+\.)+[\w-]{2,}(\/.*)?$/;
+const PINCODE_REGEX = /^[1-9][0-9]{5}$/; // 6-digit Indian pincode
+const PAN_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
+const GST_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+const CIN_REGEX = /^[LUu]{1}[0-9]{5}[A-Za-z]{2}[0-9]{4}[A-Za-z]{3}[0-9]{6}$/;
+const IFSC_REGEX = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+const DUNS_REGEX = /^[0-9]{9}$/;
+const ACCOUNT_NO_REGEX = /^[0-9]{6,18}$/;
+const NAME_REGEX = /^[A-Za-z][A-Za-z .'-]*$/;
 
 /* ---------------------------------------------------------------------------- */
 /* Shared building blocks                                                      */
@@ -37,6 +57,7 @@ const Field = ({
   type = "text",
   options,
   className = "",
+  disabled = false,
 }) => {
   if (type === "checkbox") {
     return (
@@ -71,7 +92,8 @@ const Field = ({
           name={name}
           value={value}
           onChange={onChange}
-          className={controlClasses}
+          disabled={disabled}
+          className={`${controlClasses} ${error ? controlErrClasses : ""}`}
         >
           <option value="">Select {label}</option>
           {(options || []).map((opt) => (
@@ -106,7 +128,7 @@ const Field = ({
           className={
             "w-full px-2 py-1.5 rounded border text-xs leading-snug transition-colors resize-none " +
             "bg-white dark:bg-gray-900 " +
-            "border-gray-300 dark:border-gray-600 " +
+            `${error ? controlErrClasses : "border-gray-300 dark:border-gray-600"} ` +
             "text-gray-900 dark:text-gray-100 " +
             "placeholder-gray-400 dark:placeholder-gray-500 " +
             "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
@@ -135,7 +157,8 @@ const Field = ({
         name={name}
         value={value}
         onChange={onChange}
-        className={controlClasses}
+        disabled={disabled}
+        className={`${controlClasses} ${error ? controlErrClasses : ""}`}
       />
 
       {error && (
@@ -203,147 +226,13 @@ const BANK_COLUMNS = [
 ];
 
 const emptyBankRow = () => ({
-  beneficiaryName: "",
-  accountNo: "",
+  id: 0,
   bankName: "",
-  accountCode: "",
-  branch: "",
-  ifsc: "",
-  accountType: "",
+  bankBranch: "",
+  accountNo: "",
+  ifscCode: "",
   primary: false,
 });
-
-const BankDetailsTable = ({
-  rows,
-  onCellChange,
-  onAddRow,
-  onRemoveRow,
-  onSetPrimary,
-}) => {
-  const cellInputClasses =
-    "w-full h-[28px] px-1.5 rounded border text-xs leading-none bg-transparent " +
-    "border-transparent hover:border-gray-300 dark:hover:border-gray-600 " +
-    "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
-    "text-gray-900 dark:text-gray-100 transition-colors";
-
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-2">
-        <SectionHeader>Bank Details</SectionHeader>
-
-        <button
-          type="button"
-          onClick={onAddRow}
-          className="
-            flex items-center gap-1 px-2 py-1 rounded text-[11px]
-            bg-blue-50 text-blue-700 hover:bg-blue-100
-            dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50
-            transition-colors
-          "
-        >
-          <Plus className="h-3 w-3" />
-          Add Row
-        </button>
-      </div>
-
-      <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg">
-  <table className="w-full text-xs border-collapse">
-    <thead>
-      <tr className="bg-gray-50 dark:bg-gray-900/60">
-        <th className="px-2 py-2 text-left font-semibold text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700 w-10">
-          S.No
-        </th>
-
-        {BANK_COLUMNS.map((col) => (
-          <th
-            key={col.key}
-            className="px-2 py-2 text-left font-semibold text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700 whitespace-nowrap"
-          >
-            {col.label}
-          </th>
-        ))}
-
-        <th className="px-2 py-2 text-center font-semibold text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700 whitespace-nowrap">
-          Primary Account
-        </th>
-
-        <th className="px-2 py-2 border-b border-gray-200 dark:border-gray-700 w-10"></th>
-      </tr>
-    </thead>
-
-    <tbody>
-      {rows.map((row, idx) => (
-        <tr
-          key={idx}
-          className="border-b border-gray-100 dark:border-gray-800 last:border-b-0 hover:bg-gray-50 dark:hover:bg-gray-900/40"
-        >
-          <td className="px-2 py-1 text-gray-500 dark:text-gray-400">
-            {idx + 1}
-          </td>
-
-          {BANK_COLUMNS.map((col) => (
-            <td key={col.key} className="px-2 py-1 min-w-[150px]">
-              <input
-                type="text"
-                value={row[col.key]}
-                onChange={(e) =>
-                  onCellChange(idx, col.key, e.target.value)
-                }
-                className="
-                  w-full
-                  h-[30px]
-                  px-2
-                  rounded
-                  border
-                  border-gray-300
-                  dark:border-gray-600
-                  bg-white
-                  dark:bg-gray-900
-                  text-xs
-                  text-gray-900
-                  dark:text-gray-100
-                  placeholder-gray-400
-                  dark:placeholder-gray-500
-                  transition-colors
-                  focus:outline-none
-                  focus:ring-1
-                  focus:ring-blue-500
-                  focus:border-blue-500
-                  dark:focus:ring-blue-400
-                  dark:focus:border-blue-400
-                "
-              />
-            </td>
-          ))}
-
-          <td className="px-2 py-1 text-center">
-            <input
-              type="checkbox"
-              checked={row.primary}
-              onChange={() => onSetPrimary(idx)}
-              className="h-3.5 w-3.5 accent-blue-600 dark:accent-blue-500 cursor-pointer"
-            />
-          </td>
-
-          <td className="px-2 py-1 text-center">
-            {rows.length > 1 && (
-              <button
-                type="button"
-                onClick={() => onRemoveRow(idx)}
-                className="text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </td>
-        </tr>
-      ))}
-    </tbody>
-  </table>
-</div>
-    </div>
-  );
-};
 
 /* ---------------------------------------------------------------------------- */
 /* Company tab                                                                 */
@@ -357,46 +246,124 @@ const COUNTRIES = [
 ];
 const STATES = ["Karnataka", "Maharashtra", "Tamil Nadu", "Delhi", "Gujarat"];
 
-const CompanyMasterForm = ({ data, onBack }) => {
+const emptyCompanyForm = () => ({
+  id: "",
+  companyName: "",
+  companyCode: "",
+  companyEmail: "",
+  phoneNo: "",
+  ceo: "",
+  companySize: "",
+  industryType: "",
+  officialWebsite: "",
+  address: "",
+  country: "",
+  state: "",
+  city: "",
+  pincode: "",
+  panNo: "",
+  gst: "",
+  cin: "",
+  active: true,
+
+  // Subscription
+  plan: "",
+  trialPeriodDays: "",
+  maxUsers: "",
+  storage: "",
+
+  // Admin
+  adminName: "",
+  adminEmail: "",
+  adminMobile: "",
+
+  termsAndConditions: "",
+});
+
+const CompanyMasterForm = ({ data, companyId, onBack }) => {
   const [orgId] = useState(localStorage.getItem("orgId"));
   const fileInputRef = useRef(null);
+  const { addToast } = useToast();
 
-  const [form, setForm] = useState({
-    companyCode: data?.companyCode || "",
-    companyName: data?.companyName || "",
-    ceo: data?.ceo || "",
-    address: data?.address || "",
-    country: data?.country || "",
-    state: data?.state || "",
-    city: data?.city || "",
-    pincode: data?.pincode || "",
-    panNo: data?.panNo || "",
-    gst: data?.gst || "",
-    cin: data?.cin || "",
-    officialWebsite: data?.officialWebsite || "",
-    termsAndConditions: data?.termsAndConditions || "",
+  const userId = localStorage.getItem("usersId");
 
-    id: data?.id || "",
-    active: data?.active ?? true,
-  });
-
+  const [form, setForm] = useState(emptyCompanyForm());
   const [logoFile, setLogoFile] = useState(null);
-  const [logoPreview, setLogoPreview] = useState(data?.logoUrl || null);
+  const [logoPreview, setLogoPreview] = useState(null);
 
-  const [bankRows, setBankRows] = useState(
-    data?.bankDetails?.length ? data.bankDetails : [emptyBankRow()],
-  );
-
+  const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
 
+  const populateForm = (company) => {
+    if (!company) return;
+    setForm({
+      ...emptyCompanyForm(),
+      id: company.id || "",
+      companyName: company.companyName || "",
+      companyCode: company.companyCode || "",
+      companyEmail: company.email || "",
+      phoneNo: form.phoneNo || null,
+      ceo: company.ceo || "",
+      companySize: company.companySize || "",
+      industryType: company.industryType || "",
+      officialWebsite: company.officialWebsite || "",
+      address: company.address || company.registeredAddress || "",
+      country: company.country || "",
+      state: company.state || "",
+      city: company.city || "",
+      pincode: company.pincode || "",
+      panNo: company.panNo || "",
+      gst: company.gst || "",
+      cin: company.cin || "",
+      active: company.active === "Active" || company.active === true,
+
+      plan: company.selectPlan || "",
+      trialPeriodDays: company.trialPeriod ?? "",
+      maxUsers: company.maxUsers ?? "",
+      storage: company.storageLimit || "",
+
+      adminName: company.adminName || "",
+      adminEmail: company.adminEmail || "",
+      adminMobile: company.adminMobileNo || "",
+
+      termsAndConditions: company.termsAndConditions || "",
+    });
+    setLogoPreview(company.logoUrl || null);
+  };
+
+  useEffect(() => {
+    if (data) populateForm(data);
+  }, [data]);
+
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+
+    const fetchCompany = async () => {
+      setIsLoading(true);
+      try {
+        const company = await companySetupAPI.getCompanyById(userId);
+        if (!cancelled) populateForm(company);
+      } catch (error) {
+        console.error(error);
+        if (!cancelled) addToast("Failed to load company details");
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    };
+
+    fetchCompany();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-
     if (fieldErrors[name]) {
       setFieldErrors((prev) => ({ ...prev, [name]: "" }));
     }
-
     setForm((prev) => ({
       ...prev,
       [name]:
@@ -415,84 +382,162 @@ const CompanyMasterForm = ({ data, onBack }) => {
     setLogoPreview(URL.createObjectURL(file));
   };
 
-  const handleBankCellChange = (idx, key, value) => {
-    setBankRows((prev) =>
-      prev.map((row, i) => (i === idx ? { ...row, [key]: value } : row)),
-    );
-  };
-
-  const handleAddBankRow = () =>
-    setBankRows((prev) => [...prev, emptyBankRow()]);
-
-  const handleRemoveBankRow = (idx) =>
-    setBankRows((prev) => prev.filter((_, i) => i !== idx));
-
-  const handleSetPrimaryBank = (idx) =>
-    setBankRows((prev) =>
-      prev.map((row, i) => ({ ...row, primary: i === idx })),
-    );
-
   const validate = () => {
     const errors = {};
 
-    if (!form.companyCode.trim())
-      errors.companyCode = "Company Code is required";
     if (!form.companyName.trim())
       errors.companyName = "Company Name is required";
+    else if (form.companyName.trim().length < 2)
+      errors.companyName = "Company Name is too short";
+
+    if (!form.companyCode.trim())
+      errors.companyCode = "Company Code is required";
+    else if (!/^[A-Z0-9-]{2,15}$/.test(form.companyCode.trim()))
+      errors.companyCode =
+        "Code must be 2-15 chars, letters/numbers/hyphen only";
+
+    if (form.companyEmail && !EMAIL_REGEX.test(form.companyEmail.trim()))
+      errors.companyEmail = "Enter a valid email address";
+
+    if (form.phoneNo && !PHONE_REGEX.test(form.phoneNo.trim()))
+      errors.phoneNo = "Enter a valid 10-digit phone number";
+
+    if (form.ceo && !NAME_REGEX.test(form.ceo.trim()))
+      errors.ceo = "Enter a valid name";
+
+    if (!form.address.trim()) errors.address = "Address is required";
+    if (!form.country.trim()) errors.country = "Country is required";
+    if (!form.state.trim()) errors.state = "State is required";
+
     if (!form.city.trim()) errors.city = "City is required";
+    else if (!/^[A-Za-z .'-]+$/.test(form.city.trim()))
+      errors.city = "Enter a valid city name";
+
+    if (!form.pincode.trim()) errors.pincode = "Pincode is required";
+    else if (!PINCODE_REGEX.test(form.pincode.trim()))
+      errors.pincode = "Enter a valid 6-digit pincode";
+
+    if (form.panNo && !PAN_REGEX.test(form.panNo.trim().toUpperCase()))
+      errors.panNo = "Enter a valid PAN (e.g. AAAAA1234A)";
+
+    if (form.gst && !GST_REGEX.test(form.gst.trim().toUpperCase()))
+      errors.gst = "Enter a valid 15-character GSTIN";
+
+    if (form.cin && !CIN_REGEX.test(form.cin.trim().toUpperCase()))
+      errors.cin = "Enter a valid 21-character CIN";
 
     if (
       form.officialWebsite &&
-      !/^(https?:\/\/)?([\w-]+\.)+[\w-]{2,}(\/.*)?$/.test(
-        form.officialWebsite.trim(),
-      )
+      !WEBSITE_REGEX.test(form.officialWebsite.trim())
     )
       errors.officialWebsite = "Enter a valid website URL";
 
-    if (form.pincode && !/^\d{4,8}$/.test(form.pincode.trim()))
-      errors.pincode = "Enter a valid pincode";
+    if (form.adminEmail && !EMAIL_REGEX.test(form.adminEmail.trim()))
+      errors.adminEmail = "Enter a valid email address";
+
+    if (form.adminMobile && !PHONE_REGEX.test(form.adminMobile.trim()))
+      errors.adminMobile = "Enter a valid 10-digit mobile number";
+
+    if (
+      form.trialPeriodDays &&
+      !/^[0-9]+$/.test(String(form.trialPeriodDays).trim())
+    )
+      errors.trialPeriodDays = "Enter a valid number of days";
+
+    if (form.maxUsers && !/^[0-9]+$/.test(String(form.maxUsers).trim()))
+      errors.maxUsers = "Enter a valid number";
+
+    if (form.termsAndConditions && form.termsAndConditions.trim().length > 2000)
+      errors.termsAndConditions =
+        "Terms & Conditions is too long (max 2000 chars)";
 
     setFieldErrors(errors);
-
     return Object.keys(errors).length === 0;
   };
 
   const handleSave = async () => {
     if (!validate()) return;
-
     setIsSubmitting(true);
 
+    // NOTE: confirm these keys against your actual API DTO before relying on this payload
     const payload = {
-      ...(data?.id && { id: data.id }),
-      orgId,
-      ...form,
-      bankDetails: bankRows,
-      cancel: false,
-      createdBy: "ITC001",
+      id: Number(form.id || 0),
+
+      companyName: form.companyName,
+      companyCode: form.companyCode,
+      email: form.companyEmail,
+      phoneNo: form.phoneNo,
+
+      ceo: form.ceo,
+      companySize: form.companySize,
+      industryType: form.industryType,
+      officialWebsite: form.officialWebsite,
+
+      registeredAddress: form.address,
+      countryId: 0,
+      stateId: 0,
+      cityId: 0,
+      pincode: form.pincode,
+
+      panNo: form.panNo,
+      gst: form.gst,
+      cin: form.cin,
+
+      selectPlan: form.plan,
+      trialPeriod: Number(form.trialPeriodDays || 0),
+      maxUsers: String(form.maxUsers || ""),
+      storageLimit: form.storage || null,
+
+      adminName: form.adminName,
+      adminEmail: form.adminEmail,
+      adminMobileNo: form.adminMobile,
+
+      termsAndConditions: form.termsAndConditions,
+
+      active: form.active,
     };
 
-    console.log(payload, logoFile);
-
     try {
-      // const fd = new FormData();
-      // fd.append("payload", JSON.stringify(payload));
-      // if (logoFile) fd.append("logo", logoFile);
-      // await masterAPI.saveCompany(fd);
+      console.log("Update Payload:", payload);
+      console.log(JSON.stringify(payload, null, 2));
+      const response = await companySetupAPI.updateCompany(payload);
 
-      alert(
-        data ? "Company Updated Successfully!" : "Company Saved Successfully!",
-      );
-      onBack();
+      if (response?.status) {
+        addToast("Company updated successfully!");
+        onBack();
+      } else {
+        const msg =
+          response?.errors?.[0]?.shortMessage ||
+          response?.errors?.[0]?.longMessage ||
+          "Failed to update company";
+        addToast(msg);
+      }
     } catch (error) {
-      console.error(error);
-      alert("Failed to save Company.");
+      console.error("Error updating company:", error);
+      console.error("Server response body:", error?.response?.data);
+
+      const serverMsg =
+        error?.response?.data?.errors?.[0]?.longMessage ||
+        error?.response?.data?.message ||
+        error?.response?.data?.error ||
+        "Something went wrong. Please try again.";
+
+      addToast(serverMsg);
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  if (isLoading) {
+    return (
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 text-center text-xs text-gray-500 dark:text-gray-400">
+        Loading company details...
+      </div>
+    );
+  }
+
   return (
-    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
+    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-6">
       {/* Company Details */}
       <div>
         <SectionHeader>Company Details</SectionHeader>
@@ -509,12 +554,29 @@ const CompanyMasterForm = ({ data, onBack }) => {
           />
 
           <Field
-            label="Code"
+            label="Company Code"
             name="companyCode"
             value={form.companyCode}
             onChange={handleChange}
             error={fieldErrors.companyCode}
             required
+          />
+
+          <Field
+            type="email"
+            label="Company Email"
+            name="companyEmail"
+            value={form.companyEmail}
+            onChange={handleChange}
+            error={fieldErrors.companyEmail}
+          />
+
+          <Field
+            label="Phone No"
+            name="phoneNo"
+            value={form.phoneNo}
+            onChange={handleChange}
+            error={fieldErrors.phoneNo}
           />
 
           <Field
@@ -526,32 +588,56 @@ const CompanyMasterForm = ({ data, onBack }) => {
           />
 
           <Field
+            label="Company Size"
+            name="companySize"
+            value={form.companySize}
+            onChange={handleChange}
+            error={fieldErrors.companySize}
+          />
+
+          <Field
+            label="Industry Type"
+            name="industryType"
+            value={form.industryType}
+            onChange={handleChange}
+            error={fieldErrors.industryType}
+          />
+
+          <Field
+            label="Official Website"
+            name="officialWebsite"
+            value={form.officialWebsite}
+            onChange={handleChange}
+            error={fieldErrors.officialWebsite}
+          />
+
+          <Field
             label="Address"
             name="address"
             value={form.address}
             onChange={handleChange}
             error={fieldErrors.address}
+            required
             className="col-span-2"
           />
 
+          {/* Plain text fields now, not dropdowns — just show whatever value is present */}
           <Field
-            type="select"
             label="Country"
             name="country"
             value={form.country}
             onChange={handleChange}
             error={fieldErrors.country}
-            options={COUNTRIES}
+            required
           />
 
           <Field
-            type="select"
             label="State"
             name="state"
             value={form.state}
             onChange={handleChange}
             error={fieldErrors.state}
-            options={STATES}
+            required
           />
 
           <Field
@@ -569,10 +655,11 @@ const CompanyMasterForm = ({ data, onBack }) => {
             value={form.pincode}
             onChange={handleChange}
             error={fieldErrors.pincode}
+            required
           />
 
           <Field
-            label="Pan No"
+            label="PAN No"
             name="panNo"
             value={form.panNo}
             onChange={handleChange}
@@ -580,7 +667,7 @@ const CompanyMasterForm = ({ data, onBack }) => {
           />
 
           <Field
-            label="Gst"
+            label="GST"
             name="gst"
             value={form.gst}
             onChange={handleChange}
@@ -595,26 +682,9 @@ const CompanyMasterForm = ({ data, onBack }) => {
             error={fieldErrors.cin}
           />
 
-          <Field
-            label="Official Website"
-            name="officialWebsite"
-            value={form.officialWebsite}
-            onChange={handleChange}
-            error={fieldErrors.officialWebsite}
-          />
-
-          <Field
-            label="Terms And Conditions"
-            name="termsAndConditions"
-            value={form.termsAndConditions}
-            onChange={handleChange}
-            error={fieldErrors.termsAndConditions}
-            className="col-span-2 "
-          />
-
           {/* Logo upload */}
           <div className="w-full">
-            <label className={labelClasses}>Logo</label>
+            <label className={labelClasses}>Company Logo</label>
 
             <input
               ref={fileInputRef}
@@ -655,7 +725,8 @@ const CompanyMasterForm = ({ data, onBack }) => {
           )}
 
           <div className="w-full">
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            <label className={labelClasses}>Status</label>
+            <p className="mt-1 mb-1 text-xs text-gray-500 dark:text-gray-400">
               {form.active ? "Active" : "Inactive"}
             </p>
 
@@ -684,20 +755,98 @@ const CompanyMasterForm = ({ data, onBack }) => {
         </div>
       </div>
 
-      {/* Bank Details */}
-      <BankDetailsTable
-        rows={bankRows}
-        onCellChange={handleBankCellChange}
-        onAddRow={handleAddBankRow}
-        onRemoveRow={handleRemoveBankRow}
-        onSetPrimary={handleSetPrimaryBank}
-      />
+      {/* Subscription Details */}
+      <div>
+        <SectionHeader>Subscription Details</SectionHeader>
+
+        <div className={fieldGrid}>
+          <Field
+            label="Plan"
+            name="plan"
+            value={form.plan}
+            onChange={handleChange}
+            error={fieldErrors.plan}
+          />
+
+          <Field
+            label="Trial Period (Days)"
+            name="trialPeriodDays"
+            value={form.trialPeriodDays}
+            onChange={handleChange}
+            error={fieldErrors.trialPeriodDays}
+          />
+
+          <Field
+            label="Max Users"
+            name="maxUsers"
+            value={form.maxUsers}
+            onChange={handleChange}
+            error={fieldErrors.maxUsers}
+          />
+
+          <Field
+            label="Storage"
+            name="storage"
+            value={form.storage}
+            onChange={handleChange}
+            error={fieldErrors.storage}
+          />
+        </div>
+      </div>
+
+      {/* Admin Details */}
+      <div>
+        <SectionHeader>Admin Details</SectionHeader>
+
+        <div className={fieldGrid}>
+          <Field
+            label="Admin Name"
+            name="adminName"
+            value={form.adminName}
+            onChange={handleChange}
+            error={fieldErrors.adminName}
+          />
+
+          <Field
+            type="email"
+            label="Admin Email"
+            name="adminEmail"
+            value={form.adminEmail}
+            onChange={handleChange}
+            error={fieldErrors.adminEmail}
+          />
+
+          <Field
+            label="Admin Mobile"
+            name="adminMobile"
+            value={form.adminMobile}
+            onChange={handleChange}
+            error={fieldErrors.adminMobile}
+          />
+        </div>
+      </div>
+
+      {/* Terms & Conditions */}
+      <div>
+        <SectionHeader>Terms & Conditions</SectionHeader>
+
+        <div className={fieldGrid}>
+          <Field
+            label="Terms And Conditions"
+            name="termsAndConditions"
+            value={form.termsAndConditions}
+            onChange={handleChange}
+            error={fieldErrors.termsAndConditions}
+            className="col-span-2"
+          />
+        </div>
+      </div>
 
       <FormButtons
         onCancel={onBack}
         onSave={handleSave}
         isSubmitting={isSubmitting}
-        saveLabel={data ? "Update" : "Save"}
+        saveLabel="Update"
       />
     </div>
   );
@@ -740,33 +889,29 @@ const BranchMasterForm = ({
   onBranchSelect,
 }) => {
   const [orgId] = useState(localStorage.getItem("orgId"));
+  const { addToast } = useToast();
 
   const [selectedCompany, setSelectedCompany] = useState(data?.companyId || "");
   const [selectedBranch, setSelectedBranch] = useState(data?.id || "");
 
-  const [form, setForm] = useState({
-    ...emptyBranchForm(),
-    ...data,
-  });
-
+  const [form, setForm] = useState({ ...emptyBranchForm(), ...data });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
+  const [bankRows, setBankRows] = useState(
+    data?.bankDetails?.length ? data.bankDetails : [emptyBankRow()],
+  );
 
+  // Single effect: sync everything when `data` changes
   useEffect(() => {
     if (data) {
       setForm({ ...emptyBranchForm(), ...data });
       setSelectedCompany(data.companyId || "");
       setSelectedBranch(data.id || "");
+      setBankRows(
+        data.bankDetails?.length ? data.bankDetails : [emptyBankRow()],
+      );
     }
   }, [data]);
-
-  const handleCompanySelect = (e) => {
-    const value = e.target.value;
-    setSelectedCompany(value);
-    setSelectedBranch("");
-    setForm(emptyBranchForm());
-    onCompanyChange?.(value);
-  };
 
   const handleBranchSelect = (e) => {
     const value = e.target.value;
@@ -776,57 +921,146 @@ const BranchMasterForm = ({
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-
     if (fieldErrors[name]) {
       setFieldErrors((prev) => ({ ...prev, [name]: "" }));
     }
-
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
   const validate = () => {
     const errors = {};
 
-    if (!selectedCompany) errors.company = "Please select a company";
-    if (!form.plantId.trim()) errors.plantId = "Plant ID is required";
-    if (!form.plantName.trim()) errors.plantName = "Plant Name is required";
+    if (!form.branchCode?.trim()) errors.branchCode = "Branch Code is required";
+    else if (!/^[A-Za-z0-9-]{2,20}$/.test(form.branchCode.trim()))
+      errors.branchCode = "Enter a valid Branch Code";
 
-    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()))
+    if (!form.branchName?.trim()) errors.branchName = "Branch Name is required";
+
+    if (form.branchIncharge && !NAME_REGEX.test(form.branchIncharge.trim()))
+      errors.branchIncharge = "Enter a valid name";
+
+    if (!form.phoneNo?.trim()) errors.phoneNo = "Phone Number is required";
+    else if (!PHONE_REGEX.test(form.phoneNo.trim()))
+      errors.phoneNo = "Enter a valid 10-digit phone number";
+
+    if (!form.email?.trim()) errors.email = "Email is required";
+    else if (!EMAIL_REGEX.test(form.email.trim()))
       errors.email = "Enter a valid email address";
 
-    setFieldErrors(errors);
+    if (!form.eccNo?.trim()) errors.eccNo = "ECC No is required";
 
+    if (!form.address?.trim()) errors.address = "Address is required";
+
+    if (!form.division?.trim()) errors.division = "Division is required";
+
+    if (form.cityId && !/^[0-9]+$/.test(String(form.cityId).trim()))
+      errors.cityId = "City ID must be numeric";
+
+    if (form.stateId && !/^[0-9]+$/.test(String(form.stateId).trim()))
+      errors.stateId = "State ID must be numeric";
+
+    if (!form.pincode?.trim()) errors.pincode = "Pincode is required";
+    else if (!PINCODE_REGEX.test(form.pincode.trim()))
+      errors.pincode = "Enter a valid 6-digit pincode";
+
+    if (!form.gstinNo?.trim()) errors.gstinNo = "GSTIN is required";
+    else if (!GST_REGEX.test(form.gstinNo.trim().toUpperCase()))
+      errors.gstinNo = "Enter a valid 15-character GSTIN";
+
+    if (form.panNo && !PAN_REGEX.test(form.panNo.trim().toUpperCase()))
+      errors.panNo = "Enter a valid PAN (e.g. AAAAA1234A)";
+
+    if (form.cinNo && !CIN_REGEX.test(form.cinNo.trim().toUpperCase()))
+      errors.cinNo = "Enter a valid 21-character CIN";
+
+    if (form.dunsNo && !DUNS_REGEX.test(form.dunsNo.trim()))
+      errors.dunsNo = "Enter a valid 9-digit DUNS number";
+
+    bankRows.forEach((row, idx) => {
+      if (row.bankName && !row.accountNo?.toString().trim())
+        errors[`bankAccountNo_${idx}`] =
+          "Account No is required when Bank Name is given";
+      if (row.accountNo && !ACCOUNT_NO_REGEX.test(String(row.accountNo).trim()))
+        errors[`bankAccountNo_${idx}`] = "Enter a valid bank account number";
+      if (row.ifscCode && !IFSC_REGEX.test(row.ifscCode.trim().toUpperCase()))
+        errors[`bankIfsc_${idx}`] = "Enter a valid IFSC/SWIFT code";
+    });
+
+    setFieldErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
-  const handleSave = async () => {
-    if (!validate()) return;
+  const handleBankCellChange = (idx, key, value) => {
+    setBankRows((prev) =>
+      prev.map((row, i) => (i === idx ? { ...row, [key]: value } : row)),
+    );
+  };
 
+  const handleAddBankRow = () =>
+    setBankRows((prev) => [...prev, emptyBankRow()]);
+
+  const handleRemoveBankRow = (idx) =>
+    setBankRows((prev) => prev.filter((_, i) => i !== idx));
+
+  const handleSave = async () => {
+    console.log("Save clicked");
+    const isValid = validate();
+    console.log("Valid:", isValid);
+    console.log("Errors:", fieldErrors);
+    if (!validate()) return;
     setIsSubmitting(true);
 
     const payload = {
-      ...(selectedBranch && { id: selectedBranch }),
-      orgId,
-      companyId: selectedCompany,
-      ...form,
-      cancel: false,
-      createdBy: "ITC001",
+      orgId: Number(orgId),
+      branchCode: form.branchCode.trim(),
+      branchName: form.branchName.trim(),
+      branchIncharge: form.branchIncharge?.trim() || "",
+      phoneNo: form.phoneNo.trim(),
+      email: form.email.trim(),
+      address: form.address.trim(),
+      division: form.division.trim(),
+      cityId: Number(form.cityId || 0),
+      stateId: Number(form.stateId || 0),
+      pincode: form.pincode.trim(),
+      gstinNo: form.gstinNo.trim().toUpperCase(),
+      panNo: form.panNo?.trim().toUpperCase() || "",
+      cinNo: form.cinNo?.trim().toUpperCase() || "",
+      eccNo: form.eccNo.trim(),
+      dunsNo: form.dunsNo?.trim() || "",
+      active: true,
+      cancelRemarks: "",
+      createdBy: localStorage.getItem("usersId"),
+      bankDetails: bankRows
+        .filter((row) => row.bankName?.trim())
+        .map((row) => ({
+          bankName: row.bankName.trim(),
+          bankBranch: row.bankBranch?.trim() || "",
+          accountNo: Number(row.accountNo || 0),
+          ifscCode: row.ifscCode?.trim().toUpperCase() || "",
+        })),
     };
 
-    console.log(payload);
-
     try {
-      // await masterAPI.saveBranch(payload);
+      const response = await companySetupAPI.createUpdateBranch(payload);
 
-      alert(
-        selectedBranch
-          ? "Branch Updated Successfully!"
-          : "Branch Saved Successfully!",
-      );
-      onBack();
-    } catch (error) {
-      console.error(error);
-      alert("Failed to save Branch.");
+      if (response?.status) {
+        addToast(
+          response?.paramObjectsMap?.message ||
+            (selectedBranch
+              ? "Branch updated successfully!"
+              : "Branch created successfully!"),
+        );
+        onBack?.();
+      } else {
+        addToast(
+          response?.errors?.[0]?.shortMessage ||
+            response?.errors?.[0]?.longMessage ||
+            "Failed to save branch.",
+        );
+      }
+    } catch (err) {
+      console.error(err);
+      addToast("Something went wrong.");
     } finally {
       setIsSubmitting(false);
     }
@@ -834,96 +1068,62 @@ const BranchMasterForm = ({
 
   return (
     <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
-      {/* Company / Branch selector */}
-      <div>
-        <SectionHeader>Select Company &amp; Branch</SectionHeader>
-
-        <div className={fieldGrid}>
-          <Field
-            type="select"
-            label="Company"
-            name="company"
-            value={selectedCompany}
-            onChange={handleCompanySelect}
-            error={fieldErrors.company}
-            options={companies.map((c) => c.companyName)}
-            required
-          />
-
-          <Field
-            type="select"
-            label="Branch"
-            name="branch"
-            value={selectedBranch}
-            onChange={handleBranchSelect}
-            options={branches.map((b) => b.plantName)}
-            className={!selectedCompany ? "opacity-60 pointer-events-none" : ""}
-          />
-        </div>
-      </div>
-
-      {/* Plant / Branch Details */}
+      {/* Branch Details */}
       <div>
         <SectionHeader>Branch Details</SectionHeader>
 
         <div className={fieldGrid}>
           <Field
-            label="Plant ID"
-            name="plantId"
-            value={form.plantId}
+            label="Branch Code"
+            name="branchCode"
+            value={form.branchCode}
             onChange={handleChange}
-            error={fieldErrors.plantId}
+            error={fieldErrors.branchCode}
             required
           />
 
           <Field
-            label="Plant Name"
-            name="plantName"
-            value={form.plantName}
+            label="Branch Name"
+            name="branchName"
+            value={form.branchName}
             onChange={handleChange}
-            error={fieldErrors.plantName}
+            error={fieldErrors.branchName}
             required
           />
 
           <Field
-            label="Plant Incharge"
-            name="plantIncharge"
-            value={form.plantIncharge}
+            label="Branch Incharge"
+            name="branchIncharge"
+            value={form.branchIncharge}
             onChange={handleChange}
-            error={fieldErrors.plantIncharge}
+            error={fieldErrors.branchIncharge}
           />
 
           <Field
             label="Phone Number"
-            name="phoneNumber"
-            value={form.phoneNumber}
+            name="phoneNo"
+            value={form.phoneNo}
             onChange={handleChange}
-            error={fieldErrors.phoneNumber}
+            error={fieldErrors.phoneNo}
+            required
           />
 
           <Field
             type="email"
-            label="E-Mail"
+            label="Email"
             name="email"
             value={form.email}
             onChange={handleChange}
             error={fieldErrors.email}
+            required
           />
 
           <Field
-            label="ECC NO."
+            label="ECC No"
             name="eccNo"
             value={form.eccNo}
             onChange={handleChange}
             error={fieldErrors.eccNo}
-          />
-          <Field
-            label="Address"
-            name="address"
-            value={form.address}
-            onChange={handleChange}
-            error={fieldErrors.address}
-            className="col-span-2"
           />
 
           <Field
@@ -935,11 +1135,19 @@ const BranchMasterForm = ({
           />
 
           <Field
-            label="City"
-            name="city"
-            value={form.city}
+            label="City ID"
+            name="cityId"
+            value={form.cityId}
             onChange={handleChange}
-            error={fieldErrors.city}
+            error={fieldErrors.cityId}
+          />
+
+          <Field
+            label="State ID"
+            name="stateId"
+            value={form.stateId}
+            onChange={handleChange}
+            error={fieldErrors.stateId}
           />
 
           <Field
@@ -948,14 +1156,6 @@ const BranchMasterForm = ({
             value={form.pincode}
             onChange={handleChange}
             error={fieldErrors.pincode}
-          />
-
-          <Field
-            label="State"
-            name="state"
-            value={form.state}
-            onChange={handleChange}
-            error={fieldErrors.state}
           />
 
           <Field
@@ -981,14 +1181,7 @@ const BranchMasterForm = ({
             onChange={handleChange}
             error={fieldErrors.cinNo}
           />
-        </div>
-      </div>
 
-      {/* Bank Details */}
-      <div>
-        <SectionHeader>Bank Details</SectionHeader>
-
-        <div className={fieldGrid}>
           <Field
             label="DUNS No"
             name="dunsNo"
@@ -998,29 +1191,114 @@ const BranchMasterForm = ({
           />
 
           <Field
-            label="Bank Name"
-            name="bankName"
-            value={form.bankName}
+            label="Address"
+            name="address"
+            value={form.address}
             onChange={handleChange}
-            error={fieldErrors.bankName}
-          />
-
-          <Field
-            label="Bank Account No"
-            name="bankAccountNo"
-            value={form.bankAccountNo}
-            onChange={handleChange}
-            error={fieldErrors.bankAccountNo}
-          />
-
-          <Field
-            label="IFSC/SWIFT Code"
-            name="ifscSwiftCode"
-            value={form.ifscSwiftCode}
-            onChange={handleChange}
-            error={fieldErrors.ifscSwiftCode}
+            error={fieldErrors.address}
+            className="col-span-2"
           />
         </div>
+      </div>
+
+      {/* Bank Details */}
+      <div>
+        <SectionHeader>Bank Details</SectionHeader>
+
+        <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+          <table className="w-full text-xs bg-white dark:bg-gray-800">
+            <thead>
+              <tr className="bg-gray-50 dark:bg-gray-900/40 border-b border-gray-200 dark:border-gray-700">
+                <th className="px-2 py-2 text-left font-medium text-gray-600 dark:text-gray-300">
+                  Bank Name
+                </th>
+                <th className="px-2 py-2 text-left font-medium text-gray-600 dark:text-gray-300">
+                  Bank Branch
+                </th>
+                <th className="px-2 py-2 text-left font-medium text-gray-600 dark:text-gray-300">
+                  Account No
+                </th>
+                <th className="px-2 py-2 text-left font-medium text-gray-600 dark:text-gray-300">
+                  IFSC Code
+                </th>
+                <th className="w-12 px-2 py-2"></th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {bankRows.map((row, idx) => (
+                <tr
+                  key={idx}
+                  className="border-t border-gray-100 dark:border-gray-700"
+                >
+                  <td className="px-2 py-2">
+                    <input
+                      type="text"
+                      value={row.bankName}
+                      onChange={(e) =>
+                        handleBankCellChange(idx, "bankName", e.target.value)
+                      }
+                      className={`${controlClasses} h-8 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600`}
+                    />
+                  </td>
+
+                  <td className="px-2 py-2">
+                    <input
+                      type="text"
+                      value={row.bankBranch}
+                      onChange={(e) =>
+                        handleBankCellChange(idx, "bankBranch", e.target.value)
+                      }
+                      className={`${controlClasses} h-8 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600`}
+                    />
+                  </td>
+
+                  <td className="px-2 py-2">
+                    <input
+                      type="text"
+                      value={row.accountNo}
+                      onChange={(e) =>
+                        handleBankCellChange(idx, "accountNo", e.target.value)
+                      }
+                      className={`${controlClasses} h-8 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600`}
+                    />
+                  </td>
+
+                  <td className="px-2 py-2">
+                    <input
+                      type="text"
+                      value={row.ifscCode}
+                      onChange={(e) =>
+                        handleBankCellChange(idx, "ifscCode", e.target.value)
+                      }
+                      className={`${controlClasses} h-8 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600`}
+                    />
+                  </td>
+
+                  <td className="px-2 py-2 text-center">
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveBankRow(idx)}
+                      disabled={bankRows.length === 1}
+                      className="h-8 w-8 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center text-red-500 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleAddBankRow}
+          className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+        >
+          <Plus className="h-4 w-4" />
+          Add Bank Row
+        </button>
       </div>
 
       <FormButtons
@@ -1043,6 +1321,7 @@ const TABS = [
 
 const CompanyBranchMaster = ({
   companyData,
+  companyId,
   branchData,
   companies,
   branches,
@@ -1097,7 +1376,11 @@ const CompanyBranchMaster = ({
 
       {/* Active panel */}
       {activeTab === "company" ? (
-        <CompanyMasterForm data={companyData} onBack={onBack} />
+        <CompanyMasterForm
+          data={companyData}
+          companyId={companyId}
+          onBack={onBack}
+        />
       ) : (
         <BranchMasterForm
           data={branchData}
