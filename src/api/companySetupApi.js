@@ -39,6 +39,28 @@ export const companySetupAPI = {
       throw error;
     }
   },
+  // Upload Company Logo
+  uploadCompanyLogo: async (id, file) => {
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await apiClient.post(
+        `/api/commonmaster/uploadCompanyLogoInBloob?id=${id}`,
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        },
+      );
+
+      return res;
+    } catch (error) {
+      console.error("Error uploading company logo:", error);
+      throw error;
+    }
+  },
 };
 
 export default companySetupAPI;

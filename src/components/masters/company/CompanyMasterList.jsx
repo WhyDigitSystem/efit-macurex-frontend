@@ -21,6 +21,13 @@ import { companySetupAPI } from "../../../api/companySetupApi";
 
 /* ---------------------------------------------------------------------------- */
 /* Small building blocks                                                        */
+const toImageSrc = (logo) => {
+  if (!logo) return null;
+  // Already a full URL or data URI — use as-is
+  if (logo.startsWith("http") || logo.startsWith("data:")) return logo;
+  // Raw base64 string from the API — wrap it in a data URI
+  return `data:image/png;base64,${logo}`;
+};
 
 const InfoRow = ({ icon: Icon, label, value }) => (
   <div className="flex items-center gap-2.5 py-1.5">
@@ -181,7 +188,7 @@ const CompanyMasterList = ({ onEdit, onBack }) => {
           <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-2 flex items-center gap-4">
             {company.companyLogo ? (
               <img
-                src={company.companyLogo}
+                src={toImageSrc(company.companyLogo)}
                 alt={company.companyName}
                 className="h-14 w-14 rounded-lg object-contain border border-gray-200 dark:border-gray-700 bg-white shrink-0"
               />

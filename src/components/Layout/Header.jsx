@@ -117,7 +117,7 @@ const Header = () => {
   const getStatusColor = () =>
     ["Employee", "Customer", "Admin"].includes(user?.type)
       ? "bg-green-500"
-      : "bg-gray-500";
+      : "bg-green-500";
 
   const getUserInitials = () => {
     if (!user?.name) return "U";

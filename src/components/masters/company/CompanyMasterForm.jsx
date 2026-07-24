@@ -295,7 +295,18 @@ const CompanyMasterForm = ({ data, companyId, onBack }) => {
 
       termsAndConditions: company.termsAndConditions || "",
     });
-    setLogoPreview(company.logoUrl || null);
+
+    // companyLogo comes back as raw base64 (no data URI prefix) — wrap it
+    if (company.companyLogo) {
+      const logo = company.companyLogo;
+      setLogoPreview(
+        logo.startsWith("http") || logo.startsWith("data:")
+          ? logo
+          : `data:image/png;base64,${logo}`,
+      );
+    } else {
+      setLogoPreview(null);
+    }
   };
 
   useEffect(() => {
@@ -464,6 +475,38 @@ const CompanyMasterForm = ({ data, companyId, onBack }) => {
     };
 
     try {
+      // If a new logo was picked, upload it first and fold the response into the payload
+      if (logoFile) {
+        try {
+          const logoRes = await companySetupAPI.uploadCompanyLogo(
+            form.id,
+            logoFile,
+          );
+
+          // NOTE: confirm the actual response shape/key from uploadCompanyLogoInBloob
+          const uploadedLogoUrl =
+            logoRes?.paramObjectsMap?.logoUrl ||
+            logoRes?.logoUrl ||
+            logoRes?.data?.logoUrl ||
+            logoRes?.url ||
+            null;
+
+          if (uploadedLogoUrl) {
+            payload.logoUrl = uploadedLogoUrl;
+          } else {
+            console.warn(
+              "Logo uploaded but no URL found in response:",
+              logoRes,
+            );
+          }
+        } catch (uploadError) {
+          console.error("Error uploading logo:", uploadError);
+          addToast("Failed to upload logo. Company details were not saved.");
+          setIsSubmitting(false);
+          return; // stop here — don't proceed to updateCompany if logo upload fails
+        }
+      }
+
       console.log("Update Payload:", payload);
       console.log(JSON.stringify(payload, null, 2));
       const response = await companySetupAPI.updateCompany(payload);
@@ -513,7 +556,7 @@ const CompanyMasterForm = ({ data, companyId, onBack }) => {
           <ArrowLeft className="h-4 w-4" />
         </button>
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-          {data ? "Edit Branch" : "Add Branch"}
+          {data ? "Edit Company" : "Edit Company"}
         </h2>
       </div>
 
