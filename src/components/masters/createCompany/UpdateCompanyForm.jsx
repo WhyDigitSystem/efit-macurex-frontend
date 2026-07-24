@@ -223,9 +223,9 @@ const UpdateCompanyForm = ({ editData, onBack }) => {
       </div>
 
       <form onSubmit={handleSubmit}>
-        <div className="px-3 py-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 border-b border-gray-200 dark:border-gray-700">
+        <div className="px-3 py-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 border-b border-gray-200 dark:border-gray-700">
           <div>
-            <label className={label}>Company Name {req}</label>
+            <label className={label}>Name {req}</label>
             <input
               name="companyName"
               value={formData.companyName}
@@ -235,7 +235,7 @@ const UpdateCompanyForm = ({ editData, onBack }) => {
             {errMsg("companyName")}
           </div>
           <div>
-            <label className={label}>Company Code</label>
+            <label className={label}>Code</label>
             <input
               name="companyCode"
               value={formData.companyCode}
@@ -244,7 +244,7 @@ const UpdateCompanyForm = ({ editData, onBack }) => {
             />
           </div>
           <div>
-            <label className={label}>Company Email {req}</label>
+            <label className={label}>Email {req}</label>
             <input
               type="email"
               name="email"
@@ -266,13 +266,13 @@ const UpdateCompanyForm = ({ editData, onBack }) => {
             {errMsg("industryType")}
           </div>
           <div>
-            <label className={label}>Company Size {req}</label>
+            <label className={label}>Size {req}</label>
             <Select
               name="companySize"
               value={formData.companySize}
               onChange={handleInputChange}
               options={COMPANY_SIZE_OPTIONS}
-              placeholder="Select company size"
+              placeholder="Select Company Size"
             />
             {errMsg("companySize")}
           </div>
@@ -330,7 +330,7 @@ const UpdateCompanyForm = ({ editData, onBack }) => {
           </div>
         </div>
 
-        <div className="px-3 py-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 border-b border-gray-200 dark:border-gray-700">
+        <div className="px-3 py-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 border-b border-gray-200 dark:border-gray-700">
           <div>
             <label className={label}>Admin Name {req}</label>
             <input
@@ -389,7 +389,7 @@ const UpdateCompanyForm = ({ editData, onBack }) => {
             disabled={loading}
             className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium disabled:opacity-50"
           >
-            {loading ? "Saving..." : "Update Company"}
+            {loading ? "Saving..." : "Update"}
           </button>
         </div>
       </form>

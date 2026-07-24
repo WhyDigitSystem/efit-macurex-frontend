@@ -65,7 +65,7 @@ const CreateCompanyListview = ({ onAddNew, onEdit, onView }) => {
       {/* Header */}
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
-          Company Master
+          Company Info
         </h1>
 
         <button
@@ -158,8 +158,8 @@ const CreateCompanyListview = ({ onAddNew, onEdit, onView }) => {
                 <tr className="bg-gray-100 dark:bg-gray-800 text-xs text-gray-600 dark:text-gray-300">
                   <th className="p-2 text-left w-14">S.No</th>
                   <th className="p-2 text-left">Company Code</th>
-                  <th className="p-2 text-left">Company Name</th>
-                  <th className="p-2 text-left">Admin Name</th>
+                  <th className="p-2 text-left">Company</th>
+                  <th className="p-2 text-left">Admin</th>
                   <th className="p-2 text-left">Admin Email</th>
                   <th className="p-2 text-left">Phone No</th>
                   <th className="p-2 text-left">Plan</th>
