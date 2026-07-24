@@ -16,7 +16,7 @@ export const dashboardAPI = {
           headers: {
             "Content-Type": "application/json",
           },
-        }
+        },
       );
 
       console.log("📦 Stock consolidation API response:", response);
@@ -150,7 +150,7 @@ export const dashboardAPI = {
             warehouse,
             client,
           },
-        }
+        },
       );
 
       console.log("✅ Full API Response:", response);
@@ -203,10 +203,10 @@ export const dashboardAPI = {
         }
 
         const occupied = binDetails.filter(
-          (bin) => bin?.binStatus === "Occupied"
+          (bin) => bin?.binStatus === "Occupied",
         ).length;
         const available = binDetails.filter(
-          (bin) => bin?.binStatus === "Empty"
+          (bin) => bin?.binStatus === "Empty",
         ).length;
 
         console.log("📈 Occupancy Stats:", {
@@ -259,7 +259,15 @@ export const dashboardAPI = {
   },
 
   // Get GRN Data
-  getGRNData: async (orgId, branchCode, client, finYear, warehouse, month,  type = "yesterday") => {
+  getGRNData: async (
+    orgId,
+    branchCode,
+    client,
+    finYear,
+    warehouse,
+    month,
+    type = "yesterday",
+  ) => {
     try {
       console.log("🔍 API Call - GRN Data");
 
@@ -275,7 +283,7 @@ export const dashboardAPI = {
             type,
             // month,
           },
-        }
+        },
       );
 
       let responseData = response?.statusFlag
@@ -302,7 +310,14 @@ export const dashboardAPI = {
   },
 
   // Get Putaway Data
-  getPutawayData: async (orgId, branchCode, client, finYear, month, type = "yesterday") => {
+  getPutawayData: async (
+    orgId,
+    branchCode,
+    client,
+    finYear,
+    month,
+    type = "yesterday",
+  ) => {
     try {
       const response = await apiClient.get(
         "/api/putaway/getPutawayForDashBoard",
@@ -312,10 +327,10 @@ export const dashboardAPI = {
             branchCode,
             client,
             finYear,
-            type
+            type,
             // month,
           },
-        }
+        },
       );
 
       let responseData = response?.statusFlag
@@ -327,7 +342,7 @@ export const dashboardAPI = {
           responseData.paramObjectsMap?.putawayDashboard || [];
         const pending = putawayData.filter((item) => item.status === "Pending");
         const completed = putawayData.filter(
-          (item) => item.status === "Complete"
+          (item) => item.status === "Complete",
         );
         return { pending, completed };
       }
@@ -339,7 +354,14 @@ export const dashboardAPI = {
   },
 
   // Get Buyer Order Data
-  getBuyerOrderData: async (orgId, branchCode, client, finYear, warehouse, type = "yesterday") => {
+  getBuyerOrderData: async (
+    orgId,
+    branchCode,
+    client,
+    finYear,
+    warehouse,
+    type = "yesterday",
+  ) => {
     try {
       const response = await apiClient.get(
         "/api/buyerOrder/getBuyerorderDashboard",
@@ -350,9 +372,9 @@ export const dashboardAPI = {
             client,
             finYear,
             warehouse,
-            type
+            type,
           },
-        }
+        },
       );
 
       let responseData = response?.statusFlag
@@ -363,10 +385,10 @@ export const dashboardAPI = {
         const buyerOrderData =
           responseData.paramObjectsMap?.buyerorderDashboard || [];
         const pending = buyerOrderData.filter(
-          (item) => item.status === "Pending"
+          (item) => item.status === "Pending",
         );
         const completed = buyerOrderData.filter(
-          (item) => item.status === "Complete"
+          (item) => item.status === "Complete",
         );
         return { pending, completed };
       }
@@ -378,7 +400,13 @@ export const dashboardAPI = {
   },
 
   // Get Pick Request Data
-  getPickRequestData: async (orgId, branchCode, client, finYear, type = "yesterday") => {
+  getPickRequestData: async (
+    orgId,
+    branchCode,
+    client,
+    finYear,
+    type = "yesterday",
+  ) => {
     try {
       const response = await apiClient.get(
         "/api/pickrequest/getPicrequestDashboard",
@@ -388,9 +416,9 @@ export const dashboardAPI = {
             branchCode,
             client,
             finyear: finYear,
-            type
+            type,
           },
-        }
+        },
       );
 
       let responseData = response?.statusFlag
@@ -401,10 +429,10 @@ export const dashboardAPI = {
         const pickRequestData =
           responseData.paramObjectsMap?.picrequestDashboard || [];
         const pending = pickRequestData.filter(
-          (item) => item.status === "Pending"
+          (item) => item.status === "Pending",
         );
         const completed = pickRequestData.filter(
-          (item) => item.status === "Complete"
+          (item) => item.status === "Complete",
         );
         return { pending, completed };
       }
@@ -426,7 +454,7 @@ export const dashboardAPI = {
             branchCode,
             warehouse,
           },
-        }
+        },
       );
 
       let responseData = response?.statusFlag
@@ -456,7 +484,7 @@ export const dashboardAPI = {
             client,
             bin,
           },
-        }
+        },
       );
 
       let responseData = response?.statusFlag
@@ -542,7 +570,7 @@ export const dashboardAPI = {
             warehouse,
             client,
           },
-        }
+        },
       );
 
       // Check if response has data and extract properly
@@ -567,7 +595,7 @@ export const dashboardAPI = {
             warehouse,
             client,
           },
-        }
+        },
       );
 
       // Check if response has data and extract properly
@@ -592,7 +620,7 @@ export const dashboardAPI = {
             warehouse,
             client,
           },
-        }
+        },
       );
 
       // Check if response has data and extract properly
@@ -605,7 +633,7 @@ export const dashboardAPI = {
       return [];
     }
   },
-   getExpiredItemDetails: async (orgId, branchCode, warehouse,  client) => {
+  getExpiredItemDetails: async (orgId, branchCode, warehouse, client) => {
     try {
       const response = await apiClient.get(
         "/api/dashboardController/getExpiredItemStockDetailsReport",
@@ -614,9 +642,9 @@ export const dashboardAPI = {
             orgId,
             branchCode,
             warehouse,
-             client,
+            client,
           },
-        }
+        },
       );
 
       // Check if response has data and extract properly
@@ -630,7 +658,7 @@ export const dashboardAPI = {
     }
   },
 
-   getSlowMoveDetails: async (orgId, branchCode, warehouse,  client) => {
+  getSlowMoveDetails: async (orgId, branchCode, warehouse, client) => {
     try {
       const response = await apiClient.get(
         "/api/dashboardController/getSlowMoveStockDetailsReport",
@@ -639,9 +667,9 @@ export const dashboardAPI = {
             orgId,
             branchCode,
             warehouse,
-             client,
+            client,
           },
-        }
+        },
       );
 
       // Check if response has data and extract properly
@@ -654,7 +682,7 @@ export const dashboardAPI = {
       return [];
     }
   },
-   getDeadStockDetails: async (orgId, branchCode, warehouse,  client) => {
+  getDeadStockDetails: async (orgId, branchCode, warehouse, client) => {
     try {
       const response = await apiClient.get(
         "/api/dashboardController/getDeadStockStockDetailsReport",
@@ -663,9 +691,9 @@ export const dashboardAPI = {
             orgId,
             branchCode,
             warehouse,
-             client,
+            client,
           },
-        }
+        },
       );
 
       // Check if response has data and extract properly
@@ -679,8 +707,8 @@ export const dashboardAPI = {
     }
   },
 
-  // 
-    getMaxStockDetails: async (orgId, branchCode, warehouse,  client) => {
+  //
+  getMaxStockDetails: async (orgId, branchCode, warehouse, client) => {
     try {
       const response = await apiClient.get(
         "/api/dashboardController/getMaximumStockLevelDetails",
@@ -689,10 +717,9 @@ export const dashboardAPI = {
             orgId,
             branchCode,
             warehouse,
-             client,
+            client,
           },
-        }
-        
+        },
       );
 
       // Check if response has data and extract properly
@@ -705,10 +732,10 @@ export const dashboardAPI = {
       return [];
     }
   },
-  // 
+  //
 
   // Escalation
- getEscalationDetails: async (orgId, branchCode, warehouse,  client) => {
+  getEscalationDetails: async (orgId, branchCode, warehouse, client) => {
     try {
       const response = await apiClient.get(
         "/api/dashboardController/getEscalationDetails",
@@ -719,8 +746,7 @@ export const dashboardAPI = {
             warehouse,
             client,
           },
-        }
-        
+        },
       );
 
       // Check if response has data and extract properly
@@ -735,7 +761,7 @@ export const dashboardAPI = {
   },
 
   // Escalation Card
-  getEscalationSummaryCard: async (orgId, branchCode, warehouse,  client) => {
+  getEscalationSummaryCard: async (orgId, branchCode, warehouse, client) => {
     try {
       const response = await apiClient.get(
         "/api/dashboardController/getEscalationDetails",
@@ -746,8 +772,7 @@ export const dashboardAPI = {
             warehouse,
             client,
           },
-        }
-        
+        },
       );
 
       // Check if response has data and extract properly
@@ -760,9 +785,6 @@ export const dashboardAPI = {
       return [];
     }
   },
-
-
-
 };
 
 export default dashboardAPI;

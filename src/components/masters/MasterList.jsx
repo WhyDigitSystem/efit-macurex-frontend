@@ -73,13 +73,29 @@ const SECTIONS = [
     gradient: "from-amber-500 to-amber-600",
     color: "amber",
     items: [
-      { name: "Item", icon: Package, path: "/item", screenCode: "ITEM" },
-      { name: "Unit", icon: Scale, path: "/unit", screenCode: "UNIT" },
+      {
+        name: "Item",
+        icon: Package,
+        path: "/item",
+        screenCode: "ITEM",
+      },
+      {
+        name: "Unit",
+        icon: Scale,
+        path: "/unit",
+        screenCode: "UNIT",
+      },
       {
         name: "Unit Conversion",
         icon: Scale,
         path: "/unitconversion",
         screenCode: "UNIT_CONVERSION",
+      },
+      {
+        name: "List of Values",
+        icon: Package, // Change to any icon you prefer
+        path: "/listofvalues",
+        screenCode: "LIST_OF_VALUES",
       },
     ],
   },

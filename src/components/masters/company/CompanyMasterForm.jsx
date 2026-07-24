@@ -1,11 +1,8 @@
-import { ArrowLeft, Save, X, Plus, Trash2, UploadCloud } from "lucide-react";
+import { Save, X, UploadCloud, ArrowLeft } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { superAdminAPI } from "../../../api/superAdminApi";
 import { companySetupAPI } from "../../../api/companySetupApi";
 import { useToast } from "../../Toast/ToastContext";
-
-/* ---------------------------------------------------------------------------- */
-/* Shared design tokens                                                        */
 
 const UPPERCASE_FIELDS = ["companyCode"];
 
@@ -28,9 +25,6 @@ const labelClasses =
 const fieldGrid =
   "grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-x-3 gap-y-2 items-start";
 
-/* ---------------------------------------------------------------------------- */
-/* Validation regexes / helpers (shared)                                       */
-
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_REGEX = /^[0-9]{10}$/;
 const WEBSITE_REGEX = /^(https?:\/\/)?([\w-]+\.)+[\w-]{2,}(\/.*)?$/;
@@ -38,13 +32,7 @@ const PINCODE_REGEX = /^[1-9][0-9]{5}$/; // 6-digit Indian pincode
 const PAN_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GST_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
 const CIN_REGEX = /^[LUu]{1}[0-9]{5}[A-Za-z]{2}[0-9]{4}[A-Za-z]{3}[0-9]{6}$/;
-const IFSC_REGEX = /^[A-Z]{4}0[A-Z0-9]{6}$/;
-const DUNS_REGEX = /^[0-9]{9}$/;
-const ACCOUNT_NO_REGEX = /^[0-9]{6,18}$/;
 const NAME_REGEX = /^[A-Za-z][A-Za-z .'-]*$/;
-
-/* ---------------------------------------------------------------------------- */
-/* Shared building blocks                                                      */
 
 const Field = ({
   label,
@@ -211,28 +199,6 @@ const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
     </button>
   </div>
 );
-
-/* ---------------------------------------------------------------------------- */
-/* Bank Details table (used by Company tab)                                    */
-
-const BANK_COLUMNS = [
-  { key: "beneficiaryName", label: "Beneficiary Name" },
-  { key: "accountNo", label: "Account No" },
-  { key: "bankName", label: "Bank Name" },
-  { key: "accountCode", label: "Account Code" },
-  { key: "branch", label: "Branch" },
-  { key: "ifsc", label: "IFSC" },
-  { key: "accountType", label: "Account Type" },
-];
-
-const emptyBankRow = () => ({
-  id: 0,
-  bankName: "",
-  bankBranch: "",
-  accountNo: "",
-  ifscCode: "",
-  primary: false,
-});
 
 /* ---------------------------------------------------------------------------- */
 /* Company tab                                                                 */
@@ -537,862 +503,292 @@ const CompanyMasterForm = ({ data, companyId, onBack }) => {
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-6">
-      {/* Company Details */}
-      <div>
-        <SectionHeader>Company Details</SectionHeader>
+    <div>
+      {/* HEADER */}
+      <div className="flex items-center gap-2 mb-4">
+        <button
+          onClick={onBack}
+          className="p-1 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </button>
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+          {data ? "Edit Branch" : "Add Branch"}
+        </h2>
+      </div>
 
-        <div className={fieldGrid}>
-          <Field
-            label="Company Name"
-            name="companyName"
-            value={form.companyName}
-            onChange={handleChange}
-            error={fieldErrors.companyName}
-            required
-            className="col-span-2"
-          />
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-6">
+        {/* Company Details */}
+        <div>
+          <div className={fieldGrid}>
+            <Field
+              label="Company Name"
+              name="companyName"
+              value={form.companyName}
+              onChange={handleChange}
+              error={fieldErrors.companyName}
+              required
+              className="col-span-2"
+            />
 
-          <Field
-            label="Company Code"
-            name="companyCode"
-            value={form.companyCode}
-            onChange={handleChange}
-            error={fieldErrors.companyCode}
-            required
-          />
+            <Field
+              label="Company Code"
+              name="companyCode"
+              value={form.companyCode}
+              onChange={handleChange}
+              error={fieldErrors.companyCode}
+              required
+            />
 
-          <Field
-            type="email"
-            label="Company Email"
-            name="companyEmail"
-            value={form.companyEmail}
-            onChange={handleChange}
-            error={fieldErrors.companyEmail}
-          />
+            <Field
+              type="email"
+              label="Company Email"
+              name="companyEmail"
+              value={form.companyEmail}
+              onChange={handleChange}
+              error={fieldErrors.companyEmail}
+            />
 
-          <Field
+            {/* <Field
             label="Phone No"
             name="phoneNo"
             value={form.phoneNo}
             onChange={handleChange}
             error={fieldErrors.phoneNo}
-          />
+          /> */}
 
-          <Field
-            label="CEO"
-            name="ceo"
-            value={form.ceo}
-            onChange={handleChange}
-            error={fieldErrors.ceo}
-          />
-
-          <Field
-            label="Company Size"
-            name="companySize"
-            value={form.companySize}
-            onChange={handleChange}
-            error={fieldErrors.companySize}
-          />
-
-          <Field
-            label="Industry Type"
-            name="industryType"
-            value={form.industryType}
-            onChange={handleChange}
-            error={fieldErrors.industryType}
-          />
-
-          <Field
-            label="Official Website"
-            name="officialWebsite"
-            value={form.officialWebsite}
-            onChange={handleChange}
-            error={fieldErrors.officialWebsite}
-          />
-
-          <Field
-            label="Address"
-            name="address"
-            value={form.address}
-            onChange={handleChange}
-            error={fieldErrors.address}
-            required
-            className="col-span-2"
-          />
-
-          {/* Plain text fields now, not dropdowns — just show whatever value is present */}
-          <Field
-            label="Country"
-            name="country"
-            value={form.country}
-            onChange={handleChange}
-            error={fieldErrors.country}
-            required
-          />
-
-          <Field
-            label="State"
-            name="state"
-            value={form.state}
-            onChange={handleChange}
-            error={fieldErrors.state}
-            required
-          />
-
-          <Field
-            label="City"
-            name="city"
-            value={form.city}
-            onChange={handleChange}
-            error={fieldErrors.city}
-            required
-          />
-
-          <Field
-            label="Pincode"
-            name="pincode"
-            value={form.pincode}
-            onChange={handleChange}
-            error={fieldErrors.pincode}
-            required
-          />
-
-          <Field
-            label="PAN No"
-            name="panNo"
-            value={form.panNo}
-            onChange={handleChange}
-            error={fieldErrors.panNo}
-          />
-
-          <Field
-            label="GST"
-            name="gst"
-            value={form.gst}
-            onChange={handleChange}
-            error={fieldErrors.gst}
-          />
-
-          <Field
-            label="CIN"
-            name="cin"
-            value={form.cin}
-            onChange={handleChange}
-            error={fieldErrors.cin}
-          />
-
-          {/* Logo upload */}
-          <div className="w-full">
-            <label className={labelClasses}>Company Logo</label>
-
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleLogoSelect}
-              className="hidden"
+            <Field
+              label="CEO"
+              name="ceo"
+              value={form.ceo}
+              onChange={handleChange}
+              error={fieldErrors.ceo}
             />
 
+            <Field
+              label="Company Size"
+              name="companySize"
+              value={form.companySize}
+              onChange={handleChange}
+              error={fieldErrors.companySize}
+            />
+
+            <Field
+              label="Industry Type"
+              name="industryType"
+              value={form.industryType}
+              onChange={handleChange}
+              error={fieldErrors.industryType}
+            />
+
+            <Field
+              label="Official Website"
+              name="officialWebsite"
+              value={form.officialWebsite}
+              onChange={handleChange}
+              error={fieldErrors.officialWebsite}
+            />
+
+            <Field
+              label="Address"
+              name="address"
+              value={form.address}
+              onChange={handleChange}
+              error={fieldErrors.address}
+              required
+              className="col-span-2"
+            />
+
+            {/* Plain text fields now, not dropdowns — just show whatever value is present */}
+            <Field
+              label="Country"
+              name="country"
+              value={form.country}
+              onChange={handleChange}
+              error={fieldErrors.country}
+              required
+            />
+
+            <Field
+              label="State"
+              name="state"
+              value={form.state}
+              onChange={handleChange}
+              error={fieldErrors.state}
+              required
+            />
+
+            <Field
+              label="City"
+              name="city"
+              value={form.city}
+              onChange={handleChange}
+              error={fieldErrors.city}
+              required
+            />
+
+            <Field
+              label="Pincode"
+              name="pincode"
+              value={form.pincode}
+              onChange={handleChange}
+              error={fieldErrors.pincode}
+              required
+            />
+
+            <Field
+              label="PAN No"
+              name="panNo"
+              value={form.panNo}
+              onChange={handleChange}
+              error={fieldErrors.panNo}
+            />
+
+            <Field
+              label="GST"
+              name="gst"
+              value={form.gst}
+              onChange={handleChange}
+              error={fieldErrors.gst}
+            />
+
+            <Field
+              label="CIN"
+              name="cin"
+              value={form.cin}
+              onChange={handleChange}
+              error={fieldErrors.cin}
+            />
+          </div>
+        </div>
+
+        {/* Subscription Details */}
+        <div>
+          <SectionHeader>Subscription Details</SectionHeader>
+
+          <div className={fieldGrid}>
+            <Field
+              label="Plan"
+              name="plan"
+              value={form.plan}
+              onChange={handleChange}
+              error={fieldErrors.plan}
+            />
+
+            <Field
+              label="Trial Period (Days)"
+              name="trialPeriodDays"
+              value={form.trialPeriodDays}
+              onChange={handleChange}
+              error={fieldErrors.trialPeriodDays}
+            />
+
+            <Field
+              label="Max Users"
+              name="maxUsers"
+              value={form.maxUsers}
+              onChange={handleChange}
+              error={fieldErrors.maxUsers}
+            />
+
+            <Field
+              label="Storage"
+              name="storage"
+              value={form.storage}
+              onChange={handleChange}
+              error={fieldErrors.storage}
+            />
+          </div>
+        </div>
+
+        {/* Admin Details */}
+        <div>
+          <SectionHeader>Admin Details</SectionHeader>
+
+          <div className={fieldGrid}>
+            <Field
+              label="Admin Name"
+              name="adminName"
+              value={form.adminName}
+              onChange={handleChange}
+              error={fieldErrors.adminName}
+            />
+
+            <Field
+              type="email"
+              label="Admin Email"
+              name="adminEmail"
+              value={form.adminEmail}
+              onChange={handleChange}
+              error={fieldErrors.adminEmail}
+            />
+
+            <Field
+              label="Admin Mobile"
+              name="adminMobile"
+              value={form.adminMobile}
+              onChange={handleChange}
+              error={fieldErrors.adminMobile}
+            />
+            <Field
+              label="Terms And Conditions"
+              name="termsAndConditions"
+              value={form.termsAndConditions}
+              onChange={handleChange}
+              error={fieldErrors.termsAndConditions}
+              className="col-span-2"
+            />
+          </div>
+        </div>
+
+        {/* logo */}
+        <div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleLogoSelect}
+            className="hidden"
+          />
+
+          <div className="mt-1 flex items-center gap-2">
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
               className="
-                w-full h-[30px] px-2 rounded border text-xs
-                border-blue-300 dark:border-blue-700
-                text-blue-600 dark:text-blue-400
-                hover:bg-blue-50 dark:hover:bg-blue-900/30
-                flex items-center justify-center gap-1.5
-                transition-colors
-              "
+        h-9 w-44 px-2 rounded border text-xs
+        border-blue-300 dark:border-blue-700
+        text-blue-600 dark:text-blue-400
+        hover:bg-blue-50 dark:hover:bg-blue-900/30
+        flex items-center justify-center gap-1.5
+        transition-colors
+      "
             >
-              <UploadCloud className="h-3.5 w-3.5" />
-              {logoFile ? logoFile.name : "Upload Logo"}
+              <UploadCloud className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">
+                {logoFile ? logoFile.name : "Upload Logo"}
+              </span>
             </button>
-          </div>
 
-          {logoPreview && (
-            <div className="w-full">
-              <label className={`${labelClasses} select-none opacity-0`}>
-                -
-              </label>
+            {logoPreview && (
               <img
                 src={logoPreview}
                 alt="Logo preview"
-                className="h-[30px] object-contain rounded border border-gray-200 dark:border-gray-700 bg-white"
+                className="h-9 w-9 object-contain rounded border border-gray-200 dark:border-gray-700 bg-white"
               />
-            </div>
-          )}
-
-          <div className="w-full">
-            <label className={labelClasses}>Status</label>
-            <p className="mt-1 mb-1 text-xs text-gray-500 dark:text-gray-400">
-              {form.active ? "Active" : "Inactive"}
-            </p>
-
-            <button
-              type="button"
-              onClick={() =>
-                handleChange({
-                  target: {
-                    name: "active",
-                    checked: !form.active,
-                    type: "checkbox",
-                  },
-                })
-              }
-              className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${
-                form.active ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
-              }`}
-            >
-              <span
-                className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${
-                  form.active ? "translate-x-6" : "translate-x-0.5"
-                }`}
-              />
-            </button>
+            )}
           </div>
         </div>
-      </div>
 
-      {/* Subscription Details */}
-      <div>
-        <SectionHeader>Subscription Details</SectionHeader>
-
-        <div className={fieldGrid}>
-          <Field
-            label="Plan"
-            name="plan"
-            value={form.plan}
-            onChange={handleChange}
-            error={fieldErrors.plan}
-          />
-
-          <Field
-            label="Trial Period (Days)"
-            name="trialPeriodDays"
-            value={form.trialPeriodDays}
-            onChange={handleChange}
-            error={fieldErrors.trialPeriodDays}
-          />
-
-          <Field
-            label="Max Users"
-            name="maxUsers"
-            value={form.maxUsers}
-            onChange={handleChange}
-            error={fieldErrors.maxUsers}
-          />
-
-          <Field
-            label="Storage"
-            name="storage"
-            value={form.storage}
-            onChange={handleChange}
-            error={fieldErrors.storage}
-          />
-        </div>
-      </div>
-
-      {/* Admin Details */}
-      <div>
-        <SectionHeader>Admin Details</SectionHeader>
-
-        <div className={fieldGrid}>
-          <Field
-            label="Admin Name"
-            name="adminName"
-            value={form.adminName}
-            onChange={handleChange}
-            error={fieldErrors.adminName}
-          />
-
-          <Field
-            type="email"
-            label="Admin Email"
-            name="adminEmail"
-            value={form.adminEmail}
-            onChange={handleChange}
-            error={fieldErrors.adminEmail}
-          />
-
-          <Field
-            label="Admin Mobile"
-            name="adminMobile"
-            value={form.adminMobile}
-            onChange={handleChange}
-            error={fieldErrors.adminMobile}
-          />
-        </div>
-      </div>
-
-      {/* Terms & Conditions */}
-      <div>
-        <SectionHeader>Terms & Conditions</SectionHeader>
-
-        <div className={fieldGrid}>
-          <Field
-            label="Terms And Conditions"
-            name="termsAndConditions"
-            value={form.termsAndConditions}
-            onChange={handleChange}
-            error={fieldErrors.termsAndConditions}
-            className="col-span-2"
-          />
-        </div>
-      </div>
-
-      <FormButtons
-        onCancel={onBack}
-        onSave={handleSave}
-        isSubmitting={isSubmitting}
-        saveLabel="Update"
-      />
-    </div>
-  );
-};
-
-/* ---------------------------------------------------------------------------- */
-/* Branch tab                                                                  */
-
-const emptyBranchForm = () => ({
-  plantId: "",
-  plantName: "",
-  plantIncharge: "",
-  phoneNumber: "",
-  faxNumber: "",
-  email: "",
-  address: "",
-  eccNo: "",
-  range: "",
-  rangeCode: "",
-  division: "",
-  divisionCode: "",
-  city: "",
-  pincode: "",
-  state: "",
-  gstinNo: "",
-  panNo: "",
-  cinNo: "",
-  dunsNo: "",
-  bankName: "",
-  bankAccountNo: "",
-  ifscSwiftCode: "",
-});
-
-const BranchMasterForm = ({
-  data,
-  companies = [],
-  branches = [],
-  onBack,
-  onCompanyChange,
-  onBranchSelect,
-}) => {
-  const [orgId] = useState(localStorage.getItem("orgId"));
-  const { addToast } = useToast();
-
-  const [selectedCompany, setSelectedCompany] = useState(data?.companyId || "");
-  const [selectedBranch, setSelectedBranch] = useState(data?.id || "");
-
-  const [form, setForm] = useState({ ...emptyBranchForm(), ...data });
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState({});
-  const [bankRows, setBankRows] = useState(
-    data?.bankDetails?.length ? data.bankDetails : [emptyBankRow()],
-  );
-
-  // Single effect: sync everything when `data` changes
-  useEffect(() => {
-    if (data) {
-      setForm({ ...emptyBranchForm(), ...data });
-      setSelectedCompany(data.companyId || "");
-      setSelectedBranch(data.id || "");
-      setBankRows(
-        data.bankDetails?.length ? data.bankDetails : [emptyBankRow()],
-      );
-    }
-  }, [data]);
-
-  const handleBranchSelect = (e) => {
-    const value = e.target.value;
-    setSelectedBranch(value);
-    onBranchSelect?.(value);
-  };
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    if (fieldErrors[name]) {
-      setFieldErrors((prev) => ({ ...prev, [name]: "" }));
-    }
-    setForm((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const validate = () => {
-    const errors = {};
-
-    if (!form.branchCode?.trim()) errors.branchCode = "Branch Code is required";
-    else if (!/^[A-Za-z0-9-]{2,20}$/.test(form.branchCode.trim()))
-      errors.branchCode = "Enter a valid Branch Code";
-
-    if (!form.branchName?.trim()) errors.branchName = "Branch Name is required";
-
-    if (form.branchIncharge && !NAME_REGEX.test(form.branchIncharge.trim()))
-      errors.branchIncharge = "Enter a valid name";
-
-    if (!form.phoneNo?.trim()) errors.phoneNo = "Phone Number is required";
-    else if (!PHONE_REGEX.test(form.phoneNo.trim()))
-      errors.phoneNo = "Enter a valid 10-digit phone number";
-
-    if (!form.email?.trim()) errors.email = "Email is required";
-    else if (!EMAIL_REGEX.test(form.email.trim()))
-      errors.email = "Enter a valid email address";
-
-    if (!form.eccNo?.trim()) errors.eccNo = "ECC No is required";
-
-    if (!form.address?.trim()) errors.address = "Address is required";
-
-    if (!form.division?.trim()) errors.division = "Division is required";
-
-    if (form.cityId && !/^[0-9]+$/.test(String(form.cityId).trim()))
-      errors.cityId = "City ID must be numeric";
-
-    if (form.stateId && !/^[0-9]+$/.test(String(form.stateId).trim()))
-      errors.stateId = "State ID must be numeric";
-
-    if (!form.pincode?.trim()) errors.pincode = "Pincode is required";
-    else if (!PINCODE_REGEX.test(form.pincode.trim()))
-      errors.pincode = "Enter a valid 6-digit pincode";
-
-    if (!form.gstinNo?.trim()) errors.gstinNo = "GSTIN is required";
-    else if (!GST_REGEX.test(form.gstinNo.trim().toUpperCase()))
-      errors.gstinNo = "Enter a valid 15-character GSTIN";
-
-    if (form.panNo && !PAN_REGEX.test(form.panNo.trim().toUpperCase()))
-      errors.panNo = "Enter a valid PAN (e.g. AAAAA1234A)";
-
-    if (form.cinNo && !CIN_REGEX.test(form.cinNo.trim().toUpperCase()))
-      errors.cinNo = "Enter a valid 21-character CIN";
-
-    if (form.dunsNo && !DUNS_REGEX.test(form.dunsNo.trim()))
-      errors.dunsNo = "Enter a valid 9-digit DUNS number";
-
-    bankRows.forEach((row, idx) => {
-      if (row.bankName && !row.accountNo?.toString().trim())
-        errors[`bankAccountNo_${idx}`] =
-          "Account No is required when Bank Name is given";
-      if (row.accountNo && !ACCOUNT_NO_REGEX.test(String(row.accountNo).trim()))
-        errors[`bankAccountNo_${idx}`] = "Enter a valid bank account number";
-      if (row.ifscCode && !IFSC_REGEX.test(row.ifscCode.trim().toUpperCase()))
-        errors[`bankIfsc_${idx}`] = "Enter a valid IFSC/SWIFT code";
-    });
-
-    setFieldErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  const handleBankCellChange = (idx, key, value) => {
-    setBankRows((prev) =>
-      prev.map((row, i) => (i === idx ? { ...row, [key]: value } : row)),
-    );
-  };
-
-  const handleAddBankRow = () =>
-    setBankRows((prev) => [...prev, emptyBankRow()]);
-
-  const handleRemoveBankRow = (idx) =>
-    setBankRows((prev) => prev.filter((_, i) => i !== idx));
-
-  const handleSave = async () => {
-    console.log("Save clicked");
-    const isValid = validate();
-    console.log("Valid:", isValid);
-    console.log("Errors:", fieldErrors);
-    if (!validate()) return;
-    setIsSubmitting(true);
-
-    const payload = {
-      orgId: Number(orgId),
-      branchCode: form.branchCode.trim(),
-      branchName: form.branchName.trim(),
-      branchIncharge: form.branchIncharge?.trim() || "",
-      phoneNo: form.phoneNo.trim(),
-      email: form.email.trim(),
-      address: form.address.trim(),
-      division: form.division.trim(),
-      cityId: Number(form.cityId || 0),
-      stateId: Number(form.stateId || 0),
-      pincode: form.pincode.trim(),
-      gstinNo: form.gstinNo.trim().toUpperCase(),
-      panNo: form.panNo?.trim().toUpperCase() || "",
-      cinNo: form.cinNo?.trim().toUpperCase() || "",
-      eccNo: form.eccNo.trim(),
-      dunsNo: form.dunsNo?.trim() || "",
-      active: true,
-      cancelRemarks: "",
-      createdBy: localStorage.getItem("usersId"),
-      bankDetails: bankRows
-        .filter((row) => row.bankName?.trim())
-        .map((row) => ({
-          bankName: row.bankName.trim(),
-          bankBranch: row.bankBranch?.trim() || "",
-          accountNo: Number(row.accountNo || 0),
-          ifscCode: row.ifscCode?.trim().toUpperCase() || "",
-        })),
-    };
-
-    try {
-      const response = await companySetupAPI.createUpdateBranch(payload);
-
-      if (response?.status) {
-        addToast(
-          response?.paramObjectsMap?.message ||
-            (selectedBranch
-              ? "Branch updated successfully!"
-              : "Branch created successfully!"),
-        );
-        onBack?.();
-      } else {
-        addToast(
-          response?.errors?.[0]?.shortMessage ||
-            response?.errors?.[0]?.longMessage ||
-            "Failed to save branch.",
-        );
-      }
-    } catch (err) {
-      console.error(err);
-      addToast("Something went wrong.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  return (
-    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
-      {/* Branch Details */}
-      <div>
-        <SectionHeader>Branch Details</SectionHeader>
-
-        <div className={fieldGrid}>
-          <Field
-            label="Branch Code"
-            name="branchCode"
-            value={form.branchCode}
-            onChange={handleChange}
-            error={fieldErrors.branchCode}
-            required
-          />
-
-          <Field
-            label="Branch Name"
-            name="branchName"
-            value={form.branchName}
-            onChange={handleChange}
-            error={fieldErrors.branchName}
-            required
-          />
-
-          <Field
-            label="Branch Incharge"
-            name="branchIncharge"
-            value={form.branchIncharge}
-            onChange={handleChange}
-            error={fieldErrors.branchIncharge}
-          />
-
-          <Field
-            label="Phone Number"
-            name="phoneNo"
-            value={form.phoneNo}
-            onChange={handleChange}
-            error={fieldErrors.phoneNo}
-            required
-          />
-
-          <Field
-            type="email"
-            label="Email"
-            name="email"
-            value={form.email}
-            onChange={handleChange}
-            error={fieldErrors.email}
-            required
-          />
-
-          <Field
-            label="ECC No"
-            name="eccNo"
-            value={form.eccNo}
-            onChange={handleChange}
-            error={fieldErrors.eccNo}
-          />
-
-          <Field
-            label="Division"
-            name="division"
-            value={form.division}
-            onChange={handleChange}
-            error={fieldErrors.division}
-          />
-
-          <Field
-            label="City ID"
-            name="cityId"
-            value={form.cityId}
-            onChange={handleChange}
-            error={fieldErrors.cityId}
-          />
-
-          <Field
-            label="State ID"
-            name="stateId"
-            value={form.stateId}
-            onChange={handleChange}
-            error={fieldErrors.stateId}
-          />
-
-          <Field
-            label="Pincode"
-            name="pincode"
-            value={form.pincode}
-            onChange={handleChange}
-            error={fieldErrors.pincode}
-          />
-
-          <Field
-            label="GSTIN No"
-            name="gstinNo"
-            value={form.gstinNo}
-            onChange={handleChange}
-            error={fieldErrors.gstinNo}
-          />
-
-          <Field
-            label="PAN No"
-            name="panNo"
-            value={form.panNo}
-            onChange={handleChange}
-            error={fieldErrors.panNo}
-          />
-
-          <Field
-            label="CIN No"
-            name="cinNo"
-            value={form.cinNo}
-            onChange={handleChange}
-            error={fieldErrors.cinNo}
-          />
-
-          <Field
-            label="DUNS No"
-            name="dunsNo"
-            value={form.dunsNo}
-            onChange={handleChange}
-            error={fieldErrors.dunsNo}
-          />
-
-          <Field
-            label="Address"
-            name="address"
-            value={form.address}
-            onChange={handleChange}
-            error={fieldErrors.address}
-            className="col-span-2"
-          />
-        </div>
-      </div>
-
-      {/* Bank Details */}
-      <div>
-        <SectionHeader>Bank Details</SectionHeader>
-
-        <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-          <table className="w-full text-xs bg-white dark:bg-gray-800">
-            <thead>
-              <tr className="bg-gray-50 dark:bg-gray-900/40 border-b border-gray-200 dark:border-gray-700">
-                <th className="px-2 py-2 text-left font-medium text-gray-600 dark:text-gray-300">
-                  Bank Name
-                </th>
-                <th className="px-2 py-2 text-left font-medium text-gray-600 dark:text-gray-300">
-                  Bank Branch
-                </th>
-                <th className="px-2 py-2 text-left font-medium text-gray-600 dark:text-gray-300">
-                  Account No
-                </th>
-                <th className="px-2 py-2 text-left font-medium text-gray-600 dark:text-gray-300">
-                  IFSC Code
-                </th>
-                <th className="w-12 px-2 py-2"></th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {bankRows.map((row, idx) => (
-                <tr
-                  key={idx}
-                  className="border-t border-gray-100 dark:border-gray-700"
-                >
-                  <td className="px-2 py-2">
-                    <input
-                      type="text"
-                      value={row.bankName}
-                      onChange={(e) =>
-                        handleBankCellChange(idx, "bankName", e.target.value)
-                      }
-                      className={`${controlClasses} h-8 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600`}
-                    />
-                  </td>
-
-                  <td className="px-2 py-2">
-                    <input
-                      type="text"
-                      value={row.bankBranch}
-                      onChange={(e) =>
-                        handleBankCellChange(idx, "bankBranch", e.target.value)
-                      }
-                      className={`${controlClasses} h-8 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600`}
-                    />
-                  </td>
-
-                  <td className="px-2 py-2">
-                    <input
-                      type="text"
-                      value={row.accountNo}
-                      onChange={(e) =>
-                        handleBankCellChange(idx, "accountNo", e.target.value)
-                      }
-                      className={`${controlClasses} h-8 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600`}
-                    />
-                  </td>
-
-                  <td className="px-2 py-2">
-                    <input
-                      type="text"
-                      value={row.ifscCode}
-                      onChange={(e) =>
-                        handleBankCellChange(idx, "ifscCode", e.target.value)
-                      }
-                      className={`${controlClasses} h-8 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600`}
-                    />
-                  </td>
-
-                  <td className="px-2 py-2 text-center">
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveBankRow(idx)}
-                      disabled={bankRows.length === 1}
-                      className="h-8 w-8 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center text-red-500 disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <button
-          type="button"
-          onClick={handleAddBankRow}
-          className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
-        >
-          <Plus className="h-4 w-4" />
-          Add Bank Row
-        </button>
-      </div>
-
-      <FormButtons
-        onCancel={onBack}
-        onSave={handleSave}
-        isSubmitting={isSubmitting}
-        saveLabel={selectedBranch ? "Update" : "Save"}
-      />
-    </div>
-  );
-};
-
-/* ---------------------------------------------------------------------------- */
-/* Combined screen with top-left tab switcher                                  */
-
-const TABS = [
-  { key: "company", label: "Company" },
-  { key: "branch", label: "Branch" },
-];
-
-const CompanyBranchMaster = ({
-  companyData,
-  companyId,
-  branchData,
-  companies,
-  branches,
-  onBack,
-  onCompanyChange,
-  onBranchSelect,
-}) => {
-  const [activeTab, setActiveTab] = useState("company");
-
-  return (
-    <div className="p-2 max-w-7xl">
-      {/* Header */}
-      <div className="flex items-center gap-2 mb-3">
-        <button
-          onClick={onBack}
-          className="
-            p-1 rounded-md
-            text-gray-600 dark:text-gray-300
-            hover:bg-gray-100 dark:hover:bg-gray-700
-            hover:text-gray-900 dark:hover:text-white
-            transition-colors
-          "
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </button>
-
-        <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-          Company Setup
-        </h2>
-      </div>
-
-      {/* Tabs - top left */}
-      <div className="flex items-center gap-4 border-b border-gray-200 dark:border-gray-700 mb-3">
-        {TABS.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={
-              "relative px-1 pb-2 text-sm font-medium transition-colors " +
-              (activeTab === tab.key
-                ? "text-blue-600 dark:text-blue-400"
-                : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200")
-            }
-          >
-            {tab.label}
-            {activeTab === tab.key && (
-              <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-blue-600 dark:bg-blue-400 rounded-full" />
-            )}
-          </button>
-        ))}
-      </div>
-
-      {/* Active panel */}
-      {activeTab === "company" ? (
-        <CompanyMasterForm
-          data={companyData}
-          companyId={companyId}
-          onBack={onBack}
+        <FormButtons
+          onCancel={onBack}
+          onSave={handleSave}
+          isSubmitting={isSubmitting}
+          saveLabel="Update"
         />
-      ) : (
-        <BranchMasterForm
-          data={branchData}
-          companies={companies}
-          branches={branches}
-          onBack={onBack}
-          onCompanyChange={onCompanyChange}
-          onBranchSelect={onBranchSelect}
-        />
-      )}
+      </div>
     </div>
   );
 };
 
-export default CompanyBranchMaster;
+export default CompanyMasterForm;

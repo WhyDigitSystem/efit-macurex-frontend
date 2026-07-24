@@ -1,51 +1,60 @@
-import { useState } from 'react';
-import BranchMasterList from './BranchList';
-import BranchMasterForm from './BranchMasterForm';
+import { useCallback, useState } from "react";
+import BranchMasterList from "./BranchList";
+import BranchMasterForm from "./BranchMasterForm";
+import { branchAPI } from "../../../api/branchAPI";
+import { toast } from "../../../utils/toast";
 
-const BranchMaster = () => {
-    const [currentView, setCurrentView] = useState('list'); // 'list' or 'form'
-    const [selectedBranch, setSelectedBranch] = useState(null);
-    const [refreshTrigger, setRefreshTrigger] = useState(0);
+const BranchMasterPage = () => {
+  const [view, setView] = useState("list"); // "list" | "form"
+  const [editData, setEditData] = useState(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [loadingEdit, setLoadingEdit] = useState(false);
 
-    const handleAddNew = () => {
-        setSelectedBranch(null);
-        setCurrentView('form');
-    };
+  const ORG_ID = localStorage.getItem("orgId");
 
-    const handleEdit = (branch) => {
-        setSelectedBranch(branch);
-        setCurrentView('form');
-    };
+  const handleAddNew = () => {
+    setEditData(null);
+    setView("form");
+  };
 
-    const handleBack = () => {
-        setCurrentView('list');
-        setSelectedBranch(null);
-    };
+  //  Pencil icon click -> fetch fresh data by orgId, find the matching branch, open form
+  const handleEdit = useCallback(
+    async (row) => {
+      try {
+        setLoadingEdit(true);
+        const branches = await branchAPI.getBranchByOrgId(ORG_ID);
+        const fresh = branches.find((b) => b.id === row.id) || row;
+        setEditData(fresh);
+        setView("form");
+      } catch (error) {
+        console.error("Failed to fetch branch for edit:", error);
+        toast.error("Failed to load branch details");
+      } finally {
+        setLoadingEdit(false);
+      }
+    },
+    [ORG_ID],
+  );
 
-    const handleSaveSuccess = (action) => {
-        // Trigger refresh of the list
-        setRefreshTrigger(prev => prev + 1);
-        console.log(`Branch ${action} successfully`);
-    };
+  const handleBack = () => {
+    setEditData(null);
+    setView("list");
+    // bump refreshTrigger so the list re-fetches after add/update
+    setRefreshTrigger((prev) => prev + 1);
+  };
 
-    return (
-        <div>
-            {currentView === 'list' ? (
-                <BranchMasterList
-                    onAddNew={handleAddNew}
-                    onEdit={handleEdit}
-                    refreshTrigger={refreshTrigger}
-                    onBack={() => window.history.back()}
-                />
-            ) : (
-                <BranchMasterForm
-                    editData={selectedBranch}
-                    onBack={handleBack}
-                    onSaveSuccess={handleSaveSuccess}
-                />
-            )}
-        </div>
-    );
+  if (view === "form") {
+    return <BranchMasterForm data={editData} onBack={handleBack} />;
+  }
+
+  return (
+    <BranchMasterList
+      onAddNew={handleAddNew}
+      onEdit={handleEdit}
+      onBack={handleBack}
+      refreshTrigger={refreshTrigger}
+    />
+  );
 };
 
-export default BranchMaster;
+export default BranchMasterPage;

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
-import apiClient from "../../../api/apiClient";
+import { branchAPI } from "../../../api/branchAPI";
 import { toast } from "../../../utils/toast";
 
 const BranchMasterList = ({ onAddNew, onEdit, refreshTrigger, onBack }) => {
@@ -13,19 +13,7 @@ const BranchMasterList = ({ onAddNew, onEdit, refreshTrigger, onBack }) => {
     try {
       setLoading(true);
 
-      const response = await apiClient.get(
-        `/api/warehousemastercontroller/branch?orgid=${ORG_ID}`,
-      );
-
-      let branches = [];
-
-      if (Array.isArray(response)) {
-        branches = response;
-      } else if (response?.paramObjectsMap?.branchVO) {
-        branches = response.paramObjectsMap.branchVO;
-      } else if (response?.data) {
-        branches = response.data;
-      }
+      const branches = await branchAPI.getBranchByOrgId(ORG_ID);
 
       branches.sort((a, b) => (b.id || 0) - (a.id || 0));
 
@@ -49,18 +37,59 @@ const BranchMasterList = ({ onAddNew, onEdit, refreshTrigger, onBack }) => {
       label: "Branch Code",
       accessor: "branchCode",
       type: "text",
-      noWrap: true,
     },
     {
-      key: "branch",
+      key: "branchName",
       label: "Branch Name",
-      accessor: "branch",
+      accessor: "branchName",
       type: "text",
     },
     {
-      key: "city",
-      label: "City",
-      accessor: "city",
+      key: "branchIncharge",
+      label: "Branch Incharge",
+      accessor: "branchIncharge",
+      type: "text",
+    },
+    {
+      key: "phoneNo",
+      label: "Mobile",
+      accessor: "phoneNo",
+      type: "text",
+    },
+    {
+      key: "email",
+      label: "Email",
+      accessor: "email",
+      type: "text",
+    },
+    {
+      key: "division",
+      label: "Division",
+      accessor: "division",
+      type: "text",
+    },
+    {
+      key: "bankName",
+      label: "Bank Name",
+      accessor: (row) => row.bankDetailsVO?.[0]?.bankName || "-",
+      type: "text",
+    },
+    {
+      key: "accountNo",
+      label: "Account No",
+      accessor: (row) => row.bankDetailsVO?.[0]?.accountNo || "-",
+      type: "text",
+    },
+    {
+      key: "ifscCode",
+      label: "IFSC",
+      accessor: (row) => row.bankDetailsVO?.[0]?.ifscCode || "-",
+      type: "text",
+    },
+    {
+      key: "bankBranch",
+      label: "Bank Branch",
+      accessor: (row) => row.bankDetailsVO?.[0]?.bankBranch || "-",
       type: "text",
     },
     {
@@ -69,16 +98,6 @@ const BranchMasterList = ({ onAddNew, onEdit, refreshTrigger, onBack }) => {
       accessor: "active",
       type: "status",
       statusVariants: {
-        true: {
-          label: "Active",
-          className:
-            "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
-        },
-        false: {
-          label: "Inactive",
-          className:
-            "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
-        },
         Active: {
           label: "Active",
           className:
@@ -100,7 +119,14 @@ const BranchMasterList = ({ onAddNew, onEdit, refreshTrigger, onBack }) => {
     },
   ];
 
-  const searchFields = ["branchCode", "branch", "city"];
+  const searchFields = [
+    "branchCode",
+    "branchName",
+    "branchIncharge",
+    "phoneNo",
+    "email",
+    "division",
+  ];
 
   const filterOptions = [
     {
@@ -127,7 +153,6 @@ const BranchMasterList = ({ onAddNew, onEdit, refreshTrigger, onBack }) => {
   return (
     <CommonListViewTable
       title="Branch"
-      
       data={branchData}
       loading={loading}
       columns={columns}
