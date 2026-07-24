@@ -139,15 +139,6 @@ const CompanyMasterList = ({ onEdit, onBack }) => {
 
         <div className="flex items-center gap-2">
           <button
-            onClick={loadCompany}
-            disabled={loading}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 transition-colors"
-          >
-            <RefreshCw className={`h-3 w-3 ${loading ? "animate-spin" : ""}`} />
-            Refresh
-          </button>
-
-          <button
             onClick={handleUpdate}
             disabled={loading || !company}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
@@ -204,12 +195,19 @@ const CompanyMasterList = ({ onEdit, onBack }) => {
                   {company.companyName}
                 </h3>
                 <span
-                  className={`inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-medium uppercase tracking-wide ${
                     isActive(company.active)
-                      ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300"
-                      : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300"
+                      ? "bg-emerald-500/15 text-emerald-300"
+                      : "bg-white/10 text-white/60"
                   }`}
                 >
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full ${
+                      isActive(company.active)
+                        ? "bg-emerald-400 shadow-[0_0_3px_1px_rgba(74,222,128,0.7)] animate-pulse"
+                        : "bg-gray-400 shadow-[0_0_2px_0.5px_rgba(156,163,175,0.5)] animate-pulse"
+                    }`}
+                  />
                   {isActive(company.active) ? "Active" : "Inactive"}
                 </span>
               </div>
