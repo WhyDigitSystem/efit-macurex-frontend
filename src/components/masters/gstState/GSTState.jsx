@@ -1,8 +1,9 @@
 import { useState } from "react";
-import CurrencyList from "./CurrencyList";
-import CurrencyForm from "./CurrencyForm";
 
-const Currency = () => {
+import GSTStateList from "../gstState/GSTStateList";
+import GSTStateForm from "../gstState/GSTStateForm";
+
+const GSTState = () => {
   const [screen, setScreen] = useState("list");
   const [editData, setEditData] = useState(null);
 
@@ -20,7 +21,7 @@ const Currency = () => {
   return (
     <>
       {screen === "list" && (
-        <CurrencyList
+        <GSTStateList
           onAddNew={addNew}
           onEdit={edit}
           onBack={() => window.history.back()}
@@ -28,7 +29,7 @@ const Currency = () => {
       )}
 
       {screen === "form" && (
-        <CurrencyForm
+        <GSTStateForm
           data={editData}
           onBack={() => setScreen("list")}
         />
@@ -37,4 +38,4 @@ const Currency = () => {
   );
 };
 
-export default Currency;
+export default GSTState;
