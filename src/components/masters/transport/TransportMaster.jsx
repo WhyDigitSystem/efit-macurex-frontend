@@ -23,7 +23,7 @@ const TransportMaster = () => {
 
   const handleSave = async (payload) => {
     try {
-      await transportAPI.createTransport(payload); // Create/Update
+      await transportAPI.updateCreateTransport(payload); // Create/Update
       handleBack();
     } catch (error) {
       console.error("Error saving transport:", error);

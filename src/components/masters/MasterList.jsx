@@ -69,6 +69,12 @@ const SECTIONS = [
         path: "/gst_state",
         screenCode: "GST_STATE",
       },
+      {
+        name: "Gst Rate",
+        icon: CalendarDays,
+        path: "/gst_rate",
+        screenCode: "GST_RATE",
+      },
     ],
   },
 
@@ -126,7 +132,7 @@ const SECTIONS = [
         screenCode: "DOCUMENT_TYPE",
       },
       {
-        name: "Document Type Mapping",
+        name: "Doc Type Mapping",
         icon: FileCog,
         path: "/documenttypemapping",
         screenCode: "DOCUMENT_TYPE_MAPPING",
@@ -325,7 +331,7 @@ const MastersList = () => {
                             transition-all duration-200 hover:shadow-md hover:scale-[1.02]
                           `}
                         >
-                          <div className="p-2 h-20 flex flex-col items-center justify-center text-center">
+                          <div className="p-1 h-20 flex flex-col items-center justify-center text-center">
                             <div
                               className={`
                                 p-2 rounded-lg ${sectionColors.iconBg}
