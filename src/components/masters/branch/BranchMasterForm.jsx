@@ -2,6 +2,9 @@ import { Plus, Trash2, Save, X, ArrowLeft } from "lucide-react";
 import { useEffect, useState } from "react";
 import { companySetupAPI } from "../../../api/companySetupApi";
 import { useToast } from "../../Toast/ToastContext";
+import countryAPI from "../../../api/countryAPI";
+import stateAPI from "../../../api/stateAPI";
+import cityAPI from "../../../api/cityAPI";
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -35,6 +38,19 @@ const IFSC_REGEX = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 const DUNS_REGEX = /^[0-9]{9}$/;
 const ACCOUNT_NO_REGEX = /^[0-9]{6,18}$/;
 const NAME_REGEX = /^[A-Za-z][A-Za-z .'-]*$/;
+
+/* ---------------------------------------------------------------------------- */
+/* Location helpers                                                             */
+
+// Normalizes a country/state/city field that might arrive either as a plain
+// id (string/number) OR as a full nested object (e.g. { id, countryName, ... })
+// depending on which API populated it.
+const normalizeLocationRef = (val, nameKey) => {
+  if (val && typeof val === "object") {
+    return { id: val.id ?? "", name: val[nameKey] || "" };
+  }
+  return { id: val ?? "", name: "" };
+};
 
 /* ---------------------------------------------------------------------------- */
 /* Shared building blocks                                                      */
@@ -90,8 +106,8 @@ const Field = ({
         >
           <option value="">Select {label}</option>
           {(options || []).map((opt) => (
-            <option key={opt} value={opt}>
-              {opt}
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
             </option>
           ))}
         </select>
@@ -233,11 +249,17 @@ const emptyBranchForm = () => ({
   rangeCode: "",
   division: "",
   divisionCode: "",
-  city: "",
-  cityId: "",
-  pincode: "",
-  state: "",
+
+  countryId: "",
+  countryName: "",
+
   stateId: "",
+  stateName: "",
+
+  cityId: "",
+  cityName: "",
+
+  pincode: "",
   gstinNo: "",
   panNo: "",
   cinNo: "",
@@ -264,70 +286,112 @@ const BranchMasterForm = ({
   const [fieldErrors, setFieldErrors] = useState({});
 
   const [bankRows, setBankRows] = useState(
-    data?.bankDetails?.length ? data.bankDetails : [emptyBankRow()],
+    data?.bankDetailsVO?.length ? data.bankDetailsVO : [emptyBankRow()],
   );
 
-  useEffect(() => {
-    if (data) {
-      setForm({ ...emptyBranchForm(), ...data });
-      setSelectedCompany(data.companyId || "");
-      setSelectedBranch(data.id || "");
-      setBankRows(
-        data.bankDetails?.length
-          ? data.bankDetails.map((b) => ({
-              id: b.id || 0,
-              bankName: b.bankName || "",
-              bankBranch: b.bankBranch || "",
-              accountNo: b.accountNo ?? "",
-              ifscCode: b.ifscCode || "",
-              primary: b.primary || false,
-            }))
-          : [emptyBankRow()],
-      );
-    } else {
-      setForm(emptyBranchForm());
-      setSelectedCompany("");
-      setSelectedBranch("");
-      setBankRows([emptyBankRow()]);
-    }
-  }, [data]);
+  // Country / State / City dropdown option lists
+  const [countries, setCountries] = useState([]);
+  const [states, setStates] = useState([]);
+  const [cities, setCities] = useState([]);
 
+  // Fetch the country list once we know the org
   useEffect(() => {
-    if (data) {
-      setForm({ ...emptyBranchForm(), ...data });
-      setSelectedCompany(data.companyId || "");
-      setSelectedBranch(data.id || "");
-      setBankRows(
-        data.bankDetailsVO?.length ? data.bankDetailsVO : [emptyBankRow()],
-      );
+    const fetchCountries = async () => {
+      try {
+        const result = await countryAPI.getCountries(orgId);
+        setCountries(result);
+      } catch (error) {
+        console.error("Country loading error", error);
+      }
+    };
+
+    if (orgId) {
+      fetchCountries();
     }
-  }, [data]);
-  // Single effect: sync everything when `data` changes (e.g. pencil click -> fresh fetch)
+  }, [orgId]);
+
+  // Single effect: sync everything when `data` changes (e.g. pencil click -> fresh fetch,
+  // or clearing back to "Add New"). Also preloads state/city option lists so a saved
+  // branch shows its Country/State/City as names immediately, not blank.
   useEffect(() => {
-    if (data) {
-      setForm({ ...emptyBranchForm(), ...data });
-      setSelectedCompany(data.companyId || "");
-      setSelectedBranch(data.id || "");
-      // ✅ FIX: read bankDetailsVO (matches API response shape)
-      setBankRows(
-        data.bankDetailsVO?.length
-          ? data.bankDetailsVO.map((b) => ({
-              id: b.id || 0,
-              bankName: b.bankName || "",
-              bankBranch: b.bankBranch || "",
-              accountNo: b.accountNo ?? "",
-              ifscCode: b.ifscCode || "",
-              primary: b.primary || false,
-            }))
-          : [emptyBankRow()],
-      );
-    } else {
-      // Add New: reset everything back to a blank form
-      setForm(emptyBranchForm());
-      setSelectedCompany("");
-      setSelectedBranch("");
-      setBankRows([emptyBankRow()]);
-    }
+    const syncFormWithData = async () => {
+      if (data) {
+        const countryRef = normalizeLocationRef(
+          data.country ?? data.countryId,
+          "countryName",
+        );
+        const stateRef = normalizeLocationRef(
+          data.state ?? data.stateId,
+          "stateName",
+        );
+        const cityRef = normalizeLocationRef(
+          data.city ?? data.cityId,
+          "cityName",
+        );
+
+        setForm({
+          ...emptyBranchForm(),
+          ...data,
+          countryId: countryRef.id,
+          countryName: countryRef.name,
+          stateId: stateRef.id,
+          stateName: stateRef.name,
+          cityId: cityRef.id,
+          cityName: cityRef.name,
+        });
+
+        setSelectedCompany(data.companyId || "");
+        setSelectedBranch(data.id || "");
+
+        setBankRows(
+          data.bankDetailsVO?.length
+            ? data.bankDetailsVO.map((b) => ({
+                id: b.id || 0,
+                bankName: b.bankName || "",
+                bankBranch: b.bankBranch || "",
+                accountNo: b.accountNo ?? "",
+                ifscCode: b.ifscCode || "",
+                primary: b.primary || false,
+              }))
+            : [emptyBankRow()],
+        );
+
+        // Preload state/city dropdown options for the saved country/state
+        setStates([]);
+        setCities([]);
+
+        if (countryRef.id) {
+          try {
+            const stateData = await stateAPI.getStatesByCountry(
+              countryRef.id,
+              orgId,
+            );
+            setStates(stateData);
+          } catch (error) {
+            console.error("State loading error", error);
+          }
+        }
+
+        if (stateRef.id) {
+          try {
+            const cityData = await cityAPI.getCitiesByState(orgId, stateRef.id);
+            setCities(cityData);
+          } catch (error) {
+            console.error("City loading error", error);
+          }
+        }
+      } else {
+        // Add New: reset everything back to a blank form
+        setForm(emptyBranchForm());
+        setSelectedCompany("");
+        setSelectedBranch("");
+        setBankRows([emptyBankRow()]);
+        setStates([]);
+        setCities([]);
+      }
+    };
+
+    syncFormWithData();
   }, [data]);
 
   const handleBranchSelect = (e) => {
@@ -342,6 +406,85 @@ const BranchMasterForm = ({
       setFieldErrors((prev) => ({ ...prev, [name]: "" }));
     }
     setForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleCountryChange = async (e) => {
+    const countryId = e.target.value;
+
+    const selectedCountry = countries.find(
+      (c) => String(c.id) === String(countryId),
+    );
+
+    if (fieldErrors.countryId) {
+      setFieldErrors((prev) => ({ ...prev, countryId: "" }));
+    }
+
+    setForm((prev) => ({
+      ...prev,
+      countryId,
+      countryName: selectedCountry?.countryName || "",
+      stateId: "",
+      stateName: "",
+      cityId: "",
+      cityName: "",
+    }));
+
+    setStates([]);
+    setCities([]);
+
+    if (countryId) {
+      try {
+        const stateData = await stateAPI.getStatesByCountry(countryId, orgId);
+        setStates(stateData);
+      } catch (error) {
+        console.error("State loading error", error);
+      }
+    }
+  };
+
+  const handleStateChange = async (e) => {
+    const stateId = e.target.value;
+
+    const selectedState = states.find((s) => String(s.id) === String(stateId));
+
+    if (fieldErrors.stateId) {
+      setFieldErrors((prev) => ({ ...prev, stateId: "" }));
+    }
+
+    setForm((prev) => ({
+      ...prev,
+      stateId,
+      stateName: selectedState?.stateName || "",
+      cityId: "",
+      cityName: "",
+    }));
+
+    setCities([]);
+
+    if (stateId) {
+      try {
+        const cityData = await cityAPI.getCitiesByState(orgId, stateId);
+        setCities(cityData);
+      } catch (error) {
+        console.error("City loading error", error);
+      }
+    }
+  };
+
+  const handleCityChange = (e) => {
+    const cityId = e.target.value;
+
+    const selectedCity = cities.find((c) => String(c.id) === String(cityId));
+
+    if (fieldErrors.cityId) {
+      setFieldErrors((prev) => ({ ...prev, cityId: "" }));
+    }
+
+    setForm((prev) => ({
+      ...prev,
+      cityId,
+      cityName: selectedCity?.cityName || "",
+    }));
   };
 
   const validate = () => {
@@ -370,11 +513,9 @@ const BranchMasterForm = ({
 
     if (!form.division?.trim()) errors.division = "Division is required";
 
-    if (form.cityId && !/^[0-9]+$/.test(String(form.cityId).trim()))
-      errors.cityId = "City ID must be numeric";
-
-    if (form.stateId && !/^[0-9]+$/.test(String(form.stateId).trim()))
-      errors.stateId = "State ID must be numeric";
+    if (!form.countryId) errors.countryId = "Country is required";
+    if (!form.stateId) errors.stateId = "State is required";
+    if (!form.cityId) errors.cityId = "City is required";
 
     if (!form.pincode?.trim()) errors.pincode = "Pincode is required";
     else if (!PINCODE_REGEX.test(form.pincode.trim()))
@@ -443,8 +584,9 @@ const BranchMasterForm = ({
       address: form.address.trim(),
       division: form.division.trim(),
 
-      cityId: form.cityId ? Number(form.cityId) : 0,
+      countryId: form.countryId ? Number(form.countryId) : 0,
       stateId: form.stateId ? Number(form.stateId) : 0,
+      cityId: form.cityId ? Number(form.cityId) : 0,
 
       pincode: form.pincode.trim(),
 
@@ -596,19 +738,56 @@ const BranchMasterForm = ({
             />
 
             <Field
-              label="City ID"
-              name="cityId"
-              value={form.cityId}
-              onChange={handleChange}
-              error={fieldErrors.cityId}
+              type="select"
+              label="Country"
+              name="countryId"
+              value={form.countryId}
+              onChange={handleCountryChange}
+              error={fieldErrors.countryId}
+              required
+              options={[
+                ...(form.countryId &&
+                !countries.some((c) => String(c.id) === String(form.countryId))
+                  ? [{ id: form.countryId, countryName: form.countryName }]
+                  : []),
+                ...countries,
+              ].map((c) => ({ value: c.id, label: c.countryName }))}
             />
 
             <Field
-              label="State ID"
+              type="select"
+              label="State"
               name="stateId"
               value={form.stateId}
-              onChange={handleChange}
+              onChange={handleStateChange}
               error={fieldErrors.stateId}
+              required
+              disabled={!form.countryId}
+              options={[
+                ...(form.stateId &&
+                !states.some((s) => String(s.id) === String(form.stateId))
+                  ? [{ id: form.stateId, stateName: form.stateName }]
+                  : []),
+                ...states,
+              ].map((s) => ({ value: s.id, label: s.stateName }))}
+            />
+
+            <Field
+              type="select"
+              label="City"
+              name="cityId"
+              value={form.cityId}
+              onChange={handleCityChange}
+              error={fieldErrors.cityId}
+              required
+              disabled={!form.stateId}
+              options={[
+                ...(form.cityId &&
+                !cities.some((c) => String(c.id) === String(form.cityId))
+                  ? [{ id: form.cityId, cityName: form.cityName }]
+                  : []),
+                ...cities,
+              ].map((c) => ({ value: c.id, label: c.cityName }))}
             />
 
             <Field
@@ -617,6 +796,7 @@ const BranchMasterForm = ({
               value={form.pincode}
               onChange={handleChange}
               error={fieldErrors.pincode}
+              required
             />
 
             <Field
@@ -625,6 +805,7 @@ const BranchMasterForm = ({
               value={form.gstinNo}
               onChange={handleChange}
               error={fieldErrors.gstinNo}
+              required
             />
 
             <Field
@@ -657,6 +838,7 @@ const BranchMasterForm = ({
               value={form.address}
               onChange={handleChange}
               error={fieldErrors.address}
+              required
               className="col-span-2"
             />
           </div>
@@ -699,9 +881,7 @@ const BranchMasterForm = ({
                         onChange={(e) =>
                           handleBankCellChange(idx, "bankName", e.target.value)
                         }
-                        className={`${controlClasses} h-8 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 ${
-                          fieldErrors[`bankAccountNo_${idx}`] ? "" : ""
-                        }`}
+                        className={`${controlClasses} h-8 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600`}
                       />
                     </td>
 

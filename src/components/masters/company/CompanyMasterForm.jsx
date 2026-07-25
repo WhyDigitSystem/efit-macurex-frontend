@@ -3,6 +3,16 @@ import { useEffect, useRef, useState } from "react";
 import { superAdminAPI } from "../../../api/superAdminApi";
 import { companySetupAPI } from "../../../api/companySetupApi";
 import { useToast } from "../../Toast/ToastContext";
+import countryAPI from "../../../api/countryAPI";
+import stateAPI from "../../../api/stateAPI";
+import cityAPI from "../../../api/cityAPI";
+
+const normalizeLocationRef = (val, nameKey) => {
+  if (val && typeof val === "object") {
+    return { id: val.id ?? "", name: val[nameKey] || "" };
+  }
+  return { id: val ?? "", name: "" };
+};
 
 const UPPERCASE_FIELDS = ["companyCode"];
 
@@ -85,8 +95,8 @@ const Field = ({
         >
           <option value="">Select {label}</option>
           {(options || []).map((opt) => (
-            <option key={opt} value={opt}>
-              {opt}
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
             </option>
           ))}
         </select>
@@ -224,8 +234,13 @@ const emptyCompanyForm = () => ({
   officialWebsite: "",
   address: "",
   country: "",
+  countryName: "",
+
   state: "",
+  stateName: "",
+
   city: "",
+  cityName: "",
   pincode: "",
   panNo: "",
   gst: "",
@@ -248,6 +263,10 @@ const emptyCompanyForm = () => ({
 
 const CompanyMasterForm = ({ data, companyId, onBack }) => {
   const [orgId] = useState(localStorage.getItem("orgId"));
+
+  const [countries, setCountries] = useState([]);
+  const [states, setStates] = useState([]);
+  const [cities, setCities] = useState([]);
   const fileInputRef = useRef(null);
   const { addToast } = useToast();
 
@@ -260,9 +279,98 @@ const CompanyMasterForm = ({ data, companyId, onBack }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
+  useEffect(() => {
+    const fetchCountries = async () => {
+      try {
+        const data = await countryAPI.getCountries(orgId);
+
+        setCountries(data);
+      } catch (error) {
+        console.error("Country loading error", error);
+      }
+    };
+
+    if (orgId) {
+      fetchCountries();
+    }
+  }, [orgId]);
+  const handleCountryChange = async (e) => {
+    const countryId = e.target.value;
+
+    const selectedCountry = countries.find(
+      (c) => String(c.id) === String(countryId),
+    );
+
+    setForm((prev) => ({
+      ...prev,
+
+      country: countryId,
+      countryName: selectedCountry?.countryName || "",
+
+      state: "",
+      stateName: "",
+
+      city: "",
+      cityName: "",
+    }));
+
+    setCities([]);
+
+    if (countryId) {
+      try {
+        const stateData = await stateAPI.getStatesByCountry(countryId, orgId);
+
+        setStates(stateData);
+      } catch (error) {
+        console.error("State loading error", error);
+      }
+    }
+  };
+  const handleStateChange = async (e) => {
+    const stateId = e.target.value;
+
+    const selectedState = states.find((s) => String(s.id) === String(stateId));
+
+    setForm((prev) => ({
+      ...prev,
+
+      state: stateId,
+      stateName: selectedState?.stateName || "",
+
+      city: "",
+      cityName: "",
+    }));
+
+    if (stateId) {
+      try {
+        const cityData = await cityAPI.getCitiesByState(orgId, stateId);
+
+        setCities(cityData);
+      } catch (error) {
+        console.error("City loading error", error);
+      }
+    }
+  };
+  const handleCityChange = (e) => {
+    const cityId = e.target.value;
+
+    const selectedCity = cities.find((c) => String(c.id) === String(cityId));
+
+    setForm((prev) => ({
+      ...prev,
+
+      city: cityId,
+      cityName: selectedCity?.cityName || "",
+    }));
+  };
 
   const populateForm = (company) => {
     if (!company) return;
+
+    const countryRef = normalizeLocationRef(company.country, "countryName");
+    const stateRef = normalizeLocationRef(company.state, "stateName");
+    const cityRef = normalizeLocationRef(company.city, "cityName");
+
     setForm({
       ...emptyCompanyForm(),
       id: company.id || "",
@@ -275,9 +383,16 @@ const CompanyMasterForm = ({ data, companyId, onBack }) => {
       industryType: company.industryType || "",
       officialWebsite: company.officialWebsite || "",
       address: company.address || company.registeredAddress || "",
-      country: company.country || "",
-      state: company.state || "",
-      city: company.city || "",
+
+      country: countryRef.id,
+      countryName: countryRef.name,
+
+      state: stateRef.id,
+      stateName: stateRef.name,
+
+      city: cityRef.id,
+      cityName: cityRef.name,
+
       pincode: company.pincode || "",
       panNo: company.panNo || "",
       gst: company.gst || "",
@@ -296,7 +411,6 @@ const CompanyMasterForm = ({ data, companyId, onBack }) => {
       termsAndConditions: company.termsAndConditions || "",
     });
 
-    // companyLogo comes back as raw base64 (no data URI prefix) — wrap it
     if (company.companyLogo) {
       const logo = company.companyLogo;
       setLogoPreview(
@@ -387,8 +501,6 @@ const CompanyMasterForm = ({ data, companyId, onBack }) => {
     if (!form.state.trim()) errors.state = "State is required";
 
     if (!form.city.trim()) errors.city = "City is required";
-    else if (!/^[A-Za-z .'-]+$/.test(form.city.trim()))
-      errors.city = "Enter a valid city name";
 
     if (!form.pincode.trim()) errors.pincode = "Pincode is required";
     else if (!PINCODE_REGEX.test(form.pincode.trim()))
@@ -451,9 +563,10 @@ const CompanyMasterForm = ({ data, companyId, onBack }) => {
       officialWebsite: form.officialWebsite,
 
       registeredAddress: form.address,
-      countryId: 0,
-      stateId: 0,
-      cityId: 0,
+      countryId: Number(form.country),
+      stateId: Number(form.state),
+      cityId: Number(form.city),
+      orgId: Number(orgId),
       pincode: form.pincode,
 
       panNo: form.panNo,
@@ -644,30 +757,56 @@ const CompanyMasterForm = ({ data, companyId, onBack }) => {
 
             {/* Plain text fields now, not dropdowns — just show whatever value is present */}
             <Field
+              type="select"
               label="Country"
               name="country"
               value={form.country}
-              onChange={handleChange}
+              onChange={handleCountryChange}
               error={fieldErrors.country}
               required
+              options={[
+                ...(form.country &&
+                !countries.some((c) => String(c.id) === String(form.country))
+                  ? [{ id: form.country, countryName: form.countryName }]
+                  : []),
+                ...countries,
+              ].map((c) => ({ value: c.id, label: c.countryName }))}
             />
 
             <Field
+              type="select"
               label="State"
               name="state"
               value={form.state}
-              onChange={handleChange}
+              onChange={handleStateChange}
               error={fieldErrors.state}
               required
+              disabled={!form.country}
+              options={[
+                ...(form.state &&
+                !states.some((s) => String(s.id) === String(form.state))
+                  ? [{ id: form.state, stateName: form.stateName }]
+                  : []),
+                ...states,
+              ].map((s) => ({ value: s.id, label: s.stateName }))}
             />
 
             <Field
+              type="select"
               label="City"
               name="city"
               value={form.city}
-              onChange={handleChange}
+              onChange={handleCityChange}
               error={fieldErrors.city}
               required
+              disabled={!form.state}
+              options={[
+                ...(form.city &&
+                !cities.some((c) => String(c.id) === String(form.city))
+                  ? [{ id: form.city, cityName: form.cityName }]
+                  : []),
+                ...cities,
+              ].map((c) => ({ value: c.id, label: c.cityName }))}
             />
 
             <Field

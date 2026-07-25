@@ -283,11 +283,35 @@ const CompanyMasterList = ({ onEdit, onBack }) => {
                 value={company.registeredAddress}
               />
 
-              <InfoRow icon={Globe} label="Country" value={company.country} />
+              <InfoRow
+                icon={Globe}
+                label="Country"
+                value={
+                  company.country && typeof company.country === "object"
+                    ? company.country.countryName
+                    : company.country
+                }
+              />
 
-              <InfoRow icon={MapPin} label="State" value={company.state} />
+              <InfoRow
+                icon={MapPin}
+                label="State"
+                value={
+                  company.state && typeof company.state === "object"
+                    ? company.state.stateName
+                    : company.state
+                }
+              />
 
-              <InfoRow icon={MapPin} label="City" value={company.city} />
+              <InfoRow
+                icon={MapPin}
+                label="City"
+                value={
+                  company.city && typeof company.city === "object"
+                    ? company.city.cityName
+                    : company.city
+                }
+              />
 
               <InfoRow icon={MapPin} label="Pincode" value={company.pincode} />
 
