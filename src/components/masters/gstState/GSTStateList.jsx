@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 
-const CurrencyList = ({ onAddNew, onEdit,onBack }) => {
+const GSTStateList = ({ onAddNew, onEdit,onBack }) => {
   const [itemData, setItemData] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -330,7 +330,7 @@ const CurrencyList = ({ onAddNew, onEdit,onBack }) => {
 
   return (
     <CommonListViewTable
-      title="Currency List"
+      title="GST State List"
       data={itemData}
       loading={loading}
       columns={columns}
@@ -349,9 +349,9 @@ const CurrencyList = ({ onAddNew, onEdit,onBack }) => {
       enableRefresh={true}
       onRefresh={loadItems}
       enableExport={true}
-      exportFileName="Currency List"
+      exportFileName="GST State List"
     />
   );
 };
 
-export default CurrencyList;
+export default GSTStateList;
