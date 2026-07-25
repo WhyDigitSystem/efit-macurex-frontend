@@ -330,7 +330,7 @@ const GSTRateList = ({ onAddNew, onEdit,onBack }) => {
 
   return (
     <CommonListViewTable
-      title="GST State List"
+      title="GST Rate List"
       data={itemData}
       loading={loading}
       columns={columns}
@@ -349,7 +349,7 @@ const GSTRateList = ({ onAddNew, onEdit,onBack }) => {
       enableRefresh={true}
       onRefresh={loadItems}
       enableExport={true}
-      exportFileName="GST State List"
+      exportFileName="GST Rate List"
     />
   );
 };

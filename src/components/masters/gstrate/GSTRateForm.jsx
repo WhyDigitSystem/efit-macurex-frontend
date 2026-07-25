@@ -1,5 +1,5 @@
 import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react"; // Add useEffect import
 import { useForm, Controller, useFieldArray } from "react-hook-form";
 
 const controlClasses =
@@ -14,15 +14,17 @@ const labelClasses =
   "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
 const getDefaultValues = () => ({
-  // Required fields
-  stateCode: "",
-  stateName: "",
-  GSTStateId: "",
+  category: "",
+  hsnCode: "",
+  description: "",
+  WEF: "",
+  taxable: "",
+  rate: 0,
+  igstRate: 0,
+  sgstRate: 0,
+  cgstRate: 0,
 });
 
-// ============================================================================
-// HELPER COMPONENTS
-// ============================================================================
 const SelectField = ({ control, name, label, options, required, errors }) => (
   <div>
     <label className={labelClasses}>
@@ -57,6 +59,8 @@ const InputField = ({
   required,
   placeholder,
   errors,
+  min = 0,
+  disabled = false,
 }) => (
   <div>
     <label className={labelClasses}>
@@ -70,8 +74,18 @@ const InputField = ({
         <input
           {...field}
           type={type}
+          min={min}
           className={controlClasses}
           placeholder={placeholder}
+          disabled={disabled}
+          value={field.value ?? 0} 
+          onChange={(e) => {
+            const val = e.target.value;
+            // If field is not disabled, update the value
+            if (!disabled) {
+              field.onChange(val);
+            }
+          }}
         />
       )}
     />
@@ -105,15 +119,56 @@ const ToggleButton = ({ control, name }) => (
 
 const GSTRateForm = ({ data, onBack }) => {
   const [orgId] = useState(localStorage.getItem("orgId"));
+  const countryOptions = ["Goods", "Services"];
+  const taxableOptions = ["Goods", "Services"];
 
   const {
     control,
     handleSubmit,
     formState: { errors, isSubmitting },
+    watch,
+    setValue,
   } = useForm({
     mode: "onTouched",
     defaultValues: getDefaultValues(),
   });
+
+  const rate = watch("rate");
+
+  // Auto-calculate GST rates when rate changes
+  const calculateGSTRates = (rateValue) => {
+    const rateNum = parseFloat(rateValue) || 0;
+    
+    console.log("Calculating rates for:", rateNum); // Debug log
+    
+    
+    if (rateNum === 0 || isNaN(rateNum)) {
+      setValue("igstRate", 0);
+      setValue("sgstRate", 0);
+      setValue("cgstRate", 0);
+      return;
+    }
+
+    // For IGST: entire rate as IGST (for inter-state transactions)
+    const igst = rateNum;
+    
+    // For SGST and CGST: split the rate equally (for intra-state transactions)
+    const halfRate = rateNum / 2;
+    
+    console.log("Setting values:", { igst, halfRate }); // Debug log
+    
+    setValue("igstRate", igst);
+    setValue("sgstRate", halfRate);
+    setValue("cgstRate", halfRate);
+  };
+
+  // Use useEffect to calculate rates whenever rate changes
+  useEffect(() => {
+    console.log("Rate changed to:", rate); // Debug log
+    if (rate !== undefined && rate !== null && rate !== "") {
+      calculateGSTRates(rate);
+    }
+  }, [rate]); // This will run whenever 'rate' changes
 
   const onSubmit = async (formData) => {
     try {
@@ -135,7 +190,7 @@ const GSTRateForm = ({ data, onBack }) => {
           <ArrowLeft className="h-4 w-4" />
         </button>
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-          {data ? "Edit GST State" : "Add GST State"}
+          {data ? "Edit Gst Rate" : "Add Gst Rate"}
         </h2>
       </div>
 
@@ -144,31 +199,81 @@ const GSTRateForm = ({ data, onBack }) => {
         <form onSubmit={handleSubmit(onSubmit)}>
           {/* All fields in one row - 5 columns */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-            {/* Required Fields */}
-
-            <InputField
+            <SelectField
               control={control}
-              name="stateCode"
-              label="State Code"
+              name="category"
+              label="Category"
+              options={countryOptions}
               required
-              placeholder="Enter state code"
+              errors={errors}
+            />
+            <SelectField
+              control={control}
+              name="hsnCode"
+              label="HSN/SAC Code"
+              options={countryOptions}
+              required
               errors={errors}
             />
 
             <InputField
               control={control}
-              name="stateName"
-              label="State Name"
+              name="description"
+              label="Description"
+              placeholder="Enter description"
+              errors={errors}
+            />
+
+            <InputField
+              type="date"
+              control={control}
+              name="WEF"
+              label="WEF"
               required
-              placeholder="Enter state name"
+              placeholder="Enter Date"
+              errors={errors}
+            />
+            <SelectField
+              control={control}
+              name="taxable"
+              label="Taxable Y/N"
+              options={taxableOptions}
               errors={errors}
             />
             <InputField
+              type="number"
               control={control}
-              name="GSTStateId"
-              label="GST State ID"
+              name="rate"
+              label="Rate"
+              placeholder="Enter rate"
+              errors={errors}
               required
-              placeholder="Enter gst State Id"
+            />
+            <InputField
+              type="number"
+              control={control}
+              name="igstRate"
+              disabled={true}
+              label="IGST Rate"
+              placeholder="Auto-calculated"
+              errors={errors}
+            />
+            <InputField
+              type="number"
+              control={control}
+              name="sgstRate"
+              disabled={true}
+              label="SGST Rate"
+              placeholder="Auto-calculated"
+              errors={errors}
+            />
+            <InputField
+              type="number"
+              control={control}
+              name="cgstRate"
+              disabled={true}
+              label="CGST Rate"
+              placeholder="Auto-calculated"
               errors={errors}
             />
           </div>
@@ -183,7 +288,7 @@ const GSTRateForm = ({ data, onBack }) => {
               <X className="h-3 w-3" /> Cancel
             </button>
             <button
-              onClick={handleSubmit(onSubmit)}
+              type="submit"
               disabled={isSubmitting}
               className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
             >
