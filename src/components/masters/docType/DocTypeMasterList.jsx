@@ -155,7 +155,7 @@ const DocTypeMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   return (
     <div className="h-full flex flex-col">
       <CommonListViewTable
-        title="Doc Type"
+        title="Document Type"
         data={docTypeData}
         loading={loading}
         columns={columns}

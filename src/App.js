@@ -53,6 +53,7 @@ import GSTState from "./components/masters/gstState/GSTState";
 import GSTRate from "./components/masters/gstrate/GSTRate";
 import TransportMaster from "./components/masters/transport/TransportMaster";
 import DocTypeMaster from "./components/masters/docType/DocTypeMaster";
+import DocTypeMappingMaster from "./components/masters/DocTypeMapping/DocTypeMappingMaster";
 
 const ThemeInitializer = () => {
   const { mode } = useSelector((state) => state.theme);
@@ -132,6 +133,11 @@ const AppContent = () => {
                         element={<TransportMaster />}
                       />
                       <Route path="/documenttype" element={<DocTypeMaster />} />
+
+                      <Route
+                        path="/documenttypemapping"
+                        element={<DocTypeMappingMaster />}
+                      />
                       <Route path="/item" element={<ItemMaster />} />
                       <Route path="/unit" element={<UnitMaster />} />
                       <Route
