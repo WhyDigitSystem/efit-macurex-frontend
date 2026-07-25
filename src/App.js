@@ -48,6 +48,7 @@ import UnitMaster from "./components/masters/unit/UnitMaster";
 import UnitConversionMaster from "./components/masters/unitConversion/UnitConversionMaster";
 import Profile from "./components/settings/Profile";
 import ListMaster from "./components/masters/listofvalues/ListMaster";
+import Currency from './components/masters/currency/Currency';
 
 const ThemeInitializer = () => {
   const { mode } = useSelector((state) => state.theme);
@@ -129,6 +130,8 @@ const AppContent = () => {
                         element={<UnitConversionMaster />}
                       />
                       <Route path="/listofvalues" element={<ListMaster />} />
+                      <Route path="/currency" element={<Currency />} />
+
 
                       <Route path="/employee" element={<EmployeeMaster />} />
 

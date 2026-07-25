@@ -14,6 +14,7 @@ import {
   User,
   Briefcase,
   BadgeCheck,
+  Coins
 } from "lucide-react";
 import { hasScreenAccess } from "../../utils/accessControl";
 
@@ -35,6 +36,12 @@ const SECTIONS = [
         icon: MapPin,
         path: "/location",
         screenCode: "LOCATION",
+      },
+      {
+        name: "Currency",
+        icon: Coins,
+        path: "/currency",
+        screenCode: "CURRENCY",
       },
     ],
   },
