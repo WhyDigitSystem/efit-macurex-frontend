@@ -620,11 +620,11 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
         type="button"
         onClick={onRemove}
         disabled={disabled}
-        className={`h-7 w-7 rounded text-white flex items-center justify-center ${
+        className={`h-5 w-5 rounded text-white flex items-center justify-center ${
           disabled ? "bg-gray-400 cursor-not-allowed" : "bg-red-600 hover:bg-red-700"
         }`}
       >
-        <Trash2 size={14} />
+        <Trash2 size={10} />
       </button>
     </td>
   </tr>

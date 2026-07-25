@@ -47,8 +47,8 @@ import FinancialYearMaster from "./components/masters/financialYear/FinancialYea
 import UnitMaster from "./components/masters/unit/UnitMaster";
 import UnitConversionMaster from "./components/masters/unitConversion/UnitConversionMaster";
 import Profile from "./components/settings/Profile";
+import ListMaster from "./components/masters/listofvalues/ListMaster";
 
-// Theme initializer component
 const ThemeInitializer = () => {
   const { mode } = useSelector((state) => state.theme);
 
@@ -128,6 +128,8 @@ const AppContent = () => {
                         path="/unitconversion"
                         element={<UnitConversionMaster />}
                       />
+                      <Route path="/listofvalues" element={<ListMaster />} />
+
                       <Route path="/employee" element={<EmployeeMaster />} />
 
                       <Route path="/financial-year" element={<FinYear />} />
