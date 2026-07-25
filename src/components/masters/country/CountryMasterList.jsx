@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { masterAPI } from "../../../api/customerAPI";
+import countryAPI from "../../../api/countryAPI";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import { toast } from "../../../utils/toast";
 
@@ -13,7 +13,7 @@ const CountryMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     try {
       setLoading(true);
 
-      const response = await masterAPI.getCountries(ORG_ID);
+      const response = await countryAPI.getCountries(ORG_ID);
 
       const sortedCountries = (response || []).sort(
         (a, b) => (b.id || 0) - (a.id || 0),
@@ -98,7 +98,6 @@ const CountryMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
       searchFields={searchFields}
       filterOptions={filterOptions}
       defaultFilter="all"
-      
       onBack={onBack}
       onAddNew={onAddNew}
       onEdit={handleEdit}

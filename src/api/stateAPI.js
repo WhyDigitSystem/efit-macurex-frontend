@@ -1,43 +1,47 @@
 import apiClient from "./apiClient";
 
 export const stateAPI = {
-
-  getStates: async (orgid) => {
-    const res = await apiClient.get("/api/commonmaster/state", {
-      params: { orgid },
-    });
-    return res?.paramObjectsMap?.stateVO ?? [];
-  },
-
-  getStateById: async (stateId) => {
-    const res = await apiClient.get(`/api/commonmaster/state/${stateId}`);
-    return res?.paramObjectsMap?.stateVO ?? [];
-  },
-
-  getCountries: async (orgid) => {
-    const res = await apiClient.get("/api/commonmaster/country", {
-      params: { orgid },
-    });
-    return res?.paramObjectsMap?.countryVO ?? [];
-  },
-
-  getStatesByCountry: async (orgid, country) => {
-    const res = await apiClient.get("/api/commonmaster/state/country", {
-      params: { orgid, country },
-    });
-    return res?.paramObjectsMap?.stateVO ?? [];
-  },
-
-  createState: async (payload) => {
+  getStates: async (orgId) => {
     try {
-      const response = await apiClient.post("/api/commonmaster/state", payload);
-      return response?.data || response;
+      const res = await apiClient.get(`/api/commonmaster/state?orgid=${orgId}`);
+      return res?.paramObjectsMap?.stateVO || [];
     } catch (error) {
-      console.error("❌ Error creating state:", error);
+      console.error("Error fetching states:", error);
       throw error;
     }
   },
 
+  getStateById: async (stateId) => {
+    try {
+      const res = await apiClient.get(`/api/commonmaster/state/${stateId}`);
+      return res?.paramObjectsMap?.stateVO || null;
+    } catch (error) {
+      console.error("Error fetching state by ID:", error);
+      throw error;
+    }
+  },
+
+  getStatesByCountry: async (countryId, orgId) => {
+    try {
+      const res = await apiClient.get(
+        `/api/commonmaster/state/country?country=${countryId}&orgid=${orgId}`,
+      );
+      return res?.paramObjectsMap?.stateVO || [];
+    } catch (error) {
+      console.error("Error fetching states by country:", error);
+      throw error;
+    }
+  },
+
+  createUpdateState: async (stateDTO) => {
+    try {
+      const res = await apiClient.post("/api/commonmaster/state", stateDTO);
+      return res;
+    } catch (error) {
+      console.error("Error creating/updating state:", error);
+      throw error;
+    }
+  },
 };
 
 export default stateAPI;

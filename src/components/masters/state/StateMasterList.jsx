@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
-import { stateAPI } from "../../../api/stateAPI";
+import stateAPI from "../../../api/stateAPI";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import { toast } from "../../../utils/toast";
 
-const StateMasterList = ({ onAddNew, onEdit, onBack }) => {
+const StateMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   const [stateData, setStateData] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const ORG_ID = parseInt(localStorage.getItem("orgId"));
+  const ORG_ID = Number(localStorage.getItem("orgId"));
 
   const loadStates = useCallback(async () => {
     try {
@@ -15,19 +15,14 @@ const StateMasterList = ({ onAddNew, onEdit, onBack }) => {
 
       const response = await stateAPI.getStates(ORG_ID);
 
-      let states = [];
+      const sortedStates = (response || [])
+        .map((item) => ({
+          ...item,
+          country: item.country?.countryName || "",
+        }))
+        .sort((a, b) => (b.id || 0) - (a.id || 0));
 
-      if (Array.isArray(response)) {
-        states = response;
-      } else if (response?.paramObjectsMap?.stateVO) {
-        states = response.paramObjectsMap.stateVO;
-      } else if (response?.data) {
-        states = response.data;
-      }
-
-      states.sort((a, b) => (b.id || 0) - (a.id || 0));
-
-      setStateData(states);
+      setStateData(sortedStates);
     } catch (error) {
       console.error("Failed to load states:", error);
       setStateData([]);
@@ -39,7 +34,7 @@ const StateMasterList = ({ onAddNew, onEdit, onBack }) => {
 
   useEffect(() => {
     loadStates();
-  }, [loadStates]);
+  }, [loadStates, refreshTrigger]);
 
   const columns = [
     {
@@ -78,18 +73,6 @@ const StateMasterList = ({ onAddNew, onEdit, onBack }) => {
       label: "Status",
       accessor: "active",
       type: "status",
-      statusVariants: {
-        true: {
-          label: "Active",
-          className:
-            "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
-        },
-        false: {
-          label: "Inactive",
-          className:
-            "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
-        },
-      },
     },
     {
       key: "actions",
@@ -112,7 +95,6 @@ const StateMasterList = ({ onAddNew, onEdit, onBack }) => {
     {
       value: "all",
       label: "All",
-      field: null,
     },
     {
       value: "active",
