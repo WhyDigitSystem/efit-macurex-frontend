@@ -48,7 +48,8 @@ import UnitMaster from "./components/masters/unit/UnitMaster";
 import UnitConversionMaster from "./components/masters/unitConversion/UnitConversionMaster";
 import Profile from "./components/settings/Profile";
 import ListMaster from "./components/masters/listofvalues/ListMaster";
-import Currency from './components/masters/currency/Currency';
+import Currency from "./components/masters/currency/Currency";
+import TransportMaster from "./components/masters/transport/TransportMaster";
 
 const ThemeInitializer = () => {
   const { mode } = useSelector((state) => state.theme);
@@ -123,6 +124,10 @@ const AppContent = () => {
                         element={<FinancialYearMaster />}
                       />
                       <Route path="/party" element={<PartyMaster />} />
+                      <Route
+                        path="/transporter"
+                        element={<TransportMaster />}
+                      />
                       <Route path="/item" element={<ItemMaster />} />
                       <Route path="/unit" element={<UnitMaster />} />
                       <Route
@@ -131,7 +136,6 @@ const AppContent = () => {
                       />
                       <Route path="/listofvalues" element={<ListMaster />} />
                       <Route path="/currency" element={<Currency />} />
-
 
                       <Route path="/employee" element={<EmployeeMaster />} />
 
