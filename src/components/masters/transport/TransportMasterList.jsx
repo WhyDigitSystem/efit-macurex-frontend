@@ -109,43 +109,45 @@ const TransportMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
 
   const searchFields = ["transportName", "branch", "branchCode", "address"];
 
+  // Branch dropdown, rendered inside CommonListViewTable's header row
+  // (next to the search box) via the customHeaderActions slot.
+  const branchDropdown = (
+    <select
+      value={selectedBranch}
+      onChange={(e) => setSelectedBranch(e.target.value)}
+      className="
+        w-full sm:w-48
+        px-2 py-1.5 rounded-md border text-sm
+        bg-white dark:bg-gray-800
+        text-gray-900 dark:text-gray-100
+        border-gray-300 dark:border-gray-600
+        focus:outline-none
+        focus:ring-2 focus:ring-blue-500
+        disabled:opacity-50
+      "
+      disabled={branchLoading}
+    >
+      <option
+        value=""
+        className="bg-white text-gray-900 dark:bg-gray-800 dark:text-gray-100"
+      >
+        Select Branch
+      </option>
+
+      {branches.map((branch) => (
+        <option
+          key={branch.id}
+          value={branch.branchCode}
+          className="bg-white text-gray-900 dark:bg-gray-800 dark:text-gray-100"
+        >
+          {branch.branchName}
+        </option>
+      ))}
+    </select>
+  );
+
   return (
     <div className="h-full flex flex-col">
-      {/* Branch Dropdown */}
-      <div className="mb-3 flex items-center gap-3">
-        <select
-          value={selectedBranch}
-          onChange={(e) => setSelectedBranch(e.target.value)}
-          className="
-      px-3 py-2 rounded-md border text-sm
-      bg-white dark:bg-gray-800
-      text-gray-900 dark:text-gray-100
-      border-gray-300 dark:border-gray-600
-      focus:outline-none
-      focus:ring-2 focus:ring-blue-500
-      disabled:opacity-50
-    "
-          disabled={branchLoading}
-        >
-          <option
-            value=""
-            className="bg-white text-gray-900 dark:bg-gray-800 dark:text-gray-100"
-          >
-            Select Branch
-          </option>
-
-          {branches.map((branch) => (
-            <option
-              key={branch.id}
-              value={branch.branchCode}
-              className="bg-white text-gray-900 dark:bg-gray-800 dark:text-gray-100"
-            >
-              {branch.branchName} ({branch.branchCode})
-            </option>
-          ))}
-        </select>
-      </div>
-
       <CommonListViewTable
         title="Transport"
         data={transportData}
@@ -169,6 +171,7 @@ const TransportMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
         onRefresh={loadTransports}
         enableExport={true}
         exportFileName="Transports"
+        customHeaderActions={branchDropdown}
       />
     </div>
   );
