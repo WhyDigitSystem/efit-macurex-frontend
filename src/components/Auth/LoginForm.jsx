@@ -171,7 +171,7 @@ const AuthForm = () => {
         const userType = userVO?.userType;
         console.log("userTypeee", userType);
         if (userType === "SADMIN") {
-          navigate("/new-entries");
+          navigate("/");
         } else {
           navigate("/");
         }

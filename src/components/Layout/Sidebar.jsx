@@ -17,7 +17,7 @@ const Sidebar = () => {
     user?.email?.toLowerCase() || localStorage.getItem("email")?.toLowerCase();
 
   // Special menu for sadmin@gmail.com
-  const isMainSAdmin = userEmail === "sadmin@gmail.com";
+  const isMainSAdmin = userType;
 
   const navigation = isMainSAdmin
     ? [
