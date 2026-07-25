@@ -50,6 +50,7 @@ import Profile from "./components/settings/Profile";
 import ListMaster from "./components/masters/listofvalues/ListMaster";
 import Currency from "./components/masters/currency/Currency";
 import GSTState from "./components/masters/gstState/GSTState";
+import GSTRate from "./components/masters/gstrate/GSTRate";
 import TransportMaster from "./components/masters/transport/TransportMaster";
 
 const ThemeInitializer = () => {
@@ -138,6 +139,8 @@ const AppContent = () => {
                       <Route path="/listofvalues" element={<ListMaster />} />
                       <Route path="/currency" element={<Currency />} />
                       <Route path="/gst_state" element={<GSTState />} />
+                      <Route path="/gst_rate" element={<GSTRate />} />
+
 
                       <Route path="/employee" element={<EmployeeMaster />} />
 
