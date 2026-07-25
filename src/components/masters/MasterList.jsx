@@ -14,7 +14,11 @@ import {
   User,
   Briefcase,
   BadgeCheck,
-  Coins
+  Coins,
+  Truck,
+  FileText,
+  FileCog,
+  DollarSign,
 } from "lucide-react";
 import { hasScreenAccess } from "../../utils/accessControl";
 
@@ -28,9 +32,24 @@ const SECTIONS = [
     gradient: "from-teal-500 to-teal-600",
     color: "teal",
     items: [
-      { name: "Country", icon: Globe, path: "/country", screenCode: "COUNTRY" },
-      { name: "State", icon: Map, path: "/state", screenCode: "STATE" },
-      { name: "City", icon: Landmark, path: "/city", screenCode: "CITY" },
+      {
+        name: "Country",
+        icon: Globe,
+        path: "/country",
+        screenCode: "COUNTRY",
+      },
+      {
+        name: "State",
+        icon: Map,
+        path: "/state",
+        screenCode: "STATE",
+      },
+      {
+        name: "City",
+        icon: Landmark,
+        path: "/city",
+        screenCode: "CITY",
+      },
       {
         name: "Location",
         icon: MapPin,
@@ -45,9 +64,10 @@ const SECTIONS = [
       },
     ],
   },
+
   {
     title: "Organization",
-    description: "Company structure and business entities",
+    description: "Company structure and business setup",
     icon: Building2,
     gradient: "from-indigo-500 to-indigo-600",
     color: "indigo",
@@ -70,9 +90,49 @@ const SECTIONS = [
         path: "/financialyear",
         screenCode: "FINYEAR",
       },
-      { name: "Party", icon: Users, path: "/party", screenCode: "PARTY" },
     ],
   },
+
+  {
+    title: "Commercial",
+    description: "Business partners, documents and exchange rates",
+    icon: Briefcase,
+    gradient: "from-blue-500 to-blue-600",
+    color: "blue",
+    items: [
+      {
+        name: "Party",
+        icon: Users,
+        path: "/party",
+        screenCode: "PARTY",
+      },
+      {
+        name: "Transporter",
+        icon: Truck,
+        path: "/transporter",
+        screenCode: "TRANSPORTER",
+      },
+      {
+        name: "Document Type",
+        icon: FileText,
+        path: "/documenttype",
+        screenCode: "DOCUMENT_TYPE",
+      },
+      {
+        name: "Document Type Mapping",
+        icon: FileCog,
+        path: "/documenttypemapping",
+        screenCode: "DOCUMENT_TYPE_MAPPING",
+      },
+      {
+        name: "Daily Exchange Rate",
+        icon: DollarSign,
+        path: "/dailyexchangerate",
+        screenCode: "DAILY_EXCHANGE_RATE",
+      },
+    ],
+  },
+
   {
     title: "Inventory",
     description: "Items, units and conversion rules",
@@ -100,12 +160,13 @@ const SECTIONS = [
       },
       {
         name: "List of Values",
-        icon: Package, // Change to any icon you prefer
+        icon: Package,
         path: "/listofvalues",
         screenCode: "LIST_OF_VALUES",
       },
     ],
   },
+
   {
     title: "People",
     description: "Employees, departments and designations",
@@ -172,6 +233,13 @@ const getColorStyles = (color) => {
       text: "text-rose-600 dark:text-rose-400",
       iconBg:
         "bg-rose-100 dark:bg-rose-900/40 group-hover:bg-rose-200 dark:group-hover:bg-rose-800",
+    },
+    blue: {
+      hover: "hover:bg-blue-50 dark:hover:bg-blue-900/30",
+      border: "hover:border-blue-300 dark:hover:border-blue-600",
+      text: "text-blue-600 dark:text-blue-400",
+      iconBg:
+        "bg-blue-100 dark:bg-blue-900/40 group-hover:bg-blue-200 dark:group-hover:bg-blue-800",
     },
   };
   return colors[color] || colors.blue;
