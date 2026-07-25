@@ -52,6 +52,7 @@ import Currency from "./components/masters/currency/Currency";
 import GSTState from "./components/masters/gstState/GSTState";
 import GSTRate from "./components/masters/gstrate/GSTRate";
 import TransportMaster from "./components/masters/transport/TransportMaster";
+import DocTypeMaster from "./components/masters/docType/DocTypeMaster";
 
 const ThemeInitializer = () => {
   const { mode } = useSelector((state) => state.theme);
@@ -130,6 +131,7 @@ const AppContent = () => {
                         path="/transporter"
                         element={<TransportMaster />}
                       />
+                      <Route path="/documenttype" element={<DocTypeMaster />} />
                       <Route path="/item" element={<ItemMaster />} />
                       <Route path="/unit" element={<UnitMaster />} />
                       <Route
@@ -140,7 +142,6 @@ const AppContent = () => {
                       <Route path="/currency" element={<Currency />} />
                       <Route path="/gst_state" element={<GSTState />} />
                       <Route path="/gst_rate" element={<GSTRate />} />
-
 
                       <Route path="/employee" element={<EmployeeMaster />} />
 
