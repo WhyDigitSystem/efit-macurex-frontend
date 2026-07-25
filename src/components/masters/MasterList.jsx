@@ -19,6 +19,7 @@ import {
   FileText,
   FileCog,
   DollarSign,
+  MapPinned
 } from "lucide-react";
 import { hasScreenAccess } from "../../utils/accessControl";
 
@@ -61,6 +62,12 @@ const SECTIONS = [
         icon: Coins,
         path: "/currency",
         screenCode: "CURRENCY",
+      },
+       {
+        name: "Gst State",
+        icon: MapPinned,
+        path: "/gst_state",
+        screenCode: "GST_STATE",
       },
     ],
   },

@@ -15,19 +15,9 @@ const labelClasses =
 
 const getDefaultValues = () => ({
   // Required fields
-  country: "",
-  mainCurrency: "",
-  subCurrency:'',
-  // Dropdown fields
-  mainCurrencySymbol: "",
-  subSymbol: "",
-  currencyRepresentation: "",
-
-  // Text fields
-  currency: "",
-  currencyInteger: "",
-  currencyDecimal: "",
-  menetaryUnit: "",
+  stateCode: "",
+  stateName: "",
+  GSTStateId: "",
 });
 
 // ============================================================================
@@ -113,32 +103,8 @@ const ToggleButton = ({ control, name }) => (
   />
 );
 
-const CurrencyForm = ({ data, onBack }) => {
+const GSTStateForm = ({ data, onBack }) => {
   const [orgId] = useState(localStorage.getItem("orgId"));
-
-  // Sample options for dropdowns
-  const countryOptions = [
-    "USA",
-    "UK",
-    "India",
-    "Australia",
-    "Canada",
-    "Germany",
-    "France",
-    "Japan",
-  ];
-  const currencyOptions = [
-    "USD",
-    "EUR",
-    "GBP",
-    "INR",
-    "AUD",
-    "CAD",
-    "JPY",
-    "CHF",
-  ];
-  const currencySymbolOptions = ["$", "€", "£", "₹", "A$", "C$", "¥", "Fr"];
-  const currencyRepresentationOptions = ["Symbol", "Code", "Name"];
 
   const {
     control,
@@ -169,7 +135,7 @@ const CurrencyForm = ({ data, onBack }) => {
           <ArrowLeft className="h-4 w-4" />
         </button>
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-          {data ? "Edit Currency" : "Add Currency"}
+          {data ? "Edit GST State" : "Add GST State"}
         </h2>
       </div>
 
@@ -179,90 +145,30 @@ const CurrencyForm = ({ data, onBack }) => {
           {/* All fields in one row - 5 columns */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
             {/* Required Fields */}
-            <SelectField
+
+            <InputField
               control={control}
-              name="country"
-              label="Country"
-              options={countryOptions}
+              name="stateCode"
+              label="State Code"
               required
+              placeholder="Enter state code"
               errors={errors}
             />
 
             <InputField
               control={control}
-              name="mainCurrency"
-              label="Main Currency"
+              name="stateName"
+              label="State Name"
               required
-              placeholder="Enter main currency"
+              placeholder="Enter state name"
               errors={errors}
             />
-
             <InputField
               control={control}
-              name="currency"
-              label="Currency"
-              placeholder="Enter currency"
-              errors={errors}
-            />
-               <InputField
-              control={control}
-              name="subCurrency"
-              label="Sub Currency"
-              placeholder="Enter currency"
-              errors={errors}
-            />
-
-            {/* Dropdown Fields */}
-            <SelectField
-              control={control}
-              name="mainCurrencySymbol"
-              label="Main Currency Symbol"
-              options={currencySymbolOptions}
-              errors={errors}
-            />
-
-             {/* Dropdown Fields */}
-            <SelectField
-              control={control}
-              name="subSymbol"
-              label="Sub Symbol"
-              options={currencySymbolOptions}
-              errors={errors}
-            />
-
-           
-
-            <SelectField
-              control={control}
-              name="currencyRepresentation"
-              label="Currency Representation"
-              options={currencyRepresentationOptions}
-              errors={errors}
-            />
-
-            
-
-            <InputField
-              control={control}
-              name="currencyInteger"
-              label="Currency Integer"
-              placeholder="Enter integer"
-              errors={errors}
-            />
-
-            <InputField
-              control={control}
-              name="currencyDecimal"
-              label="Currency Decimal"
-              placeholder="Enter decimal"
-              errors={errors}
-            />
-
-            <InputField
-              control={control}
-              name="menetaryUnit"
-              label="Monetary Unit"
-              placeholder="Enter monetary unit"
+              name="GSTStateId"
+              label="GST State ID"
+              required
+              placeholder="Enter gst State Id"
               errors={errors}
             />
           </div>
@@ -433,4 +339,4 @@ const InputCell = ({
   );
 };
 
-export default CurrencyForm;
+export default GSTStateForm;
