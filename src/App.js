@@ -143,6 +143,7 @@ const AppContent = () => {
                         path="/dailyexchangerate"
                         element={<DailyExchangeRateMaster />}
                       />
+
                       <Route path="/item" element={<ItemMaster />} />
                       <Route path="/unit" element={<UnitMaster />} />
                       <Route

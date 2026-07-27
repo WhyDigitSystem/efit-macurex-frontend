@@ -279,13 +279,6 @@ const getColorStyles = (color) => {
       iconBg:
         "bg-rose-100 dark:bg-rose-900/40 group-hover:bg-rose-200 dark:group-hover:bg-rose-800",
     },
-    blue: {
-      hover: "hover:bg-blue-50 dark:hover:bg-blue-900/30",
-      border: "hover:border-blue-300 dark:hover:border-blue-600",
-      text: "text-blue-600 dark:text-blue-400",
-      iconBg:
-        "bg-blue-100 dark:bg-blue-900/40 group-hover:bg-blue-200 dark:group-hover:bg-blue-800",
-    },
   };
   return colors[color] || colors.blue;
 };
@@ -302,89 +295,78 @@ const MastersList = () => {
     }),
   })).filter((section) => section.items.length > 0);
 
+  // All items across every section, flattened - no section headers/grouping,
+  // just a single grid of icon + title tiles.
+  const allItems = filteredSections.flatMap((section) =>
+    section.items.map((item) => ({
+      ...item,
+      colors: getColorStyles(section.color),
+    })),
+  );
+
   return (
     <div
       className="animate-fadeIn px-3 py-3"
       style={{ transform: "scale(0.98)", transformOrigin: "top left" }}
     >
-      {filteredSections.length > 0 ? (
-        <div className="space-y-8">
-          {filteredSections.map((section, sectionIndex) => {
-            const SectionIcon = section.icon;
-            const sectionColors = getColorStyles(section.color);
+      {allItems.length > 0 ? (
+        <>
+          {/* Main Header */}
+          <div className="flex items-center gap-2 mb-4">
+            <div className="p-1.5 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 shadow-sm">
+              <Building2 className="h-4 w-4 text-white" />
+            </div>
+            <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+              Masters
+            </h2>
+            <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
+              Manage all master data across the application
+            </span>
+            <div className="flex-1 h-px bg-gradient-to-r from-gray-200 to-transparent dark:from-gray-700"></div>
+          </div>
 
-            return (
-              <div
-                key={section.title}
-                className="animate-slideUp"
-                style={{ animationDelay: `${sectionIndex * 100}ms` }}
-              >
-                {/* Section Header */}
-                <div className="flex items-center gap-2 mb-2">
+          <div className="grid grid-cols-6 sm:grid-cols-7 lg:grid-cols-9 xl:grid-cols-10 2xl:grid-cols-12 gap-3">
+            {allItems.map((item, itemIndex) => {
+              const ItemIcon = item.icon;
+
+              return (
+                <div
+                  key={item.name}
+                  onClick={() => navigate(item.path)}
+                  className="group cursor-pointer animate-slideUp"
+                  style={{ animationDelay: `${itemIndex * 30}ms` }}
+                >
                   <div
-                    className={`p-1.5 rounded-lg bg-gradient-to-br ${section.gradient} shadow-sm`}
+                    className={`
+                    relative overflow-hidden bg-white dark:bg-gray-800 rounded-lg
+                    border border-gray-200 dark:border-gray-700
+                    ${item.colors.border} ${item.colors.hover}
+                    transition-all duration-200 hover:shadow-md hover:scale-[1.02]
+                  `}
                   >
-                    <SectionIcon className="h-4 w-4 text-white" />
-                  </div>
-                  <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-                    {section.title}
-                  </h2>
-                  <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
-                    {section.description}
-                  </span>
-                  <div className="flex-1 h-px bg-gradient-to-r from-gray-200 to-transparent dark:from-gray-700"></div>
-                </div>
-
-                {/* Section Items Grid */}
-                <div className="grid grid-cols-6 sm:grid-cols-7 lg:grid-cols-9 xl:grid-cols-10 2xl:grid-cols-12 gap-3">
-                  {section.items.map((item, itemIndex) => {
-                    const ItemIcon = item.icon;
-
-                    return (
+                    <div className="p-1 h-20 flex flex-col items-center justify-center text-center">
                       <div
-                        key={item.name}
-                        onClick={() => navigate(item.path)}
-                        className="group cursor-pointer animate-slideUp"
-                        style={{
-                          animationDelay: `${sectionIndex * 100 + itemIndex * 50}ms`,
-                        }}
+                        className={`
+                        p-2 rounded-lg ${item.colors.iconBg}
+                        transition-all duration-200 group-hover:scale-105
+                        mb-1.5
+                      `}
                       >
-                        <div
-                          className={`
-                            relative overflow-hidden bg-white dark:bg-gray-800 rounded-lg
-                            border border-gray-200 dark:border-gray-700
-                            ${sectionColors.border} ${sectionColors.hover}
-                            transition-all duration-200 hover:shadow-md hover:scale-[1.02]
-                          `}
-                        >
-                          <div className="p-1 h-20 flex flex-col items-center justify-center text-center">
-                            <div
-                              className={`
-                                p-2 rounded-lg ${sectionColors.iconBg}
-                                transition-all duration-200 group-hover:scale-105
-                                mb-1.5
-                              `}
-                            >
-                              <ItemIcon
-                                className={`h-4 w-4 ${sectionColors.text}`}
-                              />
-                            </div>
-
-                            <h3
-                              className={`text-xs font-medium ${sectionColors.text} transition-colors leading-tight line-clamp-2`}
-                            >
-                              {item.name}
-                            </h3>
-                          </div>
-                        </div>
+                        <ItemIcon className={`h-4 w-4 ${item.colors.text}`} />
                       </div>
-                    );
-                  })}
+
+                      <h3
+                        className={`text-xs font-medium ${item.colors.text} transition-colors leading-tight line-clamp-2`}
+                      >
+                        {item.name}
+                      </h3>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        </>
       ) : (
         <div className="flex items-center justify-center h-[50vh]">
           <div className="text-center">
