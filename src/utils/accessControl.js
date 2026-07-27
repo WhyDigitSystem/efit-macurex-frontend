@@ -70,6 +70,7 @@ const SCREEN_CODE_MAPPING = {
     'SCREEN ACCESS': 'SA',
     'NEW ENTRIES': 'NEWE',
     'BRANCH': 'BR',
+    'CALENDAR': 'CAL',
 };
 
 // Module to screen mapping for special handling

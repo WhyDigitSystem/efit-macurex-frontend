@@ -56,6 +56,7 @@ import DocTypeMaster from "./components/masters/docType/DocTypeMaster";
 import DocTypeMappingMaster from "./components/masters/DocTypeMapping/DocTypeMappingMaster";
 import DailyExchangeRateMaster from "./components/masters/DailyExchangeRate/DailyExchangeRateMaster";
 import HsnSacMaster from "./components/masters/hsnsac/HsnSacMaster";
+import CalendarMaster from "./components/masters/calendar/CalendarMaster";
 import PartyAccountMappingMaster from "./components/masters/partyAccountMapping/PartyAccountMappingMaster";
 import ExchangeRateMaster from "./components/masters/exchangeRate/ExchangeRateMaster";
 import ExchangeRateUpdateMaster from "./components/masters/exchangeRateUpdate/ExchangeRateUpdateMaster";
@@ -171,6 +172,7 @@ const AppContent = () => {
                       <Route path="/listofvalues" element={<ListMaster />} />
                       <Route path="/currency" element={<Currency />} />
                       <Route path="/hsnsac" element={<HsnSacMaster />} />
+                      <Route path="/calendar" element={<CalendarMaster />} />
                       <Route path="/gst_state" element={<GSTState />} />
                       <Route path="/gst_rate" element={<GSTRate />} />
 

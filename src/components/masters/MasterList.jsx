@@ -106,6 +106,12 @@ const SECTIONS = [
         path: "/financialyear",
         screenCode: "FINYEAR",
       },
+      {
+        name: "Calendar Master",
+        icon: CalendarDays,
+        path: "/calendar",
+        screenCode: "CALENDAR",
+      },
     ],
   },
 
