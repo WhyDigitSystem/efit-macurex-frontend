@@ -3,10 +3,36 @@ import { useState } from "react";
 import hsnSacAPI from "../../../api/hsnSacAPI";
 import { useToast } from "../../../components/Toast/ToastContext";
 
+const controlClasses =
+  "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
+  "bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 " +
+  "text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 " +
+  "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
+  "dark:focus:ring-blue-400 dark:focus:border-blue-400 " +
+  "disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed";
+
+const labelClasses = "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
+
+const fieldGrid = "grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-x-3 gap-y-2 items-start";
+
 const CATEGORY_OPTIONS = [
   { value: 1, label: "Goods" },
   { value: 2, label: "Services" },
 ];
+
+const ToggleButton = ({ value, onChange }) => (
+  <button
+    type="button"
+    onClick={() => onChange(!value)}
+    className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${
+      value ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
+    }`}
+  >
+    <span className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${
+      value ? "translate-x-6" : "translate-x-0.5"
+    }`} />
+  </button>
+);
 
 const HsnSacMasterForm = ({ data, onBack }) => {
   const { addToast } = useToast();
@@ -30,10 +56,6 @@ const HsnSacMasterForm = ({ data, onBack }) => {
       setFieldErrors((prev) => ({ ...prev, [name]: "" }));
     }
     setForm((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleCheckboxChange = (e) => {
-    setForm((prev) => ({ ...prev, active: e.target.checked }));
   };
 
   const validate = () => {
@@ -72,117 +94,100 @@ const HsnSacMasterForm = ({ data, onBack }) => {
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <div className="flex items-center gap-3 mb-6">
+    <div className="p-2 max-w-7xl">
+      <div className="flex items-center gap-2 mb-3">
         <button
           onClick={onBack}
-          className="p-1.5 rounded-lg text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800/60 hover:text-gray-900 dark:hover:text-white transition-colors"
+          className="p-1 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white transition-colors"
         >
-          <ArrowLeft className="h-5 w-5" />
+          <ArrowLeft className="h-4 w-4" />
         </button>
-        <h1 className="text-xl font-bold text-gray-900 dark:text-white">
+        <h2 className="text-base font-semibold text-gray-900 dark:text-white">
           {data ? "Edit HSN/SAC" : "Add HSN/SAC"}
-        </h1>
+        </h2>
       </div>
 
-      <div className="bg-white dark:bg-[#1E293B] border border-gray-200 dark:border-white/10 rounded-xl p-6 space-y-6">
-        <div>
-          {/* <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 mb-4">
-            HSN/SAC DETAILS
-          </h3> */}
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-3">
+        <div className={fieldGrid}>
+          <div>
+            <label className={labelClasses}>
+              Category <span className="text-red-500">*</span>
+            </label>
+            <select
+              name="category"
+              value={form.category}
+              onChange={handleChange}
+              className={controlClasses + (fieldErrors.category ? " border-red-500" : "")}
+            >
+              <option value="">Select Category</option>
+              {CATEGORY_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            {fieldErrors.category && (
+              <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">{fieldErrors.category}</p>
+            )}
+          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-4 items-start">
-            <div className="lg:col-span-3">
-              <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5">
-                Category <span className="text-red-500">*</span>
-              </label>
-              <select
-                name="category"
-                value={form.category}
-                onChange={handleChange}
-                className="w-full h-10 px-3 rounded-md border text-sm transition-colors bg-white dark:bg-[#0F172A] border-gray-300 dark:border-slate-700 text-gray-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600"
-              >
-                <option value="">Select Category</option>
-                {CATEGORY_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-              {fieldErrors.category && (
-                <p className="text-xs text-red-500 mt-1">{fieldErrors.category}</p>
-              )}
-            </div>
+          <div>
+            <label className={labelClasses}>
+              HSN/SAC Code <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              name="hsn"
+              value={form.hsn}
+              onChange={handleChange}
+              placeholder="Enter HSN/SAC Code"
+              className={controlClasses + (fieldErrors.hsn ? " border-red-500" : "")}
+            />
+            {fieldErrors.hsn && (
+              <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">{fieldErrors.hsn}</p>
+            )}
+          </div>
 
-            <div className="lg:col-span-3">
-              <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5">
-                HSN/SAC Code <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                name="hsn"
-                value={form.hsn}
-                onChange={handleChange}
-                placeholder="Enter HSN/SAC Code"
-                className="w-full h-10 px-3 rounded-md border text-sm transition-colors bg-white dark:bg-[#0F172A] border-gray-300 dark:border-slate-700 text-gray-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600"
+          <div>
+            <label className={labelClasses}>Description</label>
+            <textarea
+              name="description"
+              value={form.description}
+              onChange={handleChange}
+              placeholder="Enter description"
+              rows={1}
+              className={controlClasses + " resize-none pt-1"}
+            />
+          </div>
+
+          <div>
+            <label className={labelClasses}>Active</label>
+            <div className="pt-1">
+              <ToggleButton
+                value={form.active}
+                onChange={(v) => setForm((p) => ({ ...p, active: v }))}
               />
-              {fieldErrors.hsn && (
-                <p className="text-xs text-red-500 mt-1">{fieldErrors.hsn}</p>
-              )}
-            </div>
-
-            <div className="lg:col-span-4">
-              <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5">
-                Description
-              </label>
-              <textarea
-                name="description"
-                value={form.description}
-                onChange={handleChange}
-                placeholder="Enter description"
-                rows={1}
-                className="w-full h-10 px-3 py-2 rounded-md border text-sm transition-colors resize-none bg-white dark:bg-[#0F172A] border-gray-300 dark:border-slate-700 text-gray-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600"
-              />
-            </div>
-
-            <div className="lg:col-span-2 flex items-center pt-6">
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  name="active"
-                  checked={form.active}
-                  onChange={handleCheckboxChange}
-                  className="h-4 w-4 rounded border-gray-300 dark:border-slate-600 text-blue-600 focus:ring-blue-600 accent-blue-600"
-                />
-                <span className="text-sm text-gray-700 dark:text-slate-300">Active</span>
-              </label>
             </div>
           </div>
         </div>
 
-        <div className="border-t border-gray-200 dark:border-white/10" />
-
-        <div className="flex justify-end gap-3">
+        <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
           <button
             onClick={onBack}
             disabled={isSubmitting}
-            className="h-10 px-4 rounded-md text-sm font-medium border transition-colors bg-white dark:bg-transparent border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-60 disabled:cursor-not-allowed"
+            className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
           >
-            <span className="flex items-center gap-1.5">
-              <X className="h-4 w-4" />
-              Cancel
-            </span>
+            <X className="h-3 w-3" />
+            Cancel
           </button>
 
           <button
             onClick={handleSave}
             disabled={isSubmitting}
-            className="h-10 px-4 rounded-md text-sm font-medium text-white transition-colors bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
+            className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
           >
-            <span className="flex items-center gap-1.5">
-              <Save className="h-4 w-4" />
-              {isSubmitting ? "Saving..." : data ? "Update" : "Save"}
-            </span>
+            <Save className="h-3 w-3" />
+            {isSubmitting ? "Saving..." : data ? "Update" : "Save"}
           </button>
         </div>
       </div>
