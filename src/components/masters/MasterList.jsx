@@ -209,12 +209,6 @@ const SECTIONS = [
         path: "/lmtrate",
         screenCode: "LME_Ratez",
       },
-      {
-        name: "HSN/SAC",
-        icon: FileText,
-        path: "/hsnsac",
-        screenCode: "HSN_SAC",
-      },
     ],
   },
 
@@ -306,7 +300,7 @@ const MastersList = () => {
   const allItems = filteredSections.flatMap((section) =>
     section.items.map((item) => ({
       ...item,
-      colors: getColorStyles(section.color),
+      colors: getColorStyles("blue"),
     })),
   );
 
