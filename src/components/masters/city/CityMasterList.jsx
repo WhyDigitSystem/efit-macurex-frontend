@@ -26,10 +26,10 @@ const CityMasterList = ({ onAddNew, onEdit, onBack }) => {
       }
 
       // Transform the data to extract country and state names
-      const transformedCities = cities.map(city => ({
+      const transformedCities = cities.map((city) => ({
         ...city,
-        countryName: city.country?.countryName || '',
-        stateName: city.state?.stateName || '',
+        countryName: city.country?.countryName || "",
+        stateName: city.state?.stateName || "",
         // Keep the original objects for editing
         countryObj: city.country,
         stateObj: city.state,
@@ -58,14 +58,14 @@ const CityMasterList = ({ onAddNew, onEdit, onBack }) => {
   const columns = [
     {
       key: "cityCode",
-      label: "City Code",
+      label: "Code",
       accessor: "cityCode",
       type: "text",
       noWrap: true,
     },
     {
       key: "cityName",
-      label: "City Name",
+      label: "City",
       accessor: "cityName",
       type: "text",
     },
@@ -108,12 +108,7 @@ const CityMasterList = ({ onAddNew, onEdit, onBack }) => {
     },
   ];
 
-  const searchFields = [
-    "cityCode",
-    "cityName",
-    "countryName",
-    "stateName",
-  ];
+  const searchFields = ["cityCode", "cityName", "countryName", "stateName"];
 
   const filterOptions = [
     {

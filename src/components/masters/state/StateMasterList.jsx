@@ -39,20 +39,20 @@ const StateMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   const columns = [
     {
       key: "stateCode",
-      label: "State Code",
+      label: "Code",
       accessor: "stateCode",
       type: "text",
       noWrap: true,
     },
     {
       key: "stateName",
-      label: "State Name",
+      label: "State",
       accessor: "stateName",
       type: "text",
     },
     {
       key: "stateNumber",
-      label: "State Number",
+      label: "Number",
       accessor: "stateNumber",
       type: "text",
     },

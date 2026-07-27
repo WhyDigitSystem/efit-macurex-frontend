@@ -27,8 +27,15 @@ const TransportMasterForm = ({ onBack, onSave, editData }) => {
     id: editData?.id || 0,
     transportName: editData?.transportName || "",
     address: editData?.address || "",
-    branch: editData?.branch || "",
-    branchCode: editData?.branchCode || "",
+    branch:
+      typeof editData?.branch === "object"
+        ? editData.branch.id
+        : editData?.branch || "",
+
+    branchCode:
+      typeof editData?.branch === "object"
+        ? editData.branch.branchCode
+        : editData?.branchCode || "",
     active: editData?.active ?? true,
     cancelRemarks: editData?.cancelRemarks || "",
     orgId: ORG_ID,
@@ -113,17 +120,14 @@ const TransportMasterForm = ({ onBack, onSave, editData }) => {
   };
 
   const handleBranchChange = (e) => {
-    const branchCode = e.target.value;
-    const selected = branches.find((b) => b.branchCode === branchCode);
+    const branchId = Number(e.target.value);
 
-    if (fieldErrors.branch) {
-      setFieldErrors((prev) => ({ ...prev, branch: "" }));
-    }
+    const selected = branches.find((b) => b.id === branchId);
 
     setForm((prev) => ({
       ...prev,
-      branchCode,
-      branch: selected?.branchName || "",
+      branch: branchId,
+      branchCode: selected?.branchCode || "",
     }));
   };
 
@@ -150,9 +154,9 @@ const TransportMasterForm = ({ onBack, onSave, editData }) => {
     const payload = {
       transportName: form.transportName,
       address: form.address,
-      branch: form.branch,
+      branch: Number(form.branch), // send only ID
       branchCode: form.branchCode,
-      active: Boolean(form.active),
+      active: form.active,
       cancelRemarks: form.cancelRemarks,
       createdBy: form.createdBy,
       orgId: form.orgId,
@@ -253,7 +257,7 @@ const TransportMasterForm = ({ onBack, onSave, editData }) => {
 
             <select
               name="branch"
-              value={form.branchCode}
+              value={form.branch}
               onChange={handleBranchChange}
               disabled={branchLoading}
               className={`${controlClasses} ${
@@ -263,7 +267,7 @@ const TransportMasterForm = ({ onBack, onSave, editData }) => {
               <option value="">Select Branch</option>
 
               {branches.map((branch) => (
-                <option key={branch.id} value={branch.branchCode}>
+                <option key={branch.id} value={branch.id}>
                   {branch.branchName} ({branch.branchCode})
                 </option>
               ))}

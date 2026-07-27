@@ -45,11 +45,15 @@ const TransportMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
         ORG_ID,
       );
 
-      const sortedData = (response || []).sort(
-        (a, b) => (b.id || 0) - (a.id || 0),
-      );
+      const formattedData = (response || [])
+        .map((item) => ({
+          ...item,
+          branch: item.branch?.branchName || "",
+          branchCode: item.branch?.branchCode || "",
+        }))
+        .sort((a, b) => (b.id || 0) - (a.id || 0));
 
-      setTransportData(sortedData);
+      setTransportData(formattedData);
     } catch (error) {
       console.error("Failed to load transports:", error);
       setTransportData([]);
@@ -137,7 +141,7 @@ const TransportMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
       {branches.map((branch) => (
         <option
           key={branch.id}
-          value={branch.branchCode}
+          value={branch.id}
           className="bg-white text-gray-900 dark:bg-gray-800 dark:text-gray-100"
         >
           {branch.branchName}

@@ -40,14 +40,14 @@ const CountryMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   const columns = [
     {
       key: "countryCode",
-      label: "Country Code",
+      label: "Code",
       accessor: "countryCode",
       type: "text",
       noWrap: true,
     },
     {
       key: "countryName",
-      label: "Country Name",
+      label: "Country",
       accessor: "countryName",
       type: "text",
     },

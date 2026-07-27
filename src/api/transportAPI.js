@@ -13,11 +13,12 @@ export const transportAPI = {
     }
   },
 
-  getTransportByOrgId: async (branchCode, orgId) => {
+  getTransportByOrgId: async (branch, orgId) => {
     try {
       const res = await apiClient.get(
-        `/api/commonmaster/getTransportByOrgId?branchCode=${branchCode}&orgId=${orgId}`,
+        `/api/commonmaster/getTransportByOrgId?branch=${branch}&orgId=${orgId}`,
       );
+
       return res?.paramObjectsMap?.transportList || [];
     } catch (error) {
       console.error("Error fetching transport list:", error);
