@@ -62,6 +62,10 @@ import ExchangeRateMaster from "./components/masters/exchangeRate/ExchangeRateMa
 import ExchangeRateUpdateMaster from "./components/masters/exchangeRateUpdate/ExchangeRateUpdateMaster";
 import SalesZone from "./components/masters/salesZone/SalesZoneMaster";
 import SalesZoneMaster from "./components/masters/salesZone/SalesZoneMaster";
+import LMEMaster from "./components/masters/LmeRate/LMEMaster";
+import BankMaster from "./components/masters/bankMaster/BankMaster";
+import TaxRateMaster from "./components/masters/taxRate/TaxRateMaster";
+import TaxDefinationMaster from "./components/masters/taxDefination/TaxDefinationMaster";
 const ThemeInitializer = () => {
   const { mode } = useSelector((state) => state.theme);
 
@@ -170,6 +174,10 @@ const AppContent = () => {
                         element={<UnitConversionMaster />}
                       />
                       <Route path="/listofvalues" element={<ListMaster />} />
+                      <Route path="/lmtrate" element={<LMEMaster />} />
+                      <Route path="/bank" element={<BankMaster />} />
+                      <Route path="/taxRate" element={<TaxRateMaster />} />
+                      <Route path="/taxDefination" element={<TaxDefinationMaster />} />
                       <Route path="/currency" element={<Currency />} />
                       <Route path="/hsnsac" element={<HsnSacMaster />} />
                       <Route path="/calendar" element={<CalendarMaster />} />
