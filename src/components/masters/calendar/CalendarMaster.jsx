@@ -51,8 +51,8 @@ const CalendarMaster = () => {
   const { addToast } = useToast();
   const [docId] = useState(() => "CAL" + String(Date.now()).slice(-6));
   const [docDate, setDocDate] = useState(() => dayjs().format("YYYY-MM-DD"));
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const [startDate, setStartDate] = useState(() => dayjs().startOf("month").format("YYYY-MM-DD"));
+  const [endDate, setEndDate] = useState(() => dayjs().endOf("month").format("YYYY-MM-DD"));
   const [fieldErrors, setFieldErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -135,8 +135,8 @@ const CalendarMaster = () => {
 
   const handleNew = () => {
     setDocDate(dayjs().format("YYYY-MM-DD"));
-    setStartDate("");
-    setEndDate("");
+    setStartDate(dayjs().startOf("month").format("YYYY-MM-DD"));
+    setEndDate(dayjs().endOf("month").format("YYYY-MM-DD"));
     setFieldErrors({});
   };
 
