@@ -22,6 +22,7 @@ import {
   MapPinned,
   Link,
   RefreshCw,
+  ReceiptText
 } from "lucide-react";
 import { hasScreenAccess } from "../../utils/accessControl";
 
@@ -208,6 +209,24 @@ const SECTIONS = [
         icon: BadgeCheck,
         path: "/lmtrate",
         screenCode: "LME_Ratez",
+      },
+      {
+        name: "Bank Master",
+        icon: Landmark,
+        path: "/bank",
+        screenCode: "BANK",
+      },
+      {
+        name: "Tax Rate",
+        icon: ReceiptText,
+        path: "/taxRate",
+        screenCode: "TAXRATE",
+      },
+      {
+        name: "Tax Defination",
+        icon: FileText,
+        path: "/taxDefination",
+        screenCode: "TAXDEF",
       },
     ],
   },
