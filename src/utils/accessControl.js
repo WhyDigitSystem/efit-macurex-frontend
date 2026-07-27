@@ -72,6 +72,7 @@ const SCREEN_CODE_MAPPING = {
     'BRANCH': 'BR',
     'CALENDAR': 'CAL',
     'HOLIDAY': 'HOL',
+    'SERVICES_ACCOUNTING': 'SA',
 };
 
 // Module to screen mapping for special handling
