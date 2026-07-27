@@ -1,15 +1,24 @@
 import { ArrowLeft, Save, X } from "lucide-react";
 import { useState } from "react";
+import hsnSacAPI from "../../../api/hsnSacAPI";
+import { useToast } from "../../../components/Toast/ToastContext";
 
-const CATEGORY_OPTIONS = ["Goods", "Services"];
+const CATEGORY_OPTIONS = [
+  { value: 1, label: "Goods" },
+  { value: 2, label: "Services" },
+];
 
 const HsnSacMasterForm = ({ data, onBack }) => {
+  const { addToast } = useToast();
+  const orgId = Number(localStorage.getItem("orgId")) || 0;
+  const branch = Number(localStorage.getItem("branch")) || 0;
+
   const [form, setForm] = useState({
-    category: data?.category || "",
-    hsnSacCode: data?.hsnSacCode || "",
+    category: data?.category != null ? Number(data.category) : "",
+    hsn: data?.hsn || "",
     description: data?.description || "",
     active: data?.active ?? true,
-    id: data?.id || "",
+    id: data?.id || 0,
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -30,7 +39,7 @@ const HsnSacMasterForm = ({ data, onBack }) => {
   const validate = () => {
     const errors = {};
     if (!form.category) errors.category = "Category is required";
-    if (!form.hsnSacCode.trim()) errors.hsnSacCode = "HSN/SAC Code is required";
+    if (!form.hsn.trim()) errors.hsn = "HSN/SAC Code is required";
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -38,13 +47,25 @@ const HsnSacMasterForm = ({ data, onBack }) => {
   const handleSave = async () => {
     if (!validate()) return;
     setIsSubmitting(true);
+
+    const payload = {
+      ...(form.id && { id: form.id }),
+      orgId,
+      branch,
+      category: Number(form.category),
+      hsn: form.hsn.trim(),
+      description: form.description.trim(),
+      active: form.active,
+      createdBy: "ITC001",
+    };
+
     try {
-      console.log("HSN/SAC Payload:", { ...form });
-      alert(data ? "HSN/SAC Updated Successfully!" : "HSN/SAC Saved Successfully!");
+      await hsnSacAPI.createUpdate(payload);
+      addToast(data ? "HSN/SAC Updated Successfully!" : "HSN/SAC Saved Successfully!", "success");
       onBack();
     } catch (error) {
-      console.error(error);
-      alert("Failed to save HSN/SAC.");
+      console.error("Failed to save HSN/SAC:", error);
+      addToast("Failed to save HSN/SAC.", "error");
     } finally {
       setIsSubmitting(false);
     }
@@ -59,14 +80,16 @@ const HsnSacMasterForm = ({ data, onBack }) => {
         >
           <ArrowLeft className="h-5 w-5" />
         </button>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{data ? "Edit HSN/SAC" : "Add HSN/SAC"}</h1>
+        <h1 className="text-xl font-bold text-gray-900 dark:text-white">
+          {data ? "Edit HSN/SAC" : "Add HSN/SAC"}
+        </h1>
       </div>
 
       <div className="bg-white dark:bg-[#1E293B] border border-gray-200 dark:border-white/10 rounded-xl p-6 space-y-6">
         <div>
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 mb-4">
+          {/* <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 mb-4">
             HSN/SAC DETAILS
-          </h3>
+          </h3> */}
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-4 items-start">
             <div className="lg:col-span-3">
@@ -81,7 +104,9 @@ const HsnSacMasterForm = ({ data, onBack }) => {
               >
                 <option value="">Select Category</option>
                 {CATEGORY_OPTIONS.map((opt) => (
-                  <option key={opt} value={opt}>{opt}</option>
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
                 ))}
               </select>
               {fieldErrors.category && (
@@ -95,14 +120,14 @@ const HsnSacMasterForm = ({ data, onBack }) => {
               </label>
               <input
                 type="text"
-                name="hsnSacCode"
-                value={form.hsnSacCode}
+                name="hsn"
+                value={form.hsn}
                 onChange={handleChange}
                 placeholder="Enter HSN/SAC Code"
                 className="w-full h-10 px-3 rounded-md border text-sm transition-colors bg-white dark:bg-[#0F172A] border-gray-300 dark:border-slate-700 text-gray-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600"
               />
-              {fieldErrors.hsnSacCode && (
-                <p className="text-xs text-red-500 mt-1">{fieldErrors.hsnSacCode}</p>
+              {fieldErrors.hsn && (
+                <p className="text-xs text-red-500 mt-1">{fieldErrors.hsn}</p>
               )}
             </div>
 

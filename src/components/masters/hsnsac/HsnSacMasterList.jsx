@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import hsnSacAPI from "../../../api/hsnSacAPI";
+import branchAPI from "../../../api/branchAPI";
+
+const CATEGORY_MAP = { 1: "Goods", 2: "Services" };
 
 const normalizeActive = (value) => {
   if (value === true || value === "Yes" || value === "Active") return true;
@@ -10,13 +13,21 @@ const normalizeActive = (value) => {
 const HsnSacMasterList = ({ onAddNew, onEdit, onBack }) => {
   const [hsnSacData, setHsnSacData] = useState([]);
   const [loading, setLoading] = useState(false);
+  const orgId = Number(localStorage.getItem("orgId")) || 0;
 
   const loadData = async () => {
     setLoading(true);
-
     try {
-      const response = await hsnSacAPI.getAll();
-      const data = Array.isArray(response) ? response : response?.data ?? [];
+      const branchCode = localStorage.getItem("branchcode");
+      let branchId = 0;
+
+      if (branchCode && orgId) {
+        const branches = await branchAPI.getBranchByOrgId(orgId);
+        const match = branches.find((b) => b.branchCode === branchCode);
+        if (match) branchId = match.id;
+      }
+
+      const data = await hsnSacAPI.getAll(orgId, branchId);
       data.sort((a, b) => (b.id || 0) - (a.id || 0));
       setHsnSacData(data);
     } catch (error) {
@@ -40,13 +51,16 @@ const HsnSacMasterList = ({ onAddNew, onEdit, onBack }) => {
       key: "category",
       label: "Category",
       accessor: "category",
-      type: "text",
+      render: (value) => {
+        const label = CATEGORY_MAP[value] ?? (value != null ? value : "-");
+        return <span className="text-xs text-gray-900 dark:text-white">{label}</span>;
+      },
       noWrap: true,
     },
     {
-      key: "hsnSacCode",
+      key: "hsn",
       label: "HSN/SAC Code",
-      accessor: "hsnSacCode",
+      accessor: "hsn",
       type: "text",
       noWrap: true,
     },
@@ -85,14 +99,10 @@ const HsnSacMasterList = ({ onAddNew, onEdit, onBack }) => {
     },
   ];
 
-  const searchFields = ["category", "hsnSacCode", "description"];
+  const searchFields = ["category", "hsn", "description"];
 
   const filterOptions = [
-    {
-      value: "all",
-      label: "All",
-      field: null,
-    },
+    { value: "all", label: "All", field: null },
     {
       value: "active",
       label: "Active",

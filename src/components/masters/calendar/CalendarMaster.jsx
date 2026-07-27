@@ -1,8 +1,28 @@
-import { ArrowLeft, Save, Plus, FileText } from "lucide-react";
+import { ArrowLeft, Save, X, Plus, FileText } from "lucide-react";
 import { useState, useMemo } from "react";
 import dayjs from "dayjs";
 import calendarAPI from "../../../api/calendarAPI";
 import { useToast } from "../../../components/Toast/ToastContext";
+
+const controlClasses =
+  "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
+  "bg-white dark:bg-gray-900 " +
+  "border-gray-300 dark:border-gray-600 " +
+  "text-gray-900 dark:text-gray-100 " +
+  "placeholder-gray-400 dark:placeholder-gray-500 " +
+  "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
+  "dark:focus:ring-blue-400 dark:focus:border-blue-400 " +
+  "disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed";
+
+const labelClasses = "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
+
+const fieldGrid = "grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-x-3 gap-y-2 items-start";
+
+const SectionHeader = ({ children }) => (
+  <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">
+    {children}
+  </h3>
+);
 
 const getWeekNumber = (date) => {
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
@@ -35,7 +55,6 @@ const CalendarMaster = () => {
   const [endDate, setEndDate] = useState("");
   const [fieldErrors, setFieldErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [generated, setGenerated] = useState(false);
 
   const detailRows = useMemo(() => {
     if (!startDate || !endDate) return [];
@@ -73,7 +92,7 @@ const CalendarMaster = () => {
     }
 
     return rows;
-  }, [startDate, endDate, generated]);
+  }, [startDate, endDate]);
 
   const validate = () => {
     const errors = {};
@@ -84,11 +103,6 @@ const CalendarMaster = () => {
     }
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
-  };
-
-  const handleGenerate = () => {
-    if (!validate()) return;
-    setGenerated((g) => !g);
   };
 
   const handleSubmit = async () => {
@@ -124,58 +138,44 @@ const CalendarMaster = () => {
     setStartDate("");
     setEndDate("");
     setFieldErrors({});
-    setGenerated(false);
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => window.history.back()}
-            className="p-1.5 rounded-lg text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800/60 transition-colors"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </button>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Calendar Master
-          </h1>
-        </div>
+    <div className="p-2 max-w-7xl">
+      <div className="flex items-center gap-2 mb-3">
+        <button
+          onClick={() => window.history.back()}
+          className="p-1 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </button>
+        <h2 className="text-base font-semibold text-gray-900 dark:text-white">Calendar Master</h2>
       </div>
 
-      <div className="bg-white dark:bg-[#1E293B] border border-gray-200 dark:border-white/10 rounded-xl p-6 space-y-6">
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-3">
         <div>
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 mb-4">
-            Calendar Header
-          </h3>
+          <SectionHeader>Calendar Header</SectionHeader>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-4 items-start">
-            <div className="lg:col-span-3">
-              <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5">
-                Doc.Id
-              </label>
-              <input
-                type="text"
-                value={docId}
-                readOnly
-                className="w-full h-10 px-3 rounded-md border text-sm bg-gray-100 dark:bg-[#0F172A]/60 border-gray-300 dark:border-slate-700 text-gray-500 dark:text-slate-500 cursor-not-allowed"
-              />
+          <div className={fieldGrid}>
+            <div>
+              <label className={labelClasses}>Doc.Id</label>
+              <input type="text" value={docId} readOnly className={controlClasses + " text-gray-500 dark:text-gray-500"} />
             </div>
 
-            <div className="lg:col-span-3">
-              <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5">
+            <div>
+              <label className={labelClasses}>
                 Doc.Date <span className="text-red-500">*</span>
               </label>
               <input
                 type="date"
                 value={docDate}
                 onChange={(e) => setDocDate(e.target.value)}
-                className="w-full h-10 px-3 rounded-md border text-sm transition-colors bg-white dark:bg-[#0F172A] border-gray-300 dark:border-slate-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600"
+                className={controlClasses}
               />
             </div>
 
-            <div className="lg:col-span-3">
-              <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5">
+            <div>
+              <label className={labelClasses}>
                 Starting Date <span className="text-red-500">*</span>
               </label>
               <input
@@ -185,15 +185,15 @@ const CalendarMaster = () => {
                   setStartDate(e.target.value);
                   if (fieldErrors.startDate) setFieldErrors((p) => ({ ...p, startDate: "" }));
                 }}
-                className="w-full h-10 px-3 rounded-md border text-sm transition-colors bg-white dark:bg-[#0F172A] border-gray-300 dark:border-slate-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600"
+                className={controlClasses + (fieldErrors.startDate ? " border-red-500" : "")}
               />
               {fieldErrors.startDate && (
-                <p className="text-xs text-red-500 mt-1">{fieldErrors.startDate}</p>
+                <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">{fieldErrors.startDate}</p>
               )}
             </div>
 
-            <div className="lg:col-span-3">
-              <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5">
+            <div>
+              <label className={labelClasses}>
                 Ending Date <span className="text-red-500">*</span>
               </label>
               <input
@@ -203,99 +203,85 @@ const CalendarMaster = () => {
                   setEndDate(e.target.value);
                   if (fieldErrors.endDate) setFieldErrors((p) => ({ ...p, endDate: "" }));
                 }}
-                className="w-full h-10 px-3 rounded-md border text-sm transition-colors bg-white dark:bg-[#0F172A] border-gray-300 dark:border-slate-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600"
+                className={controlClasses + (fieldErrors.endDate ? " border-red-500" : "")}
               />
               {fieldErrors.endDate && (
-                <p className="text-xs text-red-500 mt-1">{fieldErrors.endDate}</p>
+                <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">{fieldErrors.endDate}</p>
               )}
             </div>
           </div>
         </div>
 
-        <div className="border-t border-gray-200 dark:border-white/10" />
+        <div className="border-t border-gray-200 dark:border-gray-700" />
 
-        <div className="flex items-center justify-between">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400">
-            Calendar Details
-          </h3>
-          <button
-            onClick={handleGenerate}
-            className="flex items-center gap-1.5 h-9 px-3 rounded-md text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Generate
-          </button>
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <SectionHeader>Calendar Details</SectionHeader>
+            <button
+              onClick={validate}
+              className="flex items-center gap-1 px-2 py-1 rounded text-[11px] bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50 transition-colors"
+            >
+              <Plus className="h-3 w-3" />
+              Generate
+            </button>
+          </div>
+
+          {detailRows.length > 0 ? (
+            <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
+              <table className="w-full text-xs">
+                <thead className="bg-gray-100 dark:bg-gray-700">
+                  <tr>
+                    {["S.No", "stdt", "sno", "Date For A Month", "Day", "Day Of Month", "Month", "Year", "Month Year", "Week No", "nwkno", "swkno"].map((h) => (
+                      <th key={h} className="px-2 py-1.5 text-left font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap">
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {detailRows.map((row, idx) => (
+                    <tr key={idx} className="border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
+                      <td className="px-2 py-1 text-gray-500 dark:text-gray-400">{idx + 1}</td>
+                      <td className="px-2 py-1 text-gray-900 dark:text-white whitespace-nowrap">{row.stdt}</td>
+                      <td className="px-2 py-1 text-gray-900 dark:text-white">{row.sno}</td>
+                      <td className="px-2 py-1 text-gray-900 dark:text-white whitespace-nowrap">{row.dateForMonth}</td>
+                      <td className="px-2 py-1 text-gray-900 dark:text-white whitespace-nowrap">{row.day}</td>
+                      <td className="px-2 py-1 text-gray-900 dark:text-white">{row.dayOfMonth}</td>
+                      <td className="px-2 py-1 text-gray-900 dark:text-white whitespace-nowrap">{row.month}</td>
+                      <td className="px-2 py-1 text-gray-900 dark:text-white">{row.year}</td>
+                      <td className="px-2 py-1 text-gray-900 dark:text-white whitespace-nowrap">{row.monthYear}</td>
+                      <td className="px-2 py-1 text-gray-900 dark:text-white">{row.weekNo}</td>
+                      <td className="px-2 py-1 text-gray-900 dark:text-white">{row.nwkno}</td>
+                      <td className="px-2 py-1 text-gray-900 dark:text-white whitespace-nowrap">{row.swkno}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-xs text-gray-500 dark:text-gray-400">
+              <FileText className="h-6 w-6 mx-auto mb-1 opacity-40" />
+              Select date range and click <strong>Generate</strong>
+            </div>
+          )}
         </div>
 
-        {detailRows.length > 0 && (
-          <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-slate-700">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="bg-gray-50 dark:bg-slate-800/60">
-                  <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-slate-300 border-b border-gray-200 dark:border-slate-700 w-10">S.No</th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-slate-300 border-b border-gray-200 dark:border-slate-700">stdt</th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-slate-300 border-b border-gray-200 dark:border-slate-700">sno</th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-slate-300 border-b border-gray-200 dark:border-slate-700">Date For A Month</th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-slate-300 border-b border-gray-200 dark:border-slate-700">Day</th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-slate-300 border-b border-gray-200 dark:border-slate-700">Day Of Month</th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-slate-300 border-b border-gray-200 dark:border-slate-700">Month</th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-slate-300 border-b border-gray-200 dark:border-slate-700">Year</th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-slate-300 border-b border-gray-200 dark:border-slate-700">Month Year</th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-slate-300 border-b border-gray-200 dark:border-slate-700">Week No</th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-slate-300 border-b border-gray-200 dark:border-slate-700">nwkno</th>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-slate-300 border-b border-gray-200 dark:border-slate-700">swkno</th>
-                </tr>
-              </thead>
-              <tbody>
-                {detailRows.map((row, idx) => (
-                  <tr
-                    key={idx}
-                    className="border-b last:border-b-0 border-gray-100 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800/40"
-                  >
-                    <td className="px-3 py-1.5 text-gray-500 dark:text-slate-400">{idx + 1}</td>
-                    <td className="px-3 py-1.5 text-gray-900 dark:text-white">{row.stdt}</td>
-                    <td className="px-3 py-1.5 text-gray-900 dark:text-white">{row.sno}</td>
-                    <td className="px-3 py-1.5 text-gray-900 dark:text-white">{row.dateForMonth}</td>
-                    <td className="px-3 py-1.5 text-gray-900 dark:text-white">{row.day}</td>
-                    <td className="px-3 py-1.5 text-gray-900 dark:text-white">{row.dayOfMonth}</td>
-                    <td className="px-3 py-1.5 text-gray-900 dark:text-white">{row.month}</td>
-                    <td className="px-3 py-1.5 text-gray-900 dark:text-white">{row.year}</td>
-                    <td className="px-3 py-1.5 text-gray-900 dark:text-white">{row.monthYear}</td>
-                    <td className="px-3 py-1.5 text-gray-900 dark:text-white">{row.weekNo}</td>
-                    <td className="px-3 py-1.5 text-gray-900 dark:text-white">{row.nwkno}</td>
-                    <td className="px-3 py-1.5 text-gray-900 dark:text-white">{row.swkno}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {detailRows.length === 0 && startDate && endDate && !fieldErrors.endDate && (
-          <div className="text-center py-8 text-sm text-gray-500 dark:text-slate-400">
-            <FileText className="h-8 w-8 mx-auto mb-2 opacity-40" />
-            Click <strong>Generate</strong> to create calendar rows
-          </div>
-        )}
-
-        <div className="border-t border-gray-200 dark:border-white/10" />
-
-        <div className="flex justify-end gap-3">
+        <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
           <button
             onClick={handleNew}
             disabled={isSubmitting}
-            className="flex items-center gap-1.5 h-10 px-4 rounded-md text-sm font-medium border transition-colors bg-white dark:bg-transparent border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-60 disabled:cursor-not-allowed"
+            className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
           >
-            <Plus className="h-4 w-4" />
+            <X className="h-3 w-3" />
             New
           </button>
 
           <button
             onClick={handleSubmit}
             disabled={isSubmitting || detailRows.length === 0}
-            className="flex items-center gap-1.5 h-10 px-4 rounded-md text-sm font-medium text-white transition-colors bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
+            className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
           >
-            <Save className="h-4 w-4" />
+            <Save className="h-3 w-3" />
             {isSubmitting ? "Saving..." : "Submit"}
           </button>
         </div>

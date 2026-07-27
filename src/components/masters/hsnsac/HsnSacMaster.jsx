@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import HsnSacMasterList from "./HsnSacMasterList";
 import HsnSacMasterForm from "./HsnSacMasterForm";
 
 const HsnSacMaster = () => {
   const [screen, setScreen] = useState("list");
   const [editData, setEditData] = useState(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const handleAddNew = () => {
     setEditData(null);
@@ -16,14 +17,16 @@ const HsnSacMaster = () => {
     setScreen("form");
   };
 
-  const handleBack = () => {
+  const handleBack = useCallback(() => {
+    setRefreshKey((k) => k + 1);
     setScreen("list");
-  };
+  }, []);
 
   return (
     <>
       {screen === "list" && (
         <HsnSacMasterList
+          key={refreshKey}
           onAddNew={handleAddNew}
           onEdit={handleEdit}
           onBack={() => window.history.back()}
