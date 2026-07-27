@@ -54,6 +54,7 @@ import GSTRate from "./components/masters/gstrate/GSTRate";
 import TransportMaster from "./components/masters/transport/TransportMaster";
 import DocTypeMaster from "./components/masters/docType/DocTypeMaster";
 import DocTypeMappingMaster from "./components/masters/DocTypeMapping/DocTypeMappingMaster";
+import DailyExchangeRateMaster from "./components/masters/DailyExchangeRate/DailyExchangeRateMaster";
 
 const ThemeInitializer = () => {
   const { mode } = useSelector((state) => state.theme);
@@ -137,6 +138,10 @@ const AppContent = () => {
                       <Route
                         path="/documenttypemapping"
                         element={<DocTypeMappingMaster />}
+                      />
+                      <Route
+                        path="/dailyexchangerate"
+                        element={<DailyExchangeRateMaster />}
                       />
                       <Route path="/item" element={<ItemMaster />} />
                       <Route path="/unit" element={<UnitMaster />} />
