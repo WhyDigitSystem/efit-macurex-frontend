@@ -246,6 +246,12 @@ const SECTIONS = [
         path: "/hsnsac",
         screenCode: "HSN_SAC",
       },
+      {
+        name: "Services Accounting",
+        icon: FileText,
+        path: "/services-accounting",
+        screenCode: "SERVICES_ACCOUNTING",
+      },
     ],
   },
 
