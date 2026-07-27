@@ -174,7 +174,7 @@ const UnitConversionMasterList = ({ onAddNew, onEdit,onBack }) => {
 
   return (
     <CommonListViewTable
-      title="Unit Conversion Master"
+      title="Unit Conversion"
       subtitle="Manage Unit Conversions"
       data={conversionData}
       loading={loading}

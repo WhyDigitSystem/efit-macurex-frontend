@@ -1,215 +1,355 @@
 import React, { useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 
-const LocationMasterList = ({
-  onAddNew,
-  onEdit,
-  onBack,
-  refreshTrigger,
-}) => {
-  const [locationData, setLocationData] = useState([]);
+const LocationMasterList = ({ onAddNew, onEdit,onBack }) => {
+  const [itemData, setItemData] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const loadLocations = () => {
+  const loadItems = async () => {
     setLoading(true);
 
-    try {
-      const dummyLocations = [
-        {
-          id: 10,
-          locationCode: "LOC010",
-          locationName: "Head Office",
-          branch: "Corporate",
-          company: "ABC Pvt Ltd",
-          startDate: "01-01-2024",
-          endDate: "-",
-          active: true,
-        },
-        {
-          id: 9,
-          locationCode: "LOC009",
-          locationName: "Bangalore Branch",
-          branch: "South Zone",
-          company: "ABC Pvt Ltd",
-          startDate: "10-02-2024",
-          endDate: "-",
-          active: true,
-        },
-        {
-          id: 8,
-          locationCode: "LOC008",
-          locationName: "Mysore Office",
-          branch: "South Zone",
-          company: "ABC Pvt Ltd",
-          startDate: "20-03-2024",
-          endDate: "-",
-          active: true,
-        },
-        {
-          id: 7,
-          locationCode: "LOC007",
-          locationName: "Chennai Branch",
-          branch: "Tamil Nadu",
-          company: "ABC Pvt Ltd",
-          startDate: "15-04-2024",
-          endDate: "-",
-          active: true,
-        },
-        {
-          id: 6,
-          locationCode: "LOC006",
-          locationName: "Hyderabad Office",
-          branch: "Telangana",
-          company: "ABC Pvt Ltd",
-          startDate: "01-05-2024",
-          endDate: "-",
-          active: true,
-        },
-        {
-          id: 5,
-          locationCode: "LOC005",
-          locationName: "Pune Warehouse",
-          branch: "Maharashtra",
-          company: "ABC Pvt Ltd",
-          startDate: "12-06-2024",
-          endDate: "30-12-2025",
-          active: false,
-        },
-        {
-          id: 4,
-          locationCode: "LOC004",
-          locationName: "Mumbai Office",
-          branch: "Maharashtra",
-          company: "ABC Pvt Ltd",
-          startDate: "08-07-2024",
-          endDate: "-",
-          active: true,
-        },
-        {
-          id: 3,
-          locationCode: "LOC003",
-          locationName: "Delhi Office",
-          branch: "North Zone",
-          company: "ABC Pvt Ltd",
-          startDate: "01-08-2024",
-          endDate: "-",
-          active: true,
-        },
-        {
-          id: 2,
-          locationCode: "LOC002",
-          locationName: "Kolkata Branch",
-          branch: "East Zone",
-          company: "ABC Pvt Ltd",
-          startDate: "10-09-2024",
-          endDate: "-",
-          active: false,
-        },
-        {
-          id: 1,
-          locationCode: "LOC001",
-          locationName: "Ahmedabad Office",
-          branch: "West Zone",
-          company: "ABC Pvt Ltd",
-          startDate: "05-10-2024",
-          endDate: "-",
-          active: true,
-        },
-      ];
+    // Dummy Data
+    const data = [
+  {
+    id: 8,
+    itemCode: "ITM008",
+    itemType: "Finished Goods",
+    itemName: "Wireless Mouse",
+    itemDescription: "2.4GHz Wireless Optical Mouse",
+    needQCApproval: "No",
+    materialType: "Electronic",
+    materialGroup: "Computer Accessories",
+    materialSubGroup: "Mouse",
+    inspection: "No",
+    instrumentSeqCode: "INS008",
+    primaryUnit: "Nos",
+    hsnCode: "84716070",
+    importLocal: "Local",
+    minimumOrderQuantity: 20,
+    stockLocation: "Main Warehouse",
+    reorderLevel: 50,
+    active: true,
+  },
+  {
+    id: 7,
+    itemCode: "ITM007",
+    itemType: "Finished Goods",
+    itemName: "Mechanical Keyboard",
+    itemDescription: "RGB Mechanical Keyboard",
+    needQCApproval: "Yes",
+    materialType: "Electronic",
+    materialGroup: "Computer Accessories",
+    materialSubGroup: "Keyboard",
+    inspection: "Yes",
+    instrumentSeqCode: "INS007",
+    primaryUnit: "Nos",
+    hsnCode: "84716040",
+    importLocal: "Import",
+    minimumOrderQuantity: 10,
+    stockLocation: "Warehouse A",
+    reorderLevel: 25,
+    active: true,
+  },
+  {
+    id: 6,
+    itemCode: "ITM006",
+    itemType: "Raw Material",
+    itemName: "Steel Sheet",
+    itemDescription: "MS Steel Sheet 2mm",
+    needQCApproval: "Yes",
+    materialType: "Metal",
+    materialGroup: "Steel",
+    materialSubGroup: "MS Sheet",
+    inspection: "Yes",
+    instrumentSeqCode: "INS006",
+    primaryUnit: "Kg",
+    hsnCode: "72083990",
+    importLocal: "Local",
+    minimumOrderQuantity: 500,
+    stockLocation: "Raw Material Store",
+    reorderLevel: 1000,
+    active: true,
+  },
+  {
+    id: 5,
+    itemCode: "ITM005",
+    itemType: "Consumable",
+    itemName: "A4 Paper",
+    itemDescription: "A4 Copier Paper",
+    needQCApproval: "No",
+    materialType: "Paper",
+    materialGroup: "Stationery",
+    materialSubGroup: "Paper",
+    inspection: "No",
+    instrumentSeqCode: "INS005",
+    primaryUnit: "Pack",
+    hsnCode: "48025690",
+    importLocal: "Local",
+    minimumOrderQuantity: 50,
+    stockLocation: "Stationery Store",
+    reorderLevel: 100,
+    active: false,
+  },
+  {
+    id: 4,
+    itemCode: "ITM004",
+    itemType: "Finished Goods",
+    itemName: "Office Chair",
+    itemDescription: "High Back Office Chair",
+    needQCApproval: "No",
+    materialType: "Furniture",
+    materialGroup: "Office",
+    materialSubGroup: "Chair",
+    inspection: "No",
+    instrumentSeqCode: "INS004",
+    primaryUnit: "Nos",
+    hsnCode: "94013000",
+    importLocal: "Import",
+    minimumOrderQuantity: 5,
+    stockLocation: "Finished Goods Store",
+    reorderLevel: 10,
+    active: true,
+  },
+  {
+    id: 3,
+    itemCode: "ITM003",
+    itemType: "Raw Material",
+    itemName: "Copper Wire",
+    itemDescription: "Copper Wire 2.5mm",
+    needQCApproval: "Yes",
+    materialType: "Metal",
+    materialGroup: "Copper",
+    materialSubGroup: "Wire",
+    inspection: "Yes",
+    instrumentSeqCode: "INS003",
+    primaryUnit: "Meter",
+    hsnCode: "74081900",
+    importLocal: "Import",
+    minimumOrderQuantity: 100,
+    stockLocation: "Raw Material Store",
+    reorderLevel: 500,
+    active: true,
+  },
+  {
+    id: 2,
+    itemCode: "ITM002",
+    itemType: "Finished Goods",
+    itemName: "LED Monitor",
+    itemDescription: "24 Inch Full HD Monitor",
+    needQCApproval: "No",
+    materialType: "Electronic",
+    materialGroup: "Displays",
+    materialSubGroup: "Monitor",
+    inspection: "No",
+    instrumentSeqCode: "INS002",
+    primaryUnit: "Nos",
+    hsnCode: "85285200",
+    importLocal: "Import",
+    minimumOrderQuantity: 5,
+    stockLocation: "Warehouse B",
+    reorderLevel: 15,
+    active: false,
+  },
+  {
+    id: 1,
+    itemCode: "ITM001",
+    itemType: "Finished Goods",
+    itemName: "Laptop",
+    itemDescription: "Core i7 Business Laptop",
+    needQCApproval: "No",
+    materialType: "Electronic",
+    materialGroup: "Computers",
+    materialSubGroup: "Laptop",
+    inspection: "No",
+    instrumentSeqCode: "INS001",
+    primaryUnit: "Nos",
+    hsnCode: "84713010",
+    importLocal: "Import",
+    minimumOrderQuantity: 2,
+    stockLocation: "Main Warehouse",
+    reorderLevel: 8,
+    active: true,
+  },
+];
 
-      setLocationData(dummyLocations.sort((a, b) => b.id - a.id));
-    } catch (error) {
-      console.error(error);
-      setLocationData([]);
-    } finally {
-      setLoading(false);
-    }
+    data.sort((a, b) => b.id - a.id);
+
+    setItemData(data);
+    setLoading(false);
   };
 
   useEffect(() => {
-    loadLocations();
-  }, [refreshTrigger]);
+    loadItems();
+  }, []);
+
+  const handleEdit = (item) => {
+    onEdit(item);
+  };
 
   const columns = [
+  {
+    key: "itemCode",
+    label: "Item Code",
+    accessor: "itemCode",
+    type: "text",
+    noWrap: true,
+  },
+  {
+    key: "itemType",
+    label: "Item Type",
+    accessor: "itemType",
+    type: "text",
+  },
+  {
+    key: "itemName",
+    label: "Item Name",
+    accessor: "itemName",
+    type: "text",
+  },
+  {
+    key: "materialGroup",
+    label: "Material Group",
+    accessor: "materialGroup",
+    type: "text",
+  },
+  {
+    key: "materialSubGroup",
+    label: "Sub Group",
+    accessor: "materialSubGroup",
+    type: "text",
+  },
+  {
+    key: "primaryUnit",
+    label: "Primary Unit",
+    accessor: "primaryUnit",
+    type: "text",
+  },
+  {
+    key: "hsnCode",
+    label: "HSN Code",
+    accessor: "hsnCode",
+    type: "text",
+  },
+  {
+    key: "importLocal",
+    label: "Import/Local",
+    accessor: "importLocal",
+    type: "text",
+  },
+  {
+    key: "minimumOrderQuantity",
+    label: "Min Order Qty",
+    accessor: "minimumOrderQuantity",
+    type: "text",
+  },
+  {
+    key: "stockLocation",
+    label: "Stock Location",
+    accessor: "stockLocation",
+    type: "text",
+  },
+  {
+    key: "reorderLevel",
+    label: "Reorder Level",
+    accessor: "reorderLevel",
+    type: "text",
+  },
+  {
+    key: "needQCApproval",
+    label: "QC Approval",
+    accessor: "needQCApproval",
+    type: "text",
+  },
+  {
+    key: "inspection",
+    label: "Inspection",
+    accessor: "inspection",
+    type: "text",
+  },
+  {
+    key: "active",
+    label: "Status",
+    accessor: "active",
+    type: "status",
+    statusVariants: {
+      true: {
+        label: "Active",
+        className:
+          "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+      },
+      false: {
+        label: "Inactive",
+        className:
+          "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+      },
+    },
+  },
+  {
+    key: "actions",
+    label: "Actions",
+    type: "actions",
+    align: "center",
+    width: "90px",
+  },
+];
+
+  const searchFields = [
+  "itemCode",
+  "itemType",
+  "itemName",
+  "itemDescription",
+  "materialType",
+  "materialGroup",
+  "materialSubGroup",
+  "primaryUnit",
+  "hsnCode",
+  "stockLocation",
+];
+
+  const filterOptions = [
     {
-      key: "locationCode",
-      label: "Location Code",
-      accessor: "locationCode",
-      type: "text",
-      noWrap: true,
+      value: "all",
+      label: "All",
+      field: null,
     },
     {
-      key: "locationName",
-      label: "Location Name",
-      accessor: "locationName",
-      type: "text",
+      value: "active",
+      label: "Active",
+      field: "active",
+      filterValue: "active",
+      activeValue: "Active",
     },
     {
-      key: "branch",
-      label: "Branch",
-      accessor: "branch",
-      type: "text",
-    },
-    {
-      key: "company",
-      label: "Company",
-      accessor: "company",
-      type: "text",
-    },
-    {
-      key: "startDate",
-      label: "Start Date",
-      accessor: "startDate",
-      type: "text",
-    },
-    {
-      key: "endDate",
-      label: "End Date",
-      accessor: "endDate",
-      type: "text",
-    },
-    {
-      key: "active",
-      label: "Status",
-      accessor: "active",
-      type: "status",
-    },
-    {
-      key: "actions",
-      label: "Actions",
-      type: "actions",
-      align: "center",
-      width: "90px",
+      value: "inactive",
+      label: "Inactive",
+      field: "active",
+      filterValue: "inactive",
+      activeValue: "Active",
     },
   ];
 
   return (
     <CommonListViewTable
-      title="Location"
-      data={locationData}
+      title="Location List"
+      data={itemData}
       loading={loading}
       columns={columns}
-      searchFields={[
-        "locationCode",
-        "locationName",
-        "branch",
-        "company",
-      ]}
+      searchFields={searchFields}
+      filterOptions={filterOptions}
       defaultFilter="all"
       onBack={onBack}
       onAddNew={onAddNew}
-      
-      onEdit={onEdit}
+      onEdit={handleEdit}
       onView={false}
-      itemsPerPageOptions={[5, 10, 25, 50, 100]}
+      showSerialNumber={true}
+      itemsPerPageOptions={[5, 10, 20, 50, 100]}
       defaultItemsPerPage={10}
-      showSerialNumber
-      emptyMessage="No Locations found"
-      loadingMessage="Loading Locations..."
-      enableRefresh
-      onRefresh={loadLocations}
-      enableExport
-      exportFileName="Locations"
+      emptyMessage="No Items found"
+      loadingMessage="Loading Items..."
+      enableRefresh={true}
+      onRefresh={loadItems}
+      enableExport={true}
+      exportFileName="Currency List"
     />
   );
 };

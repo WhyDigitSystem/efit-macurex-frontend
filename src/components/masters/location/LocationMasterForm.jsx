@@ -1,256 +1,464 @@
-import { ArrowLeft, Save, X } from "lucide-react";
+import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { FloatingInput } from "../../../utils/InputFields";
-// import { masterAPI } from "../../../api/locationAPI";
+import { useForm, Controller, useFieldArray } from "react-hook-form";
 
-const LocationMasterForm = ({ data, onBack }) => {
+const controlClasses =
+  "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
+  "bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 " +
+  "text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 " +
+  "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
+  "dark:focus:ring-blue-400 dark:focus:border-blue-400 " +
+  "disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed";
+
+const labelClasses =
+  "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
+
+const getDefaultValues = () => ({
+  // Required fields
+  plantId: "",
+  LocationId: "",
+  locationName: "",
+  locationType: "",
+  belongs: "",
+  address: "",
+  name: "",
+  honeNo: "",
+  faxNo: "",
+  Email: "",
+  ConsiderMRP: "",
+  partyName: "",
+});
+
+// ============================================================================
+// HELPER COMPONENTS
+// ============================================================================
+const SelectField = ({ control, name, label, options, required, errors }) => (
+  <div>
+    <label className={labelClasses}>
+      {label} {required && <span className="text-red-500">*</span>}
+    </label>
+    <Controller
+      name={name}
+      control={control}
+      rules={required ? { required: `${label} is required` } : undefined}
+      render={({ field }) => (
+        <select {...field} className={controlClasses}>
+          <option value="">Select</option>
+          {options.map((opt) => (
+            <option key={opt} value={opt}>
+              {opt}
+            </option>
+          ))}
+        </select>
+      )}
+    />
+    {errors?.[name] && (
+      <p className="text-red-500 text-[10px] mt-0.5">{errors[name].message}</p>
+    )}
+  </div>
+);
+
+const InputField = ({
+  control,
+  name,
+  label,
+  type = "text",
+  required,
+  placeholder,
+  errors,
+  validation = {},
+}) => (
+  <div>
+    <label className={labelClasses}>
+      {label} {required && <span className="text-red-500">*</span>}
+    </label>
+    <Controller
+      name={name}
+      control={control}
+      rules={{
+        required: required ? `${label} is required` : false,
+        ...validation,
+      }}
+      render={({ field }) => (
+        <input
+          {...field}
+          type={type}
+          className={controlClasses}
+          placeholder={placeholder}
+        />
+      )}
+    />
+    {errors?.[name] && (
+      <p className="text-red-500 text-[10px] mt-0.5">{errors[name].message}</p>
+    )}
+  </div>
+);
+
+const ToggleButton = ({ control, name }) => (
+  <Controller
+    name={name}
+    control={control}
+    render={({ field }) => (
+      <button
+        type="button"
+        onClick={() => field.onChange(!field.value)}
+        className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${
+          field.value ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
+        }`}
+      >
+        <span
+          className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${
+            field.value ? "translate-x-6" : "translate-x-0.5"
+          }`}
+        />
+      </button>
+    )}
+  />
+);
+
+const CurrencyForm = ({ data, onBack }) => {
   const [orgId] = useState(localStorage.getItem("orgId"));
 
-  const [form, setForm] = useState({
-    locationCode: data?.locationCode || "",
-    locationName: data?.locationName || "",
-    branch: data?.branch || "",
-    company: data?.company || "",
-    startDate: data?.startDate || "",
-    endDate: data?.endDate || "",
-    id: data?.id || "",
-    active: data?.active ?? true,
+  // Sample options for dropdowns
+  const countryOptions = [
+    "USA",
+    "UK",
+    "India",
+    "Australia",
+    "Canada",
+    "Germany",
+    "France",
+    "Japan",
+  ];
+  const currencyOptions = [
+    "USD",
+    "EUR",
+    "GBP",
+    "INR",
+    "AUD",
+    "CAD",
+    "JPY",
+    "CHF",
+  ];
+  const currencySymbolOptions = ["$", "€", "£", "₹", "A$", "C$", "¥", "Fr"];
+  const currencyRepresentationOptions = ["Symbol", "Code", "Name"];
+
+  const {
+    control,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm({
+    mode: "all",
+    defaultValues: getDefaultValues(),
   });
 
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState({});
-
-  const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
-
-    if (fieldErrors[name]) {
-      setFieldErrors((prev) => ({
-        ...prev,
-        [name]: "",
-      }));
-    }
-
-    setForm((prev) => ({
-      ...prev,
-      [name]:
-        type === "checkbox"
-          ? checked
-          : ["locationCode", "locationName", "branch", "company"].includes(name)
-          ? value.toUpperCase()
-          : value,
-    }));
-  };
-
-  const validate = () => {
-    const errors = {};
-
-    if (!form.locationCode.trim())
-      errors.locationCode = "Location Code is required";
-
-    if (!form.locationName.trim())
-      errors.locationName = "Location Name is required";
-
-    if (!form.branch.trim())
-      errors.branch = "Branch is required";
-
-    if (!form.company.trim())
-      errors.company = "Company is required";
-
-    if (!form.startDate)
-      errors.startDate = "Start Date is required";
-
-    if (
-      form.endDate &&
-      new Date(form.endDate) < new Date(form.startDate)
-    ) {
-      errors.endDate = "End Date must be greater than Start Date";
-    }
-
-    setFieldErrors(errors);
-
-    return Object.keys(errors).length === 0;
-  };
-
-  const handleSave = async () => {
-    if (!validate()) return;
-
-    setIsSubmitting(true);
-
-    const payload = {
-      ...(data?.id && { id: data.id }),
-      orgId,
-      locationCode: form.locationCode,
-      locationName: form.locationName,
-      branch: form.branch,
-      company: form.company,
-      startDate: form.startDate,
-      endDate: form.endDate,
-      active: form.active,
-      cancel: false,
-      createdBy: "ITC001",
-    };
-
-    console.log(payload);
-
+  const onSubmit = async (formData) => {
     try {
-      // await masterAPI.saveLocation(payload);
-
-      alert(
-        data
-          ? "Location Updated Successfully!"
-          : "Location Saved Successfully!"
-      );
-
-      onBack();
+      console.log("Form Data:", formData, "Org Id:", orgId);
+      // API call here
     } catch (error) {
       console.error(error);
-      alert("Failed to save Location.");
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="p-2 max-w-7xl ">
+    <div className="p-2 max-w-7xl relative">
       {/* Header */}
-      <div className="flex items-center gap-2 mb-4">
-  <button
-    onClick={onBack}
-    className="
-      p-1 rounded-md
-      text-gray-600 dark:text-gray-300
-      hover:bg-gray-100 dark:hover:bg-gray-700
-      hover:text-gray-900 dark:hover:text-white
-      transition-colors
-    "
-  >
-    <ArrowLeft className="h-4 w-4" />
-  </button>
+      <div className="flex items-center gap-2 mb-3">
+        <button
+          onClick={onBack}
+          className="p-1 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </button>
+        <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+          {data ? "Edit Location" : "Add Location"}
+        </h2>
+      </div>
 
-  <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-    {data ? "Edit Location" : "Add Location"}
-  </h2>
-</div>
-
-      {/* Card */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-
-          <FloatingInput
-            label="Location Code *"
-            name="locationCode"
-            value={form.locationCode}
-            onChange={handleChange}
-            error={fieldErrors.locationCode}
-          />
-
-          <FloatingInput
-            label="Location Name *"
-            name="locationName"
-            value={form.locationName}
-            onChange={handleChange}
-            error={fieldErrors.locationName}
-          />
-
-          <FloatingInput
-            label="Branch *"
-            name="branch"
-            value={form.branch}
-            onChange={handleChange}
-            error={fieldErrors.branch}
-          />
-
-          <FloatingInput
-            label="Company *"
-            name="company"
-            value={form.company}
-            onChange={handleChange}
-            error={fieldErrors.company}
-          />
-
-          <div>
-            <label className="text-xs text-gray-500 mb-1 block">
-              Start Date *
-            </label>
-
-            <input
-              type="date"
-              name="startDate"
-              value={form.startDate}
-              onChange={handleChange}
-              className="w-full border rounded px-3 py-2 text-sm"
+      {/* Main Card */}
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+        <form onSubmit={handleSubmit(onSubmit)}>
+          {/* All fields in one row - 5 columns */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+            {/* Required Fields */}
+            <SelectField
+              control={control}
+              name="plantId"
+              label="Plant ID"
+              options={countryOptions}
+              required
+              errors={errors}
             />
 
-            {fieldErrors.startDate && (
-              <p className="text-red-500 text-xs mt-1">
-                {fieldErrors.startDate}
-              </p>
-            )}
-          </div>
-
-          <div>
-            <label className="text-xs text-gray-500 mb-1 block">
-              End Date
-            </label>
-
-            <input
-              type="date"
-              name="endDate"
-              value={form.endDate}
-              onChange={handleChange}
-              className="w-full border rounded px-3 py-2 text-sm"
+            <InputField
+              control={control}
+              name="locationId"
+              label="Location ID"
+              required
+              placeholder="Enter location id"
+              errors={errors}
             />
 
-            {fieldErrors.endDate && (
-              <p className="text-red-500 text-xs mt-1">
-                {fieldErrors.endDate}
-              </p>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2 pt-6">
-            <input
-              type="checkbox"
-              name="active"
-              checked={form.active}
-              onChange={handleChange}
-              className="h-4 w-4"
+            <InputField
+              control={control}
+              name="locationName"
+              label="Location Name"
+              placeholder="Enter location name"
+              errors={errors}
+            />
+            <SelectField
+              control={control}
+              name="locationType"
+              label="Location Type"
+              required
+              options={currencySymbolOptions}
+              errors={errors}
+            />
+            <SelectField
+              control={control}
+              name="belongs"
+              label="Belongs To"
+              required
+              options={currencySymbolOptions}
+              errors={errors}
+            />
+            <InputField
+              control={control}
+              name="address"
+              label="Address"
+              placeholder="Enter address"
+              errors={errors}
             />
 
-            <span className="text-sm">Active</span>
+            <SelectField
+              control={control}
+              name="name"
+              label="Contact Person Name"
+              options={currencySymbolOptions}
+              errors={errors}
+            />
+
+            <InputField
+              control={control}
+              name="phoneNo"
+              label="Phone No"
+              placeholder="eg: 9659597177"
+              errors={errors}
+              validation={{
+                pattern: {
+                  value: /^[0-9]{10}$/,
+                  message: "Phone number must be exactly 10 digits",
+                },
+                // minLength: {
+                //   value: 10,
+                //   message: "Phone number must be at least 10 digits",
+                // },
+                // maxLength: {
+                //   value: 15,
+                //   message: "Phone number must not exceed 15 digits",
+                // },
+              }}
+            />
+            <InputField
+              control={control}
+              name="faxNo"
+              label="Fax No"
+              placeholder="eg: Enter fax no"
+              errors={errors}
+            />
+            <InputField
+              control={control}
+              type="email"
+              name="email"
+              label="E-mail"
+              placeholder="eg: whydigit@gmail.com"
+              errors={errors}
+              validation={{
+                pattern: {
+                  value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
+                  message: "Please enter a valid email address",
+                },
+              }}
+            />
+
+            <SelectField
+              control={control}
+              name="considerMRP"
+              label="Consider MRP"
+              options={currencyRepresentationOptions}
+              errors={errors}
+            />
+            <SelectField
+              control={control}
+              name="partyName"
+              label="Party Name"
+              options={currencyRepresentationOptions}
+              errors={errors}
+            />
           </div>
-        </div>
 
-        {/* Buttons */}
-        <div className="flex justify-end gap-2 mt-6 pt-4 border-t">
-
-          <button
-            onClick={onBack}
-            disabled={isSubmitting}
-            className="flex items-center gap-1 px-4 py-2 border rounded text-sm"
-          >
-            <X className="h-3 w-3" />
-            Cancel
-          </button>
-
-          <button
-            onClick={handleSave}
-            disabled={isSubmitting}
-            className="flex items-center gap-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm"
-          >
-            <Save className="h-3 w-3" />
-            {isSubmitting
-              ? "Saving..."
-              : data
-              ? "Update"
-              : "Save"}
-          </button>
-
-        </div>
+          {/* Buttons */}
+          <div className="flex justify-end gap-2 pt-3 mt-3 border-t border-gray-200 dark:border-gray-700">
+            <button
+              onClick={onBack}
+              disabled={isSubmitting}
+              className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+            >
+              <X className="h-3 w-3" /> Cancel
+            </button>
+            <button
+              onClick={handleSubmit(onSubmit)}
+              disabled={isSubmitting}
+              className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+            >
+              <Save className="h-3 w-3" />{" "}
+              {isSubmitting ? "Saving..." : data ? "Update" : "Save"}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
 };
 
-export default LocationMasterForm;
+const TableWrapper = ({ children }) => (
+  <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
+    <table className="w-full text-xs">{children}</table>
+  </div>
+);
+
+const TableHead = ({ headers }) => (
+  <thead className="bg-gray-100 dark:bg-gray-700">
+    <tr>
+      {headers.map((h, i) => (
+        <th
+          key={i}
+          className={`p-1 ${i === 0 ? "w-8 text-center" : "text-left"} dark:text-white`}
+        >
+          {h.label}
+          {h.required && <span className="text-red-500 ml-0.5">*</span>}
+        </th>
+      ))}
+    </tr>
+  </thead>
+);
+
+const TableRow = ({ children, index, onRemove, disabled }) => (
+  <tr className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
+    <td className="p-1 text-center font-medium dark:text-white align-middle">
+      {index + 1}
+    </td>
+    {children}
+    <td className="p-1 text-center align-middle">
+      <button
+        type="button"
+        onClick={onRemove}
+        disabled={disabled}
+        className={`h-5 w-5 rounded text-white flex items-center justify-center ${
+          disabled
+            ? "bg-gray-400 cursor-not-allowed"
+            : "bg-red-600 hover:bg-red-700"
+        }`}
+      >
+        <Trash2 size={10} />
+      </button>
+    </td>
+  </tr>
+);
+
+const SelectCell = ({ control, name, options, required, errors }) => {
+  const getError = () => {
+    const parts = name.split(".");
+    let error = errors;
+    for (const part of parts) {
+      if (error && error[part]) {
+        error = error[part];
+      } else {
+        return null;
+      }
+    }
+    return error?.message;
+  };
+
+  const errorMessage = getError();
+
+  return (
+    <td className="p-1 align-top">
+      <Controller
+        name={name}
+        control={control}
+        rules={required ? { required: "This field is required" } : undefined}
+        render={({ field }) => (
+          <select
+            {...field}
+            className={`${controlClasses} h-8 text-xs w-full ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
+          >
+            <option value="">Select</option>
+            {options.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+          </select>
+        )}
+      />
+      {errorMessage && (
+        <div className="text-red-500 text-[10px] mt-0.5 text-left w-full">
+          {errorMessage}
+        </div>
+      )}
+    </td>
+  );
+};
+
+const InputCell = ({
+  control,
+  name,
+  type = "text",
+  step,
+  placeholder,
+  required,
+  errors,
+}) => {
+  const getError = () => {
+    const parts = name.split(".");
+    let error = errors;
+    for (const part of parts) {
+      if (error && error[part]) {
+        error = error[part];
+      } else {
+        return null;
+      }
+    }
+    return error?.message;
+  };
+
+  const errorMessage = getError();
+
+  return (
+    <td className="p-1 align-top">
+      <Controller
+        name={name}
+        control={control}
+        rules={required ? { required: "This field is required" } : undefined}
+        render={({ field }) => (
+          <input
+            {...field}
+            type={type}
+            step={step}
+            className={`${controlClasses} h-8 text-xs w-full ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
+            placeholder={placeholder}
+          />
+        )}
+      />
+      {errorMessage && (
+        <div className="text-red-500 text-[10px] mt-0.5 text-left w-full">
+          {errorMessage}
+        </div>
+      )}
+    </td>
+  );
+};
+
+export default CurrencyForm;

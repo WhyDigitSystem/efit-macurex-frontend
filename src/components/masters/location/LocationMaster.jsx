@@ -7,7 +7,7 @@ const LocationMaster = () => {
   const [editData, setEditData] = useState(null);
 
   const addNew = () => {
-     console.log("Add button clicked");
+    console.log("Add button clicked");
     setEditData(null);
     setScreen("form");
   };

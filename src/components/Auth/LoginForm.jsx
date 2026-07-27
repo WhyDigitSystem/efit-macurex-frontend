@@ -127,8 +127,8 @@ const AuthForm = () => {
         localStorage.setItem("usersId", userVO.usersId);
         localStorage.setItem("employeeName", userVO.employeeName);
         localStorage.setItem("employeeCode", userVO.employeeCode);
-        // localStorage.setItem("branch", userVO.branch);
-        // localStorage.setItem("branchCode", userVO.branchCode);
+        localStorage.setItem("branch", userVO.branch);
+        localStorage.setItem("branchCode", userVO.branchCode);
         localStorage.setItem("department", userVO.department);
         localStorage.setItem("designation", userVO.designation);
         localStorage.setItem("companyName", userVO.companyName);

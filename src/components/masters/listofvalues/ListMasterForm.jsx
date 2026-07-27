@@ -1,6 +1,8 @@
 import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useForm, Controller, useFieldArray } from "react-hook-form";
+import listformApi from "../../../api/listformApi";
+import { useToast } from "../../Toast/ToastContext";
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -13,20 +15,10 @@ const controlClasses =
 const labelClasses =
   "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
-const getDefaultValues = () => ({
-  listCode: "",
-  listDesc: "",
-  active: true,
-  details: [{ valueCode: "", valueDesc: "", active: "" }],
-});
-
 const SELECT_OPTIONS = {
   active: ["Yes", "No"],
 };
 
-// ============================================================================
-// HELPER COMPONENTS
-// ============================================================================
 const SelectField = ({ control, name, label, options, required, errors }) => (
   <div>
     <label className={labelClasses}>
@@ -107,16 +99,54 @@ const ToggleButton = ({ control, name }) => (
   />
 );
 
-// ============================================================================
-// MAIN COMPONENT
-// ============================================================================
 const ListMasterForm = ({ data, onBack }) => {
+  const { addToast } = useToast();
   const [orgId] = useState(localStorage.getItem("orgId"));
+  const [branch] = useState(localStorage.getItem("1000000001"));
+  const [userName] = useState(localStorage.getItem("userName"));
+  const [loading, setLoading] = useState(false);
   const [activeChildTab, setActiveChildTab] = useState("details");
+
+  const getDefaultValues = () => {
+    // Check if we're in edit mode
+    if (data && data.id) {
+      // Get details array from the data
+      const detailsArray = data.listOfValuesDetailsVO || data.details || [];
+
+      // If there are existing details, map them, otherwise provide a default empty row
+      const details =
+        detailsArray.length > 0
+          ? detailsArray.map((detail) => ({
+              valueCode: detail.valueCode || "",
+              valueDescription: detail.valueDescription || "",
+              active:
+                detail.active === true || detail.active === "Active"
+                  ? "Yes"
+                  : "No",
+            }))
+          : [{ valueCode: "", valueDescription: "", active: "Yes" }];
+
+      return {
+        listCode: data.listCode || "",
+        listDescription: data.listDescription || "",
+        active: data.active === true || data.active === "Active",
+        details: details,
+      };
+    }
+
+    // Default for new entry
+    return {
+      listCode: "",
+      listDescription: "",
+      active: true,
+      details: [{ valueCode: "", valueDescription: "", active: "Yes" }],
+    };
+  };
 
   const {
     control,
     handleSubmit,
+    reset,
     formState: { errors, isSubmitting },
   } = useForm({
     mode: "onTouched",
@@ -130,20 +160,69 @@ const ListMasterForm = ({ data, onBack }) => {
 
   const getFieldArray = (tab) => tabConfig[tab] || tabConfig.details;
   const handleAdd = (tab) =>
-    getFieldArray(tab).append({ valueCode: "", valueDesc: "", active: "" });
+    getFieldArray(tab).append({
+      valueCode: "",
+      valueDescription: "",
+      active: "",
+    });
   const handleRemove = (tab, index) => {
     const { fields, remove } = getFieldArray(tab);
     if (fields.length > 1) remove(index);
   };
 
-  const onSubmit = async (formData) => {
-    try {
-      console.log("Form Data:", formData, "Org Id:", orgId);
-      // API call here
-    } catch (error) {
-      console.error(error);
-    }
+ const transformFormData = (formData) => {
+  const payload = {
+    active: formData.active,
+    branch: Number(branch),
+    createdBy: userName,
+    details: formData.details.map((detail) => ({
+      active: detail.active === 'Yes' ? true : false,
+      valueCode: detail.valueCode || "",
+      valueDescription: detail.valueDescription || "",
+    })),
+    listCode: formData.listCode,
+    listDescription: formData.listDescription,
+    orgId: orgId,
   };
+
+  // If editing, include the ID
+  if (data && data.id) {
+    payload.id = data.id;
+  }
+
+  return payload;
+};
+
+const onSubmit = async (formData) => {
+  try {
+    setLoading(true);
+
+    const apiPayload = transformFormData(formData);
+
+    console.log("API Payload:", apiPayload);
+
+    const res = await listformApi.createUpdateListofValues(apiPayload);
+
+    if (res.status === true) {
+      addToast(
+        data && data.id 
+          ? "List of Values updated successfully" 
+          : "List of Values created successfully",
+        "success"
+      );
+     
+      reset(getDefaultValues());
+      onBack(); 
+    } else {
+      addToast("Something went wrong", "error");
+    }
+  } catch (error) {
+    console.error(error);
+    addToast("Error saving List of Values", "error");
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="p-2 max-w-7xl relative">
@@ -177,7 +256,7 @@ const ListMasterForm = ({ data, onBack }) => {
           />
           <InputField
             control={control}
-            name="listDesc"
+            name="listDescription"
             label="List Description"
             required
             placeholder="Enter List Description"
@@ -251,7 +330,7 @@ const ListMasterForm = ({ data, onBack }) => {
                     {/* Value Description - Required */}
                     <InputCell
                       control={control}
-                      name={`details.${index}.valueDesc`}
+                      name={`details.${index}.valueDescription`}
                       placeholder="Enter Value Description"
                       required
                       errors={errors}
@@ -260,6 +339,7 @@ const ListMasterForm = ({ data, onBack }) => {
                     {/* Active - Required */}
                     <SelectCell
                       control={control}
+                      value={field.active}
                       name={`details.${index}.active`}
                       options={SELECT_OPTIONS.active}
                       required
@@ -275,19 +355,21 @@ const ListMasterForm = ({ data, onBack }) => {
         {/* Buttons */}
         <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
           <button
+            type="button"
             onClick={onBack}
-            disabled={isSubmitting}
+            disabled={loading}
             className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
           >
             <X className="h-3 w-3" /> Cancel
           </button>
           <button
+            type="submit"
             onClick={handleSubmit(onSubmit)}
             disabled={isSubmitting}
             className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
           >
             <Save className="h-3 w-3" />{" "}
-            {isSubmitting ? "Saving..." : data ? "Update" : "Save"}
+            {loading ? "Saving..." : data ? "Update" : "Save"}
           </button>
         </div>
       </div>

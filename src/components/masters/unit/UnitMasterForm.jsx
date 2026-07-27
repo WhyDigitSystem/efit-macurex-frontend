@@ -1,342 +1,333 @@
-import { ArrowLeft, Save, X } from "lucide-react";
+import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
-// import { masterAPI } from "../../../api/unitAPI";
-
-const UPPERCASE_FIELDS = ["unitCode"];
-
-/* ---------------------------------------------------------------------------
-   ONE shared, compact control style, used for text/number inputs, selects,
-   and the checkbox row alike, so every field in the form — regardless of
-   type — has the identical height, border, radius, background and focus
-   ring in both light and dark mode.
---------------------------------------------------------------------------- */
+import { useForm, Controller, useFieldArray } from "react-hook-form";
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
-  "bg-white dark:bg-gray-900 " +
-  "border-gray-300 dark:border-gray-600 " +
-  "text-gray-900 dark:text-gray-100 " +
-  "placeholder-gray-400 dark:placeholder-gray-500 " +
+  "bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 " +
+  "text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 " +
   "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
   "dark:focus:ring-blue-400 dark:focus:border-blue-400 " +
   "disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed";
 
-const labelClasses = "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
+const labelClasses =
+  "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
-/**
- * Field
- * A single component for every input type used in this form.
- * type: "text" | "number" | "select" | "checkbox"
- */
-const Field = ({
-  label,
-  name,
-  value,
-  checked,
-  onChange,
-  error,
-  required,
-  type = "text",
-  options = [],
-  className = "",
-}) => {
-  if (type === "select") {
-    return (
-      <div className={`w-full ${className}`}>
-        <label className={labelClasses}>
-          {label}
-          {required && <span className="text-red-500"> *</span>}
-        </label>
+const getDefaultValues = () => ({ 
+  unitCode: "",
+  description: "",
+});
 
-        <select name={name} value={value} onChange={onChange} className={controlClasses}>
+// ============================================================================
+// HELPER COMPONENTS
+// ============================================================================
+const SelectField = ({ control, name, label, options, required, errors }) => (
+  <div>
+    <label className={labelClasses}>
+      {label} {required && <span className="text-red-500">*</span>}
+    </label>
+    <Controller
+      name={name}
+      control={control}
+      rules={required ? { required: `${label} is required` } : undefined}
+      render={({ field }) => (
+        <select {...field} className={controlClasses}>
+          <option value="">Select</option>
           {options.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
+            <option key={opt} value={opt}>
+              {opt}
             </option>
           ))}
         </select>
-
-        {error && <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">{error}</p>}
-      </div>
-    );
-  }
-
-  if (type === "checkbox") {
-    return (
-      <div className={`w-full ${className}`}>
-        <label className={`${labelClasses} select-none opacity-0`}>-</label>
-
-        <label className={`${controlClasses} flex items-center gap-1.5 cursor-pointer`}>
-          <input
-            type="checkbox"
-            name={name}
-            checked={checked}
-            onChange={onChange}
-            className="h-3.5 w-3.5 accent-blue-600 dark:accent-blue-500"
-          />
-          <span className="text-gray-700 dark:text-gray-200">{label}</span>
-        </label>
-      </div>
-    );
-  }
-
-  return (
-    <div className={`w-full ${className}`}>
-      <label className={labelClasses}>
-        {label}
-        {required && <span className="text-red-500"> *</span>}
-      </label>
-
-      <input
-        type={type}
-        name={name}
-        value={value}
-        onChange={onChange}
-        className={controlClasses}
-      />
-
-      {error && <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">{error}</p>}
-    </div>
-  );
-};
-
-const SectionHeader = ({ children }) => (
-  <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">
-    {children}
-  </h3>
+      )}
+    />
+    {errors?.[name] && (
+      <p className="text-red-500 text-[10px] mt-0.5">{errors[name].message}</p>
+    )}
+  </div>
 );
 
-const fieldGrid = "grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-x-3 gap-y-2 items-start";
+const InputField = ({
+  control,
+  name,
+  label,
+  type = "text",
+  required,
+  placeholder,
+  errors,
+  validation = {},
+}) => (
+  <div>
+    <label className={labelClasses}>
+      {label} {required && <span className="text-red-500">*</span>}
+    </label>
+    <Controller
+      name={name}
+      control={control}
+      rules={{
+        required: required ? `${label} is required` : false,
+        ...validation,
+      }}
+      render={({ field }) => (
+        <input
+          {...field}
+          type={type}
+          className={controlClasses}
+          placeholder={placeholder}
+        />
+      )}
+    />
+    {errors?.[name] && (
+      <p className="text-red-500 text-[10px] mt-0.5">{errors[name].message}</p>
+    )}
+  </div>
+);
 
-/* ---------------------------------------------------------------------------- */
+const ToggleButton = ({ control, name }) => (
+  <Controller
+    name={name}
+    control={control}
+    render={({ field }) => (
+      <button
+        type="button"
+        onClick={() => field.onChange(!field.value)}
+        className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${
+          field.value ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
+        }`}
+      >
+        <span
+          className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${
+            field.value ? "translate-x-6" : "translate-x-0.5"
+          }`}
+        />
+      </button>
+    )}
+  />
+);
 
 const UnitMasterForm = ({ data, onBack }) => {
   const [orgId] = useState(localStorage.getItem("orgId"));
 
-  const [form, setForm] = useState({
-    unitCode: data?.unitCode || "",
-    unitName: data?.unitName || "",
-    shortName: data?.shortName || "",
-    unitType: data?.unitType || "Quantity",
-    decimalPlaces: data?.decimalPlaces ?? 0,
 
-    id: data?.id || "",
-    active: data?.active ?? true,
+
+  const {
+    control,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm({
+    mode: "all",
+    defaultValues: getDefaultValues(),
   });
 
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState({});
-
-  const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
-
-    if (fieldErrors[name]) {
-      setFieldErrors((prev) => ({
-        ...prev,
-        [name]: "",
-      }));
-    }
-
-    setForm((prev) => ({
-      ...prev,
-      [name]:
-        type === "checkbox"
-          ? checked
-          : UPPERCASE_FIELDS.includes(name)
-          ? value.toUpperCase()
-          : value,
-    }));
-  };
-
-  const validate = () => {
-    const errors = {};
-
-    if (!form.unitCode.trim())
-      errors.unitCode = "Unit Code is required";
-
-    if (!form.unitName.trim())
-      errors.unitName = "Unit Name is required";
-
-    if (!form.shortName.trim())
-      errors.shortName = "Short Name is required";
-
-    if (!form.unitType.trim())
-      errors.unitType = "Unit Type is required";
-
-    if (
-      form.decimalPlaces === "" ||
-      Number(form.decimalPlaces) < 0 ||
-      Number(form.decimalPlaces) > 6
-    )
-      errors.decimalPlaces = "Decimal Places must be between 0 and 6";
-
-    setFieldErrors(errors);
-
-    return Object.keys(errors).length === 0;
-  };
-
-  const handleSave = async () => {
-    if (!validate()) return;
-
-    setIsSubmitting(true);
-
-    const payload = {
-      ...(data?.id && { id: data.id }),
-      orgId,
-      ...form,
-      decimalPlaces: Number(form.decimalPlaces),
-      cancel: false,
-      createdBy: "ITC001",
-    };
-
-    console.log(payload);
-
+  const onSubmit = async (formData) => {
     try {
-      // await masterAPI.saveUnit(payload);
-
-      alert(
-        data ? "Unit Updated Successfully!" : "Unit Saved Successfully!"
-      );
-
-      onBack();
+      console.log("Form Data:", formData, "Org Id:", orgId);
+      // API call here
     } catch (error) {
       console.error(error);
-      alert("Failed to save Unit.");
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="p-2 max-w-7xl ">
+    <div className="p-2 max-w-7xl relative">
       {/* Header */}
       <div className="flex items-center gap-2 mb-3">
         <button
           onClick={onBack}
-          className="
-            p-1 rounded-md
-            text-gray-600 dark:text-gray-300
-            hover:bg-gray-100 dark:hover:bg-gray-700
-            hover:text-gray-900 dark:hover:text-white
-            transition-colors
-          "
+          className="p-1 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
-
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
           {data ? "Edit Unit" : "Add Unit"}
         </h2>
       </div>
 
-      {/* Card */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-3">
-
-        {/* Unit Details */}
-        <div>
-          <SectionHeader>Unit Details</SectionHeader>
-
-          <div className={fieldGrid}>
-            <Field
-              label="Unit Code"
+      {/* Main Card */}
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+        <form onSubmit={handleSubmit(onSubmit)}>
+          {/* All fields in one row - 5 columns */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+            {/* Required Fields */}
+            <InputField
+              control={control}
               name="unitCode"
-              value={form.unitCode}
-              onChange={handleChange}
-              error={fieldErrors.unitCode}
+              label="Unit Code"
               required
+              placeholder="Enter unit code"
+              errors={errors}
             />
 
-            <Field
-              label="Unit Name"
-              name="unitName"
-              value={form.unitName}
-              onChange={handleChange}
-              error={fieldErrors.unitName}
-              required
-            />
-
-            <Field
-              label="Short Name"
-              name="shortName"
-              value={form.shortName}
-              onChange={handleChange}
-              error={fieldErrors.shortName}
-              required
-            />
-
-            <Field
-              type="select"
-              label="Unit Type"
-              name="unitType"
-              value={form.unitType}
-              onChange={handleChange}
-              required
-              options={[
-                { value: "Quantity", label: "Quantity" },
-                { value: "Weight", label: "Weight" },
-                { value: "Volume", label: "Volume" },
-                { value: "Length", label: "Length" },
-                { value: "Area", label: "Area" },
-                { value: "Packing", label: "Packing" },
-              ]}
-            />
-
-            <Field
-              type="number"
-              label="Decimal Places"
-              name="decimalPlaces"
-              value={form.decimalPlaces}
-              onChange={handleChange}
-              error={fieldErrors.decimalPlaces}
-              required
-            />
-
-            <Field
-              type="checkbox"
-              label="Active"
-              name="active"
-              checked={form.active}
-              onChange={handleChange}
+            <InputField
+              control={control}
+              name="description"
+              label="Description"
+               required
+              placeholder="Enter description"
+              errors={errors}
             />
           </div>
-        </div>
 
-        {/* Buttons */}
-        <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
-          <button
-            onClick={onBack}
-            disabled={isSubmitting}
-            className="
-              flex items-center gap-1 px-3 py-1.5 rounded text-xs
-              border border-gray-300 dark:border-gray-600
-              text-gray-700 dark:text-gray-200
-              bg-white dark:bg-gray-800
-              hover:bg-gray-50 dark:hover:bg-gray-700
-              disabled:opacity-60 disabled:cursor-not-allowed
-              transition-colors
-            "
-          >
-            <X className="h-3 w-3" />
-            Cancel
-          </button>
-
-          <button
-            onClick={handleSave}
-            disabled={isSubmitting}
-            className="
-              flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white
-              bg-blue-600 hover:bg-blue-700
-              dark:bg-blue-600 dark:hover:bg-blue-500
-              disabled:opacity-60 disabled:cursor-not-allowed
-              transition-colors
-            "
-          >
-            <Save className="h-3 w-3" />
-            {isSubmitting ? "Saving..." : data ? "Update" : "Save"}
-          </button>
-        </div>
+          {/* Buttons */}
+          <div className="flex justify-end gap-2 pt-3 mt-3 border-t border-gray-200 dark:border-gray-700">
+            <button
+              onClick={onBack}
+              disabled={isSubmitting}
+              className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+            >
+              <X className="h-3 w-3" /> Cancel
+            </button>
+            <button
+              onClick={handleSubmit(onSubmit)}
+              disabled={isSubmitting}
+              className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+            >
+              <Save className="h-3 w-3" />{" "}
+              {isSubmitting ? "Saving..." : data ? "Update" : "Save"}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
+  );
+};
+
+const TableWrapper = ({ children }) => (
+  <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
+    <table className="w-full text-xs">{children}</table>
+  </div>
+);
+
+const TableHead = ({ headers }) => (
+  <thead className="bg-gray-100 dark:bg-gray-700">
+    <tr>
+      {headers.map((h, i) => (
+        <th
+          key={i}
+          className={`p-1 ${i === 0 ? "w-8 text-center" : "text-left"} dark:text-white`}
+        >
+          {h.label}
+          {h.required && <span className="text-red-500 ml-0.5">*</span>}
+        </th>
+      ))}
+    </tr>
+  </thead>
+);
+
+const TableRow = ({ children, index, onRemove, disabled }) => (
+  <tr className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
+    <td className="p-1 text-center font-medium dark:text-white align-middle">
+      {index + 1}
+    </td>
+    {children}
+    <td className="p-1 text-center align-middle">
+      <button
+        type="button"
+        onClick={onRemove}
+        disabled={disabled}
+        className={`h-5 w-5 rounded text-white flex items-center justify-center ${
+          disabled
+            ? "bg-gray-400 cursor-not-allowed"
+            : "bg-red-600 hover:bg-red-700"
+        }`}
+      >
+        <Trash2 size={10} />
+      </button>
+    </td>
+  </tr>
+);
+
+const SelectCell = ({ control, name, options, required, errors }) => {
+  const getError = () => {
+    const parts = name.split(".");
+    let error = errors;
+    for (const part of parts) {
+      if (error && error[part]) {
+        error = error[part];
+      } else {
+        return null;
+      }
+    }
+    return error?.message;
+  };
+
+  const errorMessage = getError();
+
+  return (
+    <td className="p-1 align-top">
+      <Controller
+        name={name}
+        control={control}
+        rules={required ? { required: "This field is required" } : undefined}
+        render={({ field }) => (
+          <select
+            {...field}
+            className={`${controlClasses} h-8 text-xs w-full ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
+          >
+            <option value="">Select</option>
+            {options.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+          </select>
+        )}
+      />
+      {errorMessage && (
+        <div className="text-red-500 text-[10px] mt-0.5 text-left w-full">
+          {errorMessage}
+        </div>
+      )}
+    </td>
+  );
+};
+
+const InputCell = ({
+  control,
+  name,
+  type = "text",
+  step,
+  placeholder,
+  required,
+  errors,
+}) => {
+  const getError = () => {
+    const parts = name.split(".");
+    let error = errors;
+    for (const part of parts) {
+      if (error && error[part]) {
+        error = error[part];
+      } else {
+        return null;
+      }
+    }
+    return error?.message;
+  };
+
+  const errorMessage = getError();
+
+  return (
+    <td className="p-1 align-top">
+      <Controller
+        name={name}
+        control={control}
+        rules={required ? { required: "This field is required" } : undefined}
+        render={({ field }) => (
+          <input
+            {...field}
+            type={type}
+            step={step}
+            className={`${controlClasses} h-8 text-xs w-full ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
+            placeholder={placeholder}
+          />
+        )}
+      />
+      {errorMessage && (
+        <div className="text-red-500 text-[10px] mt-0.5 text-left w-full">
+          {errorMessage}
+        </div>
+      )}
+    </td>
   );
 };
 

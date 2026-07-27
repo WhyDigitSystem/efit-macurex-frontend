@@ -2,7 +2,7 @@ import { useState } from "react";
 import ListMasterList from "./ListMasterList";
 import ListMasterForm from "./ListMasterForm";
 
-const ItemMaster = () => {
+const ListMaster = () => {
   const [screen, setScreen] = useState("list");
   const [editData, setEditData] = useState(null);
 
@@ -37,4 +37,4 @@ const ItemMaster = () => {
   );
 };
 
-export default ItemMaster;
+export default ListMaster;
