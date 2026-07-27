@@ -234,6 +234,12 @@ const SECTIONS = [
         path: "/taxDefination",
         screenCode: "TAXDEF",
       },
+      {
+        name: "HSN/SAC Master",
+        icon: FileText,
+        path: "/hsnsac",
+        screenCode: "HSN_SAC",
+      },
     ],
   },
 
