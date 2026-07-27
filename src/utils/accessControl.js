@@ -71,6 +71,7 @@ const SCREEN_CODE_MAPPING = {
     'NEW ENTRIES': 'NEWE',
     'BRANCH': 'BR',
     'CALENDAR': 'CAL',
+    'HOLIDAY': 'HOL',
 };
 
 // Module to screen mapping for special handling

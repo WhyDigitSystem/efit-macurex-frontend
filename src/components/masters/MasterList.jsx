@@ -112,6 +112,12 @@ const SECTIONS = [
         path: "/calendar",
         screenCode: "CALENDAR",
       },
+      {
+        name: "Holiday Master",
+        icon: CalendarDays,
+        path: "/holiday",
+        screenCode: "HOLIDAY",
+      },
     ],
   },
 

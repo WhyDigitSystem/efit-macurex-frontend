@@ -30,6 +30,7 @@ import DocTypeMappingMaster from "../components/masters/DocTypeMapping/DocTypeMa
 import DailyExchangeRateMaster from "../components/masters/DailyExchangeRate/DailyExchangeRateMaster";
 import HsnSacMaster from "../components/masters/hsnsac/HsnSacMaster";
 import CalendarMaster from "../components/masters/calendar/CalendarMaster";
+import HolidayMaster from "../components/masters/holiday/HolidayMaster";
 import PartyAccountMappingMaster from "../components/masters/partyAccountMapping/PartyAccountMappingMaster";
 import ExchangeRateMaster from "../components/masters/exchangeRate/ExchangeRateMaster";
 import ExchangeRateUpdateMaster from "../components/masters/exchangeRateUpdate/ExchangeRateUpdateMaster";
@@ -144,6 +145,7 @@ export const routesConfig = [
     element: <HsnSacMaster />,
   },
   { path: "/calendar", label: "Calendar Master", element: <CalendarMaster /> },
+  { path: "/holiday", label: "Holiday Master", element: <HolidayMaster /> },
   { path: "/gst_state", label: "GST State", element: <GSTState /> },
   { path: "/gst_rate", label: "GST Rate", element: <GSTRate /> },
   { path: "/employee", label: "Employee Master", element: <EmployeeMaster /> },
