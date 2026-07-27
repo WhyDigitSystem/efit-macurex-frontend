@@ -55,6 +55,7 @@ import TransportMaster from "./components/masters/transport/TransportMaster";
 import DocTypeMaster from "./components/masters/docType/DocTypeMaster";
 import DocTypeMappingMaster from "./components/masters/DocTypeMapping/DocTypeMappingMaster";
 import DailyExchangeRateMaster from "./components/masters/DailyExchangeRate/DailyExchangeRateMaster";
+import HsnSacMaster from './components/masters/hsnsac/HsnSacMaster';
 
 const ThemeInitializer = () => {
   const { mode } = useSelector((state) => state.theme);
@@ -151,6 +152,7 @@ const AppContent = () => {
                       />
                       <Route path="/listofvalues" element={<ListMaster />} />
                       <Route path="/currency" element={<Currency />} />
+                      <Route path="/hsnsac" element={<HsnSacMaster />} />
                       <Route path="/gst_state" element={<GSTState />} />
                       <Route path="/gst_rate" element={<GSTRate />} />
 

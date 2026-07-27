@@ -209,6 +209,12 @@ const SECTIONS = [
         path: "/lmtrate",
         screenCode: "LME_Ratez",
       },
+      {
+        name: "HSN/SAC",
+        icon: FileText,
+        path: "/hsnsac",
+        screenCode: "HSN_SAC",
+      },
     ],
   },
 
