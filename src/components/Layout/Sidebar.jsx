@@ -1,6 +1,6 @@
 import { clsx } from "clsx";
 import Lottie from "lottie-react";
-import { LayoutDashboard, BookOpenCheck } from "lucide-react";
+import { LayoutDashboard, BookOpenCheck, ShoppingCart } from "lucide-react";
 import { useSelector } from "react-redux";
 import { NavLink } from "react-router-dom";
 import { hasScreenAccess } from "../../utils/accessControl";
@@ -53,6 +53,14 @@ const Sidebar = () => {
           icon: BookOpenCheck,
           bgColor:
             "bg-gradient-to-br from-emerald-600 to-teal-500 dark:from-emerald-500 dark:to-teal-400",
+          screenCode: "MASTERS",
+        },
+        {
+          name: "Sales",
+          href: "/sales",
+          icon: ShoppingCart,
+          bgColor:
+            "bg-gradient-to-br from-orange-600 to-amber-500 dark:from-orange-500 dark:to-amber-400",
           screenCode: "MASTERS",
         },
       ];

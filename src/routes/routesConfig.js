@@ -38,12 +38,14 @@ import LMEMaster from "../components/masters/LmeRate/LMEMaster";
 import BankMaster from "../components/masters/bankMaster/BankMaster";
 import TaxRateMaster from "../components/masters/taxRate/TaxRateMaster";
 import TaxDefinationMaster from "../components/masters/taxDefination/TaxDefinationMaster";
+import SalesList from "../components/sales/SalesList";
 
 export const routesConfig = [
   { path: "/", label: "Dashboard", element: <Dashboard /> },
 
   // WMS Routes
   { path: "/masters", label: "Masters", element: <MastersList /> },
+  { path: "/Sales", label: "Masters", element: <SalesList /> },
   { path: "/country", label: "Country Master", element: <CountryMaster /> },
   { path: "/state", label: "State Master", element: <StateMaster /> },
   { path: "/city", label: "City Master", element: <CityMaster /> },

@@ -22,7 +22,7 @@ import {
   MapPinned,
   Link,
   RefreshCw,
-  ReceiptText
+  ReceiptText,
 } from "lucide-react";
 import { hasScreenAccess } from "../../utils/accessControl";
 
@@ -272,6 +272,163 @@ const SECTIONS = [
   },
 ];
 
+// Individual color palette for each item - each item gets a unique color
+const INDIVIDUAL_COLORS = [
+  {
+    light: "bg-blue-50",
+    dark: "dark:bg-blue-950/30",
+    text: "text-blue-600 dark:text-blue-400",
+    iconBg:
+      "bg-blue-100 dark:bg-blue-900/40 group-hover:bg-blue-200 dark:group-hover:bg-blue-800",
+    border: "hover:border-blue-300 dark:hover:border-blue-600",
+    hover: "hover:bg-blue-50 dark:hover:bg-blue-900/30",
+  },
+  {
+    light: "bg-teal-50",
+    dark: "dark:bg-teal-950/30",
+    text: "text-teal-600 dark:text-teal-400",
+    iconBg:
+      "bg-teal-100 dark:bg-teal-900/40 group-hover:bg-teal-200 dark:group-hover:bg-teal-800",
+    border: "hover:border-teal-300 dark:hover:border-teal-600",
+    hover: "hover:bg-teal-50 dark:hover:bg-teal-900/30",
+  },
+  {
+    light: "bg-indigo-50",
+    dark: "dark:bg-indigo-950/30",
+    text: "text-indigo-600 dark:text-indigo-400",
+    iconBg:
+      "bg-indigo-100 dark:bg-indigo-900/40 group-hover:bg-indigo-200 dark:group-hover:bg-indigo-800",
+    border: "hover:border-indigo-300 dark:hover:border-indigo-600",
+    hover: "hover:bg-indigo-50 dark:hover:bg-indigo-900/30",
+  },
+  {
+    light: "bg-amber-50",
+    dark: "dark:bg-amber-950/30",
+    text: "text-amber-600 dark:text-amber-400",
+    iconBg:
+      "bg-amber-100 dark:bg-amber-900/40 group-hover:bg-amber-200 dark:group-hover:bg-amber-800",
+    border: "hover:border-amber-300 dark:hover:border-amber-600",
+    hover: "hover:bg-amber-50 dark:hover:bg-amber-900/30",
+  },
+  {
+    light: "bg-rose-50",
+    dark: "dark:bg-rose-950/30",
+    text: "text-rose-600 dark:text-rose-400",
+    iconBg:
+      "bg-rose-100 dark:bg-rose-900/40 group-hover:bg-rose-200 dark:group-hover:bg-rose-800",
+    border: "hover:border-rose-300 dark:hover:border-rose-600",
+    hover: "hover:bg-rose-50 dark:hover:bg-rose-900/30",
+  },
+  {
+    light: "bg-violet-50",
+    dark: "dark:bg-violet-950/30",
+    text: "text-violet-600 dark:text-violet-400",
+    iconBg:
+      "bg-violet-100 dark:bg-violet-900/40 group-hover:bg-violet-200 dark:group-hover:bg-violet-800",
+    border: "hover:border-violet-300 dark:hover:border-violet-600",
+    hover: "hover:bg-violet-50 dark:hover:bg-violet-900/30",
+  },
+  {
+    light: "bg-emerald-50",
+    dark: "dark:bg-emerald-950/30",
+    text: "text-emerald-600 dark:text-emerald-400",
+    iconBg:
+      "bg-emerald-100 dark:bg-emerald-900/40 group-hover:bg-emerald-200 dark:group-hover:bg-emerald-800",
+    border: "hover:border-emerald-300 dark:hover:border-emerald-600",
+    hover: "hover:bg-emerald-50 dark:hover:bg-emerald-900/30",
+  },
+  {
+    light: "bg-fuchsia-50",
+    dark: "dark:bg-fuchsia-950/30",
+    text: "text-fuchsia-600 dark:text-fuchsia-400",
+    iconBg:
+      "bg-fuchsia-100 dark:bg-fuchsia-900/40 group-hover:bg-fuchsia-200 dark:group-hover:bg-fuchsia-800",
+    border: "hover:border-fuchsia-300 dark:hover:border-fuchsia-600",
+    hover: "hover:bg-fuchsia-50 dark:hover:bg-fuchsia-900/30",
+  },
+  {
+    light: "bg-cyan-50",
+    dark: "dark:bg-cyan-950/30",
+    text: "text-cyan-600 dark:text-cyan-400",
+    iconBg:
+      "bg-cyan-100 dark:bg-cyan-900/40 group-hover:bg-cyan-200 dark:group-hover:bg-cyan-800",
+    border: "hover:border-cyan-300 dark:hover:border-cyan-600",
+    hover: "hover:bg-cyan-50 dark:hover:bg-cyan-900/30",
+  },
+  {
+    light: "bg-lime-50",
+    dark: "dark:bg-lime-950/30",
+    text: "text-lime-600 dark:text-lime-400",
+    iconBg:
+      "bg-lime-100 dark:bg-lime-900/40 group-hover:bg-lime-200 dark:group-hover:bg-lime-800",
+    border: "hover:border-lime-300 dark:hover:border-lime-600",
+    hover: "hover:bg-lime-50 dark:hover:bg-lime-900/30",
+  },
+  {
+    light: "bg-pink-50",
+    dark: "dark:bg-pink-950/30",
+    text: "text-pink-600 dark:text-pink-400",
+    iconBg:
+      "bg-pink-100 dark:bg-pink-900/40 group-hover:bg-pink-200 dark:group-hover:bg-pink-800",
+    border: "hover:border-pink-300 dark:hover:border-pink-600",
+    hover: "hover:bg-pink-50 dark:hover:bg-pink-900/30",
+  },
+  {
+    light: "bg-purple-50",
+    dark: "dark:bg-purple-950/30",
+    text: "text-purple-600 dark:text-purple-400",
+    iconBg:
+      "bg-purple-100 dark:bg-purple-900/40 group-hover:bg-purple-200 dark:group-hover:bg-purple-800",
+    border: "hover:border-purple-300 dark:hover:border-purple-600",
+    hover: "hover:bg-purple-50 dark:hover:bg-purple-900/30",
+  },
+  {
+    light: "bg-orange-50",
+    dark: "dark:bg-orange-950/30",
+    text: "text-orange-600 dark:text-orange-400",
+    iconBg:
+      "bg-orange-100 dark:bg-orange-900/40 group-hover:bg-orange-200 dark:group-hover:bg-orange-800",
+    border: "hover:border-orange-300 dark:hover:border-orange-600",
+    hover: "hover:bg-orange-50 dark:hover:bg-orange-900/30",
+  },
+  {
+    light: "bg-red-50",
+    dark: "dark:bg-red-950/30",
+    text: "text-red-600 dark:text-red-400",
+    iconBg:
+      "bg-red-100 dark:bg-red-900/40 group-hover:bg-red-200 dark:group-hover:bg-red-800",
+    border: "hover:border-red-300 dark:hover:border-red-600",
+    hover: "hover:bg-red-50 dark:hover:bg-red-900/30",
+  },
+  {
+    light: "bg-green-50",
+    dark: "dark:bg-green-950/30",
+    text: "text-green-600 dark:text-green-400",
+    iconBg:
+      "bg-green-100 dark:bg-green-900/40 group-hover:bg-green-200 dark:group-hover:bg-green-800",
+    border: "hover:border-green-300 dark:hover:border-green-600",
+    hover: "hover:bg-green-50 dark:hover:bg-green-900/30",
+  },
+  {
+    light: "bg-yellow-50",
+    dark: "dark:bg-yellow-950/30",
+    text: "text-yellow-600 dark:text-yellow-400",
+    iconBg:
+      "bg-yellow-100 dark:bg-yellow-900/40 group-hover:bg-yellow-200 dark:group-hover:bg-yellow-800",
+    border: "hover:border-yellow-300 dark:hover:border-yellow-600",
+    hover: "hover:bg-yellow-50 dark:hover:bg-yellow-900/30",
+  },
+  {
+    light: "bg-sky-50",
+    dark: "dark:bg-sky-950/30",
+    text: "text-sky-600 dark:text-sky-400",
+    iconBg:
+      "bg-sky-100 dark:bg-sky-900/40 group-hover:bg-sky-200 dark:group-hover:bg-sky-800",
+    border: "hover:border-sky-300 dark:hover:border-sky-600",
+    hover: "hover:bg-sky-50 dark:hover:bg-sky-900/30",
+  },
+];
+
 // Same color-token map used across the app's module pages.
 const getColorStyles = (color) => {
   const colors = {
@@ -314,6 +471,11 @@ const getColorStyles = (color) => {
   return colors[color] || colors.blue;
 };
 
+// Function to get individual color for each item
+const getIndividualColor = (index) => {
+  return INDIVIDUAL_COLORS[index % INDIVIDUAL_COLORS.length];
+};
+
 const MastersList = () => {
   const navigate = useNavigate();
   const userType = localStorage.getItem("userType")?.toUpperCase();
@@ -329,9 +491,9 @@ const MastersList = () => {
   // All items across every section, flattened - no section headers/grouping,
   // just a single grid of icon + title tiles.
   const allItems = filteredSections.flatMap((section) =>
-    section.items.map((item) => ({
+    section.items.map((item, index) => ({
       ...item,
-      colors: getColorStyles("blue"),
+      individualColor: getIndividualColor(index),
     })),
   );
 
@@ -359,6 +521,7 @@ const MastersList = () => {
           <div className="grid grid-cols-6 sm:grid-cols-7 lg:grid-cols-9 xl:grid-cols-10 2xl:grid-cols-12 gap-3">
             {allItems.map((item, itemIndex) => {
               const ItemIcon = item.icon;
+              const colors = item.individualColor;
 
               return (
                 <div
@@ -371,23 +534,23 @@ const MastersList = () => {
                     className={`
                     relative overflow-hidden bg-white dark:bg-gray-800 rounded-lg
                     border border-gray-200 dark:border-gray-700
-                    ${item.colors.border} ${item.colors.hover}
+                    ${colors.border} ${colors.hover}
                     transition-all duration-200 hover:shadow-md hover:scale-[1.02]
                   `}
                   >
                     <div className="p-1 h-20 flex flex-col items-center justify-center text-center">
                       <div
                         className={`
-                        p-2 rounded-lg ${item.colors.iconBg}
+                        p-2 rounded-lg ${colors.iconBg}
                         transition-all duration-200 group-hover:scale-105
                         mb-1.5
                       `}
                       >
-                        <ItemIcon className={`h-4 w-4 ${item.colors.text}`} />
+                        <ItemIcon className={`h-4 w-4 ${colors.text}`} />
                       </div>
 
                       <h3
-                        className={`text-xs font-medium ${item.colors.text} transition-colors leading-tight line-clamp-2`}
+                        className={`text-xs font-medium ${colors.text} transition-colors leading-tight line-clamp-2`}
                       >
                         {item.name}
                       </h3>

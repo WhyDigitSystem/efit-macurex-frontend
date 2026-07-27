@@ -52,9 +52,8 @@ const MenuPage = () => {
   };
 
   return (
-   <div className="bg-gray-50 dark:bg-gray-900 p-1 animate-fadeIn">
-  <div className="max-w-6xl mx-0">
-
+    <div className="bg-gray-50 dark:bg-gray-900 p-1 animate-fadeIn">
+      <div className="max-w-6xl mx-0">
         {/* Back Button */}
         <button
           onClick={() => navigate("/")}
