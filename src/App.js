@@ -55,8 +55,12 @@ import TransportMaster from "./components/masters/transport/TransportMaster";
 import DocTypeMaster from "./components/masters/docType/DocTypeMaster";
 import DocTypeMappingMaster from "./components/masters/DocTypeMapping/DocTypeMappingMaster";
 import DailyExchangeRateMaster from "./components/masters/DailyExchangeRate/DailyExchangeRateMaster";
-import HsnSacMaster from './components/masters/hsnsac/HsnSacMaster';
-
+import HsnSacMaster from "./components/masters/hsnsac/HsnSacMaster";
+import PartyAccountMappingMaster from "./components/masters/partyAccountMapping/PartyAccountMappingMaster";
+import ExchangeRateMaster from "./components/masters/exchangeRate/ExchangeRateMaster";
+import ExchangeRateUpdateMaster from "./components/masters/exchangeRateUpdate/ExchangeRateUpdateMaster";
+import SalesZone from "./components/masters/salesZone/SalesZoneMaster";
+import SalesZoneMaster from "./components/masters/salesZone/SalesZoneMaster";
 const ThemeInitializer = () => {
   const { mode } = useSelector((state) => state.theme);
 
@@ -134,6 +138,19 @@ const AppContent = () => {
                         path="/transporter"
                         element={<TransportMaster />}
                       />
+                      <Route
+                        path="/partymappingaccount"
+                        element={<PartyAccountMappingMaster />}
+                      />
+                      <Route
+                        path="/exchangerate"
+                        element={<ExchangeRateMaster />}
+                      />
+                      <Route
+                        path="/exchangerateupdate"
+                        element={<ExchangeRateUpdateMaster />}
+                      />
+                      <Route path="/saleszone" element={<SalesZoneMaster />} />
                       <Route path="/documenttype" element={<DocTypeMaster />} />
 
                       <Route
