@@ -20,6 +20,8 @@ import {
   FileCog,
   DollarSign,
   MapPinned,
+  Link,
+  RefreshCw,
 } from "lucide-react";
 import { hasScreenAccess } from "../../utils/accessControl";
 
@@ -120,6 +122,12 @@ const SECTIONS = [
         screenCode: "PARTY",
       },
       {
+        name: "Mapping Of Party To Account",
+        icon: Link,
+        path: "/partymappingaccount",
+        screenCode: "PARTY_ACCOUNT_MAPPING",
+      },
+      {
         name: "Transporter",
         icon: Truck,
         path: "/transporter",
@@ -138,10 +146,28 @@ const SECTIONS = [
         screenCode: "DOCUMENT_TYPE_MAPPING",
       },
       {
+        name: "Exchange Rate",
+        icon: DollarSign,
+        path: "/exchangerate",
+        screenCode: "EXCHANGE_RATE",
+      },
+      {
+        name: "Exchange Rate Update",
+        icon: RefreshCw,
+        path: "/exchangerateupdate",
+        screenCode: "EXCHANGE_RATE_UPDATE",
+      },
+      {
         name: "Daily Exchange Rate",
         icon: DollarSign,
         path: "/dailyexchangerate",
         screenCode: "DAILY_EXCHANGE_RATE",
+      },
+      {
+        name: "Sales Zone",
+        icon: MapPinned,
+        path: "/saleszone",
+        screenCode: "SALES_ZONE",
       },
     ],
   },
