@@ -1,10 +1,12 @@
 import { ArrowLeft, Save, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { FloatingInput, FloatingSelect } from "../../../utils/InputFields";
-import masterAPI from "../../../api/cityAPI";
+import { cityAPI } from "../../../api/cityAPI";
 import { useToast } from "../../Toast/ToastContext";
+import countryAPI from "../../../api/countryAPI";
+import stateAPI from "../../../api/stateAPI";
 
-const CityMasterForm = ({ onBack, onSave, editData }) => {
+const CityMasterForm = ({ onBack, onSave, editData, editId }) => {
   const ORG_ID = parseInt(localStorage.getItem("orgId"));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { addToast } = useToast();
@@ -22,24 +24,26 @@ const CityMasterForm = ({ onBack, onSave, editData }) => {
   const [countries, setCountries] = useState([]);
   const [states, setStates] = useState([]);
   const [fieldErrors, setFieldErrors] = useState({});
+  const [loading, setLoading] = useState(false);
 
   const [form, setForm] = useState({
-    id: editData?.id || 0,
-    cityName: editData?.cityName || "",
-    cityCode: editData?.cityCode || "",
-    country: editData?.country || "",
-    state: editData?.state || "",
-    active: editData?.active ?? true,
-    cancel: editData?.cancel ?? false,
+    id: 0,
+    cityName: "",
+    cityCode: "",
+    country: "", // Will store country ID
+    state: "", // Will store state ID
+    active: true,
+    cancel: false,
+    cancelRemarks: "",
 
     // Additional fields from localStorage
-    branch: editData?.branch || loginBranch,
-    branchCode: editData?.branchCode || loginBranchCode,
-    warehouse: editData?.warehouse || loginWarehouse,
-    customer: editData?.customer || loginCustomer,
-    client: editData?.client || loginClient,
+    branch: loginBranch,
+    branchCode: loginBranchCode,
+    warehouse: loginWarehouse,
+    customer: loginCustomer,
+    client: loginClient,
     orgId: ORG_ID,
-    createdBy: localStorage.getItem("userName") || "SYSTEM",
+    createdBy: loginUserName,
   });
 
   // Field labels for toast messages
@@ -50,17 +54,101 @@ const CityMasterForm = ({ onBack, onSave, editData }) => {
     state: "State",
   };
 
-  // Initialize data on component mount
+  // Load city data for editing
   useEffect(() => {
-    fetchCountries();
-    if (editData?.country) {
-      fetchStatesByCountry(editData.country);
+    const initializeForm = async () => {
+      // If editing with editId, fetch the city data
+      if (editId && editId > 0) {
+        await loadCityData(editId);
+      } else if (editData) {
+        // If editData is passed directly (from list)
+        populateFormFromEditData(editData);
+      }
+
+      // Load countries
+      await fetchCountries();
+    };
+
+    initializeForm();
+  }, [editId, editData]);
+
+  const populateFormFromEditData = (data) => {
+    // Extract IDs from nested objects if they exist
+    const countryId = data.country?.id || data.countryId || '';
+    const stateId = data.state?.id || data.stateId || '';
+
+    setForm({
+      id: data.id || 0,
+      cityName: data.cityName || "",
+      cityCode: data.cityCode || "",
+      country: countryId,
+      state: stateId,
+      active: data.active === "Active" ? true : (data.active === true || data.active === "true"),
+      cancel: data.cancel === "T" ? true : (data.cancel === true || data.cancel === "true"),
+      cancelRemarks: data.cancelRemarks || "",
+
+      // Additional fields
+      branch: data.branch || loginBranch,
+      branchCode: data.branchCode || loginBranchCode,
+      warehouse: data.warehouse || loginWarehouse,
+      customer: data.customer || loginCustomer,
+      client: data.client || loginClient,
+      orgId: data.orgId || ORG_ID,
+      createdBy: data.createdBy || loginUserName,
+    });
+
+    // Load states for the selected country
+    if (countryId) {
+      fetchStatesByCountry(countryId);
     }
-  }, []);
+  };
+
+  const loadCityData = async (cityId) => {
+    try {
+      setLoading(true);
+      const cityData = await cityAPI.getCityById(cityId);
+
+      if (cityData) {
+        // Extract IDs from nested objects
+        const countryId = cityData.country?.id || '';
+        const stateId = cityData.state?.id || '';
+
+        setForm({
+          id: cityData.id || 0,
+          cityName: cityData.cityName || "",
+          cityCode: cityData.cityCode || "",
+          country: countryId,
+          state: stateId,
+          active: cityData.active === "Active" ? true : false,
+          cancel: cityData.cancel === "T" ? true : false,
+          cancelRemarks: cityData.cancelRemarks || "",
+
+          // Additional fields
+          branch: cityData.branch || loginBranch,
+          branchCode: cityData.branchCode || loginBranchCode,
+          warehouse: cityData.warehouse || loginWarehouse,
+          customer: cityData.customer || loginCustomer,
+          client: cityData.client || loginClient,
+          orgId: cityData.orgId || ORG_ID,
+          createdBy: cityData.createdBy || loginUserName,
+        });
+
+        // Load states for the selected country
+        if (countryId) {
+          await fetchStatesByCountry(countryId);
+        }
+      }
+    } catch (error) {
+      console.error("Error loading city data:", error);
+      addToast("Failed to load city data", 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchCountries = async () => {
     try {
-      const countriesData = await masterAPI.getCountries(ORG_ID);
+      const countriesData = await countryAPI.getCountries(ORG_ID);
       const sortedCountries = countriesData.sort((a, b) =>
         a.countryName.localeCompare(b.countryName)
       );
@@ -71,16 +159,16 @@ const CityMasterForm = ({ onBack, onSave, editData }) => {
     }
   };
 
-  const fetchStatesByCountry = async (countryName) => {
+  const fetchStatesByCountry = async (countryId) => {
     try {
-      const statesData = await masterAPI.getState(ORG_ID, countryName);
+      const statesData = await stateAPI.getStatesByCountry(countryId, ORG_ID);
       const sortedStates = statesData.sort((a, b) =>
         a.stateName.localeCompare(b.stateName)
       );
       setStates(sortedStates);
     } catch (error) {
       console.error("Error fetching states:", error);
-      addToast("Failed to load states", 'error');
+      addToast("Failed to load states", "error");
     }
   };
 
@@ -172,33 +260,25 @@ const CityMasterForm = ({ onBack, onSave, editData }) => {
 
     setIsSubmitting(true);
 
+    // Prepare payload - sending country and state as IDs
     const payload = {
+      // Only include id if we're editing (id exists and is greater than 0)
+      ...(form.id && form.id > 0 && { id: form.id }),
       cityName: form.cityName,
       cityCode: form.cityCode,
-      country: form.country,
-      state: form.state,
+      country: parseInt(form.country), // Send country ID
+      state: parseInt(form.state), // Send state ID
       active: Boolean(form.active),
       cancel: Boolean(form.cancel),
-
-      // Additional fields from localStorage
-      branch: form.branch,
-      branchCode: form.branchCode,
-      warehouse: form.warehouse,
-      customer: form.customer,
-      client: form.client,
+      cancelRemarks: form.cancelRemarks || "",
       orgId: form.orgId,
       createdBy: form.createdBy,
     };
 
-    // Only add id to payload if we're editing (id exists and is greater than 0)
-    if (form.id && form.id > 0) {
-      payload.id = form.id;
-    }
-
     console.log("📤 Saving City Payload:", payload);
 
     try {
-      const response = await masterAPI.saveCity(payload);
+      const response = await cityAPI.saveCity(payload);
       console.log("📥 Save Response:", response);
 
       // Check response status
@@ -210,7 +290,18 @@ const CityMasterForm = ({ onBack, onSave, editData }) => {
 
         addToast(successMessage, 'success');
 
-        if (onSave) onSave(payload);
+        // Call the parent's onSave callback
+        if (onSave) {
+          // Pass the saved data back to parent
+          const savedData = {
+            ...payload,
+            id: response?.paramObjectsMap?.cityVO?.id || payload.id
+          };
+          onSave(savedData);
+        } else {
+          // If no onSave callback, just go back
+          onBack();
+        }
       } else {
         const errorMessage = response?.paramObjectsMap?.message ||
           response?.paramObjectsMap?.errorMessage ||
@@ -234,14 +325,22 @@ const CityMasterForm = ({ onBack, onSave, editData }) => {
 
   // Options
   const countryOptions = countries.map(country => ({
-    value: country.countryName,
+    value: country.id,
     label: country.countryName
   }));
 
   const stateOptions = states.map(state => ({
-    value: state.stateName,
+    value: state.id,
     label: state.stateName
   }));
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="text-gray-500 dark:text-gray-400">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-2 max-w-7xl">
@@ -254,7 +353,7 @@ const CityMasterForm = ({ onBack, onSave, editData }) => {
           <ArrowLeft className="h-4 w-4" />
         </button>
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-          {editData ? "Edit City" : "Add City"}
+          {editData || editId ? "Edit City" : "Add City"}
         </h2>
       </div>
 
@@ -301,7 +400,7 @@ const CityMasterForm = ({ onBack, onSave, editData }) => {
             disabled={!form.country}
           />
 
-          {/* STATUS & CANCEL CHECKBOXES */}
+          {/* STATUS CHECKBOX */}
           <div className="flex flex-col gap-3 p-2">
             <div className="flex items-center gap-2">
               <input
@@ -315,7 +414,6 @@ const CityMasterForm = ({ onBack, onSave, editData }) => {
                 Active
               </span>
             </div>
-
           </div>
         </div>
 
@@ -334,7 +432,7 @@ const CityMasterForm = ({ onBack, onSave, editData }) => {
             className="flex items-center gap-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Save className="h-3 w-3" />
-            {isSubmitting ? "Saving..." : (editData ? "Update" : "Save")}
+            {isSubmitting ? "Saving..." : (editData || editId ? "Update" : "Save")}
           </button>
         </div>
       </div>

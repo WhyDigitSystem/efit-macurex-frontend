@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { FloatingInput, FloatingSelect } from "../../../utils/InputFields";
 import { useToast } from "../../Toast/ToastContext";
 import { stateAPI } from "../../../api/stateAPI";
+import countryAPI from "../../../api/countryAPI";
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
   "bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 " +
@@ -71,7 +72,7 @@ const StateMasterForm = ({ onBack, onSave, editData }) => {
 
   const fetchCountries = async () => {
     try {
-      const countriesData = await stateAPI.getCountries(ORG_ID);
+      const countriesData = await countryAPI.getCountries(ORG_ID);
       const sortedCountries = countriesData.sort((a, b) =>
         a.countryName.localeCompare(b.countryName),
       );
@@ -185,7 +186,7 @@ const StateMasterForm = ({ onBack, onSave, editData }) => {
     console.log("📤 Saving State Payload:", payload);
 
     try {
-      const response = await stateAPI.createState(payload);
+      const response = await stateAPI.createUpdateState(payload);
       console.log("📥 Response:", response);
 
       const status = response?.status === true || response?.statusFlag === "Ok";
@@ -225,7 +226,7 @@ const StateMasterForm = ({ onBack, onSave, editData }) => {
 
   // Options
   const countryOptions = countries.map((country) => ({
-    value: country.countryName,
+    value: country.id,          // or country.countryId based on your API response
     label: country.countryName,
   }));
 
@@ -259,9 +260,8 @@ const StateMasterForm = ({ onBack, onSave, editData }) => {
               name="stateName"
               value={form.stateName}
               onChange={handleChange}
-              className={`${controlClasses} ${
-                fieldErrors.stateName ? "border-red-500" : ""
-              }`}
+              className={`${controlClasses} ${fieldErrors.stateName ? "border-red-500" : ""
+                }`}
             />
 
             {fieldErrors.stateName && (
@@ -281,9 +281,8 @@ const StateMasterForm = ({ onBack, onSave, editData }) => {
               name="stateCode"
               value={form.stateCode}
               onChange={handleChange}
-              className={`${controlClasses} ${
-                fieldErrors.stateCode ? "border-red-500" : ""
-              }`}
+              className={`${controlClasses} ${fieldErrors.stateCode ? "border-red-500" : ""
+                }`}
             />
 
             {fieldErrors.stateCode && (
@@ -301,9 +300,8 @@ const StateMasterForm = ({ onBack, onSave, editData }) => {
               name="stateNumber"
               value={form.stateNumber}
               onChange={handleChange}
-              className={`${controlClasses} ${
-                fieldErrors.stateNumber ? "border-red-500" : ""
-              }`}
+              className={`${controlClasses} ${fieldErrors.stateNumber ? "border-red-500" : ""
+                }`}
             />
 
             {fieldErrors.stateNumber && (
@@ -322,10 +320,9 @@ const StateMasterForm = ({ onBack, onSave, editData }) => {
             <select
               name="country"
               value={form.country}
-              onChange={(e) => handleSelectChange("country", e.target.value)}
-              className={`${controlClasses} ${
-                fieldErrors.country ? "border-red-500" : ""
-              }`}
+              onChange={(e) => handleSelectChange("country", Number(e.target.value))}
+              className={`${controlClasses} ${fieldErrors.country ? "border-red-500" : ""
+                }`}
             >
               <option value="">Select Country</option>
 
@@ -353,9 +350,8 @@ const StateMasterForm = ({ onBack, onSave, editData }) => {
               name="region"
               value={form.region}
               onChange={handleChange}
-              className={`${controlClasses} ${
-                fieldErrors.region ? "border-red-500" : ""
-              }`}
+              className={`${controlClasses} ${fieldErrors.region ? "border-red-500" : ""
+                }`}
             />
 
             {fieldErrors.region && (
@@ -377,14 +373,12 @@ const StateMasterForm = ({ onBack, onSave, editData }) => {
                   active: !prev.active,
                 }))
               }
-              className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${
-                form.active ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
-              }`}
+              className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${form.active ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
+                }`}
             >
               <span
-                className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${
-                  form.active ? "translate-x-6" : "translate-x-0.5"
-                }`}
+                className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${form.active ? "translate-x-6" : "translate-x-0.5"
+                  }`}
               />
             </button>
           </div>

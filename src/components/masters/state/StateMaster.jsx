@@ -23,7 +23,7 @@ const StateMaster = () => {
 
   const handleSave = async (payload) => {
     try {
-      await stateAPI.createState(payload); // Create/Update
+      await stateAPI.createUpdateState(payload); // Create/Update
       handleBack();
     } catch (error) {
       console.error("Error saving state:", error);

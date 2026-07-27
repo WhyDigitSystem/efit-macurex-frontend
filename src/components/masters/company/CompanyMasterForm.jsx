@@ -497,10 +497,14 @@ const CompanyMasterForm = ({ data, companyId, onBack }) => {
       errors.ceo = "Enter a valid name";
 
     if (!form.address.trim()) errors.address = "Address is required";
-    if (!form.country.trim()) errors.country = "Country is required";
-    if (!form.state.trim()) errors.state = "State is required";
+    if (!String(form.country || "").trim())
+      errors.country = "Country is required";
 
-    if (!form.city.trim()) errors.city = "City is required";
+    if (!String(form.state || "").trim())
+      errors.state = "State is required";
+
+    if (!String(form.city || "").trim())
+      errors.city = "City is required";
 
     if (!form.pincode.trim()) errors.pincode = "Pincode is required";
     else if (!PINCODE_REGEX.test(form.pincode.trim()))
@@ -766,7 +770,7 @@ const CompanyMasterForm = ({ data, companyId, onBack }) => {
               required
               options={[
                 ...(form.country &&
-                !countries.some((c) => String(c.id) === String(form.country))
+                  !countries.some((c) => String(c.id) === String(form.country))
                   ? [{ id: form.country, countryName: form.countryName }]
                   : []),
                 ...countries,
@@ -784,7 +788,7 @@ const CompanyMasterForm = ({ data, companyId, onBack }) => {
               disabled={!form.country}
               options={[
                 ...(form.state &&
-                !states.some((s) => String(s.id) === String(form.state))
+                  !states.some((s) => String(s.id) === String(form.state))
                   ? [{ id: form.state, stateName: form.stateName }]
                   : []),
                 ...states,
@@ -802,7 +806,7 @@ const CompanyMasterForm = ({ data, companyId, onBack }) => {
               disabled={!form.state}
               options={[
                 ...(form.city &&
-                !cities.some((c) => String(c.id) === String(form.city))
+                  !cities.some((c) => String(c.id) === String(form.city))
                   ? [{ id: form.city, cityName: form.cityName }]
                   : []),
                 ...cities,

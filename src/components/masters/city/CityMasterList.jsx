@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useState } from "react";
-import masterAPI from "../../../api/cityAPI";
+import { cityAPI } from "../../../api/cityAPI";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import { toast } from "../../../utils/toast";
 
-const CityMasterList = ({ onAddNew, onEdit,onBack }) => {
+const CityMasterList = ({ onAddNew, onEdit, onBack }) => {
   const [cityData, setCityData] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -13,7 +13,7 @@ const CityMasterList = ({ onAddNew, onEdit,onBack }) => {
     try {
       setLoading(true);
 
-      const response = await masterAPI.getCities(ORG_ID);
+      const response = await cityAPI.getCities(ORG_ID);
 
       let cities = [];
 
@@ -25,9 +25,19 @@ const CityMasterList = ({ onAddNew, onEdit,onBack }) => {
         cities = response.data;
       }
 
-      cities.sort((a, b) => (b.id || 0) - (a.id || 0));
+      // Transform the data to extract country and state names
+      const transformedCities = cities.map(city => ({
+        ...city,
+        countryName: city.country?.countryName || '',
+        stateName: city.state?.stateName || '',
+        // Keep the original objects for editing
+        countryObj: city.country,
+        stateObj: city.state,
+      }));
 
-      setCityData(cities);
+      transformedCities.sort((a, b) => (b.id || 0) - (a.id || 0));
+
+      setCityData(transformedCities);
     } catch (error) {
       console.error("Failed to load cities:", error);
       setCityData([]);
@@ -60,15 +70,15 @@ const CityMasterList = ({ onAddNew, onEdit,onBack }) => {
       type: "text",
     },
     {
-      key: "country",
+      key: "countryName",
       label: "Country",
-      accessor: "country",
+      accessor: "countryName",
       type: "text",
     },
     {
-      key: "state",
+      key: "stateName",
       label: "State",
-      accessor: "state",
+      accessor: "stateName",
       type: "text",
     },
     {
@@ -101,31 +111,31 @@ const CityMasterList = ({ onAddNew, onEdit,onBack }) => {
   const searchFields = [
     "cityCode",
     "cityName",
-    "country",
-    "state",
+    "countryName",
+    "stateName",
   ];
 
   const filterOptions = [
-  {
-    value: "all",
-    label: "All",
-    field: null,
-  },
-  {
-    value: "active",
-    label: "Active",
-    field: "active",
-    filterValue: "active",
-    activeValue: "Active",
-  },
-  {
-    value: "inactive",
-    label: "Inactive",
-    field: "active",
-    filterValue: "inactive",
-    activeValue: "Active",
-  },
-];
+    {
+      value: "all",
+      label: "All",
+      field: null,
+    },
+    {
+      value: "active",
+      label: "Active",
+      field: "active",
+      filterValue: "active",
+      activeValue: "Active",
+    },
+    {
+      value: "inactive",
+      label: "Inactive",
+      field: "active",
+      filterValue: "inactive",
+      activeValue: "Active",
+    },
+  ];
 
   return (
     <CommonListViewTable

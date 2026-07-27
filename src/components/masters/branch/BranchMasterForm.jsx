@@ -317,16 +317,18 @@ const BranchMasterForm = ({
     const syncFormWithData = async () => {
       if (data) {
         const countryRef = normalizeLocationRef(
-          data.country ?? data.countryId,
-          "countryName",
+          data.state?.country ?? data.country ?? data.countryId,
+          "countryName"
         );
+
         const stateRef = normalizeLocationRef(
           data.state ?? data.stateId,
-          "stateName",
+          "stateName"
         );
+
         const cityRef = normalizeLocationRef(
           data.city ?? data.cityId,
-          "cityName",
+          "cityName"
         );
 
         setForm({
@@ -346,13 +348,13 @@ const BranchMasterForm = ({
         setBankRows(
           data.bankDetailsVO?.length
             ? data.bankDetailsVO.map((b) => ({
-                id: b.id || 0,
-                bankName: b.bankName || "",
-                bankBranch: b.bankBranch || "",
-                accountNo: b.accountNo ?? "",
-                ifscCode: b.ifscCode || "",
-                primary: b.primary || false,
-              }))
+              id: b.id || 0,
+              bankName: b.bankName || "",
+              bankBranch: b.bankBranch || "",
+              accountNo: b.accountNo ?? "",
+              ifscCode: b.ifscCode || "",
+              primary: b.primary || false,
+            }))
             : [emptyBankRow()],
         );
 
@@ -628,17 +630,17 @@ const BranchMasterForm = ({
       if (response?.status) {
         addToast(
           response?.paramObjectsMap?.message ||
-            (isUpdate
-              ? "Branch updated successfully!"
-              : "Branch created successfully!"),
+          (isUpdate
+            ? "Branch updated successfully!"
+            : "Branch created successfully!"),
         );
         onBack?.();
       } else {
         addToast(
           response?.errors?.[0]?.shortMessage ||
-            response?.errors?.[0]?.longMessage ||
-            response?.message ||
-            "Failed to save branch.",
+          response?.errors?.[0]?.longMessage ||
+          response?.message ||
+          "Failed to save branch.",
         );
       }
     } catch (err) {
@@ -646,9 +648,9 @@ const BranchMasterForm = ({
       if (err.response?.data) {
         addToast(
           err.response.data.message ||
-            err.response.data.statusMessage ||
-            err.response.data.error ||
-            JSON.stringify(err.response.data),
+          err.response.data.statusMessage ||
+          err.response.data.error ||
+          JSON.stringify(err.response.data),
         );
       } else {
         addToast("Something went wrong.");
@@ -747,7 +749,7 @@ const BranchMasterForm = ({
               required
               options={[
                 ...(form.countryId &&
-                !countries.some((c) => String(c.id) === String(form.countryId))
+                  !countries.some((c) => String(c.id) === String(form.countryId))
                   ? [{ id: form.countryId, countryName: form.countryName }]
                   : []),
                 ...countries,
@@ -765,7 +767,7 @@ const BranchMasterForm = ({
               disabled={!form.countryId}
               options={[
                 ...(form.stateId &&
-                !states.some((s) => String(s.id) === String(form.stateId))
+                  !states.some((s) => String(s.id) === String(form.stateId))
                   ? [{ id: form.stateId, stateName: form.stateName }]
                   : []),
                 ...states,
@@ -783,7 +785,7 @@ const BranchMasterForm = ({
               disabled={!form.stateId}
               options={[
                 ...(form.cityId &&
-                !cities.some((c) => String(c.id) === String(form.cityId))
+                  !cities.some((c) => String(c.id) === String(form.cityId))
                   ? [{ id: form.cityId, cityName: form.cityName }]
                   : []),
                 ...cities,
@@ -907,11 +909,10 @@ const BranchMasterForm = ({
                         onChange={(e) =>
                           handleBankCellChange(idx, "accountNo", e.target.value)
                         }
-                        className={`${controlClasses} h-8 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 border ${
-                          fieldErrors[`bankAccountNo_${idx}`]
+                        className={`${controlClasses} h-8 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 border ${fieldErrors[`bankAccountNo_${idx}`]
                             ? controlErrClasses
                             : "border-gray-300 dark:border-gray-600"
-                        }`}
+                          }`}
                       />
                       {fieldErrors[`bankAccountNo_${idx}`] && (
                         <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
@@ -927,11 +928,10 @@ const BranchMasterForm = ({
                         onChange={(e) =>
                           handleBankCellChange(idx, "ifscCode", e.target.value)
                         }
-                        className={`${controlClasses} h-8 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 border ${
-                          fieldErrors[`bankIfsc_${idx}`]
+                        className={`${controlClasses} h-8 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 border ${fieldErrors[`bankIfsc_${idx}`]
                             ? controlErrClasses
                             : "border-gray-300 dark:border-gray-600"
-                        }`}
+                          }`}
                       />
                       {fieldErrors[`bankIfsc_${idx}`] && (
                         <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
