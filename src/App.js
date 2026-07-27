@@ -8,64 +8,12 @@ import {
 } from "react-router-dom";
 import LoginForm from "./components/Auth/LoginForm";
 import Layout from "./components/Layout/Layout";
-import CountryMaster from "./components/masters/country/CountryMaster";
-import MastersList from "./components/masters/MasterList";
-import Setup from "./components/masters/Setup";
-import ProfileSettings from "./components/settings/Profile";
-import SettingsDashboard from "./components/settings/SettingsDashboard";
-import UserManagement from "./components/settings/UserManagement";
-import Dashboard from "./pages/DashBoard";
 import { store } from "./store";
 import "./styles/globals.css";
 import ChatWidget from "./utils/ChatWidget";
 import { ToastProvider } from "./components/Toast/ToastContext";
-import StateMaster from "./components/masters/state/StateMaster";
-import CityMaster from "./components/masters/city/CityMaster";
-import DepartmentMaster from "./components/masters/Department/DepartmentMaster";
-import DesignationMaster from "./components/masters/Designation/DesignationMaster";
-import User from "./components/masters/user/User";
-import FinYear from "./components/masters/finyear/Finyear";
-import ScreenNames from "./components/masters/screens/ScreenNames";
-import ScreenAccess from "./components/masters/screenAccess/screenAccess";
-import CreateCompanyPage from "./components/masters/createCompany/companyMaster";
-import BranchMaster from "./components/masters/branch/BranchMaster";
-import RolesAndResponsibilitySetup from "./components/masters/rolesResponsibilities/RolesAndResponsibilitySetup";
-import LocationMasterList from "./components/masters/location/LocationMasterList";
-import CompanyMasterList from "./components/masters/company/CompanyMasterList";
-import FinancialYearMasterList from "./components/masters/financialYear/FinancialYearMasterList";
-import PartyMasterList from "./components/masters/party/PartyMasterList";
-import ItemMasterList from "./components/masters/item/ItemMasterList";
-import UnitMasterList from "./components/masters/unit/UnitMasterList";
-import UnitConversionMasterList from "./components/masters/unitConversion/UnitConversionMasterList";
-import EmployeeMasterList from "./components/masters/employee/EmployeeMasterList";
-import LocationMaster from "./components/masters/location/LocationMaster";
-import PartyMaster from "./components/masters/party/PartyMaster";
-import ItemMaster from "./components/masters/item/ItemMaster";
-import EmployeeMaster from "./components/masters/employee/EmployeeMaster";
-import CompanyMaster from "./components/masters/company/CompanyMaster";
-import FinancialYearMaster from "./components/masters/financialYear/FinancialYearMaster";
-import UnitMaster from "./components/masters/unit/UnitMaster";
-import UnitConversionMaster from "./components/masters/unitConversion/UnitConversionMaster";
-import Profile from "./components/settings/Profile";
-import ListMaster from "./components/masters/listofvalues/ListMaster";
-import Currency from "./components/masters/currency/Currency";
-import GSTState from "./components/masters/gstState/GSTState";
-import GSTRate from "./components/masters/gstrate/GSTRate";
-import TransportMaster from "./components/masters/transport/TransportMaster";
-import DocTypeMaster from "./components/masters/docType/DocTypeMaster";
-import DocTypeMappingMaster from "./components/masters/DocTypeMapping/DocTypeMappingMaster";
-import DailyExchangeRateMaster from "./components/masters/DailyExchangeRate/DailyExchangeRateMaster";
-import HsnSacMaster from "./components/masters/hsnsac/HsnSacMaster";
-import CalendarMaster from "./components/masters/calendar/CalendarMaster";
-import PartyAccountMappingMaster from "./components/masters/partyAccountMapping/PartyAccountMappingMaster";
-import ExchangeRateMaster from "./components/masters/exchangeRate/ExchangeRateMaster";
-import ExchangeRateUpdateMaster from "./components/masters/exchangeRateUpdate/ExchangeRateUpdateMaster";
-import SalesZone from "./components/masters/salesZone/SalesZoneMaster";
-import SalesZoneMaster from "./components/masters/salesZone/SalesZoneMaster";
-import LMEMaster from "./components/masters/LmeRate/LMEMaster";
-import BankMaster from "./components/masters/bankMaster/BankMaster";
-import TaxRateMaster from "./components/masters/taxRate/TaxRateMaster";
-import TaxDefinationMaster from "./components/masters/taxDefination/TaxDefinationMaster";
+import { routesConfig } from "./routes/routesConfig";
+
 const ThemeInitializer = () => {
   const { mode } = useSelector((state) => state.theme);
 
@@ -116,94 +64,13 @@ const AppContent = () => {
                 <ProtectedRoute>
                   <Layout>
                     <Routes>
-                      <Route path="/" element={<Dashboard />} />
-
-                      {/* WMS Routes */}
-                      <Route path="/masters" element={<MastersList />} />
-                      <Route path="/country" element={<CountryMaster />} />
-                      <Route path="/state" element={<StateMaster />} />
-                      <Route path="/city" element={<CityMaster />} />
-                      <Route
-                        path="/department"
-                        element={<DepartmentMaster />}
-                      />
-                      <Route
-                        path="/designation"
-                        element={<DesignationMaster />}
-                      />
-                      <Route path="/location" element={<LocationMaster />} />
-                      {/* <Route path="/location" element={<LocationMasterList/>} /> */}
-                      <Route path="/company" element={<CompanyMaster />} />
-                      <Route
-                        path="/financialyear"
-                        element={<FinancialYearMaster />}
-                      />
-                      <Route path="/party" element={<PartyMaster />} />
-                      <Route
-                        path="/transporter"
-                        element={<TransportMaster />}
-                      />
-                      <Route
-                        path="/partymappingaccount"
-                        element={<PartyAccountMappingMaster />}
-                      />
-                      <Route
-                        path="/exchangerate"
-                        element={<ExchangeRateMaster />}
-                      />
-                      <Route
-                        path="/exchangerateupdate"
-                        element={<ExchangeRateUpdateMaster />}
-                      />
-                      <Route path="/saleszone" element={<SalesZoneMaster />} />
-                      <Route path="/documenttype" element={<DocTypeMaster />} />
-
-                      <Route
-                        path="/documenttypemapping"
-                        element={<DocTypeMappingMaster />}
-                      />
-                      <Route
-                        path="/dailyexchangerate"
-                        element={<DailyExchangeRateMaster />}
-                      />
-
-                      <Route path="/item" element={<ItemMaster />} />
-                      <Route path="/unit" element={<UnitMaster />} />
-                      <Route
-                        path="/unitconversion"
-                        element={<UnitConversionMaster />}
-                      />
-                      <Route path="/listofvalues" element={<ListMaster />} />
-                      <Route path="/lmtrate" element={<LMEMaster />} />
-                      <Route path="/bank" element={<BankMaster />} />
-                      <Route path="/taxRate" element={<TaxRateMaster />} />
-                      <Route path="/taxDefination" element={<TaxDefinationMaster />} />
-                      <Route path="/currency" element={<Currency />} />
-                      <Route path="/hsnsac" element={<HsnSacMaster />} />
-                      <Route path="/calendar" element={<CalendarMaster />} />
-                      <Route path="/gst_state" element={<GSTState />} />
-                      <Route path="/gst_rate" element={<GSTRate />} />
-
-                      <Route path="/employee" element={<EmployeeMaster />} />
-
-                      <Route path="/financial-year" element={<FinYear />} />
-
-                      <Route path="/screens" element={<ScreenNames />} />
-
-                      <Route path="/screen-access" element={<ScreenAccess />} />
-
-                      <Route
-                        path="/new-entries"
-                        element={<CreateCompanyPage />}
-                      />
-
-                      <Route path="/branch" element={<BranchMaster />} />
-
-                      <Route
-                        path="/roles"
-                        element={<RolesAndResponsibilitySetup />}
-                      />
-                      <Route path="/myprofile" element={<Profile />} />
+                      {routesConfig.map((route) => (
+                        <Route
+                          key={route.path}
+                          path={route.path}
+                          element={route.element}
+                        />
+                      ))}
                     </Routes>
                   </Layout>
                 </ProtectedRoute>
