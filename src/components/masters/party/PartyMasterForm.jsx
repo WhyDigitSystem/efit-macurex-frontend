@@ -15,6 +15,15 @@ const controlClasses =
   "dark:focus:ring-blue-400 dark:focus:border-blue-400 " +
   "disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed";
 
+const cellInputClasses =
+  "w-full h-8 px-2 rounded border text-xs leading-none transition-colors " +
+  "bg-white dark:bg-gray-900 " +
+  "border-gray-300 dark:border-gray-600 " +
+  "text-gray-900 dark:text-gray-100 " +
+  "placeholder-gray-400 dark:placeholder-gray-500 " +
+  "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
+  "dark:focus:ring-blue-400 dark:focus:border-blue-400";
+
 const labelClasses =
   "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
@@ -140,15 +149,7 @@ const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
     <button
       onClick={onCancel}
       disabled={isSubmitting}
-      className="
-        flex items-center gap-1 px-3 py-1.5 rounded text-xs
-        border border-gray-300 dark:border-gray-600
-        text-gray-700 dark:text-gray-200
-        bg-white dark:bg-gray-800
-        hover:bg-gray-50 dark:hover:bg-gray-700
-        disabled:opacity-60 disabled:cursor-not-allowed
-        transition-colors
-      "
+      className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
     >
       <X className="h-3 w-3" />
       Cancel
@@ -157,13 +158,7 @@ const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
     <button
       onClick={onSave}
       disabled={isSubmitting}
-      className="
-        flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white
-        bg-blue-600 hover:bg-blue-700
-        dark:bg-blue-600 dark:hover:bg-blue-500
-        disabled:opacity-60 disabled:cursor-not-allowed
-        transition-colors
-      "
+      className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
     >
       <Save className="h-3 w-3" />
       {isSubmitting ? "Saving..." : saveLabel}
@@ -172,125 +167,113 @@ const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
 );
 
 /* ---------------------------------------------------------------------------- */
-/* Generic dynamic table (Contact Whom / Address Book / Sales-Purchase Item)   */
+/* Table helpers - mirrors ItemMasterForm's TableWrapper / TableHead / TableRow */
 
-const DynamicTable = ({
-  title,
-  columns,
-  rows,
-  onCellChange,
-  onAddRow,
-  onRemoveRow,
-}) => {
-  const cellInputClasses =
-    "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
-    "bg-white dark:bg-gray-900 " +
-    "border-gray-300 dark:border-gray-600 " +
-    "text-gray-900 dark:text-gray-100 " +
-    "placeholder-gray-400 dark:placeholder-gray-500 " +
-    "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
-    "dark:focus:ring-blue-400 dark:focus:border-blue-400";
+const TableWrapper = ({ children }) => (
+  <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
+    <table className="w-full text-xs">{children}</table>
+  </div>
+);
 
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-2">
-        <SectionHeader>{title}</SectionHeader>
-
-        <button
-          type="button"
-          onClick={onAddRow}
-          className="
-            flex items-center gap-1 px-2 py-1 rounded text-[11px]
-            bg-blue-50 text-blue-700 hover:bg-blue-100
-            dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50
-            transition-colors
-          "
+const TableHead = ({ headers }) => (
+  <thead className="bg-gray-100 dark:bg-gray-700">
+    <tr>
+      {headers.map((h, i) => (
+        <th
+          key={i}
+          className={`p-1 ${
+            i === 0
+              ? "w-8 text-center"
+              : i === headers.length - 1
+                ? "w-20 text-left"
+                : "text-left"
+          } dark:text-white`}
         >
-          <Plus className="h-3 w-3" />
-          Add Row
-        </button>
-      </div>
+          {h}
+        </th>
+      ))}
+    </tr>
+  </thead>
+);
 
-      <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg">
-        <table className="w-full text-xs border-collapse">
-          <thead>
-            <tr className="bg-gray-50 dark:bg-gray-900/60">
-              <th className="px-2 py-2 text-left font-semibold text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700 w-10">
-                S.No
-              </th>
+const TableRow = ({ children, index, onRemove, disabled }) => (
+  <tr className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
+    <td className="p-1 text-center font-medium dark:text-white">{index + 1}</td>
+    {children}
+    <td className="p-1 text-center">
+      <button
+        type="button"
+        onClick={onRemove}
+        disabled={disabled}
+        className={`h-5 w-5 rounded text-white flex items-center justify-center ${
+          disabled
+            ? "bg-gray-400 cursor-not-allowed"
+            : "bg-red-600 hover:bg-red-700"
+        }`}
+      >
+        <Trash2 size={10} />
+      </button>
+    </td>
+  </tr>
+);
 
-              {columns.map((col) => (
-                <th
-                  key={col.key}
-                  className="px-2 py-2 text-left font-semibold text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700 whitespace-nowrap"
-                >
-                  {col.label}
-                </th>
-              ))}
+const SelectCell = ({ value, onChange, options }) => (
+  <td className="p-1 align-top">
+    <select value={value} onChange={onChange} className={cellInputClasses}>
+      <option value="">-- Select --</option>
+      {(options || []).map((opt) => (
+        <option key={opt} value={opt}>
+          {opt}
+        </option>
+      ))}
+    </select>
+  </td>
+);
 
-              <th className="px-2 py-2 border-b border-gray-200 dark:border-gray-700 w-10"></th>
-            </tr>
-          </thead>
+const InputCell = ({ value, onChange }) => (
+  <td className="p-1 align-top">
+    <input
+      type="text"
+      value={value}
+      onChange={onChange}
+      className={cellInputClasses}
+    />
+  </td>
+);
 
-          <tbody>
-            {rows.map((row, idx) => (
-              <tr
-                key={idx}
-                className="border-b last:border-b-0 border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900/40"
-              >
-                <td className="px-2 py-1 text-gray-500 dark:text-gray-400">
-                  {idx + 1}
-                </td>
-
-                {columns.map((col) => (
-                  <td key={col.key} className="px-2 py-1 min-w-[150px]">
-                    {col.type === "select" ? (
-                      <select
-                        value={row[col.key]}
-                        onChange={(e) =>
-                          onCellChange(idx, col.key, e.target.value)
-                        }
-                        className={cellInputClasses}
-                      >
-                        <option value="">-- Select --</option>
-                        {(col.options || []).map((opt) => (
-                          <option key={opt} value={opt}>
-                            {opt}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <input
-                        type="text"
-                        value={row[col.key]}
-                        onChange={(e) =>
-                          onCellChange(idx, col.key, e.target.value)
-                        }
-                        className={cellInputClasses}
-                      />
-                    )}
-                  </td>
-                ))}
-
-                <td className="px-2 py-1 text-center">
-                  {rows.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => onRemoveRow(idx)}
-                      className="text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-};
+/* Generic dynamic table body - header/Add-row now live in the shared tab bar */
+const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
+  <TableWrapper>
+    <TableHead headers={["#", ...columns.map((c) => c.label), "Action"]} />
+    <tbody>
+      {rows.map((row, idx) => (
+        <TableRow
+          key={idx}
+          index={idx}
+          onRemove={() => onRemoveRow(idx)}
+          disabled={rows.length <= 1}
+        >
+          {columns.map((col) =>
+            col.type === "select" ? (
+              <SelectCell
+                key={col.key}
+                value={row[col.key]}
+                onChange={(e) => onCellChange(idx, col.key, e.target.value)}
+                options={col.options}
+              />
+            ) : (
+              <InputCell
+                key={col.key}
+                value={row[col.key]}
+                onChange={(e) => onCellChange(idx, col.key, e.target.value)}
+              />
+            ),
+          )}
+        </TableRow>
+      ))}
+    </tbody>
+  </TableWrapper>
+);
 
 /* ---------------------------------------------------------------------------- */
 /* Options (swap for real API-driven lists)                                    */
@@ -349,7 +332,6 @@ const ADDRESS_TYPES = ["Registered Office", "Branch", "Factory", "Warehouse"];
 /* ---------------------------------------------------------------------------- */
 
 const emptyGeneralInfo = () => ({
-  // Party details
   partyCategories: [],
   salutation: "",
   partyType: "",
@@ -359,7 +341,6 @@ const emptyGeneralInfo = () => ({
   active: "YES",
   groupIndividual: "",
 
-  // Category & credit
   supplierCategory: "",
   plantId: "",
   registered: "",
@@ -367,7 +348,6 @@ const emptyGeneralInfo = () => ({
   partyCreditLimit: "",
   partyCreditPeriod: "",
 
-  // GST details
   gstType: "",
   gstnNo: "",
   gstState: "",
@@ -375,7 +355,6 @@ const emptyGeneralInfo = () => ({
   gstStateId: "",
   isIgstAppl: "",
 
-  // Other details
   belongsTo: "",
   buyerName: "",
   logistics: "",
@@ -387,7 +366,6 @@ const emptyGeneralInfo = () => ({
   logisticCost: "",
   date: "",
 
-  // Address & compliance
   address: "",
   city: "",
   pincode: "",
@@ -467,19 +445,16 @@ const emptyItemRow = () => ({
 });
 
 /* ---------------------------------------------------------------------------- */
+/* Only repeatable, table-shaped data lives in tabs now (ItemMasterForm style) */
 
-const TABS = [
-  { key: "general", label: "General Info" },
+const CHILD_TABS = [
   { key: "contact", label: "Contact Whom" },
   { key: "addressBook", label: "Address Book" },
-  { key: "supplier", label: "Supplier Details" },
   { key: "items", label: "Sales/Purchase/S.C/L.C Item" },
-  { key: "shipping", label: "Shipping Address Details" },
-  { key: "bank", label: "Supplier Bank Account Details" },
 ];
 
 const PartyMasterForm = ({ data, onBack }) => {
-  const [activeTab, setActiveTab] = useState("general");
+  const [activeChildTab, setActiveChildTab] = useState("contact");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
 
@@ -507,7 +482,7 @@ const PartyMasterForm = ({ data, onBack }) => {
     data?.items?.length ? data.items : [emptyItemRow()],
   );
 
-  /* -- generic handlers for the plain-object tabs -- */
+  /* -- generic handlers for the single-object sections -- */
   const makeChangeHandler = (setter) => (e) => {
     const { name, value } = e.target;
     if (fieldErrors[name]) setFieldErrors((prev) => ({ ...prev, [name]: "" }));
@@ -541,6 +516,59 @@ const PartyMasterForm = ({ data, onBack }) => {
   );
   const itemHandlers = makeTableHandlers(setItemRows, emptyItemRow);
 
+  // Config-driven lookup so the tab bar's single "+" button and the active
+  // table render off the same source of truth, mirroring ItemMasterForm's
+  // tabConfig / getFieldArray pattern.
+  const childTabConfig = {
+    contact: {
+      rows: contactRows,
+      handlers: contactHandlers,
+      columns: [
+        {
+          key: "purpose",
+          label: "Purpose",
+          type: "select",
+          options: CONTACT_PURPOSES,
+        },
+        { key: "contactName", label: "Contact Name" },
+        { key: "designation", label: "Designation" },
+        { key: "phone", label: "Phone" },
+        { key: "fax", label: "Fax" },
+        { key: "email", label: "Email" },
+        { key: "webSite", label: "Web Site" },
+      ],
+    },
+    addressBook: {
+      rows: addressBookRows,
+      handlers: addressBookHandlers,
+      columns: [
+        { key: "type", label: "Type", type: "select", options: ADDRESS_TYPES },
+        { key: "name", label: "Name" },
+        { key: "address", label: "Address" },
+        { key: "phone", label: "Phone" },
+        { key: "fax", label: "Fax" },
+        { key: "email", label: "Email" },
+      ],
+    },
+    items: {
+      rows: itemRows,
+      handlers: itemHandlers,
+      columns: [
+        {
+          key: "itemCode",
+          label: "Item Code",
+          type: "select",
+          options: ITEM_CODES,
+        },
+        { key: "itemDescription", label: "Item Description" },
+        { key: "unit", label: "Unit" },
+      ],
+    },
+  };
+
+  const handleAddChildRow = () =>
+    childTabConfig[activeChildTab].handlers.onAddRow();
+
   const validate = () => {
     const errors = {};
 
@@ -572,9 +600,6 @@ const PartyMasterForm = ({ data, onBack }) => {
       errors.email = "Enter a valid email address";
 
     setFieldErrors(errors);
-
-    // jump to General Info tab if that's where the errors are
-    if (Object.keys(errors).length) setActiveTab("general");
 
     return Object.keys(errors).length === 0;
   };
@@ -618,13 +643,7 @@ const PartyMasterForm = ({ data, onBack }) => {
       <div className="flex items-center gap-2 mb-3">
         <button
           onClick={onBack}
-          className="
-            p-1 rounded-md
-            text-gray-600 dark:text-gray-300
-            hover:bg-gray-100 dark:hover:bg-gray-700
-            hover:text-gray-900 dark:hover:text-white
-            transition-colors
-          "
+          className="p-1 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
@@ -634,696 +653,639 @@ const PartyMasterForm = ({ data, onBack }) => {
         </h2>
       </div>
 
-      {/* Tabs */}
-      <div className="flex items-center gap-4 border-b border-gray-200 dark:border-gray-700 mb-3  whitespace-nowrap">
-        {TABS.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={
-              "relative px-1 pb-2 text-xs font-medium transition-colors shrink-0 " +
-              (activeTab === tab.key
-                ? "text-blue-600 dark:text-blue-400"
-                : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200")
-            }
-          >
-            {tab.label}
-            {activeTab === tab.key && (
-              <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-blue-600 dark:bg-blue-400 rounded-full" />
-            )}
-          </button>
-        ))}
-      </div>
-
-      {/* Card */}
+      {/* Main Card */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
-        {/* ---------------- General Info ---------------- */}
-        {activeTab === "general" && (
-          <>
-            <div>
-              <SectionHeader>Party Details</SectionHeader>
-              <div className={fieldGrid}>
-                <Field
-                  type="select"
-                  label="Party Category"
-                  name="partyCategories"
-                  value={general.partyCategories}
-                  onChange={handlePartyCategoriesChange}
-                  error={fieldErrors.salutation}
-                  options={PARTY_CATEGORIES}
-                  required
-                  className="col-span-2"
-                />
-                <Field
-                  type="select"
-                  label="Salutation"
-                  name="salutation"
-                  value={general.salutation}
-                  onChange={handleGeneralChange}
-                  error={fieldErrors.salutation}
-                  options={SALUTATIONS}
-                  required
-                />
-                <Field
-                  type="select"
-                  label="Party Type"
-                  name="partyType"
-                  value={general.partyType}
-                  onChange={handleGeneralChange}
-                  error={fieldErrors.partyType}
-                  options={PARTY_TYPES}
-                  required
-                />
-                <Field
-                  type="select"
-                  label="Account Name"
-                  name="accountName"
-                  value={general.accountName}
-                  onChange={handleGeneralChange}
-                  options={ACCOUNT_NAMES}
-                />
-                <Field
-                  label="Vendor/Customer ID"
-                  name="vendorCustomerId"
-                  value={general.vendorCustomerId}
-                  onChange={handleGeneralChange}
-                />
-                <Field
-                  label="Party Name"
-                  name="partyName"
-                  value={general.partyName}
-                  onChange={handleGeneralChange}
-                  error={fieldErrors.partyName}
-                  required
-                  className="col-span-2"
-                />
-                <Field
-                  type="select"
-                  label="Active"
-                  name="active"
-                  value={general.active}
-                  onChange={handleGeneralChange}
-                  options={YES_NO}
-                  required
-                />
-                <Field
-                  type="select"
-                  label="Group / Individual"
-                  name="groupIndividual"
-                  value={general.groupIndividual}
-                  onChange={handleGeneralChange}
-                  error={fieldErrors.groupIndividual}
-                  options={GROUP_INDIVIDUAL}
-                  required
-                />
-              </div>
-            </div>
-
-            <div>
-              <SectionHeader>Category &amp; Credit</SectionHeader>
-              <div className={fieldGrid}>
-                <Field
-                  type="select"
-                  label="Supplier Category"
-                  name="supplierCategory"
-                  value={general.supplierCategory}
-                  onChange={handleGeneralChange}
-                  error={fieldErrors.supplierCategory}
-                  options={SUPPLIER_CATEGORIES}
-                  required
-                />
-                <Field
-                  type="select"
-                  label="Plant ID"
-                  name="plantId"
-                  value={general.plantId}
-                  onChange={handleGeneralChange}
-                  error={fieldErrors.plantId}
-                  options={PLANT_IDS}
-                  required
-                />
-                <Field
-                  type="select"
-                  label="Registered ?"
-                  name="registered"
-                  value={general.registered}
-                  onChange={handleGeneralChange}
-                  options={YES_NO}
-                />
-                <Field
-                  type="select"
-                  label="Excisable?"
-                  name="excisable"
-                  value={general.excisable}
-                  onChange={handleGeneralChange}
-                  error={fieldErrors.excisable}
-                  options={YES_NO}
-                  required
-                />
-                <Field
-                  type="number"
-                  label="Party Credit Limit"
-                  name="partyCreditLimit"
-                  value={general.partyCreditLimit}
-                  onChange={handleGeneralChange}
-                />
-                <Field
-                  type="number"
-                  label="Party Credit Period(Days)"
-                  name="partyCreditPeriod"
-                  value={general.partyCreditPeriod}
-                  onChange={handleGeneralChange}
-                />
-              </div>
-            </div>
-
-            <div>
-              <SectionHeader>GST Details</SectionHeader>
-              <div className={fieldGrid}>
-                <Field
-                  type="select"
-                  label="GST Type"
-                  name="gstType"
-                  value={general.gstType}
-                  onChange={handleGeneralChange}
-                  error={fieldErrors.gstType}
-                  options={GST_TYPES}
-                  required
-                />
-                <Field
-                  label="GSTN No"
-                  name="gstnNo"
-                  value={general.gstnNo}
-                  onChange={handleGeneralChange}
-                />
-                <Field
-                  type="select"
-                  label="GST State"
-                  name="gstState"
-                  value={general.gstState}
-                  onChange={handleGeneralChange}
-                  error={fieldErrors.gstState}
-                  options={GST_STATES}
-                  required
-                />
-                <Field
-                  label="GST State Code"
-                  name="gstStateCode"
-                  value={general.gstStateCode}
-                  onChange={handleGeneralChange}
-                />
-                <Field
-                  label="GST State ID"
-                  name="gstStateId"
-                  value={general.gstStateId}
-                  onChange={handleGeneralChange}
-                  error={fieldErrors.gstStateId}
-                  required
-                />
-                <Field
-                  type="select"
-                  label="Is IGST Appl"
-                  name="isIgstAppl"
-                  value={general.isIgstAppl}
-                  onChange={handleGeneralChange}
-                  error={fieldErrors.isIgstAppl}
-                  options={YES_NO}
-                  required
-                />
-              </div>
-            </div>
-
-            <div>
-              <SectionHeader>Other Details</SectionHeader>
-              <div className={fieldGrid}>
-                <Field
-                  type="select"
-                  label="Belongs To"
-                  name="belongsTo"
-                  value={general.belongsTo}
-                  onChange={handleGeneralChange}
-                  error={fieldErrors.belongsTo}
-                  options={BELONGS_TO}
-                  required
-                />
-                <Field
-                  type="select"
-                  label="Buyer Name"
-                  name="buyerName"
-                  value={general.buyerName}
-                  onChange={handleGeneralChange}
-                  options={[]}
-                />
-                <Field
-                  label="Logistics"
-                  name="logistics"
-                  value={general.logistics}
-                  onChange={handleGeneralChange}
-                />
-                <Field
-                  type="select"
-                  label="ZoneId"
-                  name="zoneId"
-                  value={general.zoneId}
-                  onChange={handleGeneralChange}
-                  options={ZONE_IDS}
-                />
-                <Field
-                  label="Vendor Code"
-                  name="vendorCode"
-                  value={general.vendorCode}
-                  onChange={handleGeneralChange}
-                />
-                <Field
-                  type="select"
-                  label="IF Group. Group Name"
-                  name="ifGroupName"
-                  value={general.ifGroupName}
-                  onChange={handleGeneralChange}
-                  options={IF_GROUPS}
-                />
-                <Field
-                  label="Legal Name"
-                  name="legalName"
-                  value={general.legalName}
-                  onChange={handleGeneralChange}
-                  className="col-span-2"
-                />
-                <Field
-                  label="Trade Name"
-                  name="tradeName"
-                  value={general.tradeName}
-                  onChange={handleGeneralChange}
-                  className="col-span-2"
-                />
-                <Field
-                  label="Logistic Cost"
-                  name="logisticCost"
-                  value={general.logisticCost}
-                  onChange={handleGeneralChange}
-                />
-                <Field
-                  type="date"
-                  label="Date"
-                  name="date"
-                  value={general.date}
-                  onChange={handleGeneralChange}
-                />
-              </div>
-            </div>
-
-            <div>
-              <div className={fieldGrid}>
-                <Field
-                  label="Address"
-                  name="address"
-                  value={general.address}
-                  onChange={handleGeneralChange}
-                  error={fieldErrors.address}
-                  required
-                  className="col-span-2 "
-                />
-                <Field
-                  type="select"
-                  label="City"
-                  name="city"
-                  value={general.city}
-                  onChange={handleGeneralChange}
-                  error={fieldErrors.city}
-                  options={CITIES}
-                  required
-                />
-                <Field
-                  label="Pincode"
-                  name="pincode"
-                  value={general.pincode}
-                  onChange={handleGeneralChange}
-                  error={fieldErrors.pincode}
-                  required
-                />
-                <Field
-                  type="select"
-                  label="State"
-                  name="state"
-                  value={general.state}
-                  onChange={handleGeneralChange}
-                  options={GST_STATES}
-                />
-                <Field
-                  type="select"
-                  label="Country"
-                  name="country"
-                  value={general.country}
-                  onChange={handleGeneralChange}
-                  error={fieldErrors.country}
-                  options={COUNTRIES}
-                  required
-                />
-                <Field
-                  type="email"
-                  label="Email"
-                  name="email"
-                  value={general.email}
-                  onChange={handleGeneralChange}
-                  error={fieldErrors.email}
-                />
-                <Field
-                  label="Http://"
-                  name="website"
-                  value={general.website}
-                  onChange={handleGeneralChange}
-                />
-                <Field
-                  label="CINNO"
-                  name="cinNo"
-                  value={general.cinNo}
-                  onChange={handleGeneralChange}
-                />
-                <Field
-                  type="number"
-                  label="Over Due Int. %"
-                  name="overDueIntPct"
-                  value={general.overDueIntPct}
-                  onChange={handleGeneralChange}
-                />
-                <Field
-                  label="Introd. by"
-                  name="introdBy"
-                  value={general.introdBy}
-                  onChange={handleGeneralChange}
-                />
-                <Field
-                  label="CST No."
-                  name="cstNo"
-                  value={general.cstNo}
-                  onChange={handleGeneralChange}
-                />
-                <Field
-                  label="ECC. No"
-                  name="eccNo"
-                  value={general.eccNo}
-                  onChange={handleGeneralChange}
-                />
-                <Field
-                  type="select"
-                  label="ECC Type"
-                  name="eccType"
-                  value={general.eccType}
-                  onChange={handleGeneralChange}
-                  error={fieldErrors.eccType}
-                  options={ECC_TYPES}
-                  required
-                />
-                <Field
-                  label="PAN"
-                  name="pan"
-                  value={general.pan}
-                  onChange={handleGeneralChange}
-                />
-                <Field
-                  label="ESI No."
-                  name="esiNo"
-                  value={general.esiNo}
-                  onChange={handleGeneralChange}
-                />
-                <Field
-                  label="TIN No."
-                  name="tinNo"
-                  value={general.tinNo}
-                  onChange={handleGeneralChange}
-                />
-                <Field
-                  label="KST No."
-                  name="kstNo"
-                  value={general.kstNo}
-                  onChange={handleGeneralChange}
-                />
-                <Field
-                  label="Phone"
-                  name="phone"
-                  value={general.phone}
-                  onChange={handleGeneralChange}
-                />
-                <Field
-                  label="Contact Person"
-                  name="contactPerson"
-                  value={general.contactPerson}
-                  onChange={handleGeneralChange}
-                  className="col-span-2"
-                />
-                <Field
-                  label="Mobile"
-                  name="mobile"
-                  value={general.mobile}
-                  onChange={handleGeneralChange}
-                />
-                <Field
-                  label="Fax"
-                  name="fax"
-                  value={general.fax}
-                  onChange={handleGeneralChange}
-                />
-                <Field
-                  type="date"
-                  label="Eff. from"
-                  name="effFrom"
-                  value={general.effFrom}
-                  onChange={handleGeneralChange}
-                />
-              </div>
-            </div>
-          </>
-        )}
-
-        {/* ---------------- Contact Whom ---------------- */}
-        {activeTab === "contact" && (
-          <DynamicTable
-            title="Contact Whom"
-            columns={[
-              {
-                key: "purpose",
-                label: "Purpose",
-                type: "select",
-                options: CONTACT_PURPOSES,
-              },
-              { key: "contactName", label: "Contact Name" },
-              { key: "designation", label: "Designation" },
-              { key: "phone", label: "Phone" },
-              { key: "fax", label: "Fax" },
-              { key: "email", label: "Email" },
-              { key: "webSite", label: "Web Site" },
-            ]}
-            rows={contactRows}
-            {...contactHandlers}
-          />
-        )}
-
-        {/* ---------------- Address Book ---------------- */}
-        {activeTab === "addressBook" && (
-          <DynamicTable
-            title="Address Book"
-            columns={[
-              {
-                key: "type",
-                label: "Type",
-                type: "select",
-                options: ADDRESS_TYPES,
-              },
-              { key: "name", label: "Name" },
-              { key: "address", label: "Address" },
-              { key: "phone", label: "Phone" },
-              { key: "fax", label: "Fax" },
-              { key: "email", label: "Email" },
-            ]}
-            rows={addressBookRows}
-            {...addressBookHandlers}
-          />
-        )}
-
-        {/* ---------------- Supplier Details ---------------- */}
-        {activeTab === "supplier" && (
-          <div>
-            <SectionHeader>Supplier Details</SectionHeader>
-            <div className={fieldGrid}>
-              <Field
-                type="date"
-                label="Date OF Approval"
-                name="dateOfApproval"
-                value={supplier.dateOfApproval}
-                onChange={handleSupplierChange}
-              />
-              <Field
-                type="select"
-                label="Status Of ISO Certification"
-                name="isoCertificationStatus"
-                value={supplier.isoCertificationStatus}
-                onChange={handleSupplierChange}
-                options={ISO_STATUS}
-              />
-              <Field
-                label="Type Extent Of Control"
-                name="typeExtentOfControl"
-                value={supplier.typeExtentOfControl}
-                onChange={handleSupplierChange}
-                className="col-span-2"
-              />
-              <Field
-                type="date"
-                label="Re-assessment Date"
-                name="reAssessmentDate"
-                value={supplier.reAssessmentDate}
-                onChange={handleSupplierChange}
-              />
-              <Field
-                label="Credit Period"
-                name="creditPeriod"
-                value={supplier.creditPeriod}
-                onChange={handleSupplierChange}
-              />
-              <Field
-                label="Approved"
-                name="approved"
-                value={supplier.approved}
-                onChange={handleSupplierChange}
-              />
-              <Field
-                label="Scope Of Supply"
-                name="scopeOfSupply"
-                value={supplier.scopeOfSupply}
-                onChange={handleSupplierChange}
-                className="col-span-2 "
-              />
-              <Field
-                label="Basis Of Approval"
-                name="basisOfApproval"
-                value={supplier.basisOfApproval}
-                onChange={handleSupplierChange}
-                className="col-span-2 "
-              />
-            </div>
+        {/* ---------------- General Info (always visible, like ItemMasterForm's top grid) ---------------- */}
+        <div>
+          <SectionHeader>Party Details</SectionHeader>
+          <div className={fieldGrid}>
+            <Field
+              type="select"
+              label="Party Category"
+              name="partyCategories"
+              value={general.partyCategories}
+              onChange={handlePartyCategoriesChange}
+              error={fieldErrors.salutation}
+              options={PARTY_CATEGORIES}
+              required
+              className="col-span-2"
+            />
+            <Field
+              type="select"
+              label="Salutation"
+              name="salutation"
+              value={general.salutation}
+              onChange={handleGeneralChange}
+              error={fieldErrors.salutation}
+              options={SALUTATIONS}
+              required
+            />
+            <Field
+              type="select"
+              label="Party Type"
+              name="partyType"
+              value={general.partyType}
+              onChange={handleGeneralChange}
+              error={fieldErrors.partyType}
+              options={PARTY_TYPES}
+              required
+            />
+            <Field
+              type="select"
+              label="Account Name"
+              name="accountName"
+              value={general.accountName}
+              onChange={handleGeneralChange}
+              options={ACCOUNT_NAMES}
+            />
+            <Field
+              label="Vendor/Customer ID"
+              name="vendorCustomerId"
+              value={general.vendorCustomerId}
+              onChange={handleGeneralChange}
+            />
+            <Field
+              label="Party Name"
+              name="partyName"
+              value={general.partyName}
+              onChange={handleGeneralChange}
+              error={fieldErrors.partyName}
+              required
+              className="col-span-2"
+            />
+            <Field
+              type="select"
+              label="Active"
+              name="active"
+              value={general.active}
+              onChange={handleGeneralChange}
+              options={YES_NO}
+              required
+            />
+            <Field
+              type="select"
+              label="Group / Individual"
+              name="groupIndividual"
+              value={general.groupIndividual}
+              onChange={handleGeneralChange}
+              error={fieldErrors.groupIndividual}
+              options={GROUP_INDIVIDUAL}
+              required
+            />
           </div>
-        )}
+        </div>
 
-        {/* ---------------- Sales/Purchase/S.C/L.C Item ---------------- */}
-        {activeTab === "items" && (
+        <div>
+          <SectionHeader>Category &amp; Credit</SectionHeader>
+          <div className={fieldGrid}>
+            <Field
+              type="select"
+              label="Supplier Category"
+              name="supplierCategory"
+              value={general.supplierCategory}
+              onChange={handleGeneralChange}
+              error={fieldErrors.supplierCategory}
+              options={SUPPLIER_CATEGORIES}
+              required
+            />
+            <Field
+              type="select"
+              label="Plant ID"
+              name="plantId"
+              value={general.plantId}
+              onChange={handleGeneralChange}
+              error={fieldErrors.plantId}
+              options={PLANT_IDS}
+              required
+            />
+            <Field
+              type="select"
+              label="Registered ?"
+              name="registered"
+              value={general.registered}
+              onChange={handleGeneralChange}
+              options={YES_NO}
+            />
+            <Field
+              type="select"
+              label="Excisable?"
+              name="excisable"
+              value={general.excisable}
+              onChange={handleGeneralChange}
+              error={fieldErrors.excisable}
+              options={YES_NO}
+              required
+            />
+            <Field
+              type="number"
+              label="Party Credit Limit"
+              name="partyCreditLimit"
+              value={general.partyCreditLimit}
+              onChange={handleGeneralChange}
+            />
+            <Field
+              type="number"
+              label="Party Credit Period(Days)"
+              name="partyCreditPeriod"
+              value={general.partyCreditPeriod}
+              onChange={handleGeneralChange}
+            />
+          </div>
+        </div>
+
+        <div>
+          <SectionHeader>GST Details</SectionHeader>
+          <div className={fieldGrid}>
+            <Field
+              type="select"
+              label="GST Type"
+              name="gstType"
+              value={general.gstType}
+              onChange={handleGeneralChange}
+              error={fieldErrors.gstType}
+              options={GST_TYPES}
+              required
+            />
+            <Field
+              label="GSTN No"
+              name="gstnNo"
+              value={general.gstnNo}
+              onChange={handleGeneralChange}
+            />
+            <Field
+              type="select"
+              label="GST State"
+              name="gstState"
+              value={general.gstState}
+              onChange={handleGeneralChange}
+              error={fieldErrors.gstState}
+              options={GST_STATES}
+              required
+            />
+            <Field
+              label="GST State Code"
+              name="gstStateCode"
+              value={general.gstStateCode}
+              onChange={handleGeneralChange}
+            />
+            <Field
+              label="GST State ID"
+              name="gstStateId"
+              value={general.gstStateId}
+              onChange={handleGeneralChange}
+              error={fieldErrors.gstStateId}
+              required
+            />
+            <Field
+              type="select"
+              label="Is IGST Appl"
+              name="isIgstAppl"
+              value={general.isIgstAppl}
+              onChange={handleGeneralChange}
+              error={fieldErrors.isIgstAppl}
+              options={YES_NO}
+              required
+            />
+          </div>
+        </div>
+
+        <div>
+          <SectionHeader>Other Details</SectionHeader>
+          <div className={fieldGrid}>
+            <Field
+              type="select"
+              label="Belongs To"
+              name="belongsTo"
+              value={general.belongsTo}
+              onChange={handleGeneralChange}
+              error={fieldErrors.belongsTo}
+              options={BELONGS_TO}
+              required
+            />
+            <Field
+              type="select"
+              label="Buyer Name"
+              name="buyerName"
+              value={general.buyerName}
+              onChange={handleGeneralChange}
+              options={[]}
+            />
+            <Field
+              label="Logistics"
+              name="logistics"
+              value={general.logistics}
+              onChange={handleGeneralChange}
+            />
+            <Field
+              type="select"
+              label="ZoneId"
+              name="zoneId"
+              value={general.zoneId}
+              onChange={handleGeneralChange}
+              options={ZONE_IDS}
+            />
+            <Field
+              label="Vendor Code"
+              name="vendorCode"
+              value={general.vendorCode}
+              onChange={handleGeneralChange}
+            />
+            <Field
+              type="select"
+              label="IF Group. Group Name"
+              name="ifGroupName"
+              value={general.ifGroupName}
+              onChange={handleGeneralChange}
+              options={IF_GROUPS}
+            />
+            <Field
+              label="Legal Name"
+              name="legalName"
+              value={general.legalName}
+              onChange={handleGeneralChange}
+              className="col-span-2"
+            />
+            <Field
+              label="Trade Name"
+              name="tradeName"
+              value={general.tradeName}
+              onChange={handleGeneralChange}
+              className="col-span-2"
+            />
+            <Field
+              label="Logistic Cost"
+              name="logisticCost"
+              value={general.logisticCost}
+              onChange={handleGeneralChange}
+            />
+            <Field
+              type="date"
+              label="Date"
+              name="date"
+              value={general.date}
+              onChange={handleGeneralChange}
+            />
+          </div>
+        </div>
+
+        <div>
+          <div className={fieldGrid}>
+            <Field
+              label="Address"
+              name="address"
+              value={general.address}
+              onChange={handleGeneralChange}
+              error={fieldErrors.address}
+              required
+              className="col-span-2 "
+            />
+            <Field
+              type="select"
+              label="City"
+              name="city"
+              value={general.city}
+              onChange={handleGeneralChange}
+              error={fieldErrors.city}
+              options={CITIES}
+              required
+            />
+            <Field
+              label="Pincode"
+              name="pincode"
+              value={general.pincode}
+              onChange={handleGeneralChange}
+              error={fieldErrors.pincode}
+              required
+            />
+            <Field
+              type="select"
+              label="State"
+              name="state"
+              value={general.state}
+              onChange={handleGeneralChange}
+              options={GST_STATES}
+            />
+            <Field
+              type="select"
+              label="Country"
+              name="country"
+              value={general.country}
+              onChange={handleGeneralChange}
+              error={fieldErrors.country}
+              options={COUNTRIES}
+              required
+            />
+            <Field
+              type="email"
+              label="Email"
+              name="email"
+              value={general.email}
+              onChange={handleGeneralChange}
+              error={fieldErrors.email}
+            />
+            <Field
+              label="Http://"
+              name="website"
+              value={general.website}
+              onChange={handleGeneralChange}
+            />
+            <Field
+              label="CINNO"
+              name="cinNo"
+              value={general.cinNo}
+              onChange={handleGeneralChange}
+            />
+            <Field
+              type="number"
+              label="Over Due Int. %"
+              name="overDueIntPct"
+              value={general.overDueIntPct}
+              onChange={handleGeneralChange}
+            />
+            <Field
+              label="Introd. by"
+              name="introdBy"
+              value={general.introdBy}
+              onChange={handleGeneralChange}
+            />
+            <Field
+              label="CST No."
+              name="cstNo"
+              value={general.cstNo}
+              onChange={handleGeneralChange}
+            />
+            <Field
+              label="ECC. No"
+              name="eccNo"
+              value={general.eccNo}
+              onChange={handleGeneralChange}
+            />
+            <Field
+              type="select"
+              label="ECC Type"
+              name="eccType"
+              value={general.eccType}
+              onChange={handleGeneralChange}
+              error={fieldErrors.eccType}
+              options={ECC_TYPES}
+              required
+            />
+            <Field
+              label="PAN"
+              name="pan"
+              value={general.pan}
+              onChange={handleGeneralChange}
+            />
+            <Field
+              label="ESI No."
+              name="esiNo"
+              value={general.esiNo}
+              onChange={handleGeneralChange}
+            />
+            <Field
+              label="TIN No."
+              name="tinNo"
+              value={general.tinNo}
+              onChange={handleGeneralChange}
+            />
+            <Field
+              label="KST No."
+              name="kstNo"
+              value={general.kstNo}
+              onChange={handleGeneralChange}
+            />
+            <Field
+              label="Phone"
+              name="phone"
+              value={general.phone}
+              onChange={handleGeneralChange}
+            />
+            <Field
+              label="Contact Person"
+              name="contactPerson"
+              value={general.contactPerson}
+              onChange={handleGeneralChange}
+              className="col-span-2"
+            />
+            <Field
+              label="Mobile"
+              name="mobile"
+              value={general.mobile}
+              onChange={handleGeneralChange}
+            />
+            <Field
+              label="Fax"
+              name="fax"
+              value={general.fax}
+              onChange={handleGeneralChange}
+            />
+            <Field
+              type="date"
+              label="Eff. from"
+              name="effFrom"
+              value={general.effFrom}
+              onChange={handleGeneralChange}
+            />
+          </div>
+        </div>
+
+        {/* ---------------- Supplier Details (single-object, now on top like general info) ---------------- */}
+        <div>
+          <SectionHeader>Supplier Details</SectionHeader>
+          <div className={fieldGrid}>
+            <Field
+              type="date"
+              label="Date OF Approval"
+              name="dateOfApproval"
+              value={supplier.dateOfApproval}
+              onChange={handleSupplierChange}
+            />
+            <Field
+              type="select"
+              label="Status Of ISO Certification"
+              name="isoCertificationStatus"
+              value={supplier.isoCertificationStatus}
+              onChange={handleSupplierChange}
+              options={ISO_STATUS}
+            />
+            <Field
+              label="Type Extent Of Control"
+              name="typeExtentOfControl"
+              value={supplier.typeExtentOfControl}
+              onChange={handleSupplierChange}
+              className="col-span-2"
+            />
+            <Field
+              type="date"
+              label="Re-assessment Date"
+              name="reAssessmentDate"
+              value={supplier.reAssessmentDate}
+              onChange={handleSupplierChange}
+            />
+            <Field
+              label="Credit Period"
+              name="creditPeriod"
+              value={supplier.creditPeriod}
+              onChange={handleSupplierChange}
+            />
+            <Field
+              label="Approved"
+              name="approved"
+              value={supplier.approved}
+              onChange={handleSupplierChange}
+            />
+            <Field
+              label="Scope Of Supply"
+              name="scopeOfSupply"
+              value={supplier.scopeOfSupply}
+              onChange={handleSupplierChange}
+              className="col-span-2 "
+            />
+            <Field
+              label="Basis Of Approval"
+              name="basisOfApproval"
+              value={supplier.basisOfApproval}
+              onChange={handleSupplierChange}
+              className="col-span-2 "
+            />
+          </div>
+        </div>
+
+        {/* ---------------- Shipping Address Details (single-object, now on top) ---------------- */}
+        <div>
+          <SectionHeader>Shipping Address Details</SectionHeader>
+          <div className={fieldGrid}>
+            <Field
+              label="Address Line 1"
+              name="addressLine1"
+              value={shipping.addressLine1}
+              onChange={handleShippingChange}
+              className="col-span-2 "
+            />
+            <Field
+              label="Address Line 2"
+              name="addressLine2"
+              value={shipping.addressLine2}
+              onChange={handleShippingChange}
+              className="col-span-2 "
+            />
+            <Field
+              label="Address Line 3"
+              name="addressLine3"
+              value={shipping.addressLine3}
+              onChange={handleShippingChange}
+              className="col-span-2 "
+            />
+            <Field
+              type="select"
+              label="City"
+              name="city"
+              value={shipping.city}
+              onChange={handleShippingChange}
+              options={CITIES}
+            />
+            <Field
+              label="PinCode"
+              name="pincode"
+              value={shipping.pincode}
+              onChange={handleShippingChange}
+            />
+            <Field
+              type="select"
+              label="State"
+              name="state"
+              value={shipping.state}
+              onChange={handleShippingChange}
+              options={GST_STATES}
+            />
+            <Field
+              type="select"
+              label="Country"
+              name="country"
+              value={shipping.country}
+              onChange={handleShippingChange}
+              options={COUNTRIES}
+            />
+          </div>
+        </div>
+
+        {/* ---------------- Supplier Bank Account Details (single-object, now on top) ---------------- */}
+        <div>
+          <SectionHeader>Supplier Bank Account Details</SectionHeader>
+          <div className={fieldGrid}>
+            <Field
+              label="Bank Name"
+              name="bankName"
+              value={bank.bankName}
+              onChange={handleBankChange}
+              className="col-span-2"
+            />
+            <Field
+              label="Bank Account No."
+              name="bankAccountNo"
+              value={bank.bankAccountNo}
+              onChange={handleBankChange}
+            />
+            <Field
+              type="select"
+              label="Mode Of Payment"
+              name="modeOfPayment"
+              value={bank.modeOfPayment}
+              onChange={handleBankChange}
+              options={MODE_OF_PAYMENT}
+            />
+            <Field
+              label="Branch"
+              name="branch"
+              value={bank.branch}
+              onChange={handleBankChange}
+            />
+            <Field
+              label="IFSC / SWIFT Code"
+              name="ifscSwiftCode"
+              value={bank.ifscSwiftCode}
+              onChange={handleBankChange}
+            />
+          </div>
+        </div>
+
+        {/* ---------------- Child Tables (only repeatable data lives in tabs, ItemMasterForm style) ---------------- */}
+        <section className="mt-0 bg-white dark:bg-gray-800">
+          {/* Tabs */}
+          <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 mb-0">
+            <div className="flex">
+              {CHILD_TABS.map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setActiveChildTab(tab.key)}
+                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${
+                    activeChildTab === tab.key
+                      ? "bg-blue-600 text-white"
+                      : "text-gray-600 dark:text-gray-300"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={handleAddChildRow}
+              className="h-6 w-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-colors"
+            >
+              <Plus size={12} />
+            </button>
+          </div>
+
+          {/* Active tab's table */}
           <DynamicTable
-            title="Sales/Purchase/S.C/L.C Item"
-            columns={[
-              {
-                key: "itemCode",
-                label: "Item Code",
-                type: "select",
-                options: ITEM_CODES,
-              },
-              { key: "itemDescription", label: "Item Description" },
-              { key: "unit", label: "Unit" },
-            ]}
-            rows={itemRows}
-            {...itemHandlers}
+            columns={childTabConfig[activeChildTab].columns}
+            rows={childTabConfig[activeChildTab].rows}
+            onCellChange={childTabConfig[activeChildTab].handlers.onCellChange}
+            onRemoveRow={childTabConfig[activeChildTab].handlers.onRemoveRow}
           />
-        )}
-
-        {/* ---------------- Shipping Address Details ---------------- */}
-        {activeTab === "shipping" && (
-          <div>
-            <SectionHeader>Shipping Address Details</SectionHeader>
-            <div className={fieldGrid}>
-              <Field
-                label="Address Line 1"
-                name="addressLine1"
-                value={shipping.addressLine1}
-                onChange={handleShippingChange}
-                className="col-span-2 "
-              />
-              <Field
-                label="Address Line 2"
-                name="addressLine2"
-                value={shipping.addressLine2}
-                onChange={handleShippingChange}
-                className="col-span-2 "
-              />
-              <Field
-                label="Address Line 3"
-                name="addressLine3"
-                value={shipping.addressLine3}
-                onChange={handleShippingChange}
-                className="col-span-2 "
-              />
-              <Field
-                type="select"
-                label="City"
-                name="city"
-                value={shipping.city}
-                onChange={handleShippingChange}
-                options={CITIES}
-              />
-              <Field
-                label="PinCode"
-                name="pincode"
-                value={shipping.pincode}
-                onChange={handleShippingChange}
-              />
-              <Field
-                type="select"
-                label="State"
-                name="state"
-                value={shipping.state}
-                onChange={handleShippingChange}
-                options={GST_STATES}
-              />
-              <Field
-                type="select"
-                label="Country"
-                name="country"
-                value={shipping.country}
-                onChange={handleShippingChange}
-                options={COUNTRIES}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* ---------------- Supplier Bank Account Details ---------------- */}
-        {activeTab === "bank" && (
-          <div>
-            <SectionHeader>Supplier Bank Account Details</SectionHeader>
-            <div className={fieldGrid}>
-              <Field
-                label="Bank Name"
-                name="bankName"
-                value={bank.bankName}
-                onChange={handleBankChange}
-                className="col-span-2"
-              />
-              <Field
-                label="Bank Account No."
-                name="bankAccountNo"
-                value={bank.bankAccountNo}
-                onChange={handleBankChange}
-              />
-              <Field
-                type="select"
-                label="Mode Of Payment"
-                name="modeOfPayment"
-                value={bank.modeOfPayment}
-                onChange={handleBankChange}
-                options={MODE_OF_PAYMENT}
-              />
-              <Field
-                label="Branch"
-                name="branch"
-                value={bank.branch}
-                onChange={handleBankChange}
-              />
-              <Field
-                label="IFSC / SWIFT Code"
-                name="ifscSwiftCode"
-                value={bank.ifscSwiftCode}
-                onChange={handleBankChange}
-              />
-            </div>
-          </div>
-        )}
+        </section>
 
         <FormButtons
           onCancel={onBack}

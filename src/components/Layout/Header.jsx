@@ -5,16 +5,18 @@ import {
   LogOut,
   Menu,
   Moon,
+  Search,
   Shield,
   Sun,
   Truck,
   User,
   Building2,
   UserCog,
+  X,
 } from "lucide-react";
 
 import GlobalSelectionDropdown from "./GlobalParameter";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "../../hooks/useTheme";
@@ -22,6 +24,16 @@ import { logout } from "../../store/slices/authSlice";
 import { toggleSidebar } from "../../store/slices/uiSlice";
 
 import efitlogo from "../../assets/EfitLogo.png";
+
+// Search matches against the same route list used to render <Route> elements
+// in App.jsx — add a page once in routesConfig.jsx and it shows up here too.
+import { routesConfig } from "../../routes/routesConfig";
+
+const APP_SCREENS = routesConfig.map(({ path, label, keywords }) => ({
+  path,
+  label,
+  keywords,
+}));
 
 const Header = () => {
   const dispatch = useDispatch();
@@ -44,6 +56,52 @@ const Header = () => {
   const dropdownRef = useRef(null);
   const sidebarOpen = useSelector((state) => state.ui.sidebarOpen);
   const sidebarBtnRef = useRef(null);
+
+  // ---- Search state ----
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const searchRef = useRef(null);
+
+  const filteredScreens = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return [];
+    return APP_SCREENS.filter((screen) => {
+      const inLabel = screen.label.toLowerCase().includes(q);
+      const inKeywords = (screen.keywords || []).some((k) =>
+        k.toLowerCase().includes(q),
+      );
+      return inLabel || inKeywords;
+    }).slice(0, 8);
+  }, [searchQuery]);
+
+  const goToScreen = (screen) => {
+    navigate(screen.path);
+    setSearchQuery("");
+    setShowSearchResults(false);
+    setActiveIndex(-1);
+  };
+
+  const handleSearchKeyDown = (e) => {
+    if (!showSearchResults || filteredScreens.length === 0) return;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveIndex((prev) => (prev + 1) % filteredScreens.length);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveIndex((prev) =>
+        prev <= 0 ? filteredScreens.length - 1 : prev - 1,
+      );
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const chosen = filteredScreens[activeIndex] || filteredScreens[0];
+      if (chosen) goToScreen(chosen);
+    } else if (e.key === "Escape") {
+      setShowSearchResults(false);
+      setActiveIndex(-1);
+    }
+  };
 
   const handleLogout = () => {
     dispatch(logout());
@@ -91,6 +149,20 @@ const Header = () => {
 
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Close search dropdown on outside click
+  useEffect(() => {
+    const handleClickOutsideSearch = (event) => {
+      if (searchRef.current && !searchRef.current.contains(event.target)) {
+        setShowSearchResults(false);
+        setActiveIndex(-1);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutsideSearch);
+    return () =>
+      document.removeEventListener("mousedown", handleClickOutsideSearch);
   }, []);
 
   const formatTime = (date) =>
@@ -151,6 +223,69 @@ const Header = () => {
             >
               <Menu className="h-5 w-5 text-gray-600 dark:text-gray-400" />
             </button>
+
+            {/* Search */}
+            <div className="relative hidden md:block" ref={searchRef}>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setShowSearchResults(true);
+                    setActiveIndex(-1);
+                  }}
+                  onFocus={() => {
+                    if (searchQuery.trim()) setShowSearchResults(true);
+                  }}
+                  onKeyDown={handleSearchKeyDown}
+                  placeholder="Search screens..."
+                  className="w-56 lg:w-72 pl-9 pr-8 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-400 transition-all"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => {
+                      setSearchQuery("");
+                      setShowSearchResults(false);
+                      setActiveIndex(-1);
+                    }}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                    aria-label="Clear search"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+
+              {showSearchResults && searchQuery.trim() && (
+                <div className="absolute left-0 mt-1.5 w-full min-w-[280px] bg-white dark:bg-gray-900 rounded-lg shadow-xl border border-gray-200 dark:border-gray-800 z-50 overflow-hidden">
+                  {filteredScreens.length > 0 ? (
+                    <ul className="max-h-72 overflow-y-auto py-1">
+                      {filteredScreens.map((screen, idx) => (
+                        <li key={screen.path}>
+                          <button
+                            onClick={() => goToScreen(screen)}
+                            onMouseEnter={() => setActiveIndex(idx)}
+                            className={`w-full flex items-center justify-between text-left px-3 py-2 text-sm transition-colors ${
+                              idx === activeIndex
+                                ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+                                : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+                            }`}
+                          >
+                            <span className="font-medium">{screen.label}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="px-3 py-4 text-sm text-gray-400 text-center">
+                      No matching screens found
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Right section */}
