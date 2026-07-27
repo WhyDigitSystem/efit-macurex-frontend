@@ -56,26 +56,26 @@ export const routesConfig = [
 
   // WMS Routes
   { path: "/masters", label: "Masters", element: <MastersList /> },
-  { path: "/Sales", label: "Masters", element: <SalesList /> },
-  { path: "/purchase", label: "Masters", element: <PurchaseList /> },
-  { path: "/inventory", label: "Masters", element: <InventoryList /> },
-  { path: "/subcontract", label: "Masters", element: <SubContractList /> },
-  { path: "/ppc", label: "Masters", element: <PpcList /> },
-  { path: "/TDC", label: "Masters", element: <TdcList /> },
-  { path: "/production", label: "Masters", element: <ProductionList /> },
+  { path: "/Sales", label: "Sales", element: <SalesList /> },
+  { path: "/purchase", label: "Purchase", element: <PurchaseList /> },
+  { path: "/inventory", label: "Inventory", element: <InventoryList /> },
+  { path: "/subcontract", label: "Sub Contract", element: <SubContractList /> },
+  { path: "/ppc", label: "PPC", element: <PpcList /> },
+  { path: "/TDC", label: "TDC", element: <TdcList /> },
+  { path: "/production", label: "Production", element: <ProductionList /> },
   {
     path: "/plantmaintenance",
-    label: "Masters",
+    label: "Plant Maintenance",
     element: <PlantMaintenanceList />,
   },
   {
     path: "/quality",
-    label: "Masters",
+    label: "Quality",
     element: <QualityList />,
   },
   {
     path: "/labourcharges",
-    label: "Masters",
+    label: "Labour Charges",
     element: <LabourChargesList />,
   },
   { path: "/country", label: "Country Master", element: <CountryMaster /> },
@@ -107,7 +107,7 @@ export const routesConfig = [
   },
   {
     path: "/partymappingaccount",
-    label: "Party Account Mapping",
+    label: "Party Account Mapping Master",
     element: <PartyAccountMappingMaster />,
   },
   {
@@ -117,7 +117,7 @@ export const routesConfig = [
   },
   {
     path: "/exchangerateupdate",
-    label: "Exchange Rate Update",
+    label: "Exchange Rate Update Master",
     element: <ExchangeRateUpdateMaster />,
   },
   {
@@ -133,12 +133,12 @@ export const routesConfig = [
   },
   {
     path: "/documenttypemapping",
-    label: "Document Type Mapping",
+    label: "Document Type Mapping Master",
     element: <DocTypeMappingMaster />,
   },
   {
     path: "/dailyexchangerate",
-    label: "Daily Exchange Rate",
+    label: "Daily Exchange Rate Master",
     element: <DailyExchangeRateMaster />,
   },
   { path: "/item", label: "Item Master", element: <ItemMaster /> },
@@ -150,7 +150,7 @@ export const routesConfig = [
   },
   {
     path: "/listofvalues",
-    label: "List of Values",
+    label: "List of Values Master",
     keywords: ["lov"],
     element: <ListMaster />,
   },
@@ -168,7 +168,7 @@ export const routesConfig = [
     keywords: ["tax definition"],
     element: <TaxDefinationMaster />,
   },
-  { path: "/currency", label: "Currency", element: <Currency /> },
+  { path: "/currency", label: "Currency Master", element: <Currency /> },
   {
     path: "/hsnsac",
     label: "HSN/SAC Master",
@@ -177,13 +177,25 @@ export const routesConfig = [
   },
   { path: "/calendar", label: "Calendar Master", element: <CalendarMaster /> },
   { path: "/holiday", label: "Holiday Master", element: <HolidayMaster /> },
-  { path: "/services-accounting", label: "Services Accounting Master", element: <ServicesAccountingMaster /> },
-  { path: "/gst_state", label: "GST State", element: <GSTState /> },
-  { path: "/gst_rate", label: "GST Rate", element: <GSTRate /> },
+  {
+    path: "/services-accounting",
+    label: "Services Accounting Master",
+    element: <ServicesAccountingMaster />,
+  },
+  { path: "/gst_state", label: "GST State Master", element: <GSTState /> },
+  { path: "/gst_rate", label: "GST Rate Master", element: <GSTRate /> },
   { path: "/employee", label: "Employee Master", element: <EmployeeMaster /> },
-  { path: "/financial-year", label: "Financial Year", element: <FinYear /> },
-  { path: "/screens", label: "Screen Names", element: <ScreenNames /> },
-  { path: "/screen-access", label: "Screen Access", element: <ScreenAccess /> },
+  {
+    path: "/financial-year",
+    label: "Financial Year Master",
+    element: <FinYear />,
+  },
+  { path: "/screens", label: "Screen Names Master", element: <ScreenNames /> },
+  {
+    path: "/screen-access",
+    label: "Screen Access Master",
+    element: <ScreenAccess />,
+  },
   {
     path: "/new-entries",
     label: "Create Company",
