@@ -252,7 +252,7 @@ const CreateCompanyForm = ({ editData, onBack }) => {
   const cls = (key) => `${inputBase} ${errors[key] ? inputErr : inputOk}`;
 
   const SectionHeader = ({ num, title }) => (
-    <div className="flex items-center gap-3 mb-6">
+    <div className="flex items-center gap-3 mb-2">
       <span className="flex items-center justify-center w-6 h-6 rounded bg-blue-600 text-white text-xs font-semibold">
         {num}
       </span>
@@ -290,6 +290,8 @@ const CreateCompanyForm = ({ editData, onBack }) => {
   const stepErrorCount = (fields) => fields.filter((f) => errors[f]).length;
 
   return (
+    <div className="max-w-7xl mx-auto bg-gray-50 dark:bg-gray-900 p-4">
+      
     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
@@ -310,430 +312,336 @@ const CreateCompanyForm = ({ editData, onBack }) => {
       </div>
 
       <form onSubmit={handleSubmit}>
-        {/* Section 1: Company Information */}
-        <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700">
-          <SectionHeader num={1} title="Basic Info" />
+  {/* Section 1: Company Information */}
+  <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700">
+    <SectionHeader num={1} title="Basic Info" />
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-2 mt-1.5">
-            {/* Company Name */}
-            <div>
-              <label className={`${label} mb-1 text-xs`}>
-                Name {req}
-              </label>
-              <input
-                type="text"
-                name="companyName"
-                value={formData.companyName}
-                onChange={handleInputChange}
-                placeholder="Company Name"
-                className={`${cls("companyName")} h-8 px-2 text-sm rounded-md`}
-              />
-              {errMsg("companyName")}
-            </div>
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-2 mt-1">
+      {/* Company Name */}
+      <div>
+        <label className={`${label} mb-1 text-xs`}>
+          Name {req}
+        </label>
+        <input
+          type="text"
+          name="companyName"
+          value={formData.companyName}
+          onChange={handleInputChange}
+          placeholder="Company Name"
+          className={`${cls("companyName")} h-8 px-2 text-sm rounded-md`}
+        />
+        {errMsg("companyName")}
+      </div>
 
-            {/* Company Code */}
-            <div>
-              <label className={`${label} mb-1 text-xs`}>Code</label>
-              <input
-                type="text"
-                name="companyCode"
-                value={formData.companyCode}
-                onChange={handleInputChange}
-                placeholder="Company Code"
-                className={`${cls("companyName")} h-8 px-2 text-sm rounded-md`}
-              />
-            </div>
+      {/* Company Code */}
+      <div>
+        <label className={`${label} mb-1 text-xs`}>Code</label>
+        <input
+          type="text"
+          name="companyCode"
+          value={formData.companyCode}
+          onChange={handleInputChange}
+          placeholder="Company Code"
+          className={`${cls("companyName")} h-8 px-2 text-sm rounded-md`}
+        />
+      </div>
 
-            {/* Company Email */}
-            <div>
-              <label className={`${label} mb-1 text-xs`}>
-                Email {req}
-              </label>
-              <input
-                type="email"
-                name="companyEmail"
-                value={formData.companyEmail}
-                onChange={handleInputChange}
-                placeholder="Company Email"
-                className={`${cls("companyEmail")} h-8 px-2 text-sm rounded-md`}
-              />
-              {errMsg("companyEmail")}
-            </div>
+      {/* Company Email */}
+      <div>
+        <label className={`${label} mb-1 text-xs`}>
+          Email {req}
+        </label>
+        <input
+          type="email"
+          name="companyEmail"
+          value={formData.companyEmail}
+          onChange={handleInputChange}
+          placeholder="Company Email"
+          className={`${cls("companyEmail")} h-8 px-2 text-sm rounded-md`}
+        />
+        {errMsg("companyEmail")}
+      </div>
 
-            {/* Industry Type */}
-            <div>
-              <label className={`${label} mb-1 text-xs`}>
-                Industry Type {req}
-              </label>
-              <Select
-                name="industryType"
-                value={formData.industryType}
-                onChange={handleInputChange}
-                options={INDUSTRY_OPTIONS}
-                placeholder="Select Industry"
-                className="h-8 text-sm"
-              />
-              {errMsg("industryType")}
-            </div>
+      {/* Industry Type */}
+      <div>
+        <label className={`${label} mb-1 text-xs`}>
+          Industry Type {req}
+        </label>
+        <Select
+          name="industryType"
+          value={formData.industryType}
+          onChange={handleInputChange}
+          options={INDUSTRY_OPTIONS}
+          placeholder="Select Industry"
+          className="h-8 text-sm"
+        />
+        {errMsg("industryType")}
+      </div>
 
-            {/* Company Size */}
-            <div>
-              <label className={`${label} mb-1 text-xs`}>
-                Size {req}
-              </label>
-              <Select
-                name="companySize"
-                value={formData.companySize}
-                onChange={handleInputChange}
-                options={COMPANY_SIZE_OPTIONS}
-                placeholder="Select Company Size"
-                className="h-8 text-sm"
-              />
-              {errMsg("companySize")}
-            </div>
-          </div>
-        </div>
+      {/* Company Size */}
+      <div>
+        <label className={`${label} mb-1 text-xs`}>
+          Size {req}
+        </label>
+        <Select
+          name="companySize"
+          value={formData.companySize}
+          onChange={handleInputChange}
+          options={COMPANY_SIZE_OPTIONS}
+          placeholder="Select Company Size"
+          className="h-8 text-sm"
+        />
+        {errMsg("companySize")}
+      </div>
+    </div>
+  </div>
 
-        <div className="px-4 pt-2 flex items-center gap-6 border-b border-gray-200 dark:border-gray-700">
+  {/* Section 2: Subscription Details */}
+  <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700">
+    <SectionHeader num={2} title="Subscription Details" />
+
+    <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-2">
+      {/* Select Plan */}
+      <div>
+        <label className={`${label} mb-1 text-xs`}>
+          Select Plan {req}
+        </label>
+        <Select
+          name="selectPlan"
+          value={formData.selectPlan}
+          onChange={handleInputChange}
+          options={PLAN_OPTIONS}
+          placeholder="Select plan"
+          className="h-8 text-sm"
+        />
+        {errMsg("selectPlan")}
+      </div>
+
+      {/* Trial Period */}
+      <div>
+        <label className={`${label} mb-1 text-xs`}>
+          Trial Period (Days) {req}
+        </label>
+        <input
+          type="number"
+          min="0"
+          name="trialPeriodDays"
+          value={formData.trialPeriodDays}
+          onChange={handleInputChange}
+          className={`${cls("trialPeriodDays")} h-8 px-2 text-sm`}
+        />
+        <p className="mt-0.5 text-[10px] text-gray-500 dark:text-gray-400">
+          Set 0 for no trial period
+        </p>
+      </div>
+
+      {/* Max Users */}
+      <div>
+        <label className={`${label} mb-1 text-xs`}>
+          Max Users {req}
+        </label>
+        <input
+          type="number"
+          min="1"
+          name="maxUsers"
+          value={formData.maxUsers}
+          onChange={handleInputChange}
+          className={`${cls("maxUsers")} h-8 px-2 text-sm`}
+        />
+        <p className="mt-0.5 text-[10px] text-gray-500 dark:text-gray-400">
+          Maximum number of users
+        </p>
+      </div>
+
+      {/* Status */}
+      <div>
+        <label className={`${label} mb-1 text-xs`}>Status {req}</label>
+
+        <div className="flex h-8 overflow-hidden rounded-md border border-gray-300 dark:border-gray-600">
           <button
             type="button"
-            onClick={() => setActiveStep(2)}
-            className={`flex items-center gap-1.5 pb-2 border-b-2 transition-colors ${
-              activeStep === 2
-                ? "border-blue-600"
-                : "border-transparent hover:border-gray-300 dark:hover:border-gray-600"
+            onClick={() => setStatus("Active")}
+            className={`flex-1 text-[11px] font-medium transition-colors ${
+              formData.status === "Active"
+                ? "bg-blue-600 text-white"
+                : "bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
             }`}
           >
-            <span
-              className={`flex items-center justify-center w-5 h-5 rounded text-[11px] font-semibold ${
-                activeStep === 2
-                  ? "bg-blue-600 text-white"
-                  : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 border border-gray-300 dark:border-gray-600"
-              }`}
-            >
-              2
-            </span>
-            <span
-              className={`text-xs font-semibold ${
-                activeStep === 2
-                  ? "text-gray-900 dark:text-white"
-                  : "text-gray-500 dark:text-gray-400"
-              }`}
-            >
-              Subscription Details
-            </span>
-            {stepErrorCount(step2Fields) > 0 && (
-              <span className="text-[11px] text-red-500">
-                ({stepErrorCount(step2Fields)})
-              </span>
-            )}
+            Active
           </button>
 
           <button
             type="button"
-            onClick={() => setActiveStep(3)}
-            className={`flex items-center gap-1.5 pb-2 border-b-2 transition-colors ${
-              activeStep === 3
-                ? "border-blue-600"
-                : "border-transparent hover:border-gray-300 dark:hover:border-gray-600"
+            onClick={() => setStatus("Inactive")}
+            className={`flex-1 text-[11px] font-medium transition-colors ${
+              formData.status === "Inactive"
+                ? "bg-blue-600 text-white"
+                : "bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
             }`}
           >
-            <span
-              className={`flex items-center justify-center w-5 h-5 rounded text-[11px] font-semibold ${
-                activeStep === 3
-                  ? "bg-blue-600 text-white"
-                  : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 border border-gray-300 dark:border-gray-600"
-              }`}
-            >
-              3
-            </span>
-            <span
-              className={`text-xs font-semibold ${
-                activeStep === 3
-                  ? "text-gray-900 dark:text-white"
-                  : "text-gray-500 dark:text-gray-400"
-              }`}
-            >
-              Admin Account
-            </span>
-            {stepErrorCount(step3Fields) > 0 && (
-              <span className="text-[11px] text-red-500">
-                ({stepErrorCount(step3Fields)})
-              </span>
+            Inactive
+          </button>
+        </div>
+      </div>
+    </div>
+
+    {/* Info */}
+    <div className="mt-2 flex items-start gap-2 rounded-md border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/40 p-2">
+      <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-600 dark:text-blue-400" />
+      <p className="text-[11px] text-blue-700 dark:text-blue-300">
+        You can change subscription details later from company setup.
+      </p>
+    </div>
+  </div>
+
+  {/* Section 3: Admin Account */}
+  <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700">
+    <SectionHeader num={3} title="Admin Account" />
+
+    <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-2">
+      {/* Admin Name */}
+      <div>
+        <label className={`${label} mb-1 text-xs`}>
+          Name {req}
+        </label>
+        <input
+          type="text"
+          name="adminName"
+          value={formData.adminName}
+          onChange={handleInputChange}
+          placeholder="Admin Name"
+          className={`${cls("adminName")} h-8 px-2 text-sm`}
+        />
+        {errMsg("adminName")}
+      </div>
+
+      {/* Admin Email */}
+      <div>
+        <label className={`${label} mb-1 text-xs`}>
+          Admin Email {req}
+        </label>
+        <input
+          type="email"
+          name="adminEmail"
+          value={formData.adminEmail}
+          onChange={handleInputChange}
+          placeholder="Admin Email"
+          className={`${cls("adminEmail")} h-8 px-2 text-sm`}
+        />
+        {errMsg("adminEmail")}
+      </div>
+
+      {/* Mobile Number */}
+      <div>
+        <label className={`${label} mb-1 text-xs`}>
+          Mobile No {req}
+        </label>
+        <input
+          type="tel"
+          name="adminMobileNumber"
+          value={formData.adminMobileNumber || ""}
+          onChange={(e) => {
+            const value = e.target.value.replace(/\D/g, "").slice(0, 10);
+            setFormData((prev) => ({
+              ...prev,
+              adminMobileNumber: value,
+            }));
+          }}
+          placeholder="Mobile No"
+          maxLength={10}
+          className={`${cls("adminMobileNumber")} h-8 px-2 text-sm`}
+        />
+        {errMsg("adminMobileNumber")}
+      </div>
+
+      {/* Password */}
+      <div>
+        <label className={`${label} mb-1 text-xs`}>
+          Password {req}
+        </label>
+        <div className="relative">
+          <input
+            type={showPassword ? "text" : "password"}
+            name="password"
+            value={formData.password}
+            onChange={handleInputChange}
+            placeholder="Password"
+            className={`${cls("password")} h-8 px-2 pr-8 text-sm`}
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword((s) => !s)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+          >
+            {showPassword ? (
+              <EyeOff className="w-4 h-4" />
+            ) : (
+              <Eye className="w-4 h-4" />
             )}
           </button>
         </div>
+        {errMsg("password")}
+      </div>
 
-        {/* Step 2 body: Subscription Details */}
-        {activeStep === 2 && (
-          <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700">
-            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-2">
-              {/* Select Plan */}
-              <div>
-                <label className={`${label} mb-1 text-xs`}>
-                  Select Plan {req}
-                </label>
-                <Select
-                  name="selectPlan"
-                  value={formData.selectPlan}
-                  onChange={handleInputChange}
-                  options={PLAN_OPTIONS}
-                  placeholder="Select plan"
-                  className="h-8 text-sm"
-                />
-                {errMsg("selectPlan")}
-              </div>
-
-              {/* Trial Period */}
-              <div>
-                <label className={`${label} mb-1 text-xs`}>
-                  Trial Period (Days) {req}
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  name="trialPeriodDays"
-                  value={formData.trialPeriodDays}
-                  onChange={handleInputChange}
-                  className={`${cls("trialPeriodDays")} h-8 px-2 text-sm`}
-                />
-                <p className="mt-0.5 text-[10px] text-gray-500 dark:text-gray-400">
-                  Set 0 for no trial period
-                </p>
-              </div>
-
-              {/* Max Users */}
-              <div>
-                <label className={`${label} mb-1 text-xs`}>
-                  Max Users {req}
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  name="maxUsers"
-                  value={formData.maxUsers}
-                  onChange={handleInputChange}
-                  className={`${cls("maxUsers")} h-8 px-2 text-sm`}
-                />
-                <p className="mt-0.5 text-[10px] text-gray-500 dark:text-gray-400">
-                  Maximum number of users
-                </p>
-              </div>
-
-              {/* Status */}
-              <div>
-                <label className={`${label} mb-1 text-xs`}>Status {req}</label>
-
-                <div className="flex h-8 overflow-hidden rounded-md border border-gray-300 dark:border-gray-600">
-                  <button
-                    type="button"
-                    onClick={() => setStatus("Active")}
-                    className={`flex-1 text-[11px] font-medium transition-colors ${
-                      formData.status === "Active"
-                        ? "bg-blue-600 text-white"
-                        : "bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
-                    }`}
-                  >
-                    Active
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setStatus("Inactive")}
-                    className={`flex-1 text-[11px] font-medium transition-colors ${
-                      formData.status === "Inactive"
-                        ? "bg-blue-600 text-white"
-                        : "bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
-                    }`}
-                  >
-                    Inactive
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Info */}
-            <div className="mt-2 flex items-start gap-2 rounded-md border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/40 p-2">
-              <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-600 dark:text-blue-400" />
-              <p className="text-[11px] text-blue-700 dark:text-blue-300">
-                You can change subscription details later from company setup.
-              </p>
-            </div>
-
-            {/* Next Button */}
-            {/* <div className="mt-2 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setActiveStep(3)}
-                className="rounded-md bg-blue-600 px-3 py-1.5 text-[11px] font-medium text-white transition-colors hover:bg-blue-700"
-              >
-                Next: Admin Account →
-              </button>
-            </div> */}
-          </div>
-        )}
-
-        {/* Step 3 body: Admin Account */}
-        {activeStep === 3 && (
-          <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700">
-            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-2">
-              {/* Admin Name */}
-              <div>
-                <label className={`${label} mb-1 text-xs`}>
-                  Name {req}
-                </label>
-                <input
-                  type="text"
-                  name="adminName"
-                  value={formData.adminName}
-                  onChange={handleInputChange}
-                  placeholder="Admin Name"
-                  className={`${cls("adminName")} h-8 px-2 text-sm`}
-                />
-                {errMsg("adminName")}
-              </div>
-
-              {/* Admin Email */}
-              <div>
-                <label className={`${label} mb-1 text-xs`}>
-                  Admin Email {req}
-                </label>
-                <input
-                  type="email"
-                  name="adminEmail"
-                  value={formData.adminEmail}
-                  onChange={handleInputChange}
-                  placeholder="Admin Email"
-                  className={`${cls("adminEmail")} h-8 px-2 text-sm`}
-                />
-                {errMsg("adminEmail")}
-              </div>
-
-              {/* Mobile Number */}
-              <div>
-                <label className={`${label} mb-1 text-xs`}>
-                  Mobile No {req}
-                </label>
-
-                <input
-                  type="tel"
-                  name="adminMobileNumber"
-                  value={formData.adminMobileNumber || ""}
-                  onChange={(e) => {
-                    const value = e.target.value
-                      .replace(/\D/g, "")
-                      .slice(0, 10);
-
-                    setFormData((prev) => ({
-                      ...prev,
-                      adminMobileNumber: value,
-                    }));
-                  }}
-
-                  placeholder="Mobile No"
-                  maxLength={10}
-                  className={`${cls("adminMobileNumber")} h-8 px-2 text-sm`}
-                />
-
-                {errMsg("adminMobileNumber")}
-              </div>
-
-              {/* Password */}
-              <div>
-                <label className={`${label} mb-1 text-xs`}>
-                  Password {req}
-                </label>
-
-                <div className="relative">
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    name="password"
-                    value={formData.password}
-                    onChange={handleInputChange}
-                    placeholder="Password"
-                    className={`${cls("password")} h-8 px-2 pr-8 text-sm`}
-                  />
-
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((s) => !s)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-                  >
-                    {showPassword ? (
-                      <EyeOff className="w-4 h-4" />
-                    ) : (
-                      <Eye className="w-4 h-4" />
-                    )}
-                  </button>
-                </div>
-
-                {errMsg("password")}
-              </div>
-
-              {/* Confirm Password */}
-              <div>
-                <label className={`${label} mb-1 text-xs`}>
-                  Confirm Password {req}
-                </label>
-
-                <div className="relative">
-                  <input
-                    type={showConfirmPassword ? "text" : "password"}
-                    name="confirmPassword"
-                    value={formData.confirmPassword}
-                    onChange={handleInputChange}
-                    placeholder="Confirm password"
-                    className={`${cls("confirmPassword")} h-8 px-2 pr-8 text-sm`}
-                  />
-
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmPassword((s) => !s)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-                  >
-                    {showConfirmPassword ? (
-                      <EyeOff className="w-4 h-4" />
-                    ) : (
-                      <Eye className="w-4 h-4" />
-                    )}
-                  </button>
-                </div>
-
-                {errMsg("confirmPassword")}
-              </div>
-            </div>
-
-            {/* Info Box */}
-            <div className="mt-2 flex items-start gap-2 rounded-md border border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-950/30 p-2">
-              <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-green-600 dark:text-green-400" />
-              <p className="text-[11px] text-green-700 dark:text-green-300">
-                A login credential will be created and shared with the admin on
-                company creation.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Footer buttons */}
-        <div className="flex justify-end gap-2.5 px-4 py-3">
+      {/* Confirm Password */}
+      <div>
+        <label className={`${label} mb-1 text-xs`}>
+          Confirm Password {req}
+        </label>
+        <div className="relative">
+          <input
+            type={showConfirmPassword ? "text" : "password"}
+            name="confirmPassword"
+            value={formData.confirmPassword}
+            onChange={handleInputChange}
+            placeholder="Confirm password"
+            className={`${cls("confirmPassword")} h-8 px-2 pr-8 text-sm`}
+          />
           <button
             type="button"
-            onClick={handleCancel}
-            className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-xs font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+            onClick={() => setShowConfirmPassword((s) => !s)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
           >
-            Cancel
-          </button>
-
-          <button
-            type="submit"
-            onClick={() => console.log("Button clicked")}
-            disabled={loading}
-            className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium transition-colors disabled:opacity-50"
-          >
-            {loading ? "Saving..." : "Save"}
+            {showConfirmPassword ? (
+              <EyeOff className="w-4 h-4" />
+            ) : (
+              <Eye className="w-4 h-4" />
+            )}
           </button>
         </div>
-      </form>
+        {errMsg("confirmPassword")}
+      </div>
+    </div>
+
+    {/* Info Box */}
+    <div className="mt-2 flex items-start gap-2 rounded-md border border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-950/30 p-2">
+      <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-green-600 dark:text-green-400" />
+      <p className="text-[11px] text-green-700 dark:text-green-300">
+        A login credential will be created and shared with the admin on company creation.
+      </p>
+    </div>
+  </div>
+
+  {/* Footer buttons */}
+  <div className="flex justify-end gap-2.5 px-4 py-3">
+    <button
+      type="button"
+      onClick={handleCancel}
+      className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-xs font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+    >
+      Cancel
+    </button>
+
+    <button
+      type="submit"
+      disabled={loading}
+      className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium transition-colors disabled:opacity-50"
+    >
+      {loading ? "Saving..." : "Save"}
+    </button>
+  </div>
+</form>
+    </div>
     </div>
   );
 };
