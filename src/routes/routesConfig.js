@@ -40,6 +40,15 @@ import BankMaster from "../components/masters/bankMaster/BankMaster";
 import TaxRateMaster from "../components/masters/taxRate/TaxRateMaster";
 import TaxDefinationMaster from "../components/masters/taxDefination/TaxDefinationMaster";
 import SalesList from "../components/sales/SalesList";
+import PurchaseList from "../components/purchase/purchaseList";
+import InventoryList from "../components/inventory/InventoryList";
+import SubContractList from "../components/subContract/SubContractList";
+import PpcList from "../components/PPC/PpcList";
+import TdcList from "../components/TDC/TdcList";
+import ProductionList from "../components/Production/ProductionList";
+import PlantMaintenanceList from "../components/plantMaintenance/PlantMaintenanceList";
+import QualityList from "../components/quality/QualityList";
+import LabourChargesList from "../components/labourCharges/LabourChargesList";
 
 export const routesConfig = [
   { path: "/", label: "Dashboard", element: <Dashboard /> },
@@ -47,6 +56,27 @@ export const routesConfig = [
   // WMS Routes
   { path: "/masters", label: "Masters", element: <MastersList /> },
   { path: "/Sales", label: "Masters", element: <SalesList /> },
+  { path: "/purchase", label: "Masters", element: <PurchaseList /> },
+  { path: "/inventory", label: "Masters", element: <InventoryList /> },
+  { path: "/subcontract", label: "Masters", element: <SubContractList /> },
+  { path: "/ppc", label: "Masters", element: <PpcList /> },
+  { path: "/TDC", label: "Masters", element: <TdcList /> },
+  { path: "/production", label: "Masters", element: <ProductionList /> },
+  {
+    path: "/plantmaintenance",
+    label: "Masters",
+    element: <PlantMaintenanceList />,
+  },
+  {
+    path: "/quality",
+    label: "Masters",
+    element: <QualityList />,
+  },
+  {
+    path: "/labourcharges",
+    label: "Masters",
+    element: <LabourChargesList />,
+  },
   { path: "/country", label: "Country Master", element: <CountryMaster /> },
   { path: "/state", label: "State Master", element: <StateMaster /> },
   { path: "/city", label: "City Master", element: <CityMaster /> },

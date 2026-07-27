@@ -1,6 +1,17 @@
 import { clsx } from "clsx";
 import Lottie from "lottie-react";
-import { LayoutDashboard, BookOpenCheck, ShoppingCart } from "lucide-react";
+import {
+  LayoutDashboard,
+  BookOpenCheck,
+  ShoppingCart,
+  PackagePlus,
+  Boxes,
+  Factory,
+  Cog,
+  ClipboardList,
+  Wrench,
+  ClipboardCheck,
+} from "lucide-react";
 import { useSelector } from "react-redux";
 import { NavLink } from "react-router-dom";
 import { hasScreenAccess } from "../../utils/accessControl";
@@ -62,6 +73,78 @@ const Sidebar = () => {
           bgColor:
             "bg-gradient-to-br from-orange-600 to-amber-500 dark:from-orange-500 dark:to-amber-400",
           screenCode: "MASTERS",
+        },
+        {
+          name: "Purchase",
+          href: "/purchase",
+          icon: PackagePlus,
+          bgColor:
+            "bg-gradient-to-br from-indigo-600 to-violet-500 dark:from-indigo-500 dark:to-violet-400",
+          screenCode: "MASTERS",
+        },
+        {
+          name: "Inventory",
+          href: "/inventory",
+          icon: Boxes,
+          bgColor:
+            "bg-gradient-to-br from-cyan-600 to-sky-500 dark:from-cyan-500 dark:to-sky-400",
+          screenCode: "MASTERS",
+        },
+        {
+          name: "Sub Contract",
+          href: "/subcontract",
+          icon: Factory,
+          bgColor:
+            "bg-gradient-to-br from-violet-600 to-fuchsia-500 dark:from-violet-500 dark:to-fuchsia-400",
+          screenCode: "SUB_CONTRACT",
+        },
+        {
+          name: "PPC",
+          href: "/ppc",
+          icon: Cog,
+          bgColor:
+            "bg-gradient-to-br from-emerald-600 to-green-500 dark:from-emerald-500 dark:to-green-400",
+          screenCode: "PPC",
+        },
+        {
+          name: "TDC",
+          href: "/tdc",
+          icon: ClipboardList,
+          bgColor:
+            "bg-gradient-to-br from-blue-600 to-cyan-500 dark:from-blue-500 dark:to-cyan-400",
+          screenCode: "PPC_TRANSACTION",
+        },
+        {
+          name: "Production",
+          href: "/production",
+          icon: Factory,
+          bgColor:
+            "bg-gradient-to-br from-red-600 to-orange-500 dark:from-red-500 dark:to-orange-400",
+          screenCode: "PRODUCTION",
+        },
+        {
+          name: "Plant Maintenance",
+          href: "/plantmaintenance",
+          icon: Wrench,
+          bgColor:
+            "bg-gradient-to-br from-slate-600 to-gray-500 dark:from-slate-500 dark:to-gray-400",
+          screenCode: "PLANT_MAINTENANCE",
+        },
+        {
+          name: "Quality",
+          href: "/quality",
+          icon: ClipboardCheck,
+          bgColor:
+            "bg-gradient-to-br from-cyan-600 to-sky-500 dark:from-cyan-500 dark:to-sky-400",
+          screenCode: "QUALITY",
+        },
+        {
+          name: "Labour Charges",
+          href: "/labourcharges",
+          icon: ShoppingCart,
+          bgColor:
+            "bg-gradient-to-br from-orange-600 to-amber-500 dark:from-orange-500 dark:to-amber-400",
+          screenCode: "LABOUR_CHARGES",
         },
       ];
 
