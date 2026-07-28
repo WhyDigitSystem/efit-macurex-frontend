@@ -1,3 +1,4 @@
+import purchaseRoutes from "./purchaseRoutes";
 import CountryMaster from "../components/masters/country/CountryMaster";
 import MastersList from "../components/masters/MasterList";
 import Dashboard from "../pages/DashBoard";
@@ -59,7 +60,11 @@ export const routesConfig = [
   { path: "/masters", label: "Masters", element: <MastersList /> },
   { path: "/Sales", label: "Sales", element: <SalesList /> },
   { path: "/purchase", label: "Purchase", element: <PurchaseList /> },
-  { path: "/purchaseorderamendment", label: "Purchase Order Amendment", element: <PurchaseOrderAmendment /> },
+  {
+    path: "/purchaseorderamendment",
+    label: "Purchase Order Amendment",
+    element: <PurchaseOrderAmendment />,
+  },
   { path: "/inventory", label: "Inventory", element: <InventoryList /> },
   { path: "/subcontract", label: "Sub Contract", element: <SubContractList /> },
   { path: "/ppc", label: "PPC", element: <PpcList /> },
@@ -216,4 +221,5 @@ export const routesConfig = [
     keywords: ["profile", "account"],
     element: <Profile />,
   },
+  ...purchaseRoutes,
 ];
