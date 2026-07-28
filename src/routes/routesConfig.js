@@ -55,6 +55,7 @@ import PurchaseOrderAmendment from "../components/purchase/PurchaseOrderAmendmen
 import PurchaseContractAmendment from "../components/purchase/PurchaseContractAmendment/PurchaseContractAmendmentMaster";
 import SalesContractAmendment from "../components/sales/SalesContractAmendment/SalesContractAmendmentMaster";
 import SalesOrderAmendment from "../components/sales/SalesOrderAmendment/SalesOrderAmendmentMaster";
+import inventoryRoutes from "./inventoryRoutes";
 
 export const routesConfig = [
   { path: "/", label: "Dashboard", element: <Dashboard /> },
@@ -240,4 +241,5 @@ export const routesConfig = [
     element: <Profile />,
   },
   ...purchaseRoutes,
+  ...inventoryRoutes,
 ];
