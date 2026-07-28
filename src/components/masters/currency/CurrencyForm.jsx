@@ -1,6 +1,9 @@
-import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
-import { useForm, Controller, useFieldArray } from "react-hook-form";
+import { ArrowLeft, Save, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useForm, Controller } from "react-hook-form";
+import currencyAPI from "../../../api/currencyAPI";
+import countryAPI from "../../../api/countryAPI";
+import { toast } from "../../../utils/toast";
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -13,51 +16,91 @@ const controlClasses =
 const labelClasses =
   "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
-const getDefaultValues = () => ({
-  // Required fields
-  country: "",
-  mainCurrency: "",
-  subCurrency:'',
-  // Dropdown fields
-  mainCurrencySymbol: "",
-  subSymbol: "",
-  currencyRepresentation: "",
+const getDefaultValues = (editData) => ({
+  id: editData?.id || 0,
+  country: editData?.country
+    ? Number(editData.country)
+    : editData?.countryId
+      ? Number(editData.countryId)
+      : "",
 
-  // Text fields
-  currency: "",
-  currencyInteger: "",
-  currencyDecimal: "",
-  menetaryUnit: "",
+  mainCurrency: editData?.mainCurrency || "",
+  currency: editData?.currency || "",
+  subCurrency: editData?.subCurrency || "",
+
+  mainCurrencySymbol: editData?.mainCurrencySymbol || "",
+  subSymbol: editData?.subSymbol || "",
+  currencyRepresentation: editData?.currencyRepresentation || "",
+
+  currencyInteger: editData?.currencyInteger || "",
+  currencyDecimal: editData?.currencyDecimal || "",
+  currencyDescription: editData?.currencyDescription || "",
+
+  active: editData?.active ?? true,
 });
+
+// Normalizes plain strings ("USD") and {value,label} objects alike into a
+// single { value, label } shape, so SelectField never has to guess the
+// caller's option format.
+const toOptionShape = (opt) => {
+  if (opt && typeof opt === "object") {
+    return { value: opt.value, label: opt.label };
+  }
+  return { value: opt, label: opt };
+};
 
 // ============================================================================
 // HELPER COMPONENTS
 // ============================================================================
-const SelectField = ({ control, name, label, options, required, errors }) => (
-  <div>
-    <label className={labelClasses}>
-      {label} {required && <span className="text-red-500">*</span>}
-    </label>
-    <Controller
-      name={name}
-      control={control}
-      rules={required ? { required: `${label} is required` } : undefined}
-      render={({ field }) => (
-        <select {...field} className={controlClasses}>
-          <option value="">Select</option>
-          {options.map((opt) => (
-            <option key={opt} value={opt}>
-              {opt}
-            </option>
-          ))}
-        </select>
+const SelectField = ({
+  control,
+  name,
+  label,
+  options,
+  required,
+  errors,
+  disabled,
+}) => {
+  const normalizedOptions = (options || []).map(toOptionShape);
+
+  return (
+    <div>
+      <label className={labelClasses}>
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      <Controller
+        name={name}
+        control={control}
+        rules={required ? { required: `${label} is required` } : undefined}
+        render={({ field }) => (
+          <select
+            {...field}
+            value={field.value}
+            onChange={(e) =>
+              field.onChange(
+                name === "country" ? Number(e.target.value) : e.target.value,
+              )
+            }
+            disabled={disabled}
+            className={controlClasses}
+          >
+            <option value="">Select</option>
+            {normalizedOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        )}
+      />
+      {errors?.[name] && (
+        <p className="text-red-500 text-[10px] mt-0.5">
+          {errors[name].message}
+        </p>
       )}
-    />
-    {errors?.[name] && (
-      <p className="text-red-500 text-[10px] mt-0.5">{errors[name].message}</p>
-    )}
-  </div>
-);
+    </div>
+  );
+};
 
 const InputField = ({
   control,
@@ -113,30 +156,13 @@ const ToggleButton = ({ control, name }) => (
   />
 );
 
-const CurrencyForm = ({ data, onBack }) => {
-  const [orgId] = useState(localStorage.getItem("orgId"));
+const CurrencyForm = ({ data, onBack, onSave }) => {
+  const [orgId] = useState(Number(localStorage.getItem("orgId")));
 
-  // Sample options for dropdowns
-  const countryOptions = [
-    "USA",
-    "UK",
-    "India",
-    "Australia",
-    "Canada",
-    "Germany",
-    "France",
-    "Japan",
-  ];
-  const currencyOptions = [
-    "USD",
-    "EUR",
-    "GBP",
-    "INR",
-    "AUD",
-    "CAD",
-    "JPY",
-    "CHF",
-  ];
+  const [countries, setCountries] = useState([]);
+  const [countryLoading, setCountryLoading] = useState(false);
+
+  // Sample options for dropdowns not yet backed by a real API
   const currencySymbolOptions = ["$", "€", "£", "₹", "A$", "C$", "¥", "Fr"];
   const currencyRepresentationOptions = ["Symbol", "Code", "Name"];
 
@@ -146,15 +172,99 @@ const CurrencyForm = ({ data, onBack }) => {
     formState: { errors, isSubmitting },
   } = useForm({
     mode: "onTouched",
-    defaultValues: getDefaultValues(),
+    defaultValues: getDefaultValues(data),
   });
 
-  const onSubmit = async (formData) => {
+  useEffect(() => {
+    fetchCountries();
+  }, []);
+
+  const fetchCountries = async () => {
     try {
-      console.log("Form Data:", formData, "Org Id:", orgId);
-      // API call here
+      setCountryLoading(true);
+      const response = await countryAPI.getCountries(orgId);
+      const sortedCountries = (response || []).sort((a, b) =>
+        (a.countryName || "").localeCompare(b.countryName || ""),
+      );
+      setCountries(sortedCountries);
     } catch (error) {
-      console.error(error);
+      console.error("Error fetching countries:", error);
+      toast.error("Failed to load countries");
+    } finally {
+      setCountryLoading(false);
+    }
+  };
+
+  // Country options carry both an id (submitted value) and a display name -
+  // SelectField normalizes this the same way it normalizes plain strings.
+  const countryOptions = countries.map((c) => ({
+    value: c.id,
+    label: c.countryName,
+  }));
+
+  const onSubmit = async (formData) => {
+    const payload = {
+      id: data?.id ?? 0, // include for update
+      countryId: Number(formData.country),
+      mainCurrency: formData.mainCurrency,
+      currency: formData.currency,
+      subCurrency: formData.subCurrency,
+      mainCurrencySymbol: formData.mainCurrencySymbol,
+      subSymbol: formData.subSymbol,
+      currencyRepresentation: formData.currencyRepresentation,
+      currencyInteger: formData.currencyInteger,
+      currencyDecimal: formData.currencyDecimal,
+      currencyDescription: formData.currencyDescription || "",
+      active: Boolean(formData.active),
+      cancelRemarks: "",
+      orgId,
+      createdBy: localStorage.getItem("userName") || "SYSTEM",
+    };
+
+    if (!(payload.id && payload.id > 0)) {
+      delete payload.id;
+    }
+
+    console.log("📤 Saving Currency Payload:", payload);
+
+    try {
+      const response = await currencyAPI.createUpdateCurrency(payload);
+      console.log("📥 Response:", response);
+
+      const status = response?.status === true || response?.statusFlag === "Ok";
+
+      if (status) {
+        const successMessage =
+          response?.paramObjectsMap?.message ||
+          (data
+            ? "Currency updated successfully!"
+            : "Currency created successfully!");
+
+        toast.success(successMessage);
+
+        if (onSave) {
+          onSave(payload);
+        } else {
+          onBack();
+        }
+      } else {
+        const errorMessage =
+          response?.paramObjectsMap?.message ||
+          response?.paramObjectsMap?.errorMessage ||
+          response?.message ||
+          "Failed to save currency";
+
+        toast.error(errorMessage);
+      }
+    } catch (error) {
+      console.error("❌ Save Error:", error);
+      const errorMessage =
+        error.response?.data?.paramObjectsMap?.message ||
+        error.response?.data?.paramObjectsMap?.errorMessage ||
+        error.response?.data?.message ||
+        "Save failed! Try again.";
+
+      toast.error(errorMessage);
     }
   };
 
@@ -186,6 +296,7 @@ const CurrencyForm = ({ data, onBack }) => {
               options={countryOptions}
               required
               errors={errors}
+              disabled={countryLoading}
             />
 
             <InputField
@@ -204,7 +315,8 @@ const CurrencyForm = ({ data, onBack }) => {
               placeholder="Enter currency"
               errors={errors}
             />
-               <InputField
+
+            <InputField
               control={control}
               name="subCurrency"
               label="Sub Currency"
@@ -221,7 +333,6 @@ const CurrencyForm = ({ data, onBack }) => {
               errors={errors}
             />
 
-             {/* Dropdown Fields */}
             <SelectField
               control={control}
               name="subSymbol"
@@ -230,8 +341,6 @@ const CurrencyForm = ({ data, onBack }) => {
               errors={errors}
             />
 
-           
-
             <SelectField
               control={control}
               name="currencyRepresentation"
@@ -239,8 +348,6 @@ const CurrencyForm = ({ data, onBack }) => {
               options={currencyRepresentationOptions}
               errors={errors}
             />
-
-            
 
             <InputField
               control={control}
@@ -265,11 +372,20 @@ const CurrencyForm = ({ data, onBack }) => {
               placeholder="Enter monetary unit"
               errors={errors}
             />
+
+            {/* Active toggle */}
+            <div>
+              <label className={labelClasses}>Active</label>
+              <div className="h-[30px] flex items-center">
+                <ToggleButton control={control} name="active" />
+              </div>
+            </div>
           </div>
 
           {/* Buttons */}
           <div className="flex justify-end gap-2 pt-3 mt-3 border-t border-gray-200 dark:border-gray-700">
             <button
+              type="button"
               onClick={onBack}
               disabled={isSubmitting}
               className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
@@ -277,7 +393,7 @@ const CurrencyForm = ({ data, onBack }) => {
               <X className="h-3 w-3" /> Cancel
             </button>
             <button
-              onClick={handleSubmit(onSubmit)}
+              type="submit"
               disabled={isSubmitting}
               className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
             >
@@ -288,148 +404,6 @@ const CurrencyForm = ({ data, onBack }) => {
         </form>
       </div>
     </div>
-  );
-};
-
-// ============================================================================
-// TABLE HELPER COMPONENTS
-// ============================================================================
-const TableWrapper = ({ children }) => (
-  <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
-    <table className="w-full text-xs">{children}</table>
-  </div>
-);
-
-const TableHead = ({ headers }) => (
-  <thead className="bg-gray-100 dark:bg-gray-700">
-    <tr>
-      {headers.map((h, i) => (
-        <th
-          key={i}
-          className={`p-1 ${i === 0 ? "w-8 text-center" : "text-left"} dark:text-white`}
-        >
-          {h.label}
-          {h.required && <span className="text-red-500 ml-0.5">*</span>}
-        </th>
-      ))}
-    </tr>
-  </thead>
-);
-
-const TableRow = ({ children, index, onRemove, disabled }) => (
-  <tr className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-    <td className="p-1 text-center font-medium dark:text-white align-middle">
-      {index + 1}
-    </td>
-    {children}
-    <td className="p-1 text-center align-middle">
-      <button
-        type="button"
-        onClick={onRemove}
-        disabled={disabled}
-        className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-          disabled
-            ? "bg-gray-400 cursor-not-allowed"
-            : "bg-red-600 hover:bg-red-700"
-        }`}
-      >
-        <Trash2 size={10} />
-      </button>
-    </td>
-  </tr>
-);
-
-const SelectCell = ({ control, name, options, required, errors }) => {
-  const getError = () => {
-    const parts = name.split(".");
-    let error = errors;
-    for (const part of parts) {
-      if (error && error[part]) {
-        error = error[part];
-      } else {
-        return null;
-      }
-    }
-    return error?.message;
-  };
-
-  const errorMessage = getError();
-
-  return (
-    <td className="p-1 align-top">
-      <Controller
-        name={name}
-        control={control}
-        rules={required ? { required: "This field is required" } : undefined}
-        render={({ field }) => (
-          <select
-            {...field}
-            className={`${controlClasses} h-8 text-xs w-full ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
-          >
-            <option value="">Select</option>
-            {options.map((opt) => (
-              <option key={opt} value={opt}>
-                {opt}
-              </option>
-            ))}
-          </select>
-        )}
-      />
-      {errorMessage && (
-        <div className="text-red-500 text-[10px] mt-0.5 text-left w-full">
-          {errorMessage}
-        </div>
-      )}
-    </td>
-  );
-};
-
-const InputCell = ({
-  control,
-  name,
-  type = "text",
-  step,
-  placeholder,
-  required,
-  errors,
-}) => {
-  const getError = () => {
-    const parts = name.split(".");
-    let error = errors;
-    for (const part of parts) {
-      if (error && error[part]) {
-        error = error[part];
-      } else {
-        return null;
-      }
-    }
-    return error?.message;
-  };
-
-  const errorMessage = getError();
-
-  return (
-    <td className="p-1 align-top">
-      <Controller
-        name={name}
-        control={control}
-        rules={required ? { required: "This field is required" } : undefined}
-        render={({ field }) => (
-          <input
-            {...field}
-            type={type}
-            step={step}
-            className={`${controlClasses} h-8 text-xs w-full ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
-            placeholder={placeholder}
-          />
-        )}
-      />
-      {errorMessage && (
-        <div className="text-red-500 text-[10px] mt-0.5 text-left w-full">
-          {errorMessage}
-        </div>
-      )}
-    </td>
   );
 };
 
