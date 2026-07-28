@@ -50,6 +50,7 @@ import ProductionList from "../components/Production/ProductionList";
 import PlantMaintenanceList from "../components/plantMaintenance/PlantMaintenanceList";
 import QualityList from "../components/quality/QualityList";
 import LabourChargesList from "../components/labourCharges/LabourChargesList";
+import purchaseRoutes from "./purchaseRoutes";
 
 export const routesConfig = [
   { path: "/", label: "Dashboard", element: <Dashboard /> },
@@ -201,6 +202,7 @@ export const routesConfig = [
     label: "Create Company",
     element: <CreateCompanyPage />,
   },
+
   { path: "/branch", label: "Branch Master", element: <BranchMaster /> },
   {
     path: "/roles",
@@ -214,4 +216,6 @@ export const routesConfig = [
     keywords: ["profile", "account"],
     element: <Profile />,
   },
+
+  ...purchaseRoutes,
 ];
