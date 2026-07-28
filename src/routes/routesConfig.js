@@ -52,6 +52,7 @@ import PlantMaintenanceList from "../components/plantMaintenance/PlantMaintenanc
 import QualityList from "../components/quality/QualityList";
 import LabourChargesList from "../components/labourCharges/LabourChargesList";
 import PurchaseOrderAmendment from "../components/purchase/PurchaseOrderAmendment/PurchaseOrderAmendmentMaster";
+import PurchaseContractAmendment from "../components/purchase/PurchaseContractAmendment/PurchaseContractAmendmentMaster";
 
 export const routesConfig = [
   { path: "/", label: "Dashboard", element: <Dashboard /> },
@@ -64,6 +65,11 @@ export const routesConfig = [
     path: "/purchaseorderamendment",
     label: "Purchase Order Amendment",
     element: <PurchaseOrderAmendment />,
+  },
+  {
+    path: "/purchasecontractamendment",
+    label: "Purchase Contract Amendment",
+    element: <PurchaseContractAmendment />,
   },
   { path: "/inventory", label: "Inventory", element: <InventoryList /> },
   { path: "/subcontract", label: "Sub Contract", element: <SubContractList /> },
