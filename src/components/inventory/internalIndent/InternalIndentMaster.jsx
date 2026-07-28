@@ -1,5 +1,5 @@
 import { useState } from "react";
-import InternalIndentList from "./";
+import InternalIndentList from "./InternalIndentList";
 import InternalIndentForm from "./InternalIndentForm";
 import internalIndentAPI from "../../../api/Inventory/internalIndentAPI";
 
