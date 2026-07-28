@@ -2,8 +2,8 @@ import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import { useForm, Controller } from "react-hook-form";
 import dayjs from "dayjs";
-import purchaseOrderAmendmentAPI from "../../api/purchaseOrderAmendmentAPI";
-import { useToast } from "../Toast/ToastContext";
+import purchaseOrderAmendmentAPI from "../../../api/Purchase/purchaseOrderAmendmentAPI";
+import { useToast } from "../../Toast/ToastContext";
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -97,8 +97,6 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
     getValues,
     watch,
     reset,
-    setError,
-    clearErrors,
     formState: { errors },
   } = useForm({ defaultValues: getDefaultValues() });
 
@@ -183,19 +181,11 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
   const onSubmit = async (formData) => {
     const isValid = await handleSubmit(
       () => true,
-      (errs) => {
-        const fieldNames = Object.keys(errs);
-        if (fieldNames.includes("plantId") || fieldNames.includes("belongsTo") ||
-            fieldNames.includes("partyCode") || fieldNames.includes("poNo") ||
-            fieldNames.includes("amendmentDate")) {
-          setActiveTab("poDetail");
-        }
+      () => {
+        addToast("Please fill all mandatory fields", "error");
       }
     )();
-    if (!isValid) {
-      addToast("Please fill all mandatory fields", "error");
-      return;
-    }
+    if (!isValid) return;
 
     if (!formData.poDetails || formData.poDetails.length === 0) {
       setPoDetailError("At least one PO detail item is required");

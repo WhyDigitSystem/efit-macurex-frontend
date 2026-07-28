@@ -1,4 +1,4 @@
-import apiClient from "./apiClient";
+import apiClient from "../apiClient";
 
 const purchaseOrderAmendmentAPI = {
   getAll: async (orgId, branch) => {

@@ -50,8 +50,7 @@ import ProductionList from "../components/Production/ProductionList";
 import PlantMaintenanceList from "../components/plantMaintenance/PlantMaintenanceList";
 import QualityList from "../components/quality/QualityList";
 import LabourChargesList from "../components/labourCharges/LabourChargesList";
-import purchaseRoutes from "./purchaseRoutes";
-import PurchaseOrderAmendment from "../components/purchase/PurchaseOrderAmendment";
+import PurchaseOrderAmendment from "../components/purchase/PurchaseOrderAmendment/PurchaseOrderAmendmentMaster";
 
 export const routesConfig = [
   { path: "/", label: "Dashboard", element: <Dashboard /> },
@@ -60,11 +59,7 @@ export const routesConfig = [
   { path: "/masters", label: "Masters", element: <MastersList /> },
   { path: "/Sales", label: "Sales", element: <SalesList /> },
   { path: "/purchase", label: "Purchase", element: <PurchaseList /> },
-  {
-    path: "/purchaseorderamendment",
-    label: "Purchase Order Amendment",
-    element: <PurchaseOrderAmendment />,
-  },
+  { path: "/purchaseorderamendment", label: "Purchase Order Amendment", element: <PurchaseOrderAmendment /> },
   { path: "/inventory", label: "Inventory", element: <InventoryList /> },
   { path: "/subcontract", label: "Sub Contract", element: <SubContractList /> },
   { path: "/ppc", label: "PPC", element: <PpcList /> },
@@ -208,7 +203,6 @@ export const routesConfig = [
     label: "Create Company",
     element: <CreateCompanyPage />,
   },
-
   { path: "/branch", label: "Branch Master", element: <BranchMaster /> },
   {
     path: "/roles",
@@ -222,6 +216,4 @@ export const routesConfig = [
     keywords: ["profile", "account"],
     element: <Profile />,
   },
-
-  ...purchaseRoutes,
 ];

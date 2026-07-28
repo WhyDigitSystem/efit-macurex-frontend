@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import CommonListViewTable from "../../utils/CommonListViewTable";
-import purchaseOrderAmendmentAPI from "../../api/purchaseOrderAmendmentAPI";
+import CommonListViewTable from "../../../utils/CommonListViewTable";
+import purchaseOrderAmendmentAPI from "../../../api/Purchase/purchaseOrderAmendmentAPI";
 
 const PurchaseOrderAmendmentList = ({ onAdd, onEdit }) => {
   const [data, setData] = useState([]);

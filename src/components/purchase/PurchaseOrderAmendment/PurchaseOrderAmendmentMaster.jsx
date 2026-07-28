@@ -2,7 +2,7 @@ import { useState } from "react";
 import PurchaseOrderAmendmentForm from "./PurchaseOrderAmendmentForm";
 import PurchaseOrderAmendmentList from "./PurchaseOrderAmendmentList";
 
-const PurchaseOrderAmendment = () => {
+const PurchaseOrderAmendmentMaster = () => {
   const [screen, setScreen] = useState("list");
   const [editData, setEditData] = useState(null);
 
@@ -28,4 +28,4 @@ const PurchaseOrderAmendment = () => {
   return <PurchaseOrderAmendmentList onAdd={handleAdd} onEdit={handleEdit} />;
 };
 
-export default PurchaseOrderAmendment;
+export default PurchaseOrderAmendmentMaster;
