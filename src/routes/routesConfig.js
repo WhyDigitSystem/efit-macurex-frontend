@@ -54,6 +54,7 @@ import LabourChargesList from "../components/labourCharges/LabourChargesList";
 import PurchaseOrderAmendment from "../components/purchase/PurchaseOrderAmendment/PurchaseOrderAmendmentMaster";
 import PurchaseContractAmendment from "../components/purchase/PurchaseContractAmendment/PurchaseContractAmendmentMaster";
 import SalesContractAmendment from "../components/sales/SalesContractAmendment/SalesContractAmendmentMaster";
+import SalesOrderAmendment from "../components/sales/SalesOrderAmendment/SalesOrderAmendmentMaster";
 
 export const routesConfig = [
   { path: "/", label: "Dashboard", element: <Dashboard /> },
@@ -76,6 +77,11 @@ export const routesConfig = [
     path: "/salescontractamendment",
     label: "Sales Contract Amendment",
     element: <SalesContractAmendment />,
+  },
+  {
+    path: "/salesorderamendment",
+    label: "Sales Order Amendment",
+    element: <SalesOrderAmendment />,
   },
   { path: "/inventory", label: "Inventory", element: <InventoryList /> },
   { path: "/subcontract", label: "Sub Contract", element: <SubContractList /> },
