@@ -248,6 +248,7 @@ const GlobalSelectionDropdown = () => {
 
       const payload = {
         branch: selectedBranch?.branch || "",
+        branchId: selectedBranch?.id || "",
         branchcode: selections.branch,
         customer: selections.customer,
         client: selections.client,
@@ -265,6 +266,7 @@ const GlobalSelectionDropdown = () => {
 
         // Update localStorage
         localStorage.setItem("branch", payload.branch);
+        localStorage.setItem("branchId", payload.branchId);
         localStorage.setItem("branchcode", payload.branchcode);
         localStorage.setItem("customer", payload.customer);
         localStorage.setItem("client", payload.client);
