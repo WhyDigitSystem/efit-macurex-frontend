@@ -33,6 +33,7 @@ const ToggleButton = ({ value, onChange }) => (
 
 const ItemGradeMasterForm = ({ editData, onBack }) => {
   const ORG_ID = parseInt(localStorage.getItem("orgId"));
+  const BRANCH = Number(localStorage.getItem("branchId")) || 1000000001;
   const CREATED_BY = localStorage.getItem("userName") || "SYSTEM";
   const { addToast } = useToast();
 
@@ -80,16 +81,17 @@ const ItemGradeMasterForm = ({ editData, onBack }) => {
     setIsSubmitting(true);
     try {
       const payload = {
+        ...(form.id ? { id: form.id } : {}),
         orgId: ORG_ID,
+        branch: BRANCH,
         gradeCode: form.gradeCode.trim(),
         gradeDescription: form.gradeDescription.trim(),
+        description: form.gradeDescription.trim(),
         remarks: form.remarks.trim(),
         active: form.active,
         createdBy: CREATED_BY,
+        cancelRemarks: "",
       };
-      if (form.id) {
-        payload.id = form.id;
-      }
       await itemGradeAPI.save(payload);
       addToast(
         form.id ? "Item Grade updated successfully" : "Item Grade created successfully",

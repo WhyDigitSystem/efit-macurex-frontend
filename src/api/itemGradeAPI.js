@@ -1,10 +1,12 @@
 import apiClient from "./apiClient";
 
 const itemGradeAPI = {
-  getAll: async (orgId) => {
+  getAll: async (orgId, branch) => {
     try {
-      const res = await apiClient.get(`/api/commonmaster/itemGrade?orgid=${orgId}`);
-      return res?.paramObjectsMap?.itemGradeVO || [];
+      const res = await apiClient.get("/api/commonmaster/getGradeMasterByOrgId", {
+        params: { orgId, branch },
+      });
+      return res?.paramObjectsMap?.gradeMasterList || [];
     } catch (error) {
       console.error("Error fetching item grades:", error);
       throw error;
@@ -13,8 +15,10 @@ const itemGradeAPI = {
 
   getById: async (id) => {
     try {
-      const res = await apiClient.get(`/api/commonmaster/itemGrade/${id}`);
-      return res?.paramObjectsMap?.ItemGrade || null;
+      const res = await apiClient.get("/api/commonmaster/getGradeMasterById", {
+        params: { id },
+      });
+      return res?.paramObjectsMap?.gradeMasterVO || null;
     } catch (error) {
       console.error("Error fetching item grade by ID:", error);
       throw error;
@@ -23,7 +27,7 @@ const itemGradeAPI = {
 
   save: async (payload) => {
     try {
-      const res = await apiClient.post("/api/commonmaster/createUpdateItemGrade", payload);
+      const res = await apiClient.put("/api/commonmaster/createUpdateGradeMaster", payload);
       return res;
     } catch (error) {
       console.error("Error saving item grade:", error);
