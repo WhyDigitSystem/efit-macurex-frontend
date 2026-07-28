@@ -1,65 +1,89 @@
 import React, { useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
+import { lmeAPI } from "../../../api/lmeApi";
 
 const LMEMasterList = ({ onAddNew, onEdit, onBack }) => {
   const [lmeData, setLmeData] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [orgId] = useState(localStorage.getItem("orgId") || "1000000006");
+  const [branch] = useState(localStorage.getItem("branch") || "1000000011");
 
   const loadLME = async () => {
     setLoading(true);
+    try {
+      const response = await lmeAPI.getAllLME(orgId, branch);
+      console.log("LME API Response:", response);
 
-    // Dummy Data - Matching the image format
-    const data = [
-      {
-        id: 1,
-        currencySymbol: "USD",
-        currencyName: "US Dollar",
-        lmeRate: "10.15",
-        lmeDateFrom: "01/08/2025",
-        lmeDateTo: "31/08/2025",
-        active: true,
-      },
-      {
-        id: 2,
-        currencySymbol: "EUR",
-        currencyName: "Euro",
-        lmeRate: "12.50",
-        lmeDateFrom: "01/08/2025",
-        lmeDateTo: "31/08/2025",
-        active: true,
-      },
-      {
-        id: 3,
-        currencySymbol: "GBP",
-        currencyName: "British Pound",
-        lmeRate: "15.75",
-        lmeDateFrom: "01/08/2025",
-        lmeDateTo: "31/08/2025",
-        active: true,
-      },
-      {
-        id: 4,
-        currencySymbol: "INR",
-        currencyName: "Indian Rupee",
-        lmeRate: "0.12",
-        lmeDateFrom: "01/08/2025",
-        lmeDateTo: "31/08/2025",
-        active: false,
-      },
-      {
-        id: 5,
-        currencySymbol: "JPY",
-        currencyName: "Japanese Yen",
-        lmeRate: "0.068",
-        lmeDateFrom: "01/08/2025",
-        lmeDateTo: "31/08/2025",
-        active: true,
-      },
-    ];
+      // Handle the nested response structure
+      let lmeList = [];
 
-    data.sort((a, b) => b.id - a.id);
-    setLmeData(data);
-    setLoading(false);
+      if (response) {
+        // Check for paramObjectsMap.transportList structure
+        if (response.paramObjectsMap && response.paramObjectsMap.transportList) {
+          lmeList = response.paramObjectsMap.transportList;
+        }
+        // Check for data property with paramObjectsMap
+        else if (response.data && response.data.paramObjectsMap && response.data.paramObjectsMap.transportList) {
+          lmeList = response.data.paramObjectsMap.transportList;
+        }
+        // Fallback: check if response is directly an array
+        else if (Array.isArray(response)) {
+          lmeList = response;
+        }
+        // Fallback: check if response.data is an array
+        else if (response.data && Array.isArray(response.data)) {
+          lmeList = response.data;
+        }
+      }
+
+      // Map the data to the format expected by the table
+      if (lmeList.length > 0) {
+        const mappedData = lmeList.map((item) => {
+          // Extract currency information from nested object
+          let currencySymbol = "";
+          let currencyName = "";
+
+          if (item.currencyName) {
+            // If currencyName is an object (nested structure)
+            if (typeof item.currencyName === 'object') {
+              currencySymbol = item.currencyName.currency || item.currencySymbol || "";
+              currencyName = item.currencyName.mainCurrency || item.currencyName.currencyDescription || "";
+            } else {
+              // If currencyName is a string
+              currencyName = item.currencyName || "";
+              currencySymbol = item.currencySymbol || "";
+            }
+          } else {
+            // Fallback to direct properties
+            currencySymbol = item.currencySymbol || "";
+            currencyName = item.currencyName || "";
+          }
+
+          return {
+            id: item.id,
+            currencySymbol: currencySymbol,
+            currencyName: currencyName,
+            lmeRate: item.lmeRate || "",
+            lmeDateFrom: item.lmeDateFrom || "",
+            lmeDateTo: item.elmeDateTo || item.lmeDateTo || "",
+            active: item.active === "Active" ? true : (item.active ?? true),
+            // Keep original data for reference if needed
+            originalData: item
+          };
+        });
+
+        // Sort by ID descending (newest first)
+        mappedData.sort((a, b) => b.id - a.id);
+        setLmeData(mappedData);
+      } else {
+        setLmeData([]);
+      }
+    } catch (error) {
+      console.error("Error loading LME data:", error);
+      setLmeData([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -67,7 +91,8 @@ const LMEMasterList = ({ onAddNew, onEdit, onBack }) => {
   }, []);
 
   const handleEdit = (lme) => {
-    onEdit(lme);
+    // Pass the original data for editing
+    onEdit(lme.originalData || lme);
   };
 
   const columns = [
@@ -96,12 +121,14 @@ const LMEMasterList = ({ onAddNew, onEdit, onBack }) => {
       label: "LME Date From",
       accessor: "lmeDateFrom",
       type: "text",
+      noWrap: true,
     },
     {
       key: "lmeDateTo",
       label: "LME Date To",
       accessor: "lmeDateTo",
       type: "text",
+      noWrap: true,
     },
     {
       key: "active",

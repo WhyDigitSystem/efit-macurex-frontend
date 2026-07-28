@@ -57,6 +57,7 @@ import PurchaseContractAmendment from "../components/purchase/PurchaseContractAm
 import SalesContractAmendment from "../components/sales/SalesContractAmendment/SalesContractAmendmentMaster";
 import SalesOrderAmendment from "../components/sales/SalesOrderAmendment/SalesOrderAmendmentMaster";
 import inventoryRoutes from "./inventoryRoutes";
+import UserCreation from "../components/masters/userCreation/UserCreationMaster";
 
 export const routesConfig = [
   { path: "/", label: "Dashboard", element: <Dashboard /> },
@@ -218,6 +219,7 @@ export const routesConfig = [
   { path: "/gst_state", label: "GST State Master", element: <GSTState /> },
   { path: "/gst_rate", label: "GST Rate Master", element: <GSTRate /> },
   { path: "/employee", label: "Employee Master", element: <EmployeeMaster /> },
+  { path: "/userCreation", label: "User Creation", element: <UserCreation /> },
   {
     path: "/financial-year",
     label: "Financial Year Master",

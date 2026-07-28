@@ -1,6 +1,10 @@
 import PurchaseContractMaster from "../components/purchase/purchaseContract/PurchaseContractMaster";
 import PurchaseIndentMaster from "../components/purchase/purchaseIndent/PurchaseIndentMaster";
 import PurchaseDeliveryMaster from "../components/purchase/purchaseDeliverySchedule/PurchaseDeliveryMaster";
+import DirectPurchase from "../components/purchase/DirectPurchase/DirectPurchase";
+import PoShortCloseMaster from "../components/purchase/poDelvSch/PoShortCloseMaster";
+import PurchaseBill from "../components/purchase/purchaseBill/PurchaseBill";
+
 const purchaseRoutes = [
   {
     path: "/purchaseindent",
@@ -16,6 +20,21 @@ const purchaseRoutes = [
     path: "/purchasedeliveryschedule",
     label: "Purchase Contract Open",
     element: <PurchaseDeliveryMaster />,
+  },
+  {
+    path: "/purchasebill",
+    label: "Purchase Bill",
+    element: <PurchaseBill />,
+  },
+  {
+    path: "/purchaseordershortclose",
+    label: "P.O./Delv.Sch. Shortclose",
+    element: <PoShortCloseMaster />,
+  },
+  {
+    path: "/directpurchase",
+    label: "Direct Purchase",
+    element: <DirectPurchase />,
   },
 ];
 

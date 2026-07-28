@@ -2,7 +2,7 @@ import apiClient from "./apiClient";
 
 export const getAllActiveScreens = async () => {
     try {
-        const response = await apiClient.get(`/api/commonmaster/allScreenNames`);
+        const response = await apiClient.get(`/api/commonmaster/getAllScreenNames`);
         console.log('API Response:', response);
 
         if (response.status === true) {

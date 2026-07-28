@@ -4,53 +4,95 @@ import { departmentAPI } from "../../../api/departmentAPI";
 import { useToast } from "../../Toast/ToastContext";
 
 const controlClasses =
-  "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
-  "bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 " +
-  "text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 " +
-  "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
-  "dark:focus:ring-blue-400 dark:focus:border-blue-400 " +
-  "disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed";
+    "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
+    "bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 " +
+    "text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 " +
+    "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
+    "dark:focus:ring-blue-400 dark:focus:border-blue-400 " +
+    "disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed";
 
 const labelClasses = "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
 const fieldGrid = "grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-x-3 gap-y-2 items-start";
 
 const ToggleButton = ({ value, onChange }) => (
-  <button
-    type="button"
-    onClick={() => onChange(!value)}
-    className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${
-      value ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
-    }`}
-  >
-    <span className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${
-      value ? "translate-x-6" : "translate-x-0.5"
-    }`} />
-  </button>
+    <button
+        type="button"
+        onClick={() => onChange(!value)}
+        className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${value ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
+            }`}
+    >
+        <span className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${value ? "translate-x-6" : "translate-x-0.5"
+            }`} />
+    </button>
 );
 
-const DepartmentMasterForm = ({ editData, onBack }) => {
+const DepartmentMasterForm = ({ editData, editId, onBack, onSave }) => {
     const ORG_ID = parseInt(localStorage.getItem("orgId"));
+    const branch = parseInt(localStorage.getItem("branch"));
     const { addToast } = useToast();
     const [isLoading, setIsLoading] = useState(false);
 
     const [form, setForm] = useState({
+        id: 0,
         code: "",
         departmentName: "",
         active: true,
+        branch: branch,
+        orgId: ORG_ID,
+        createdBy: localStorage.getItem("userName") || "",
     });
 
     const [fieldErrors, setFieldErrors] = useState({});
 
+    // Load department data when editing
     useEffect(() => {
-        if (editData) {
-            setForm({
-                code: editData.code || "",
-                departmentName: editData.departmentName || "",
-                active: editData.active === "Active" || editData.active === true,
-            });
+        const loadDepartmentData = async () => {
+            // If we have editId, fetch the full data
+            if (editId && editId > 0) {
+                await loadDepartmentById(editId);
+            }
+            // If we have editData directly (from list)
+            else if (editData) {
+                populateFormFromEditData(editData);
+            }
+        };
+
+        loadDepartmentData();
+    }, [editId, editData]);
+
+    const loadDepartmentById = async (id) => {
+        try {
+            setIsLoading(true);
+            const response = await departmentAPI.getDepartmentById(id);
+
+            if (response?.status === true) {
+                const departmentData = response?.paramObjectsMap?.departmentVO?.[0];
+                if (departmentData) {
+                    populateFormFromEditData(departmentData);
+                }
+            } else {
+                addToast("Failed to load department data", "error");
+            }
+        } catch (error) {
+            console.error("Error loading department:", error);
+            addToast("Failed to load department data", "error");
+        } finally {
+            setIsLoading(false);
         }
-    }, [editData]);
+    };
+
+    const populateFormFromEditData = (data) => {
+        setForm({
+            id: data.id || 0,
+            code: data.departmentCode || data.code || "",
+            departmentName: data.departmentName || "",
+            active: data.active === "Active" || data.active === true,
+            branch: data.branch?.id || branch,
+            orgId: data.orgId || ORG_ID,
+            createdBy: data.createdBy || localStorage.getItem("userName") || "",
+        });
+    };
 
     const handleFormChange = (e) => {
         const { name, value, type, checked } = e.target;
@@ -92,22 +134,34 @@ const DepartmentMasterForm = ({ editData, onBack }) => {
         setIsLoading(true);
         try {
             const payload = {
-                ...(editData?.id && { id: editData.id }),
-                code: form.code,
+                // Only include id if editing (id exists and is greater than 0)
+                ...(form.id && form.id > 0 && { id: form.id }),
+                departmentCode: form.code,
                 departmentName: form.departmentName,
+                branch: branch,
+                finYear: 0,
+                cancelRemarks: '',
                 active: form.active,
                 orgId: ORG_ID,
-                createdBy: localStorage.getItem("userName") || "SYSTEM",
+                createdBy: localStorage.getItem("userName") || "",
             };
+
+            console.log("📤 Saving Department Payload:", payload);
 
             const response = await departmentAPI.saveDepartment(payload);
 
             if (response?.status === true) {
                 const successMessage =
                     response?.paramObjectsMap?.message ||
-                    (editData?.id ? "Department updated successfully!" : "Department created successfully!");
+                    (form.id && form.id > 0 ? "Department updated successfully!" : "Department created successfully!");
                 addToast(successMessage, "success");
-                onBack();
+
+                // Call parent's onSave or onBack
+                if (onSave) {
+                    onSave(payload);
+                } else {
+                    onBack();
+                }
             } else {
                 const errorMessage =
                     response?.paramObjectsMap?.errorMessage ||
@@ -129,6 +183,16 @@ const DepartmentMasterForm = ({ editData, onBack }) => {
         }
     };
 
+    if (isLoading) {
+        return (
+            <div className="p-2 max-w-7xl">
+                <div className="flex justify-center items-center h-64">
+                    <div className="text-gray-500 dark:text-gray-400">Loading...</div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="p-2 max-w-7xl">
             <div className="flex items-center gap-2 mb-3">
@@ -139,7 +203,7 @@ const DepartmentMasterForm = ({ editData, onBack }) => {
                     <ArrowLeft className="h-4 w-4" />
                 </button>
                 <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-                    {editData ? "Edit Department" : "Add Department"}
+                    {form.id && form.id > 0 ? "Edit Department" : "Add Department"}
                 </h2>
             </div>
 

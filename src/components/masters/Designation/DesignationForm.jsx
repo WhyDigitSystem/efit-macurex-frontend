@@ -4,53 +4,95 @@ import { designationAPI } from "../../../api/designationAPI";
 import { useToast } from "../../Toast/ToastContext";
 
 const controlClasses =
-  "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
-  "bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 " +
-  "text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 " +
-  "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
-  "dark:focus:ring-blue-400 dark:focus:border-blue-400 " +
-  "disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed";
+    "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
+    "bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 " +
+    "text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 " +
+    "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
+    "dark:focus:ring-blue-400 dark:focus:border-blue-400 " +
+    "disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed";
 
 const labelClasses = "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
 const fieldGrid = "grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-x-3 gap-y-2 items-start";
 
 const ToggleButton = ({ value, onChange }) => (
-  <button
-    type="button"
-    onClick={() => onChange(!value)}
-    className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${
-      value ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
-    }`}
-  >
-    <span className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${
-      value ? "translate-x-6" : "translate-x-0.5"
-    }`} />
-  </button>
+    <button
+        type="button"
+        onClick={() => onChange(!value)}
+        className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${value ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
+            }`}
+    >
+        <span className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${value ? "translate-x-6" : "translate-x-0.5"
+            }`} />
+    </button>
 );
 
-const DesignationMasterForm = ({ editData, onBack }) => {
+const DesignationMasterForm = ({ editData, editId, onBack, onSave }) => {
     const ORG_ID = parseInt(localStorage.getItem("orgId"));
+    const branch = parseInt(localStorage.getItem("branch"));
     const { addToast } = useToast();
     const [isLoading, setIsLoading] = useState(false);
 
     const [form, setForm] = useState({
+        id: 0,
         designationCode: "",
         designationName: "",
         active: true,
+        branch: branch,
+        orgId: ORG_ID,
+        createdBy: localStorage.getItem("userName") || "SYSTEM",
     });
 
     const [fieldErrors, setFieldErrors] = useState({});
 
+    // Load designation data when editing
     useEffect(() => {
-        if (editData) {
-            setForm({
-                designationCode: editData.designationCode || editData.code || "",
-                designationName: editData.designation || editData.designationName || "",
-                active: editData.active === "Active" || editData.active === true,
-            });
+        const loadDesignationData = async () => {
+            // If we have editId, fetch the full data
+            if (editId && editId > 0) {
+                await loadDesignationById(editId);
+            }
+            // If we have editData directly (from list)
+            else if (editData) {
+                populateFormFromEditData(editData);
+            }
+        };
+
+        loadDesignationData();
+    }, [editId, editData]);
+
+    const loadDesignationById = async (id) => {
+        try {
+            setIsLoading(true);
+            const response = await designationAPI.getDesignationById(id);
+
+            if (response?.status === true) {
+                const designationData = response?.paramObjectsMap?.designationVO?.[0];
+                if (designationData) {
+                    populateFormFromEditData(designationData);
+                }
+            } else {
+                addToast("Failed to load designation data", "error");
+            }
+        } catch (error) {
+            console.error("Error loading designation:", error);
+            addToast("Failed to load designation data", "error");
+        } finally {
+            setIsLoading(false);
         }
-    }, [editData]);
+    };
+
+    const populateFormFromEditData = (data) => {
+        setForm({
+            id: data.id || 0,
+            designationCode: data.designationCode || data.code || "",
+            designationName: data.designation || data.designationName || "",
+            active: data.active === "Active" || data.active === true,
+            branch: data.branch?.id || branch,
+            orgId: data.orgId || ORG_ID,
+            createdBy: data.createdBy || localStorage.getItem("userName") || "SYSTEM",
+        });
+    };
 
     const handleFormChange = (e) => {
         const { name, value, type, checked } = e.target;
@@ -80,6 +122,7 @@ const DesignationMasterForm = ({ editData, onBack }) => {
 
     const validateForm = () => {
         const errors = {};
+        if (!form.designationCode) errors.designationCode = "Designation Code is required";
         if (!form.designationName) errors.designationName = "Designation Name is required";
         setFieldErrors(errors);
         return Object.keys(errors).length === 0;
@@ -91,22 +134,34 @@ const DesignationMasterForm = ({ editData, onBack }) => {
         setIsLoading(true);
         try {
             const payload = {
-                ...(editData?.id && { id: editData.id }),
+                // Only include id if editing (id exists and is greater than 0)
+                ...(form.id && form.id > 0 && { id: form.id }),
                 designationCode: form.designationCode,
                 designation: form.designationName,
+                branch: branch,
+                finYear: 0,
+                cancelRemarks: '',
                 active: form.active,
                 orgId: ORG_ID,
                 createdBy: localStorage.getItem("userName") || "SYSTEM",
             };
+
+            console.log("📤 Saving Designation Payload:", payload);
 
             const response = await designationAPI.saveDesignation(payload);
 
             if (response?.status === true) {
                 const successMessage =
                     response?.paramObjectsMap?.message ||
-                    (editData?.id ? "Designation updated successfully!" : "Designation created successfully!");
+                    (form.id && form.id > 0 ? "Designation updated successfully!" : "Designation created successfully!");
                 addToast(successMessage, "success");
-                onBack();
+
+                // Call parent's onSave or onBack
+                if (onSave) {
+                    onSave(payload);
+                } else {
+                    onBack();
+                }
             } else {
                 const errorMessage =
                     response?.paramObjectsMap?.errorMessage ||
@@ -128,6 +183,16 @@ const DesignationMasterForm = ({ editData, onBack }) => {
         }
     };
 
+    if (isLoading) {
+        return (
+            <div className="p-2 max-w-7xl">
+                <div className="flex justify-center items-center h-64">
+                    <div className="text-gray-500 dark:text-gray-400">Loading...</div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="p-2 max-w-7xl">
             <div className="flex items-center gap-2 mb-3">
@@ -138,12 +203,29 @@ const DesignationMasterForm = ({ editData, onBack }) => {
                     <ArrowLeft className="h-4 w-4" />
                 </button>
                 <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-                    {editData ? "Edit Designation" : "Add Designation"}
+                    {form.id && form.id > 0 ? "Edit Designation" : "Add Designation"}
                 </h2>
             </div>
 
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-3">
                 <div className={fieldGrid}>
+                    <div>
+                        <label className={labelClasses}>
+                            Designation Code <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            type="text"
+                            name="designationCode"
+                            value={form.designationCode || ""}
+                            onChange={handleFormChange}
+                            className={controlClasses + (fieldErrors.designationCode ? " border-red-500" : "")}
+                            placeholder="Enter designation code"
+                        />
+                        {fieldErrors.designationCode && (
+                            <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">{fieldErrors.designationCode}</p>
+                        )}
+                    </div>
+
                     <div>
                         <label className={labelClasses}>
                             Designation Name <span className="text-red-500">*</span>

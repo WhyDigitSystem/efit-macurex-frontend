@@ -2,42 +2,54 @@ import { useState } from "react";
 import DepartmentListView from "./DepartmentListView";
 import DepartmentMasterForm from "./DepartmentMasterForm";
 
-const DepartmentMasterPage = () => {
-  const [screen, setScreen] = useState("list");
-  const [editData, setEditData] = useState(null);
+const DepartmentMaster = ({ onBack }) => {
+  const [currentView, setCurrentView] = useState("list"); // "list", "add", "edit"
+  const [selectedDepartment, setSelectedDepartment] = useState(null);
+  const [editId, setEditId] = useState(null);
 
   const handleAddNew = () => {
-    setEditData(null);
-    setScreen("form");
+    setSelectedDepartment(null);
+    setEditId(null);
+    setCurrentView("add");
   };
 
-  const handleEdit = (row) => {
-    setEditData(row);
-    setScreen("form");
+  const handleEdit = (department) => {
+    setSelectedDepartment(department);
+    setEditId(department.id);
+    setCurrentView("edit");
   };
 
-  const handleBack = () => {
-    setScreen("list");
+  const handleBackToList = () => {
+    setCurrentView("list");
+    setSelectedDepartment(null);
+    setEditId(null);
+  };
+
+  const handleSave = (savedData) => {
+    // Refresh the list after saving
+    handleBackToList();
   };
 
   return (
     <>
-      {screen === "list" && (
+      {currentView === "list" && (
         <DepartmentListView
           onAddNew={handleAddNew}
           onEdit={handleEdit}
-          onBack={() => window.history.back()}
+          onBack={onBack || (() => window.history.back())}
         />
       )}
 
-      {screen === "form" && (
+      {(currentView === "add" || currentView === "edit") && (
         <DepartmentMasterForm
-          data={editData}
-          onBack={handleBack}
+          onBack={handleBackToList}
+          onSave={handleSave}
+          editData={selectedDepartment}
+          editId={editId}
         />
       )}
     </>
   );
 };
 
-export default DepartmentMasterPage;
+export default DepartmentMaster;

@@ -1,9 +1,8 @@
 import { useState } from "react";
-import ScreenNamesList from "./ScreenNamesList";
-import ScreenNamesForm from "./ScreenNamesForm";
-import screensAPI from "../../../api/screensAPI";
+import DirectPurchaseList from "./DirectPurchaseList";
+import DirectPurchaseForm from "./DirectPurchaseForm";
 
-const ScreenNames = () => {
+const DirectPurchase = () => {
     const [screen, setScreen] = useState("list");
     const [editData, setEditData] = useState(null);
 
@@ -23,26 +22,10 @@ const ScreenNames = () => {
         setScreen("list");
     };
 
-    const handleSave = async (payload) => {
-        try {
-            if (payload.id) {
-                // Update existing screen
-                await screensAPI.updateScreen(payload.id, payload);
-            } else {
-                // Create new screen
-                await screensAPI.createScreen(payload);
-            }
-            handleBack();
-        } catch (error) {
-            console.error("Error saving screen:", error);
-            throw error;
-        }
-    };
-
     return (
         <>
             {screen === "list" && (
-                <ScreenNamesList
+                <DirectPurchaseList
                     onAddNew={addNew}
                     onEdit={edit}
                     onBack={() => window.history.back()}
@@ -50,14 +33,13 @@ const ScreenNames = () => {
             )}
 
             {screen === "form" && (
-                <ScreenNamesForm
+                <DirectPurchaseForm
                     data={editData}
                     onBack={handleBack}
-                    onSave={handleSave}
                 />
             )}
         </>
     );
 };
 
-export default ScreenNames;
+export default DirectPurchase;

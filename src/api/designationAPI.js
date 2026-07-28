@@ -2,9 +2,9 @@ import apiClient from '../api/apiClient';
 
 export const designationAPI = {
     // Get all designations
-    getAllDesignations: async (orgId) => {
+    getAllDesignations: async (orgId, branch) => {
         try {
-            const response = await apiClient.get(`/api/commonmaster/getAllDesignationByOrgId?orgId=${orgId}`);
+            const response = await apiClient.get(`/api/efitmaster/getDesignationByOrgId?orgId=${orgId}&branch=${branch}`);
             return response;
         } catch (error) {
             console.error('Error fetching designations:', error);
@@ -15,7 +15,7 @@ export const designationAPI = {
     // Get designation by ID
     getDesignationById: async (id) => {
         try {
-            const response = await apiClient.get(`/api/commonmaster/getAllDesignationById?id=${id}`);
+            const response = await apiClient.get(`/api/efitmaster/getDesignationById?id=${id}`);
             return response;
         } catch (error) {
             console.error('Error fetching designation:', error);
@@ -26,7 +26,7 @@ export const designationAPI = {
     // Save/Update designation
     saveDesignation: async (payload) => {
         try {
-            const response = await apiClient.put(`/api/commonmaster/createUpdateDesignation`, payload);
+            const response = await apiClient.put(`/api/efitmaster/updateCreateDesignation`, payload);
             return response;
         } catch (error) {
             console.error('Error saving designation:', error);

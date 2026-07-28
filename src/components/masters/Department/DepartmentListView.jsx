@@ -8,17 +8,18 @@ const DepartmentListView = ({ onAddNew, onEdit,onBack }) => {
   const [loading, setLoading] = useState(false);
 
   const ORG_ID = parseInt(localStorage.getItem("orgId"));
+  const branch = parseInt(localStorage.getItem("branch"));
 
   const loadDepartments = useCallback(async () => {
     try {
       setLoading(true);
 
-      const response = await departmentAPI.getAllDepartments(ORG_ID);
+      const response = await departmentAPI.getAllDepartments(ORG_ID, branch);
 
       let departments = [];
 
       if (response?.status === true) {
-        departments = response.paramObjectsMap?.departmentVOs || [];
+        departments = response.paramObjectsMap?.departmentVO || [];
       }
 
       departments.sort((a, b) => (b.id || 0) - (a.id || 0));
@@ -39,9 +40,9 @@ const DepartmentListView = ({ onAddNew, onEdit,onBack }) => {
 
   const columns = [
     {
-      key: "code",
+      key: "departmentCode",
       label: "Code",
-      accessor: "code",
+      accessor: "departmentCode",
       type: "text",
       noWrap: true,
     },
@@ -88,7 +89,7 @@ const DepartmentListView = ({ onAddNew, onEdit,onBack }) => {
     },
   ];
 
-  const searchFields = ["code", "departmentName"];
+  const searchFields = ["departmentCode", "departmentName"];
 
   const filterOptions = [
     {

@@ -332,7 +332,7 @@ export const getAllActiveBuyer = async (cBranch, client, orgId) => {
 export const getAllActiveScreens = async () => {
   try {
     const response = await axios.get(
-      `${API_URL}/api/commonmaster/allScreenNames`
+      `${API_URL}/api/commonmaster/getAllScreenNames`
     );
     console.log("API Response:", response);
 

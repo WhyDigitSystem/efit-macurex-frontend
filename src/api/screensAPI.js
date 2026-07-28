@@ -3,7 +3,7 @@ import apiClient from "./apiClient";
 const screensAPI = {
     // Add to your masterAPI object
     getScreens: async (orgId) => {
-        const response = await apiClient.get(`/api/commonmaster/allScreenNames`);
+        const response = await apiClient.get(`/api/commonmaster/getAllScreenNames`);
         return response;
     },
 

@@ -2,9 +2,9 @@ import apiClient from './apiClient';
 
 export const departmentAPI = {
     // Get all departments
-    getAllDepartments: async (orgId) => {
+    getAllDepartments: async (orgId, branch) => {
         try {
-            const response = await apiClient.get(`/api/commonmaster/getAllDepartmentByOrgId?orgId=${orgId}`);
+            const response = await apiClient.get(`/api/efitmaster/getAllDepartmentByOrgId?orgId=${orgId}&branch=${branch}`);
             return response;
         } catch (error) {
             console.error('Error fetching departments:', error);
@@ -15,7 +15,7 @@ export const departmentAPI = {
     // Get department by ID
     getDepartmentById: async (id) => {
         try {
-            const response = await apiClient.get(`/api/commonmaster/getAllDepartmentById?id=${id}`);
+            const response = await apiClient.get(`/api/efitmaster/getDepartmentById?id=${id}`);
             return response;
         } catch (error) {
             console.error('Error fetching department:', error);
@@ -26,7 +26,7 @@ export const departmentAPI = {
     // Save/Update department
     saveDepartment: async (payload) => {
         try {
-            const response = await apiClient.put(`/api/commonmaster/createUpdateDepartment`, payload);
+            const response = await apiClient.put(`/api/efitmaster/createUpdateDepartment`, payload);
             return response;
         } catch (error) {
             console.error('Error saving department:', error);

@@ -1,8 +1,8 @@
 import { useState } from "react";
-import LMEMasterList from "./LMEMasterList";
-import LMEMasterForm from "./LMEMasterForm";
+import PurchaseBillList from "./PurchaseBillList";
+import PurchaseBillForm from "./PurchaseBillForm";
 
-const LMEMaster = () => {
+const PurchaseBill = () => {
   const [screen, setScreen] = useState("list");
   const [editData, setEditData] = useState(null);
 
@@ -25,7 +25,7 @@ const LMEMaster = () => {
   return (
     <>
       {screen === "list" && (
-        <LMEMasterList
+        <PurchaseBillList
           onAddNew={addNew}
           onEdit={edit}
           onBack={() => window.history.back()}
@@ -33,7 +33,7 @@ const LMEMaster = () => {
       )}
 
       {screen === "form" && (
-        <LMEMasterForm
+        <PurchaseBillForm
           data={editData}
           onBack={handleBack}
         />
@@ -42,4 +42,4 @@ const LMEMaster = () => {
   );
 };
 
-export default LMEMaster;
+export default PurchaseBill;

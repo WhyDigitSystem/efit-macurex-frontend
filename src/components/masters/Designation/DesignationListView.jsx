@@ -3,17 +3,18 @@ import { designationAPI } from "../../../api/designationAPI";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import { toast } from "../../../utils/toast";
 
-const DesignationListView = ({ onAddNew, onEdit,onBack }) => {
+const DesignationListView = ({ onAddNew, onEdit, onBack }) => {
   const [designationData, setDesignationData] = useState([]);
   const [loading, setLoading] = useState(false);
 
   const ORG_ID = parseInt(localStorage.getItem("orgId"));
+  const branch = parseInt(localStorage.getItem("branch"));
 
   const loadDesignations = useCallback(async () => {
     try {
       setLoading(true);
 
-      const response = await designationAPI.getAllDesignations(ORG_ID);
+      const response = await designationAPI.getAllDesignations(ORG_ID, branch);
 
       let designations = [];
 
@@ -21,9 +22,17 @@ const DesignationListView = ({ onAddNew, onEdit,onBack }) => {
         designations = response.paramObjectsMap?.designationVO || [];
       }
 
-      designations.sort((a, b) => (b.id || 0) - (a.id || 0));
+      // Transform data if needed
+      const transformedDesignations = designations.map(designation => ({
+        ...designation,
+        // Ensure consistency in field names
+        designationName: designation.designation || designation.designationName || "",
+        designationCode: designation.designationCode || designation.code || "",
+      }));
 
-      setDesignationData(designations);
+      transformedDesignations.sort((a, b) => (b.id || 0) - (a.id || 0));
+
+      setDesignationData(transformedDesignations);
     } catch (error) {
       console.error("Failed to load designations:", error);
       setDesignationData([]);
@@ -31,7 +40,7 @@ const DesignationListView = ({ onAddNew, onEdit,onBack }) => {
     } finally {
       setLoading(false);
     }
-  }, [ORG_ID]);
+  }, [ORG_ID, branch]);
 
   useEffect(() => {
     loadDesignations();
@@ -39,9 +48,16 @@ const DesignationListView = ({ onAddNew, onEdit,onBack }) => {
 
   const columns = [
     {
-      key: "designation",
+      key: "designationCode",
+      label: "Code",
+      accessor: "designationCode",
+      type: "text",
+      noWrap: true,
+    },
+    {
+      key: "designationName",
       label: "Designation Name",
-      accessor: "designation",
+      accessor: "designationName",
       type: "text",
     },
     {
@@ -81,7 +97,7 @@ const DesignationListView = ({ onAddNew, onEdit,onBack }) => {
     },
   ];
 
-  const searchFields = ["designationCode", "designation", "code"];
+  const searchFields = ["designationCode", "designationName"];
 
   const filterOptions = [
     {

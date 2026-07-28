@@ -6,31 +6,32 @@ const RolesAndResponsibilitySetup = () => {
     const [activeTab, setActiveTab] = useState("roles");
 
     return (
-        <div className="max-w-7xl mx-auto min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
-            <h1 className="text-2xl font-semibold text-gray-900 dark:text-white mb-4">
-                Roles & Responsibilities
-            </h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-                Manage roles and their associated responsibilities
-            </p>
+        <div className="p-2 max-w-7xl">
+            {/* Header */}
+            <div className="flex items-center gap-2 mb-3">
+                <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+                    Roles & Responsibilities
+                </h2>
+            </div>
 
-            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
+            {/* Card */}
+            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-3">
                 {/* Tabs */}
-                <div className="flex gap-4 border-b border-gray-200 dark:border-gray-700 mb-6">
+                <div className="flex items-center border-b border-gray-200 dark:border-gray-700">
                     <button
                         onClick={() => setActiveTab("roles")}
-                        className={`px-4 py-2 text-sm font-medium transition-colors relative ${activeTab === "roles"
-                                ? "text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400"
-                                : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                        className={`px-4 py-1.5 text-xs font-semibold rounded-t transition-colors ${activeTab === "roles"
+                                ? "bg-blue-600 text-white"
+                                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                             }`}
                     >
                         Roles
                     </button>
                     <button
                         onClick={() => setActiveTab("responsibilities")}
-                        className={`px-4 py-2 text-sm font-medium transition-colors relative ${activeTab === "responsibilities"
-                                ? "text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400"
-                                : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                        className={`px-4 py-1.5 text-xs font-semibold rounded-t transition-colors ${activeTab === "responsibilities"
+                                ? "bg-blue-600 text-white"
+                                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                             }`}
                     >
                         Responsibilities
@@ -38,7 +39,7 @@ const RolesAndResponsibilitySetup = () => {
                 </div>
 
                 {/* Tab Content */}
-                <div>
+                <div className="mt-2">
                     {activeTab === "roles" && <Roles />}
                     {activeTab === "responsibilities" && <Responsibilities />}
                 </div>

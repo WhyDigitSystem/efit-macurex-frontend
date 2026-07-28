@@ -286,6 +286,24 @@ const SECTIONS = [
         path: "/designation",
         screenCode: "DESIGNATION",
       },
+      {
+        name: "User Creation",
+        icon: BadgeCheck,
+        path: "/userCreation",
+        screenCode: "UC",
+      },
+      {
+        name: "Screens",
+        icon: BadgeCheck,
+        path: "/screens",
+        screenCode: "SCREENS",
+      },
+      {
+        name: "Roles",
+        icon: BadgeCheck,
+        path: "/roles",
+        screenCode: "ROLES",
+      },
     ],
   },
 ];
