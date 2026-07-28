@@ -1,14 +1,14 @@
 import apiClient from "./apiClient";
 
 const listOfValuesAPI = {
-  getByOrgId: async (orgId, branchId) => {
+  getListValuesGroup: async (listDescription, orgId) => {
     try {
-      const res = await apiClient.get("/api/commonmaster/getListOfValuesByOrgId", {
-        params: { orgId, branchId },
+      const res = await apiClient.get("/api/commonmaster/getListValuesGroup", {
+        params: { listDescription, orgId },
       });
-      return res?.paramObjectsMap?.listOfValues || [];
+      return res?.paramObjectsMap?.listValues || [];
     } catch (error) {
-      console.error("Error fetching list of values:", error);
+      console.error("Error fetching list values group:", error);
       throw error;
     }
   },

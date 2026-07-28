@@ -34,8 +34,6 @@ const HsnSacMasterForm = ({ data, onBack }) => {
   const { addToast } = useToast();
   const orgId = Number(localStorage.getItem("orgId")) || 0;
   const branch = Number(localStorage.getItem("branch")) || Number(localStorage.getItem("branchId")) || 1000000001;
-  const globalParam = JSON.parse(localStorage.getItem("globalParams") || "{}");
-  const branchCode = globalParam?.branchcode || localStorage.getItem("branchcode") || "";
 
   const [categoryOptions, setCategoryOptions] = useState([]);
 
@@ -53,25 +51,19 @@ const HsnSacMasterForm = ({ data, onBack }) => {
   useEffect(() => {
     const loadCategories = async () => {
       try {
-        console.log("Loading categories - orgId:", orgId, "branch:", branch);
-        const list = await listOfValuesAPI.getByOrgId(orgId, branch);
-        console.log("ListOfValues response:", list);
-        const filtered = list.filter(
-          (item) => item.listCode === "GOODS" || item.listCode === "SERVICE"
-        );
-        console.log("Filtered categories:", filtered);
-        setCategoryOptions(filtered);
+        const list = await listOfValuesAPI.getListValuesGroup("HSN/SAC", orgId);
+        setCategoryOptions(list);
       } catch (error) {
         console.error("Failed to load categories:", error);
       }
     };
     loadCategories();
-  }, [orgId, branch]);
+  }, [orgId]);
 
   useEffect(() => {
     if (data?.category != null) {
-      const catId = typeof data.category === "object" ? data.category.id : Number(data.category);
-      setForm((prev) => ({ ...prev, category: catId }));
+      const cat = typeof data.category === "object" ? data.category.valuesDescription : String(data.category);
+      setForm((prev) => ({ ...prev, category: cat }));
     }
   }, [data]);
 
@@ -99,7 +91,7 @@ const HsnSacMasterForm = ({ data, onBack }) => {
       ...(form.id && { id: form.id }),
       orgId,
       branch,
-      category: Number(form.category),
+      category: form.category,
       hsn: form.hsn.trim(),
       description: form.description.trim(),
       active: form.active,
@@ -145,9 +137,9 @@ const HsnSacMasterForm = ({ data, onBack }) => {
               className={controlClasses + (fieldErrors.category ? " border-red-500" : "")}
             >
               <option value="">Select Category</option>
-              {categoryOptions.map((opt) => (
-                <option key={opt.id} value={opt.id}>
-                  {opt.listCode === "GOODS" ? "Goods" : "Services"}
+              {categoryOptions.map((opt, idx) => (
+                <option key={idx} value={opt.valuesDescription}>
+                  {opt.valuesDescription}
                 </option>
               ))}
             </select>
