@@ -1,9 +1,20 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import hsnSacAPI from "../../../api/hsnSacAPI";
-import branchAPI from "../../../api/branchAPI";
+import { useToast } from "../../Toast/ToastContext";
 
 const CATEGORY_MAP = { 1: "Goods", 2: "Services" };
+
+const resolveCategory = (value) => {
+  if (value == null) return "-";
+  if (typeof value === "object") {
+    if (value.listCode === "GOODS") return "Goods";
+    if (value.listCode === "SERVICE") return "Services";
+    return value.listDescription || value.listCode || String(value.id);
+  }
+  if (typeof value === "number") return CATEGORY_MAP[value] || String(value);
+  return String(value);
+};
 
 const normalizeActive = (value) => {
   if (value === true || value === "Yes" || value === "Active") return true;
@@ -11,21 +22,17 @@ const normalizeActive = (value) => {
 };
 
 const HsnSacMasterList = ({ onAddNew, onEdit, onBack }) => {
+  const { addToast } = useToast();
   const [hsnSacData, setHsnSacData] = useState([]);
   const [loading, setLoading] = useState(false);
   const orgId = Number(localStorage.getItem("orgId")) || 0;
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const branchCode = localStorage.getItem("branchcode");
-      let branchId = 0;
-
-      if (branchCode && orgId) {
-        const branches = await branchAPI.getBranchByOrgId(orgId);
-        const match = branches.find((b) => b.branchCode === branchCode);
-        if (match) branchId = match.id;
-      }
+      const branchVal = localStorage.getItem("branch");
+      const branchId = Number(branchVal) || 1000000001;
+      console.log("HSN/SAC List - orgId:", orgId, "branch:", branchVal, "branchId:", branchId);
 
       const data = await hsnSacAPI.getAll(orgId, branchId);
       data.sort((a, b) => (b.id || 0) - (a.id || 0));
@@ -33,14 +40,15 @@ const HsnSacMasterList = ({ onAddNew, onEdit, onBack }) => {
     } catch (error) {
       console.error("Failed to load HSN/SAC data:", error);
       setHsnSacData([]);
+      addToast("Failed to load HSN/SAC data.", "error");
     } finally {
       setLoading(false);
     }
-  };
+  }, [orgId, addToast]);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   const handleEdit = (item) => {
     onEdit(item);
@@ -52,7 +60,7 @@ const HsnSacMasterList = ({ onAddNew, onEdit, onBack }) => {
       label: "Category",
       accessor: "category",
       render: (value) => {
-        const label = CATEGORY_MAP[value] ?? (value != null ? value : "-");
+        const label = resolveCategory(value);
         return <span className="text-xs text-gray-900 dark:text-white">{label}</span>;
       },
       noWrap: true,

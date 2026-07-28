@@ -1,6 +1,7 @@
 import { ArrowLeft, Save, X } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import hsnSacAPI from "../../../api/hsnSacAPI";
+import listOfValuesAPI from "../../../api/listOfValuesAPI";
 import { useToast } from "../../../components/Toast/ToastContext";
 
 const controlClasses =
@@ -14,11 +15,6 @@ const controlClasses =
 const labelClasses = "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
 const fieldGrid = "grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-x-3 gap-y-2 items-start";
-
-const CATEGORY_OPTIONS = [
-  { value: 1, label: "Goods" },
-  { value: 2, label: "Services" },
-];
 
 const ToggleButton = ({ value, onChange }) => (
   <button
@@ -37,10 +33,14 @@ const ToggleButton = ({ value, onChange }) => (
 const HsnSacMasterForm = ({ data, onBack }) => {
   const { addToast } = useToast();
   const orgId = Number(localStorage.getItem("orgId")) || 0;
-  const branch = Number(localStorage.getItem("branch")) || 0;
+  const branch = Number(localStorage.getItem("branch")) || Number(localStorage.getItem("branchId")) || 1000000001;
+  const globalParam = JSON.parse(localStorage.getItem("globalParams") || "{}");
+  const branchCode = globalParam?.branchcode || localStorage.getItem("branchcode") || "";
+
+  const [categoryOptions, setCategoryOptions] = useState([]);
 
   const [form, setForm] = useState({
-    category: data?.category != null ? Number(data.category) : "",
+    category: "",
     hsn: data?.hsn || "",
     description: data?.description || "",
     active: data?.active ?? true,
@@ -49,6 +49,31 @@ const HsnSacMasterForm = ({ data, onBack }) => {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
+
+  useEffect(() => {
+    const loadCategories = async () => {
+      try {
+        console.log("Loading categories - orgId:", orgId, "branch:", branch);
+        const list = await listOfValuesAPI.getByOrgId(orgId, branch);
+        console.log("ListOfValues response:", list);
+        const filtered = list.filter(
+          (item) => item.listCode === "GOODS" || item.listCode === "SERVICE"
+        );
+        console.log("Filtered categories:", filtered);
+        setCategoryOptions(filtered);
+      } catch (error) {
+        console.error("Failed to load categories:", error);
+      }
+    };
+    loadCategories();
+  }, [orgId, branch]);
+
+  useEffect(() => {
+    if (data?.category != null) {
+      const catId = typeof data.category === "object" ? data.category.id : Number(data.category);
+      setForm((prev) => ({ ...prev, category: catId }));
+    }
+  }, [data]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -120,9 +145,9 @@ const HsnSacMasterForm = ({ data, onBack }) => {
               className={controlClasses + (fieldErrors.category ? " border-red-500" : "")}
             >
               <option value="">Select Category</option>
-              {CATEGORY_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
+              {categoryOptions.map((opt) => (
+                <option key={opt.id} value={opt.id}>
+                  {opt.listCode === "GOODS" ? "Goods" : "Services"}
                 </option>
               ))}
             </select>
