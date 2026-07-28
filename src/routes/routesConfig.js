@@ -58,6 +58,10 @@ import SalesContractAmendment from "../components/sales/SalesContractAmendment/S
 import SalesOrderAmendment from "../components/sales/SalesOrderAmendment/SalesOrderAmendmentMaster";
 import inventoryRoutes from "./inventoryRoutes";
 import UserCreation from "../components/masters/userCreation/UserCreationMaster";
+// sales
+import Enquiry from '../components/sales/enquiry/Enquiry'
+import Quotation from '../components/sales/quotation/Quotation'
+import SalesDelivery from '../components/sales/salesdeliveryschedule/SalesDelivery'
 
 export const routesConfig = [
   { path: "/", label: "Dashboard", element: <Dashboard /> },
@@ -248,6 +252,25 @@ export const routesConfig = [
     label: "My Profile",
     keywords: ["profile", "account"],
     element: <Profile />,
+  },
+  // sales module
+   {
+    path: "/sales/enquiry",
+    label: "Enquiry",
+    keywords: ["enquiry"],
+    element: <Enquiry />,
+  },
+   {
+    path: "/sales/quotation",
+    label: "Quotation",
+    keywords: ["quotation"],
+    element: <Quotation />,
+  },
+    {
+    path: "/sales/salesdelivery",
+    label: "Sales Delivery Schedule",
+    keywords: ["salesdelivery"],
+    element: <SalesDelivery />,
   },
   ...purchaseRoutes,
   ...inventoryRoutes,

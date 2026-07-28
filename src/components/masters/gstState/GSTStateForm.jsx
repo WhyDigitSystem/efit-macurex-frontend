@@ -1,7 +1,8 @@
 import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useForm, Controller, useFieldArray } from "react-hook-form";
-
+import gstStateApi from "../../../api/gstStateApi";
+import { useToast } from "../../Toast/ToastContext";
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
   "bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 " +
@@ -13,16 +14,7 @@ const controlClasses =
 const labelClasses =
   "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
-const getDefaultValues = () => ({
-  // Required fields
-  stateCode: "",
-  stateName: "",
-  GSTStateId: "",
-});
 
-// ============================================================================
-// HELPER COMPONENTS
-// ============================================================================
 const SelectField = ({ control, name, label, options, required, errors }) => (
   <div>
     <label className={labelClasses}>
@@ -104,24 +96,81 @@ const ToggleButton = ({ control, name }) => (
 );
 
 const GSTStateForm = ({ data, onBack }) => {
+   const { addToast } = useToast();
   const [orgId] = useState(localStorage.getItem("orgId"));
+  const branch = "1000000001"
+  const [userName] = useState(localStorage.getItem("userName"));
+  const [loading, setLoading] = useState(false);
 
+  
+const getDefaultValues = () => {
+   if (data && data.id) {
+   const detailsArray = data.listOfValuesDetailsVO || data.details || [];
+    return {
+        stateCode: data.listCode || "",
+        stateName: data.listDescription || "",
+        GSTStateId: data.GSTStateId || ''
+      };
+   }
+   return {
+      stateCode: "",
+      stateName: "",
+      GSTStateId: '',
+    };
+};
   const {
     control,
     handleSubmit,
+    reset,
     formState: { errors, isSubmitting },
   } = useForm({
     mode: "onTouched",
     defaultValues: getDefaultValues(),
   });
 
+  const transformFormData = (formData) => {
+    const payload = {
+      branch: Number(branch),
+      createdBy: userName,      
+      stateCode: formData.stateCode,
+      stateName: formData.stateName,
+      gstStateId: formData.GSTStateId, 
+      orgId: Number(orgId),
+    };
+
+    // If editing, include the ID
+    if (data && data.id) {
+      payload.id = data.id;
+    }
+
+    return payload;
+  };
+
   const onSubmit = async (formData) => {
     try {
-      console.log("Form Data:", formData, "Org Id:", orgId);
-      // API call here
+      setLoading(true);
+      const apiPayload = transformFormData(formData);
+      console.log("API Payload:", apiPayload);
+      const res = await gstStateApi.createUpdateGstState(apiPayload);
+      if (res.status === true) {
+      addToast(
+        data && data.id 
+          ? "Gst State updated successfully" 
+          : "Gst State created successfully",
+        "success"
+      );
+       reset(getDefaultValues());
+       onBack(); 
+    }
+    else {
+      addToast("Something went wrong", "error");
+    }
     } catch (error) {
       console.error(error);
-    }
+      addToast("Error saving Gst State", "error");
+    } finally {
+    setLoading(false);
+  }
   };
 
   return (

@@ -30,13 +30,13 @@ const SECTIONS = [
       {
         name: "Enquiry",
         icon: HelpCircle,
-        path: "/enquiry",
+        path: "/sales/enquiry",
         screenCode: "ENQUIRY",
       },
       {
         name: "Quotation",
         icon: FileText,
-        path: "/quotation",
+        path: "/sales/quotation",
         screenCode: "QUOTATION",
       },
       {
@@ -66,7 +66,7 @@ const SECTIONS = [
       {
         name: "Sales Delivery Schedule",
         icon: CalendarClock,
-        path: "/salesdeliveryschedule",
+        path: "/sales/salesdelivery",
         screenCode: "SALES_DELIVERY_SCHEDULE",
       },
       {
