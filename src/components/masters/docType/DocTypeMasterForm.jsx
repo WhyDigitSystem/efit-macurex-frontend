@@ -23,24 +23,35 @@ const DocTypeMasterForm = ({ onBack, onSave, editData }) => {
   const [branchLoading, setBranchLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
 
+  // editData is expected to come back from the GET endpoint, where `branch`
+  // is a nested object ({ id, branchName, branchCode }), unlike the flat
+  // numeric `branch` id the create/update endpoint expects on save.
   const [form, setForm] = useState({
-    id: editData?.id || 0,
-    docTypeName: editData?.docTypeName || "",
-    docTypeCode: editData?.docTypeCode || "",
+    code: editData?.code || "",
+    docCode: editData?.docCode || "",
+    name: editData?.name || "",
+    des: editData?.des || "",
     description: editData?.description || "",
-    branch: editData?.branch || "",
-    branchCode: editData?.branchCode || "",
+    financialYear: editData?.financialYear || "",
+    branch: editData?.branch?.id || editData?.branch || "",
     active: editData?.active ?? true,
     cancelRemarks: editData?.cancelRemarks || "",
     orgId: ORG_ID,
     createdBy: localStorage.getItem("userName") || "SYSTEM",
   });
 
-  // Field labels for toast messages
+  // Kept only for display in the branch dropdown label — not sent to the backend.
+  const [branchDisplay, setBranchDisplay] = useState({
+    branchName: editData?.branch?.branchName || "",
+    branchCode: editData?.branch?.branchCode || "",
+  });
+
   const fieldLabels = {
-    docTypeName: "Doc Type Name",
-    docTypeCode: "Doc Type Code",
+    name: "Doc Type Name",
+    code: "Doc Type Code",
+
     branch: "Branch",
+    financialYear: "Financial Year",
   };
 
   useEffect(() => {
@@ -79,36 +90,62 @@ const DocTypeMasterForm = ({ onBack, onSave, editData }) => {
     const nameRegex = /^[A-Za-z0-9 .,&'-]*$/;
 
     switch (name) {
-      case "docTypeName":
+      case "name":
         if (!nameRegex.test(value)) {
           setFieldErrors((prev) => ({
             ...prev,
-            docTypeName:
-              "Special characters other than . , & ' - are not allowed",
+            name: "Special characters other than . , & ' - are not allowed",
           }));
           return;
         }
         if (value.length > 100) {
           setFieldErrors((prev) => ({
             ...prev,
-            docTypeName: "Doc Type Name must be maximum 100 characters",
+            name: "Doc Type Name must be maximum 100 characters",
           }));
           return;
         }
         break;
 
-      case "docTypeCode":
+      case "code":
         if (!alphanumericRegex.test(value)) {
           setFieldErrors((prev) => ({
             ...prev,
-            docTypeCode: "Only alphanumeric characters are allowed",
+            code: "Only alphanumeric characters are allowed",
           }));
           return;
         }
         if (value.length > 10) {
           setFieldErrors((prev) => ({
             ...prev,
-            docTypeCode: "Doc Type Code must be maximum 10 characters",
+            code: "Doc Type Code must be maximum 10 characters",
+          }));
+          return;
+        }
+        break;
+
+      case "docCode":
+        if (!alphanumericRegex.test(value)) {
+          setFieldErrors((prev) => ({
+            ...prev,
+            docCode: "Only alphanumeric characters are allowed",
+          }));
+          return;
+        }
+        if (value.length > 10) {
+          setFieldErrors((prev) => ({
+            ...prev,
+            docCode: "Doc Code must be maximum 10 characters",
+          }));
+          return;
+        }
+        break;
+
+      case "des":
+        if (value.length > 250) {
+          setFieldErrors((prev) => ({
+            ...prev,
+            des: "This field must be maximum 250 characters",
           }));
           return;
         }
@@ -119,6 +156,16 @@ const DocTypeMasterForm = ({ onBack, onSave, editData }) => {
           setFieldErrors((prev) => ({
             ...prev,
             description: "Description must be maximum 250 characters",
+          }));
+          return;
+        }
+        break;
+
+      case "financialYear":
+        if (value.length > 20) {
+          setFieldErrors((prev) => ({
+            ...prev,
+            financialYear: "Financial Year looks too long",
           }));
           return;
         }
@@ -138,14 +185,15 @@ const DocTypeMasterForm = ({ onBack, onSave, editData }) => {
         break;
     }
 
-    const updatedValue = name === "docTypeCode" ? value.toUpperCase() : value;
+    const updatedValue =
+      name === "code" || name === "docCode" ? value.toUpperCase() : value;
 
     setForm((prev) => ({ ...prev, [name]: updatedValue }));
   };
 
   const handleBranchChange = (e) => {
-    const branchCode = e.target.value;
-    const selected = branches.find((b) => b.branchCode === branchCode);
+    const branchId = e.target.value;
+    const selected = branches.find((b) => String(b.id) === branchId);
 
     if (fieldErrors.branch) {
       setFieldErrors((prev) => ({ ...prev, branch: "" }));
@@ -153,19 +201,21 @@ const DocTypeMasterForm = ({ onBack, onSave, editData }) => {
 
     setForm((prev) => ({
       ...prev,
-      branchCode,
-      branch: selected?.branchName || "",
+      branch: branchId ? Number(branchId) : "",
     }));
+
+    setBranchDisplay({
+      branchName: selected?.branchName || "",
+      branchCode: selected?.branchCode || "",
+    });
   };
 
   const handleSave = async () => {
     const errors = {};
 
-    if (!form.docTypeName.trim())
-      errors.docTypeName = "Doc Type Name is required";
-    if (!form.docTypeCode.trim())
-      errors.docTypeCode = "Doc Type Code is required";
-    if (!form.branchCode) errors.branch = "Branch is required";
+    if (!form.name.trim()) errors.name = "Doc Type Name is required";
+    if (!form.code.trim()) errors.code = "Doc Type Code is required";
+    if (!form.branch) errors.branch = "Branch is required";
 
     setFieldErrors(errors);
 
@@ -181,11 +231,13 @@ const DocTypeMasterForm = ({ onBack, onSave, editData }) => {
     setIsSubmitting(true);
 
     const payload = {
-      docTypeName: form.docTypeName,
-      docTypeCode: form.docTypeCode,
+      code: form.code,
+      docCode: form.docCode,
+      name: form.name,
+      des: form.des,
       description: form.description,
+      financialYear: form.financialYear,
       branch: form.branch,
-      branchCode: form.branchCode,
       active: Boolean(form.active),
       cancelRemarks: form.cancelRemarks,
       createdBy: form.createdBy,
@@ -199,7 +251,7 @@ const DocTypeMasterForm = ({ onBack, onSave, editData }) => {
     console.log("📤 Saving Doc Type Payload:", payload);
 
     try {
-      const response = await docTypeAPI.updateCreateDocType(payload);
+      const response = await docTypeAPI.updateCreateDocumentType(payload);
       console.log("📥 Response:", response);
 
       const status = response?.status === true || response?.statusFlag === "Ok";
@@ -257,87 +309,97 @@ const DocTypeMasterForm = ({ onBack, onSave, editData }) => {
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
         {/* MAIN FORM GRID */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {/* Doc Type Code */}
+          {/* Code */}
           <div>
             <label className={labelClasses}>
-              Screen Code <span className="text-red-500">*</span>
+              Code <span className="text-red-500">*</span>
             </label>
 
             <input
-              name="docTypeCode"
-              value={form.docTypeCode}
+              name="code"
+              value={form.code}
               onChange={handleChange}
               className={`${controlClasses} ${
-                fieldErrors.docTypeCode ? "border-red-500" : ""
+                fieldErrors.code ? "border-red-500" : ""
               }`}
             />
 
-            {fieldErrors.docTypeCode && (
+            {fieldErrors.code && (
               <p className="text-red-500 text-[11px] mt-1">
-                {fieldErrors.docTypeCode}
-              </p>
-            )}
-          </div>
-          {/* Doc Type Name */}
-          <div>
-            <label className={labelClasses}>
-              Screen Name <span className="text-red-500">*</span>
-            </label>
-
-            <input
-              name="docTypeName"
-              value={form.docTypeName}
-              onChange={handleChange}
-              className={`${controlClasses} ${
-                fieldErrors.docTypeName ? "border-red-500" : ""
-              }`}
-            />
-
-            {fieldErrors.docTypeName && (
-              <p className="text-red-500 text-[11px] mt-1">
-                {fieldErrors.docTypeName}
+                {fieldErrors.code}
               </p>
             )}
           </div>
 
-          {/* Description */}
-          <div className="md:col-span-2 lg:col-span-2">
-            <label className={labelClasses}>Description</label>
+          {/* Name */}
+          <div>
+            <label className={labelClasses}>
+              Name <span className="text-red-500">*</span>
+            </label>
 
             <input
-              name="description"
-              value={form.description}
+              name="name"
+              value={form.name}
               onChange={handleChange}
               className={`${controlClasses} ${
-                fieldErrors.description ? "border-red-500" : ""
+                fieldErrors.name ? "border-red-500" : ""
               }`}
             />
 
-            {fieldErrors.description && (
+            {fieldErrors.name && (
               <p className="text-red-500 text-[11px] mt-1">
-                {fieldErrors.description}
+                {fieldErrors.name}
               </p>
             )}
           </div>
 
-          {/* Doc Type Code */}
+          {/* Financial Year */}
           <div>
-            <label className={labelClasses}>
-              Doc Code <span className="text-red-500">*</span>
-            </label>
+            <label className={labelClasses}>Financial Year</label>
 
             <input
-              name="docTypeCode"
-              value={form.docTypeCode}
+              name="financialYear"
+              placeholder="e.g. 2026-2027"
+              value={form.financialYear}
               onChange={handleChange}
               className={`${controlClasses} ${
-                fieldErrors.docTypeCode ? "border-red-500" : ""
+                fieldErrors.financialYear ? "border-red-500" : ""
               }`}
             />
 
-            {fieldErrors.docTypeCode && (
+            {fieldErrors.financialYear && (
               <p className="text-red-500 text-[11px] mt-1">
-                {fieldErrors.docTypeCode}
+                {fieldErrors.financialYear}
+              </p>
+            )}
+          </div>
+
+          {/* Branch */}
+          <div>
+            <label className={labelClasses}>
+              Branch <span className="text-red-500">*</span>
+            </label>
+
+            <select
+              name="branch"
+              value={form.branch}
+              onChange={handleBranchChange}
+              disabled={branchLoading}
+              className={`${controlClasses} ${
+                fieldErrors.branch ? "border-red-500" : ""
+              }`}
+            >
+              <option value="">Select Branch</option>
+              {branches.map((branch) => (
+                <option key={branch.id} value={branch.id}>
+                  {branch.branchName} ({branch.branchCode})
+                </option>
+              ))}
+            </select>
+
+            {fieldErrors.branch && (
+              <p className="text-red-500 text-[11px] mt-1">
+                {fieldErrors.branch}
               </p>
             )}
           </div>
@@ -364,6 +426,26 @@ const DocTypeMasterForm = ({ onBack, onSave, editData }) => {
                 }`}
               />
             </button>
+          </div>
+
+          {/* description */}
+          <div className="md:col-span-2 lg:col-span-3">
+            <label className={labelClasses}>Description</label>
+
+            <input
+              name="description"
+              value={form.description}
+              onChange={handleChange}
+              className={`${controlClasses} ${
+                fieldErrors.description ? "border-red-500" : ""
+              }`}
+            />
+
+            {fieldErrors.description && (
+              <p className="text-red-500 text-[11px] mt-1">
+                {fieldErrors.description}
+              </p>
+            )}
           </div>
 
           {/* Cancel Remarks - only relevant when marking inactive */}

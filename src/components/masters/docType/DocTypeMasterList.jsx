@@ -1,11 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
-import docTypeAPI from "../../../api/docTypeAPI";
+import documentTypeAPI from "../../../api/docTypeAPI";
 import branchAPI from "../../../api/branchAPI";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import { toast } from "../../../utils/toast";
 
-const DocTypeMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
-  const [docTypeData, setDocTypeData] = useState([]);
+const DocumentTypeMasterList = ({
+  onAddNew,
+  onEdit,
+  onBack,
+  refreshTrigger,
+}) => {
+  const [documentTypeData, setDocumentTypeData] = useState([]);
   const [branches, setBranches] = useState([]);
   const [selectedBranch, setSelectedBranch] = useState("");
 
@@ -20,7 +25,6 @@ const DocTypeMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
       setBranchLoading(true);
 
       const response = await branchAPI.getBranchByOrgId(ORG_ID);
-
       setBranches(response || []);
     } catch (error) {
       console.error("Failed to load branches:", error);
@@ -30,17 +34,17 @@ const DocTypeMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     }
   }, [ORG_ID]);
 
-  // Load doc types by branch
-  const loadDocTypes = useCallback(async () => {
+  // Load document types
+  const loadDocumentTypes = useCallback(async () => {
     if (!selectedBranch) {
-      setDocTypeData([]);
+      setDocumentTypeData([]);
       return;
     }
 
     try {
       setLoading(true);
 
-      const response = await docTypeAPI.getDocTypeByOrgId(
+      const response = await documentTypeAPI.getDocumentTypeByOrgId(
         selectedBranch,
         ORG_ID,
       );
@@ -49,11 +53,11 @@ const DocTypeMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
         (a, b) => (b.id || 0) - (a.id || 0),
       );
 
-      setDocTypeData(sortedData);
+      setDocumentTypeData(sortedData);
     } catch (error) {
-      console.error("Failed to load doc types:", error);
-      setDocTypeData([]);
-      toast.error("Failed to fetch doc types");
+      console.error("Failed to load document types:", error);
+      setDocumentTypeData([]);
+      toast.error("Failed to fetch document types");
     } finally {
       setLoading(false);
     }
@@ -64,20 +68,26 @@ const DocTypeMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   }, [loadBranches]);
 
   useEffect(() => {
-    loadDocTypes();
-  }, [loadDocTypes, refreshTrigger]);
+    loadDocumentTypes();
+  }, [loadDocumentTypes, refreshTrigger]);
 
   const columns = [
     {
-      key: "docTypeName",
-      label: "Doc Type Name",
-      accessor: "docTypeName",
+      key: "code",
+      label: "Code",
+      accessor: "code",
       type: "text",
     },
     {
-      key: "docTypeCode",
-      label: "Doc Type Code",
-      accessor: "docTypeCode",
+      key: "name",
+      label: "Name",
+      accessor: "name",
+      type: "text",
+    },
+    {
+      key: "docCode",
+      label: "Doc Code",
+      accessor: "docCode",
       type: "text",
     },
     {
@@ -87,15 +97,21 @@ const DocTypeMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
       type: "text",
     },
     {
+      key: "financialYear",
+      label: "Financial Year",
+      accessor: "financialYear",
+      type: "text",
+    },
+    {
       key: "branch",
       label: "Branch",
-      accessor: "branch",
+      accessor: (row) => row.branch?.branchName || "-",
       type: "text",
     },
     {
       key: "branchCode",
       label: "Branch Code",
-      accessor: "branchCode",
+      accessor: (row) => row.branch?.branchCode || "-",
       type: "text",
     },
     {
@@ -113,10 +129,8 @@ const DocTypeMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     },
   ];
 
-  const searchFields = ["docTypeName", "docTypeCode", "description", "branch"];
+  const searchFields = ["code", "name", "docCode", "description"];
 
-  // Branch dropdown, rendered inside CommonListViewTable's header row
-  // (next to the search box) via the customHeaderActions slot.
   const branchDropdown = (
     <select
       value={selectedBranch}
@@ -133,19 +147,10 @@ const DocTypeMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
       "
       disabled={branchLoading}
     >
-      <option
-        value=""
-        className="bg-white text-gray-900 dark:bg-gray-800 dark:text-gray-100"
-      >
-        Select Branch
-      </option>
+      <option value="">Select Branch</option>
 
       {branches.map((branch) => (
-        <option
-          key={branch.id}
-          value={branch.branchCode}
-          className="bg-white text-gray-900 dark:bg-gray-800 dark:text-gray-100"
-        >
+        <option key={branch.id} value={branch.id}>
           {branch.branchName} ({branch.branchCode})
         </option>
       ))}
@@ -155,8 +160,8 @@ const DocTypeMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   return (
     <div className="h-full flex flex-col">
       <CommonListViewTable
-        title="Document Type"
-        data={docTypeData}
+        title="Document Type Master"
+        data={documentTypeData}
         loading={loading}
         columns={columns}
         searchFields={searchFields}
@@ -169,18 +174,18 @@ const DocTypeMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
         defaultItemsPerPage={10}
         emptyMessage={
           selectedBranch
-            ? "No Doc Types found"
-            : "Select branch to load doc types"
+            ? "No Document Types found"
+            : "Select a branch to load document types"
         }
-        loadingMessage="Loading Doc Types..."
+        loadingMessage="Loading Document Types..."
         enableRefresh={true}
-        onRefresh={loadDocTypes}
+        onRefresh={loadDocumentTypes}
         enableExport={true}
-        exportFileName="DocTypes"
+        exportFileName="DocumentTypeMaster"
         customHeaderActions={branchDropdown}
       />
     </div>
   );
 };
 
-export default DocTypeMasterList;
+export default DocumentTypeMasterList;

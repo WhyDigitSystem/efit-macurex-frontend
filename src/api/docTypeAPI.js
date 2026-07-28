@@ -1,39 +1,39 @@
 import apiClient from "./apiClient";
 
 export const docTypeAPI = {
-  getDocTypeById: async (id) => {
+  getDocumentTypeById: async (id) => {
     try {
       const res = await apiClient.get(
-        `/api/commonmaster/getDocTypeById?id=${id}`,
+        `/api/commonmaster/getDocumentTypeMasterById?id=${id}`,
       );
-      return res?.paramObjectsMap?.docTypeVO || null;
+      return res?.paramObjectsMap?.documentTypeMasterVO || null;
     } catch (error) {
-      console.error("Error fetching doc type by ID:", error);
+      console.error("Error fetching document type by ID:", error);
       throw error;
     }
   },
 
-  getDocTypeByOrgId: async (branchCode, orgId) => {
+  getDocumentTypeByOrgId: async (branch, orgId) => {
     try {
       const res = await apiClient.get(
-        `/api/commonmaster/getDocTypeByOrgId?branchCode=${branchCode}&orgId=${orgId}`,
+        `/api/commonmaster/getDocumentTypeMasterByOrgId?branch=${branch}&orgId=${orgId}`,
       );
-      return res?.paramObjectsMap?.docTypeList || [];
+      return res?.paramObjectsMap?.documentTypeMasterList || [];
     } catch (error) {
-      console.error("Error fetching doc type list:", error);
+      console.error("Error fetching document type list:", error);
       throw error;
     }
   },
 
-  updateCreateDocType: async (docTypeMasterDTO) => {
+  updateCreateDocumentType: async (documentTypeMasterDTO) => {
     try {
       const res = await apiClient.put(
-        "/api/commonmaster/updateCreateDocTypeMaster",
-        docTypeMasterDTO,
+        "/api/commonmaster/createUpdateDocumentTypeMaster",
+        documentTypeMasterDTO,
       );
       return res;
     } catch (error) {
-      console.error("Error creating/updating doc type:", error);
+      console.error("Error creating/updating document type:", error);
       throw error;
     }
   },
