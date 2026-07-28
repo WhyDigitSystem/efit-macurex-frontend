@@ -43,6 +43,7 @@ import TaxRateMaster from "../components/masters/taxRate/TaxRateMaster";
 import TaxDefinationMaster from "../components/masters/taxDefination/TaxDefinationMaster";
 import SalesList from "../components/sales/SalesList";
 import PurchaseList from "../components/purchase/purchaseList";
+import ItemGradeMaster from "../components/masters/itemGrade/ItemGradeMaster";
 import InventoryList from "../components/inventory/InventoryList";
 import SubContractList from "../components/subContract/SubContractList";
 import PpcList from "../components/PPC/PpcList";
@@ -168,6 +169,12 @@ export const routesConfig = [
     element: <DailyExchangeRateMaster />,
   },
   { path: "/item", label: "Item Master", element: <ItemMaster /> },
+  {
+    path: "/itemgrade",
+    label: "Item Grade Master",
+    keywords: ["grade"],
+    element: <ItemGradeMaster />,
+  },
   { path: "/unit", label: "Unit Master", element: <UnitMaster /> },
   {
     path: "/unitconversion",

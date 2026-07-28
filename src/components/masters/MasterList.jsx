@@ -199,6 +199,12 @@ const SECTIONS = [
         screenCode: "ITEM",
       },
       {
+        name: "Item Grade",
+        icon: BadgeCheck,
+        path: "/itemgrade",
+        screenCode: "ITEM_GRADE",
+      },
+      {
         name: "Unit",
         icon: Scale,
         path: "/unit",
