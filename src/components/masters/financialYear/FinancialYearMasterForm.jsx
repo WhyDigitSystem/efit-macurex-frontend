@@ -1,14 +1,9 @@
 import { ArrowLeft, Save, X } from "lucide-react";
 import { useState } from "react";
-// import { masterAPI } from "../../../api/financialYearAPI";
+import { financialYearAPI } from "../../../api/financialYearAPI";
+import { useToast } from "../../Toast/ToastContext";
 
 const UPPERCASE_FIELDS = ["financialYearCode"];
-
-/* ---------------------------------------------------------------------------
-   ONE shared, compact control style, used for text/date inputs and the
-   checkbox rows alike, so every field in the form has the identical height,
-   border, radius, background and focus ring in both light and dark mode.
---------------------------------------------------------------------------- */
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -21,7 +16,8 @@ const controlClasses =
   "disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed " +
   "[color-scheme:light] dark:[color-scheme:dark]";
 
-const labelClasses = "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
+const labelClasses =
+  "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
 /**
  * Field
@@ -44,7 +40,9 @@ const Field = ({
       <div className={`w-full ${className}`}>
         <label className={`${labelClasses} select-none opacity-0`}>-</label>
 
-        <label className={`${controlClasses} flex items-center gap-1.5 cursor-pointer`}>
+        <label
+          className={`${controlClasses} flex items-center gap-1.5 cursor-pointer`}
+        >
           <input
             type="checkbox"
             name={name}
@@ -73,7 +71,11 @@ const Field = ({
         className={controlClasses}
       />
 
-      {error && <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">{error}</p>}
+      {error && (
+        <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
+          {error}
+        </p>
+      )}
     </div>
   );
 };
@@ -84,21 +86,23 @@ const SectionHeader = ({ children }) => (
   </h3>
 );
 
-const fieldGrid = "grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-x-3 gap-y-2 items-start";
+const fieldGrid =
+  "grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-x-3 gap-y-2 items-start";
 
 /* ---------------------------------------------------------------------------- */
 
 const FinancialYearMasterForm = ({ data, onBack }) => {
   const [orgId] = useState(localStorage.getItem("orgId"));
+  const { addToast } = useToast();
+
+  const [selectedFY] = useState(data?.id || "");
 
   const [form, setForm] = useState({
     financialYearCode: data?.financialYearCode || "",
     financialYear: data?.financialYear || "",
-    fromDate: data?.fromDate || "",
-    toDate: data?.toDate || "",
+    fromDate: data?.startDate || "",
+    toDate: data?.endDate || "",
     isCurrent: data?.isCurrent ?? false,
-
-    id: data?.id || "",
     active: data?.active ?? true,
   });
 
@@ -122,8 +126,8 @@ const FinancialYearMasterForm = ({ data, onBack }) => {
           type === "checkbox"
             ? checked
             : UPPERCASE_FIELDS.includes(name)
-            ? value.toUpperCase()
-            : value,
+              ? value.toUpperCase()
+              : value,
       };
 
       // Auto-fill the "YYYY-YYYY" label whenever fromDate/toDate change
@@ -144,19 +148,18 @@ const FinancialYearMasterForm = ({ data, onBack }) => {
   const validate = () => {
     const errors = {};
 
-    if (!form.financialYearCode.trim())
-      errors.financialYearCode = "FY Code is required";
-
     if (!form.financialYear.trim())
       errors.financialYear = "Financial Year is required";
 
-    if (!form.fromDate)
-      errors.fromDate = "From Date is required";
+    if (!form.fromDate) errors.fromDate = "From Date is required";
 
-    if (!form.toDate)
-      errors.toDate = "To Date is required";
+    if (!form.toDate) errors.toDate = "To Date is required";
 
-    if (form.fromDate && form.toDate && new Date(form.toDate) <= new Date(form.fromDate))
+    if (
+      form.fromDate &&
+      form.toDate &&
+      new Date(form.toDate) <= new Date(form.fromDate)
+    )
       errors.toDate = "To Date must be after From Date";
 
     setFieldErrors(errors);
@@ -169,29 +172,47 @@ const FinancialYearMasterForm = ({ data, onBack }) => {
 
     setIsSubmitting(true);
 
+    const isUpdate = Boolean(selectedFY);
+    const fromYear = form.fromDate ? new Date(form.fromDate).getFullYear() : 0;
+
     const payload = {
-      ...(data?.id && { id: data.id }),
-      orgId,
-      ...form,
-      cancel: false,
-      createdBy: "ITC001",
+      ...(isUpdate ? { id: data.id } : {}),
+      active: form.active,
+      cancelRemarks: "",
+      createdBy: localStorage.getItem("usersId") || "admin",
+      endDate: form.toDate,
+      finYear: new Date(form.fromDate).getFullYear(),
+      orgId: Number(orgId),
+      startDate: form.fromDate,
     };
 
-    console.log(payload);
-
     try {
-      // await masterAPI.saveFinancialYear(payload);
+      const response =
+        await financialYearAPI.createUpdateFinancialYear(payload);
 
-      alert(
-        data
-          ? "Financial Year Updated Successfully!"
-          : "Financial Year Saved Successfully!"
+      if (response?.status) {
+        addToast(
+          response?.paramObjectsMap?.message ||
+            (isUpdate
+              ? "Financial Year updated successfully!"
+              : "Financial Year created successfully!"),
+        );
+        onBack?.();
+      } else {
+        addToast(
+          response?.errors?.[0]?.shortMessage ||
+            response?.errors?.[0]?.longMessage ||
+            response?.message ||
+            "Failed to save Financial Year.",
+        );
+      }
+    } catch (err) {
+      console.error("Save Financial Year Error:", err);
+      addToast(
+        err.response?.data?.message ||
+          err.response?.data?.statusMessage ||
+          "Something went wrong.",
       );
-
-      onBack();
-    } catch (error) {
-      console.error(error);
-      alert("Failed to save Financial Year.");
     } finally {
       setIsSubmitting(false);
     }
@@ -221,21 +242,11 @@ const FinancialYearMasterForm = ({ data, onBack }) => {
 
       {/* Card */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-3">
-
         {/* Financial Year Details */}
         <div>
           <SectionHeader>Financial Year Details</SectionHeader>
 
           <div className={fieldGrid}>
-            <Field
-              label="FY Code"
-              name="financialYearCode"
-              value={form.financialYearCode}
-              onChange={handleChange}
-              error={fieldErrors.financialYearCode}
-              required
-            />
-
             <Field
               label="Financial Year"
               name="financialYear"
@@ -263,14 +274,6 @@ const FinancialYearMasterForm = ({ data, onBack }) => {
               onChange={handleChange}
               error={fieldErrors.toDate}
               required
-            />
-
-            <Field
-              type="checkbox"
-              label="Current FY"
-              name="isCurrent"
-              checked={form.isCurrent}
-              onChange={handleChange}
             />
 
             <Field
