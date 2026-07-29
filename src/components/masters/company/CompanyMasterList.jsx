@@ -89,7 +89,7 @@ const CompanyMasterList = ({ onEdit, onBack }) => {
     setError(null);
 
     try {
-      const companyId = localStorage.getItem("usersId");
+      const companyId = localStorage.getItem("orgId");
 
       if (!companyId) {
         setError("No company ID found for this account.");
