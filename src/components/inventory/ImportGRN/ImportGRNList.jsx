@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
-import importGRNAPI from "../../../api/Inventory/importGRNAPI";
+import apiClient from "../../../api/apiClient";
 import { toast } from "../../../utils/toast";
 
 const normalizeActive = (value) => {
@@ -8,7 +8,7 @@ const normalizeActive = (value) => {
   return false;
 };
 
-const ImportGRNList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
+const ImportGRNList = ({ onAddNew, onEdit, onBack }) => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
   const ORG_ID = Number(localStorage.getItem("orgId")) || 0;
@@ -18,7 +18,8 @@ const ImportGRNList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     if (!ORG_ID) return;
     setLoading(true);
     try {
-      const list = await importGRNAPI.getAll(ORG_ID, BRANCH);
+      const res = await apiClient.get("/api/dev/getGRNMasterByOrgId", { params: { orgId: ORG_ID, branch: BRANCH } });
+      const list = res?.paramObjectsMap?.grnMasterList || [];
       const sorted = (list || []).sort((a, b) => (b.id || 0) - (a.id || 0));
       setData(sorted);
     } catch (error) {
@@ -32,7 +33,7 @@ const ImportGRNList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
 
   useEffect(() => {
     loadData();
-  }, [loadData, refreshTrigger]);
+  }, [loadData]);
 
   const columns = [
     { key: "docId", label: "Doc ID", accessor: "docId", type: "text", noWrap: true },

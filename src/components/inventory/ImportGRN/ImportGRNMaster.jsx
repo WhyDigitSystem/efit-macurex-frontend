@@ -1,43 +1,35 @@
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import ImportGRNList from "./ImportGRNList";
 import ImportGRNForm from "./ImportGRNForm";
 
 const ImportGRNMaster = () => {
   const [screen, setScreen] = useState("list");
   const [editData, setEditData] = useState(null);
-  const [refreshKey, setRefreshKey] = useState(0);
 
-  const handleAdd = () => {
+  const addNew = () => {
     setEditData(null);
     setScreen("form");
   };
 
-  const handleEdit = (row) => {
+  const edit = (row) => {
     setEditData(row);
     setScreen("form");
   };
-
-  const handleBack = useCallback(() => {
-    setRefreshKey((k) => k + 1);
-    setEditData(null);
-    setScreen("list");
-  }, []);
 
   return (
     <>
       {screen === "list" && (
         <ImportGRNList
-          key={refreshKey}
-          onAddNew={handleAdd}
-          onEdit={handleEdit}
+          onAddNew={addNew}
+          onEdit={edit}
           onBack={() => window.history.back()}
-          refreshTrigger={refreshKey}
         />
       )}
+
       {screen === "form" && (
         <ImportGRNForm
           data={editData}
-          onBack={handleBack}
+          onBack={() => setScreen("list")}
         />
       )}
     </>
