@@ -1,4 +1,4 @@
-import { ArrowLeft, Save, X, Plus, Trash2, UploadCloud, Copy } from "lucide-react";
+import { ArrowLeft, Save, X, Plus, Trash2, Copy } from "lucide-react";
 import { useState, useEffect } from "react";
 import dayjs from "dayjs";
 import apiClient from "../../../api/apiClient";
@@ -135,7 +135,9 @@ const DirectPurchaseForm = ({ data, onBack }) => {
     remarks: data?.remarks || "",
   });
 
-  const [attachments, setAttachments] = useState(data?.attachments || []);
+  const [attachments, setAttachments] = useState(
+    data?.attachments?.length ? data.attachments : [{ id: Date.now() + Math.random(), fileName: "", file: null, remarks: "" }]
+  );
 
   useEffect(() => {
     if (form.gstState) {
@@ -244,7 +246,7 @@ const DirectPurchaseForm = ({ data, onBack }) => {
   };
 
   const addAttachment = () => {
-    setAttachments((prev) => [...prev, { id: Date.now() + Math.random(), fileName: "", file: null }]);
+    setAttachments((prev) => [...prev, { id: Date.now() + Math.random(), fileName: "", file: null, remarks: "" }]);
   };
 
   const removeAttachment = (id) => {
@@ -476,44 +478,40 @@ const DirectPurchaseForm = ({ data, onBack }) => {
           <Plus className="h-3 w-3" /> Add Document
         </button>
       </div>
-      {attachments.length > 0 ? (
-        <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
-          <table className="w-full text-xs">
-            <thead className="bg-gray-100 dark:bg-gray-700">
-              <tr>
-                <th className="px-2 py-1.5 text-left font-semibold text-gray-600 dark:text-gray-300">#</th>
-                <th className="px-2 py-1.5 text-left font-semibold text-gray-600 dark:text-gray-300">File</th>
-                <th className="px-2 py-1.5 text-center font-semibold text-gray-600 dark:text-gray-300">Action</th>
+      <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
+        <table className="w-full text-xs">
+          <thead className="bg-gray-100 dark:bg-gray-700">
+            <tr>
+              <th className="p-1 w-8 text-center dark:text-white">#</th>
+              <th className="p-1 text-left dark:text-white">Attachment</th>
+              <th className="p-1 w-20 text-left dark:text-white">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {attachments.map((att, idx) => (
+              <tr key={att.id} className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
+                <td className="p-1 text-center font-medium dark:text-white">{idx + 1}</td>
+                <td className="p-1">
+                  <input type="file"
+                    accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.png,.jpg,.jpeg,.gif,.webp,.bmp,.svg,.zip,.rar,.txt"
+                    className="w-full h-9 text-xs file:mr-3 file:px-3 file:py-1 file:rounded file:border-0 file:bg-blue-600 file:text-white hover:file:bg-blue-700 file:cursor-pointer cursor-pointer bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded px-2"
+                    onChange={(e) => handleAttachmentChange(att.id, "file", e.target.files[0])}
+                  />
+                </td>
+                <td className="p-1 text-center">
+                  <button type="button" onClick={() => removeAttachment(att.id)}
+                    disabled={attachments.length <= 1}
+                    className={`h-5 w-5 rounded text-white flex items-center justify-center ${
+                      attachments.length <= 1 ? "bg-gray-400 cursor-not-allowed" : "bg-red-600 hover:bg-red-700"
+                    }`}>
+                    <Trash2 size={10} />
+                  </button>
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {attachments.map((att, idx) => (
-                <tr key={att.id} className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-                  <td className="px-2 py-1 text-gray-500 dark:text-gray-400">{idx + 1}</td>
-                  <td className="px-2 py-1">
-                    <label className="flex items-center gap-1 px-2 py-1 rounded text-[11px] bg-gray-50 text-gray-600 hover:bg-gray-100 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 cursor-pointer transition-colors">
-                      <UploadCloud className="h-3 w-3" />
-                      {att.file ? att.file.name : "Upload"}
-                      <input type="file" className="hidden" onChange={(e) => handleAttachmentChange(att.id, "file", e.target.files[0])} />
-                    </label>
-                  </td>
-                  <td className="px-2 py-1 text-center">
-                    <button onClick={() => removeAttachment(att.id)}
-                      className="p-0.5 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
-                      <Trash2 className="h-3 w-3" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <div className="text-center py-6 text-xs text-gray-500 dark:text-gray-400">
-          <UploadCloud className="h-6 w-6 mx-auto mb-1 opacity-40" />
-          Click <strong>Add Document</strong> to attach invoice copies
-        </div>
-      )}
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 

@@ -5,6 +5,7 @@ import ReceiptMaster from "../components/inventory/receipt/ReceiptMaster";
 import StockTransferMaster from "../components/inventory/stockTransfer/StockTransferMaster";
 import SubContractingGrnMaster from "../components/inventory/subContractingGrn/SubContractingGrnMaster";
 import DirectPurchaseMaster from "../components/inventory/DirectPurchase/DirectPurchaseMaster";
+import StockTransferGRNMaster from "../components/inventory/stockTransferGRN/StockTransferGRNMaster";
 
 const inventoryRoutes = [
   {
@@ -41,6 +42,11 @@ const inventoryRoutes = [
     path: "/directpurchase",
     label: "Direct Purchase",
     element: <DirectPurchaseMaster />,
+  },
+  {
+    path: "/stocktransfergrn",
+    label: "Stock Transfer GRN",
+    element: <StockTransferGRNMaster />,
   },
 ];
 
