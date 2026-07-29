@@ -4,6 +4,7 @@ import PhysicalStockReconciliationMaster from "../components/inventory/physicalS
 import ReceiptMaster from "../components/inventory/receipt/ReceiptMaster";
 import StockTransferMaster from "../components/inventory/stockTransfer/StockTransferMaster";
 import SubContractingGrnMaster from "../components/inventory/subContractingGrn/SubContractingGrnMaster";
+import DirectPurchaseMaster from "../components/inventory/DirectPurchase/DirectPurchaseMaster";
 
 const inventoryRoutes = [
   {
@@ -35,6 +36,11 @@ const inventoryRoutes = [
     path: "/subcontractinggrn",
     label: "Sub contracting GRN",
     element: <SubContractingGrnMaster />,
+  },
+  {
+    path: "/directpurchase",
+    label: "Direct Purchase",
+    element: <DirectPurchaseMaster />,
   },
 ];
 
