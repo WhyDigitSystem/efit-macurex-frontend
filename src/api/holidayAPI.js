@@ -3,7 +3,7 @@ import apiClient from "./apiClient";
 const holidayAPI = {
   getAll: async (orgId, branch) => {
     try {
-      const res = await apiClient.get("/api/dev/getHolidayMasterByOrgId", {
+      const res = await apiClient.get("api/commonmaster/getHolidayMasterByOrgId", {
         params: { orgId, branch },
       });
       return res?.paramObjectsMap?.holidayMasterVO || [];
@@ -15,7 +15,7 @@ const holidayAPI = {
 
   getById: async (id) => {
     try {
-      const res = await apiClient.get("/api/dev/getHolidayMasterById", {
+      const res = await apiClient.get("api/commonmaster/getHolidayMasterById", {
         params: { id },
       });
       return res?.paramObjectsMap?.holidayMasterVO || null;
@@ -27,7 +27,7 @@ const holidayAPI = {
 
   createUpdate: async (data) => {
     try {
-      const res = await apiClient.put("/api/dev/updateCreateHolidayMaster", data);
+      const res = await apiClient.put("api/commonmaster/updateCreateHolidayMaster", data);
       return res;
     } catch (error) {
       console.error("Error saving holiday:", error);

@@ -3,7 +3,7 @@ import apiClient from "./apiClient";
 const bankAPI = {
   getAll: async (orgId) => {
     try {
-      const res = await apiClient.get("/api/dev/getBankMasterByOrgId", {
+      const res = await apiClient.get("api/commonmaster/getBankMasterByOrgId", {
         params: { orgId },
       });
       return res?.paramObjectsMap?.bankList || [];
@@ -15,7 +15,7 @@ const bankAPI = {
 
   getById: async (id) => {
     try {
-      const res = await apiClient.get("/api/dev/getBankMasterById", {
+      const res = await apiClient.get("api/commonmaster/getBankMasterById", {
         params: { id },
       });
       return res?.paramObjectsMap?.tSBankVO || null;
@@ -27,7 +27,7 @@ const bankAPI = {
 
   createUpdate: async (payload) => {
     try {
-      const res = await apiClient.post("/api/dev/createUpdateBankMaster", payload);
+      const res = await apiClient.post("api/commonmaster/createUpdateBankMaster", payload);
       return res;
     } catch (error) {
       console.error("Error saving bank:", error);
