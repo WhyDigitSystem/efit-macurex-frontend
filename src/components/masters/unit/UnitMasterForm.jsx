@@ -1,6 +1,8 @@
 import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm, Controller, useFieldArray } from "react-hook-form";
+import unitAPI from "../../../api/unitAPI"; // adjust the import path to match your project structure
+import branchAPI from "../../../api/branchAPI"; // adjust the import path to match your project structure
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -13,7 +15,8 @@ const controlClasses =
 const labelClasses =
   "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
-const getDefaultValues = () => ({ 
+const getDefaultValues = () => ({
+  branchId: "",
   unitCode: "",
   description: "",
 });
@@ -107,24 +110,86 @@ const ToggleButton = ({ control, name }) => (
 
 const UnitMasterForm = ({ data, onBack }) => {
   const [orgId] = useState(localStorage.getItem("orgId"));
-
-
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [submitError, setSubmitError] = useState("");
+  const [branchOptions, setBranchOptions] = useState([]);
+  const [branchesLoading, setBranchesLoading] = useState(false);
 
   const {
     control,
     handleSubmit,
+    reset,
     formState: { errors, isSubmitting },
   } = useForm({
     mode: "all",
     defaultValues: getDefaultValues(),
   });
 
+  // Load branches for the dropdown.
+  useEffect(() => {
+    const loadBranches = async () => {
+      setBranchesLoading(true);
+      try {
+        const branches = await branchAPI.getBranchByOrgId(orgId);
+        setBranchOptions(branches || []);
+      } catch (error) {
+        // Non-fatal: leave the dropdown empty and let the user retry via refresh.
+        setBranchOptions([]);
+      } finally {
+        setBranchesLoading(false);
+      }
+    };
+
+    if (orgId) loadBranches();
+  }, [orgId]);
+
+  // When editing, fetch the full record by unitId and populate the form.
+  useEffect(() => {
+    const loadUnit = async () => {
+      if (!data?.unitId) return;
+      setLoading(true);
+      setLoadError("");
+      try {
+        const unit = await unitAPI.getUnitById(data.unitId);
+        if (unit) {
+          reset({
+            branchId: unit.branchId || "",
+            unitCode: unit.unitCode || "",
+            description: unit.description || "",
+          });
+        }
+      } catch (error) {
+        setLoadError("Failed to load unit details. Please try again.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadUnit();
+  }, [data?.unitId, reset]);
+
   const onSubmit = async (formData) => {
+    setSubmitError("");
+
     try {
-      console.log("Form Data:", formData, "Org Id:", orgId);
-      // API call here
+      const payload = {
+        unitId: data?.unitId || formData.unitCode,
+        description: formData.description,
+        orgId: Number(orgId),
+        branch: Number(formData.branchId), // <-- send selected branch
+        createdBy: localStorage.getItem("userName") || "SYSTEM",
+        active: true,
+        cancelRemarks: "",
+      };
+
+      console.log("Form Data:", formData);
+      console.log("Payload:", payload);
+
+      await unitAPI.saveUnit(payload);
+      onBack();
     } catch (error) {
-      console.error(error);
+      setSubmitError("Failed to save unit. Please try again.");
     }
   };
 
@@ -145,9 +210,45 @@ const UnitMasterForm = ({ data, onBack }) => {
 
       {/* Main Card */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+        {loadError && <p className="text-red-500 text-xs mb-2">{loadError}</p>}
+        {submitError && (
+          <p className="text-red-500 text-xs mb-2">{submitError}</p>
+        )}
+
         <form onSubmit={handleSubmit(onSubmit)}>
           {/* All fields in one row - 5 columns */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+            {/* Branch Dropdown */}
+            <div>
+              <label className={labelClasses}>
+                Branch <span className="text-red-500">*</span>
+              </label>
+              <Controller
+                name="branchId"
+                control={control}
+                rules={{ required: "Branch is required" }}
+                render={({ field }) => (
+                  <select {...field} className={controlClasses}>
+                    <option value="">Select</option>
+
+                    {branchOptions.map((branch) => (
+                      <option
+                        key={branch.id}
+                        value={branch.id} // or branch.branchId if that's what your API returns
+                      >
+                        {branch.branchName}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              />
+              {errors?.branchId && (
+                <p className="text-red-500 text-[10px] mt-0.5">
+                  {errors.branchId.message}
+                </p>
+              )}
+            </div>
+
             {/* Required Fields */}
             <InputField
               control={control}
@@ -162,7 +263,7 @@ const UnitMasterForm = ({ data, onBack }) => {
               control={control}
               name="description"
               label="Description"
-               required
+              required
               placeholder="Enter description"
               errors={errors}
             />
@@ -171,6 +272,7 @@ const UnitMasterForm = ({ data, onBack }) => {
           {/* Buttons */}
           <div className="flex justify-end gap-2 pt-3 mt-3 border-t border-gray-200 dark:border-gray-700">
             <button
+              type="button"
               onClick={onBack}
               disabled={isSubmitting}
               className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
@@ -178,8 +280,8 @@ const UnitMasterForm = ({ data, onBack }) => {
               <X className="h-3 w-3" /> Cancel
             </button>
             <button
-              onClick={handleSubmit(onSubmit)}
-              disabled={isSubmitting}
+              type="submit"
+              disabled={isSubmitting || loading}
               className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
             >
               <Save className="h-3 w-3" />{" "}

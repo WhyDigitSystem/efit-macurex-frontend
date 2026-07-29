@@ -1,93 +1,47 @@
 import React, { useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
+import unitAPI from "../../../api/unitAPI";
+import branchAPI from "../../../api/branchAPI";
 
-const UnitMasterList = ({ onAddNew, onEdit,onBack }) => {
+const UnitMasterList = ({ onAddNew, onEdit, onBack }) => {
   const [unitData, setUnitData] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const loadUnits = async () => {
     setLoading(true);
+    setError("");
 
-    // Dummy Data
-    const data = [
-      {
-        id: 8,
-        unitCode: "UOM008",
-        unitName: "Kilogram",
-        shortName: "Kg",
-        unitType: "Weight",
-        decimalPlaces: 3,
-        active: true,
-      },
-      {
-        id: 7,
-        unitCode: "UOM007",
-        unitName: "Gram",
-        shortName: "Gm",
-        unitType: "Weight",
-        decimalPlaces: 2,
-        active: true,
-      },
-      {
-        id: 6,
-        unitCode: "UOM006",
-        unitName: "Liter",
-        shortName: "Ltr",
-        unitType: "Volume",
-        decimalPlaces: 2,
-        active: true,
-      },
-      {
-        id: 5,
-        unitCode: "UOM005",
-        unitName: "Milliliter",
-        shortName: "Ml",
-        unitType: "Volume",
-        decimalPlaces: 2,
-        active: true,
-      },
-      {
-        id: 4,
-        unitCode: "UOM004",
-        unitName: "Meter",
-        shortName: "Mtr",
-        unitType: "Length",
-        decimalPlaces: 2,
-        active: true,
-      },
-      {
-        id: 3,
-        unitCode: "UOM003",
-        unitName: "Centimeter",
-        shortName: "Cm",
-        unitType: "Length",
-        decimalPlaces: 2,
-        active: false,
-      },
-      {
-        id: 2,
-        unitCode: "UOM002",
-        unitName: "Piece",
-        shortName: "Nos",
-        unitType: "Quantity",
-        decimalPlaces: 0,
-        active: true,
-      },
-      {
-        id: 1,
-        unitCode: "UOM001",
-        unitName: "Box",
-        shortName: "Box",
-        unitType: "Packing",
-        decimalPlaces: 0,
-        active: false,
-      },
-    ];
+    try {
+      const orgId = Number(localStorage.getItem("orgId"));
 
-    data.sort((a, b) => b.id - a.id);
+      let branch = Number(localStorage.getItem("branch"));
 
-    setUnitData(data);
-    setLoading(false);
+      // If branch is not stored in localStorage, fetch the first branch
+      if (!branch) {
+        const branches = await branchAPI.getBranchByOrgId(orgId);
+
+        if (branches && branches.length > 0) {
+          branch = branches[0].id || branches[0].branch || 0;
+        }
+      }
+
+      const data = await unitAPI.getUnits(branch, orgId);
+
+      console.log("Unit List:", data);
+
+      setUnitData(
+        Array.isArray(data)
+          ? data.sort((a, b) => (b.id || 0) - (a.id || 0))
+          : [],
+      );
+    } catch (err) {
+      console.error("Error loading units:", err);
+      setError("Failed to load units. Please try again.");
+      setUnitData([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -100,36 +54,17 @@ const UnitMasterList = ({ onAddNew, onEdit,onBack }) => {
 
   const columns = [
     {
-      key: "unitCode",
-      label: "Unit Code",
-      accessor: "unitCode",
+      key: "unitId",
+      label: "Unit ID",
+      accessor: "unitId",
       type: "text",
       noWrap: true,
     },
     {
-      key: "unitName",
-      label: "Unit Name",
-      accessor: "unitName",
+      key: "description",
+      label: "Description",
+      accessor: "description",
       type: "text",
-    },
-    {
-      key: "shortName",
-      label: "Short Name",
-      accessor: "shortName",
-      type: "text",
-    },
-    {
-      key: "unitType",
-      label: "Unit Type",
-      accessor: "unitType",
-      type: "text",
-    },
-    {
-      key: "decimalPlaces",
-      label: "Decimals",
-      accessor: "decimalPlaces",
-      type: "text",
-      align: "center",
     },
     {
       key: "active",
@@ -158,12 +93,7 @@ const UnitMasterList = ({ onAddNew, onEdit,onBack }) => {
     },
   ];
 
-  const searchFields = [
-    "unitCode",
-    "unitName",
-    "shortName",
-    "unitType",
-  ];
+  const searchFields = ["unitId", "description"];
 
   const filterOptions = [
     {
@@ -175,15 +105,15 @@ const UnitMasterList = ({ onAddNew, onEdit,onBack }) => {
       value: "active",
       label: "Active",
       field: "active",
-      filterValue: "active",
+      filterValue: true,
       activeValue: "Active",
     },
     {
       value: "inactive",
       label: "Inactive",
       field: "active",
-      filterValue: "inactive",
-      activeValue: "Active",
+      filterValue: false,
+      activeValue: "Inactive",
     },
   ];
 
@@ -193,6 +123,7 @@ const UnitMasterList = ({ onAddNew, onEdit,onBack }) => {
       subtitle="Manage Units"
       data={unitData}
       loading={loading}
+      error={error}
       columns={columns}
       searchFields={searchFields}
       filterOptions={filterOptions}
@@ -209,7 +140,7 @@ const UnitMasterList = ({ onAddNew, onEdit,onBack }) => {
       enableRefresh={true}
       onRefresh={loadUnits}
       enableExport={true}
-      exportFileName="Units"
+      exportFileName="UnitMaster"
     />
   );
 };
