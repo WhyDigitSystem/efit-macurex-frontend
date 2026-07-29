@@ -1,26 +1,38 @@
 import apiClient from "./apiClient";
 
 const holidayAPI = {
-  getAll: async (orgId) => {
-    const response = await apiClient.get("/api/commonmaster/getHoliday", {
-      params: { orgId },
-    });
-    return Array.isArray(response) ? response : response?.data ?? [];
+  getAll: async (orgId, branch) => {
+    try {
+      const res = await apiClient.get("/api/dev/getHolidayMasterByOrgId", {
+        params: { orgId, branch },
+      });
+      return res?.paramObjectsMap?.holidayMasterVO || [];
+    } catch (error) {
+      console.error("Error fetching holidays:", error);
+      throw error;
+    }
   },
 
   getById: async (id) => {
-    const response = await apiClient.get("/api/commonmaster/getHolidayById", {
-      params: { id },
-    });
-    return response;
+    try {
+      const res = await apiClient.get("/api/dev/getHolidayMasterById", {
+        params: { id },
+      });
+      return res?.paramObjectsMap?.holidayMasterVO || null;
+    } catch (error) {
+      console.error("Error fetching holiday by ID:", error);
+      throw error;
+    }
   },
 
   createUpdate: async (data) => {
-    const response = await apiClient.put(
-      "/api/commonmaster/createUpdateHoliday",
-      data
-    );
-    return response;
+    try {
+      const res = await apiClient.put("/api/dev/updateCreateHolidayMaster", data);
+      return res;
+    } catch (error) {
+      console.error("Error saving holiday:", error);
+      throw error;
+    }
   },
 };
 
