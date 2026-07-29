@@ -54,6 +54,7 @@ import QualityList from "../components/quality/QualityList";
 import LabourChargesList from "../components/labourCharges/LabourChargesList";
 import PurchaseOrderAmendment from "../components/purchase/PurchaseOrderAmendment/PurchaseOrderAmendmentMaster";
 import PurchaseContractAmendment from "../components/purchase/PurchaseContractAmendment/PurchaseContractAmendmentMaster";
+import ImportGRNMaster from "../components/inventory/ImportGRN/ImportGRNMaster";
 import SalesContractAmendment from "../components/sales/SalesContractAmendment/SalesContractAmendmentMaster";
 import SalesOrderAmendment from "../components/sales/SalesOrderAmendment/SalesOrderAmendmentMaster";
 import inventoryRoutes from "./inventoryRoutes";
@@ -79,6 +80,12 @@ export const routesConfig = [
     path: "/purchasecontractamendment",
     label: "Purchase Contract Amendment",
     element: <PurchaseContractAmendment />,
+  },
+  {
+    path: "/importgrn",
+    label: "Import GRN",
+    keywords: ["grn", "goods receipt"],
+    element: <ImportGRNMaster />,
   },
   {
     path: "/salescontractamendment",
