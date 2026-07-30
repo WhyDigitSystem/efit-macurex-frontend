@@ -17,6 +17,18 @@ export const financialYearAPI = {
     }
   },
 
+  getAllFinancialYearByOrgId: async (orgId) => {
+    try {
+      const res = await apiClient.get(
+        `/api/commonmaster/getAllFInYearByOrgId?orgId=${orgId}`,
+      );
+      return res?.paramObjectsMap?.financialYearVOs || [];
+    } catch (error) {
+      console.error("Error fetching all financial years:", error);
+      throw error;
+    }
+  },
+
   // Get Financial Year by ID
   getFinancialYearById: async (id) => {
     try {

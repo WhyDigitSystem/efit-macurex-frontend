@@ -1,7 +1,6 @@
 import { useState } from "react";
 import DocTypeMappingList from "./DocTypeMappingList";
 import DocTypeMappingForm from "./DocTypeMappingForm";
-import docTypeMappingAPI from "../../../api/docTypeMappingAPI";
 
 const DocTypeMappingMaster = () => {
   const [screen, setScreen] = useState("list");
@@ -21,16 +20,6 @@ const DocTypeMappingMaster = () => {
     setScreen("list");
   };
 
-  const handleSave = async (payload) => {
-    try {
-      await docTypeMappingAPI.updateCreateDocTypeMapping(payload); // Create/Update
-      handleBack();
-    } catch (error) {
-      console.error("Error saving doc type mapping:", error);
-      throw error;
-    }
-  };
-
   return (
     <>
       {screen === "list" && (
@@ -45,7 +34,6 @@ const DocTypeMappingMaster = () => {
         <DocTypeMappingForm
           editData={editData}
           onBack={handleBack}
-          onSave={handleSave}
         />
       )}
     </>

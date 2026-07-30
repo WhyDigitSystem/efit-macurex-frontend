@@ -1,37 +1,33 @@
 import apiClient from "./apiClient";
 
-export const docTypeMappingAPI = {
-  getDocTypeMappingById: async (id) => {
+const docTypeMappingAPI = {
+  getDocumentTypeMappingById: async (id) => {
     try {
-      const res = await apiClient.get(
-        `/api/commonmaster/getDocTypeMappingById?id=${id}`,
-      );
-      return res?.paramObjectsMap?.docTypeMappingVO || null;
+      const res = await apiClient.get("/api/commonmaster/getDocumentTypeMappingById", {
+        params: { id },
+      });
+      return res?.paramObjectsMap?.documentTypeMappingMasterVO || null;
     } catch (error) {
       console.error("Error fetching doc type mapping by ID:", error);
       throw error;
     }
   },
 
-  // branchCode / year are optional filters - pass "" to skip a filter
-  getDocTypeMappingByOrgId: async (branchCode, year, orgId) => {
+  getDocumentTypeMappingByOrgId: async (orgId, branch) => {
     try {
-      const res = await apiClient.get(
-        `/api/commonmaster/getDocTypeMappingByOrgId?branchCode=${branchCode}&year=${year}&orgId=${orgId}`,
-      );
-      return res?.paramObjectsMap?.docTypeMappingList || [];
+      const res = await apiClient.get("/api/commonmaster/getDocumentTypeMappingByOrgId", {
+        params: { orgId, branch },
+      });
+      return res?.paramObjectsMap?.documentTypeMappingMasterList || [];
     } catch (error) {
       console.error("Error fetching doc type mapping list:", error);
       throw error;
     }
   },
 
-  updateCreateDocTypeMapping: async (docTypeMappingDTO) => {
+  updateCreateDocumentTypeMapping: async (dto) => {
     try {
-      const res = await apiClient.put(
-        "/api/commonmaster/updateCreateDocTypeMapping",
-        docTypeMappingDTO,
-      );
+      const res = await apiClient.put("/api/commonmaster/updateCreateDocumentTypeMapping", dto);
       return res;
     } catch (error) {
       console.error("Error creating/updating doc type mapping:", error);

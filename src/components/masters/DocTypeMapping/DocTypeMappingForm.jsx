@@ -1,8 +1,9 @@
-import { ArrowLeft, Save, X } from "lucide-react";
+import { ArrowLeft, Plus, Save, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useToast } from "../../Toast/ToastContext";
 import docTypeMappingAPI from "../../../api/docTypeMappingAPI";
 import branchAPI from "../../../api/branchAPI";
+import { financialYearAPI } from "../../../api/financialYearAPI";
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -14,291 +15,200 @@ const controlClasses =
 const labelClasses =
   "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
-const YEARS_BACK = 5;
-const YEARS_FORWARD = 2;
-
-const DocTypeMappingForm = ({ onBack, onSave, editData }) => {
+const DocTypeMappingForm = ({ onBack, editData }) => {
   const ORG_ID = parseInt(localStorage.getItem("orgId"));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { addToast } = useToast();
 
   const [branches, setBranches] = useState([]);
   const [branchLoading, setBranchLoading] = useState(false);
+  const [financialYears, setFinancialYears] = useState([]);
+  const [fyLoading, setFyLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
 
-  const yearOptions = useMemo(() => {
-    const currentYear = new Date().getFullYear();
-    const years = [];
-    for (
-      let y = currentYear + YEARS_FORWARD;
-      y >= currentYear - YEARS_BACK;
-      y--
-    ) {
-      years.push(y);
-    }
-    return years;
-  }, []);
+  const defaultDetail = {
+    id: 0,
+    screenName: "",
+    screenCode: "",
+    docCode: "",
+    prefix: "",
+    active: true,
+  };
 
   const [form, setForm] = useState({
     id: editData?.id || 0,
-    screenName: editData?.screenName || "",
-    screenCode: editData?.screenCode || "",
-    docCode: editData?.docCode || "",
-    prefix: editData?.prefix || "",
-    branch: editData?.branch || "",
-    branchCode: editData?.branchCode || "",
-    year: editData?.year || "",
-    active: editData?.active ?? true,
+    description: editData?.description || "",
+    branch: editData?.branch?.id ? String(editData.branch.id) : "",
+    financialYear: editData?.financialYear?.id ? String(editData.financialYear.id) : "",
+    active: editData?.active === "Active" || editData?.active === true,
     cancelRemarks: editData?.cancelRemarks || "",
     orgId: ORG_ID,
     createdBy: localStorage.getItem("userName") || "SYSTEM",
   });
 
+  const [details, setDetails] = useState(() => {
+    if (editData?.details?.length > 0) {
+      return editData.details.map((d) => ({
+        id: d.id || 0,
+        screenName: d.screenName || "",
+        screenCode: d.screenCode || "",
+        docCode: d.docCode || "",
+        prefix: d.prefix || "",
+        active: d.active === "Active" || d.active === true,
+      }));
+    }
+    return [{ ...defaultDetail }];
+  });
+
   // Field labels for toast messages
   const fieldLabels = {
-    screenName: "Screen Name",
-    screenCode: "Screen Code",
-    docCode: "Doc Code",
-    prefix: "Prefix",
+    description: "Description",
     branch: "Branch",
-    year: "Year",
+    financialYear: "Financial Year",
   };
 
   useEffect(() => {
-    fetchBranches();
-  }, []);
-
-  const fetchBranches = async () => {
-    try {
-      setBranchLoading(true);
-      const response = await branchAPI.getBranchByOrgId(ORG_ID);
-      const sortedBranches = (response || []).sort((a, b) =>
-        (a.branchName || "").localeCompare(b.branchName || ""),
-      );
-      setBranches(sortedBranches);
-    } catch (error) {
-      console.error("Error fetching branches:", error);
-      addToast("Failed to load branches", "error");
-    } finally {
-      setBranchLoading(false);
-    }
-  };
+    const loadBranches = async () => {
+      try {
+        setBranchLoading(true);
+        const res = await branchAPI.getBranchByOrgId(ORG_ID);
+        setBranches(res || []);
+      } catch (err) {
+        console.error("Failed to load branches", err);
+      } finally {
+        setBranchLoading(false);
+      }
+    };
+    const loadFy = async () => {
+      try {
+        setFyLoading(true);
+        const res = await financialYearAPI.getAllFinancialYearByOrgId(ORG_ID);
+        setFinancialYears(res || []);
+      } catch (err) {
+        console.error("Failed to load financial years", err);
+      } finally {
+        setFyLoading(false);
+      }
+    };
+    loadBranches();
+    loadFy();
+  }, [ORG_ID]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-
     if (fieldErrors[name]) {
       setFieldErrors((prev) => ({ ...prev, [name]: "" }));
     }
-
     if (name === "active") {
       setForm((prev) => ({ ...prev, active: e.target.checked }));
       return;
     }
-
-    const alphanumericRegex = /^[A-Za-z0-9]*$/;
-    const nameRegex = /^[A-Za-z0-9 .,&'-]*$/;
-
-    switch (name) {
-      case "screenName":
-        if (!nameRegex.test(value)) {
-          setFieldErrors((prev) => ({
-            ...prev,
-            screenName:
-              "Special characters other than . , & ' - are not allowed",
-          }));
-          return;
-        }
-        if (value.length > 100) {
-          setFieldErrors((prev) => ({
-            ...prev,
-            screenName: "Screen Name must be maximum 100 characters",
-          }));
-          return;
-        }
-        break;
-
-      case "screenCode":
-        if (!alphanumericRegex.test(value)) {
-          setFieldErrors((prev) => ({
-            ...prev,
-            screenCode: "Only alphanumeric characters are allowed",
-          }));
-          return;
-        }
-        if (value.length > 20) {
-          setFieldErrors((prev) => ({
-            ...prev,
-            screenCode: "Screen Code must be maximum 20 characters",
-          }));
-          return;
-        }
-        break;
-
-      case "docCode":
-        if (!alphanumericRegex.test(value)) {
-          setFieldErrors((prev) => ({
-            ...prev,
-            docCode: "Only alphanumeric characters are allowed",
-          }));
-          return;
-        }
-        if (value.length > 20) {
-          setFieldErrors((prev) => ({
-            ...prev,
-            docCode: "Doc Code must be maximum 20 characters",
-          }));
-          return;
-        }
-        break;
-
-      case "prefix":
-        if (!alphanumericRegex.test(value)) {
-          setFieldErrors((prev) => ({
-            ...prev,
-            prefix: "Only alphanumeric characters are allowed",
-          }));
-          return;
-        }
-        if (value.length > 10) {
-          setFieldErrors((prev) => ({
-            ...prev,
-            prefix: "Prefix must be maximum 10 characters",
-          }));
-          return;
-        }
-        break;
-
-      case "cancelRemarks":
-        if (value.length > 250) {
-          setFieldErrors((prev) => ({
-            ...prev,
-            cancelRemarks: "Remarks must be maximum 250 characters",
-          }));
-          return;
-        }
-        break;
-
-      default:
-        break;
-    }
-
-    const upperCaseFields = ["screenCode", "docCode", "prefix"];
-    const updatedValue = upperCaseFields.includes(name)
-      ? value.toUpperCase()
-      : value;
-
-    setForm((prev) => ({ ...prev, [name]: updatedValue }));
+    setForm((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleBranchChange = (e) => {
-    const branchCode = e.target.value;
-    const selected = branches.find((b) => b.branchCode === branchCode);
-
-    if (fieldErrors.branch) {
-      setFieldErrors((prev) => ({ ...prev, branch: "" }));
-    }
-
-    setForm((prev) => ({
-      ...prev,
-      branchCode,
-      branch: selected?.branchName || "",
-    }));
+  const handleDetailChange = (index, field, value) => {
+    setDetails((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
   };
 
-  const handleYearChange = (e) => {
-    if (fieldErrors.year) {
-      setFieldErrors((prev) => ({ ...prev, year: "" }));
-    }
-    setForm((prev) => ({ ...prev, year: e.target.value }));
+  const addDetailRow = () => {
+    setDetails((prev) => [...prev, { ...defaultDetail }]);
+  };
+
+  const removeDetailRow = (index) => {
+    if (details.length <= 1) return;
+    setDetails((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleSave = async () => {
     const errors = {};
 
-    if (!form.screenName.trim()) errors.screenName = "Screen Name is required";
-    if (!form.screenCode.trim()) errors.screenCode = "Screen Code is required";
-    if (!form.docCode.trim()) errors.docCode = "Doc Code is required";
-    if (!form.prefix.trim()) errors.prefix = "Prefix is required";
-    if (!form.branchCode) errors.branch = "Branch is required";
-    if (!form.year) errors.year = "Year is required";
+    if (!form.branch) errors.branch = "Branch is required";
+    if (!form.financialYear) errors.financialYear = "Financial Year is required";
+
+    const validDetails = details.filter((d) => d.screenName.trim() || d.screenCode.trim() || d.docCode.trim() || d.prefix.trim());
+    if (validDetails.length === 0) {
+      addToast("At least one detail row with data is required", "error");
+      return;
+    }
 
     setFieldErrors(errors);
 
     if (Object.keys(errors).length > 0) {
-      const firstErrorField = Object.keys(errors)[0];
-      const fieldLabel = fieldLabels[firstErrorField] || firstErrorField;
-      const errorMessage = errors[firstErrorField];
-
-      addToast(`${fieldLabel}: ${errorMessage}`, "error");
+      const first = Object.keys(errors)[0];
+      addToast(`${fieldLabels[first] || first}: ${errors[first]}`, "error");
       return;
     }
 
     setIsSubmitting(true);
 
     const payload = {
-      screenName: form.screenName,
-      screenCode: form.screenCode,
-      docCode: form.docCode,
-      prefix: form.prefix,
-      branch: form.branch,
-      branchCode: form.branchCode,
-      year: form.year,
+      description: form.description,
+      branch: Number(form.branch),
+      financialYear: Number(form.financialYear),
       active: Boolean(form.active),
       cancelRemarks: form.cancelRemarks,
       createdBy: form.createdBy,
       orgId: form.orgId,
+      details: validDetails.map((d) => ({
+        screenName: d.screenName,
+        screenCode: d.screenCode,
+        docCode: d.docCode,
+        prefix: d.prefix,
+        active: Boolean(d.active),
+      })),
     };
 
     if (form.id && form.id > 0) {
       payload.id = form.id;
+      payload.details = payload.details.map((d, i) => ({
+        ...d,
+        id: validDetails[i]?.id || 0,
+      }));
     }
 
     console.log("📤 Saving Doc Type Mapping Payload:", payload);
 
     try {
       const response =
-        await docTypeMappingAPI.updateCreateDocTypeMapping(payload);
-      console.log("📥 Response:", response);
+        await docTypeMappingAPI.updateCreateDocumentTypeMapping(payload);
 
       const status = response?.status === true || response?.statusFlag === "Ok";
 
       if (status) {
-        const successMessage =
+        const msg =
           response?.paramObjectsMap?.message ||
           (form.id && form.id > 0
             ? "Doc Type Mapping updated successfully!"
             : "Doc Type Mapping created successfully!");
-
-        addToast(successMessage, "success");
-
-        if (onSave) onSave(payload);
+        addToast(msg, "success");
+        if (onBack) onBack();
       } else {
-        const errorMessage =
+        addToast(
           response?.paramObjectsMap?.message ||
-          response?.paramObjectsMap?.errorMessage ||
-          response?.message ||
-          "Failed to save doc type mapping";
-
-        addToast(errorMessage, "error");
+            response?.paramObjectsMap?.errorMessage ||
+            response?.message ||
+            "Failed to save",
+          "error",
+        );
       }
     } catch (error) {
-      console.error("❌ Save Error:", error);
-      const errorMessage =
+      const msg =
         error.response?.data?.paramObjectsMap?.message ||
         error.response?.data?.paramObjectsMap?.errorMessage ||
         error.response?.data?.message ||
         "Save failed! Try again.";
-
-      addToast(errorMessage, "error");
+      addToast(msg, "error");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="p-2 max-w-7xl ">
-      {/* HEADER */}
+    <div className="p-2 max-w-7xl">
       <div className="flex items-center gap-2 mb-3">
         <button
           onClick={onBack}
@@ -306,102 +216,22 @@ const DocTypeMappingForm = ({ onBack, onSave, editData }) => {
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
-
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
           {editData ? "Edit Doc Type Mapping" : "Add Doc Type Mapping"}
         </h2>
       </div>
 
-      {/* MAIN CARD */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
-        {/* MAIN FORM GRID */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {/* Screen Name */}
-          <div>
-            <label className={labelClasses}>
-              Screen Name <span className="text-red-500">*</span>
-            </label>
-
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
+          {/* Description */}
+          <div className="lg:col-span-2">
+            <label className={labelClasses}>Description</label>
             <input
-              name="screenName"
-              value={form.screenName}
+              name="description"
+              value={form.description}
               onChange={handleChange}
-              className={`${controlClasses} ${
-                fieldErrors.screenName ? "border-red-500" : ""
-              }`}
+              className={controlClasses}
             />
-
-            {fieldErrors.screenName && (
-              <p className="text-red-500 text-[11px] mt-1">
-                {fieldErrors.screenName}
-              </p>
-            )}
-          </div>
-
-          {/* Screen Code */}
-          <div>
-            <label className={labelClasses}>
-              Screen Code <span className="text-red-500">*</span>
-            </label>
-
-            <input
-              name="screenCode"
-              value={form.screenCode}
-              onChange={handleChange}
-              className={`${controlClasses} ${
-                fieldErrors.screenCode ? "border-red-500" : ""
-              }`}
-            />
-
-            {fieldErrors.screenCode && (
-              <p className="text-red-500 text-[11px] mt-1">
-                {fieldErrors.screenCode}
-              </p>
-            )}
-          </div>
-
-          {/* Doc Code */}
-          <div>
-            <label className={labelClasses}>
-              Doc Code <span className="text-red-500">*</span>
-            </label>
-
-            <input
-              name="docCode"
-              value={form.docCode}
-              onChange={handleChange}
-              className={`${controlClasses} ${
-                fieldErrors.docCode ? "border-red-500" : ""
-              }`}
-            />
-
-            {fieldErrors.docCode && (
-              <p className="text-red-500 text-[11px] mt-1">
-                {fieldErrors.docCode}
-              </p>
-            )}
-          </div>
-
-          {/* Prefix */}
-          <div>
-            <label className={labelClasses}>
-              Prefix <span className="text-red-500">*</span>
-            </label>
-
-            <input
-              name="prefix"
-              value={form.prefix}
-              onChange={handleChange}
-              className={`${controlClasses} ${
-                fieldErrors.prefix ? "border-red-500" : ""
-              }`}
-            />
-
-            {fieldErrors.prefix && (
-              <p className="text-red-500 text-[11px] mt-1">
-                {fieldErrors.prefix}
-              </p>
-            )}
           </div>
 
           {/* Branch */}
@@ -409,74 +239,55 @@ const DocTypeMappingForm = ({ onBack, onSave, editData }) => {
             <label className={labelClasses}>
               Branch <span className="text-red-500">*</span>
             </label>
-
             <select
               name="branch"
-              value={form.branchCode}
-              onChange={handleBranchChange}
+              value={form.branch}
+              onChange={handleChange}
               disabled={branchLoading}
-              className={`${controlClasses} ${
-                fieldErrors.branch ? "border-red-500" : ""
-              }`}
+              className={`${controlClasses} ${fieldErrors.branch ? "border-red-500" : ""}`}
             >
               <option value="">Select Branch</option>
-
-              {branches.map((branch) => (
-                <option key={branch.id} value={branch.branchCode}>
-                  {branch.branchName} ({branch.branchCode})
+              {branches.map((b) => (
+                <option key={b.id} value={String(b.id)}>
+                  {b.branchName} ({b.branchCode})
                 </option>
               ))}
             </select>
-
             {fieldErrors.branch && (
-              <p className="text-red-500 text-[11px] mt-1">
-                {fieldErrors.branch}
-              </p>
+              <p className="text-red-500 text-[11px] mt-1">{fieldErrors.branch}</p>
             )}
           </div>
 
-          {/* Year */}
+          {/* Financial Year */}
           <div>
             <label className={labelClasses}>
-              Year <span className="text-red-500">*</span>
+              Financial Year <span className="text-red-500">*</span>
             </label>
-
             <select
-              name="year"
-              value={form.year}
-              onChange={handleYearChange}
-              className={`${controlClasses} ${
-                fieldErrors.year ? "border-red-500" : ""
-              }`}
+              name="financialYear"
+              value={form.financialYear}
+              onChange={handleChange}
+              disabled={fyLoading}
+              className={`${controlClasses} ${fieldErrors.financialYear ? "border-red-500" : ""}`}
             >
-              <option value="">Select Year</option>
-
-              {yearOptions.map((year) => (
-                <option key={year} value={year}>
-                  {year}
+              <option value="">Select Financial Year</option>
+              {financialYears.map((fy) => (
+                <option key={fy.id} value={String(fy.id)}>
+                  {fy.finYear || fy.financialYear || fy.id}
                 </option>
               ))}
             </select>
-
-            {fieldErrors.year && (
-              <p className="text-red-500 text-[11px] mt-1">
-                {fieldErrors.year}
-              </p>
+            {fieldErrors.financialYear && (
+              <p className="text-red-500 text-[11px] mt-1">{fieldErrors.financialYear}</p>
             )}
           </div>
 
           {/* Active */}
           <div>
             <label className={labelClasses}>Active</label>
-
             <button
               type="button"
-              onClick={() =>
-                setForm((prev) => ({
-                  ...prev,
-                  active: !prev.active,
-                }))
-              }
+              onClick={() => setForm((prev) => ({ ...prev, active: !prev.active }))}
               className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${
                 form.active ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
               }`}
@@ -489,27 +300,110 @@ const DocTypeMappingForm = ({ onBack, onSave, editData }) => {
             </button>
           </div>
 
-          {/* Cancel Remarks - only relevant when marking inactive */}
+          {/* Cancel Remarks */}
           {!form.active && (
             <div className="md:col-span-2 lg:col-span-3">
               <label className={labelClasses}>Cancel Remarks</label>
-
               <input
                 name="cancelRemarks"
                 value={form.cancelRemarks}
                 onChange={handleChange}
-                className={`${controlClasses} ${
-                  fieldErrors.cancelRemarks ? "border-red-500" : ""
-                }`}
+                className={controlClasses}
               />
-
-              {fieldErrors.cancelRemarks && (
-                <p className="text-red-500 text-[11px] mt-1">
-                  {fieldErrors.cancelRemarks}
-                </p>
-              )}
             </div>
           )}
+        </div>
+
+        {/* Details Section */}
+        <div className="border-t border-gray-200 dark:border-gray-700 pt-3">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+              Document Type Details
+            </h3>
+            <button
+              type="button"
+              onClick={addDetailRow}
+              className="flex items-center gap-1 px-2 py-1 rounded text-xs text-blue-600 border border-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+            >
+              <Plus className="h-3 w-3" /> Add Row
+            </button>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="bg-gray-50 dark:bg-gray-700/50">
+                  <th className="px-2 py-1.5 text-[11px] font-medium text-gray-500 dark:text-gray-400 text-center w-8">#</th>
+                  <th className="px-2 py-1.5 text-[11px] font-medium text-gray-500 dark:text-gray-400 text-left">Screen Name</th>
+                  <th className="px-2 py-1.5 text-[11px] font-medium text-gray-500 dark:text-gray-400 text-left">Screen Code</th>
+                  <th className="px-2 py-1.5 text-[11px] font-medium text-gray-500 dark:text-gray-400 text-left">Doc Code</th>
+                  <th className="px-2 py-1.5 text-[11px] font-medium text-gray-500 dark:text-gray-400 text-left">Prefix</th>
+                  <th className="px-2 py-1.5 text-[11px] font-medium text-gray-500 dark:text-gray-400 text-center w-16">Active</th>
+                  <th className="px-2 py-1.5 text-[11px] font-medium text-gray-500 dark:text-gray-400 text-center w-10"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {details.map((row, index) => (
+                  <tr key={index} className="border-b border-gray-100 dark:border-gray-700/50">
+                    <td className="px-2 py-1 text-xs text-gray-500 text-center">{index + 1}</td>
+                    <td className="px-2 py-1">
+                      <input
+                        value={row.screenName}
+                        onChange={(e) => handleDetailChange(index, "screenName", e.target.value)}
+                        className={controlClasses}
+                      />
+                    </td>
+                    <td className="px-2 py-1">
+                      <input
+                        value={row.screenCode}
+                        onChange={(e) => handleDetailChange(index, "screenCode", e.target.value.toUpperCase())}
+                        className={controlClasses}
+                      />
+                    </td>
+                    <td className="px-2 py-1">
+                      <input
+                        value={row.docCode}
+                        onChange={(e) => handleDetailChange(index, "docCode", e.target.value.toUpperCase())}
+                        className={controlClasses}
+                      />
+                    </td>
+                    <td className="px-2 py-1">
+                      <input
+                        value={row.prefix}
+                        onChange={(e) => handleDetailChange(index, "prefix", e.target.value.toUpperCase())}
+                        className={controlClasses}
+                      />
+                    </td>
+                    <td className="px-2 py-1 text-center">
+                      <button
+                        type="button"
+                        onClick={() => handleDetailChange(index, "active", !row.active)}
+                        className={`relative inline-flex items-center w-8 h-4 rounded-full transition-colors ${
+                          row.active ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
+                        }`}
+                      >
+                        <span
+                          className={`absolute h-3 w-3 bg-white rounded-full shadow transition-transform ${
+                            row.active ? "translate-x-4" : "translate-x-0.5"
+                          }`}
+                        />
+                      </button>
+                    </td>
+                    <td className="px-2 py-1 text-center">
+                      <button
+                        type="button"
+                        onClick={() => removeDetailRow(index)}
+                        disabled={details.length <= 1}
+                        className="p-0.5 rounded text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-30 disabled:cursor-not-allowed"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         {/* ACTION BUTTONS */}
@@ -522,7 +416,6 @@ const DocTypeMappingForm = ({ onBack, onSave, editData }) => {
             <X className="h-3 w-3" />
             Cancel
           </button>
-
           <button
             onClick={handleSave}
             disabled={isSubmitting}

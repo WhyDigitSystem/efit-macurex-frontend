@@ -1,70 +1,34 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import docTypeMappingAPI from "../../../api/docTypeMappingAPI";
-import branchAPI from "../../../api/branchAPI";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import { toast } from "../../../utils/toast";
 
-// How many years back/forward to show in the Year filter dropdown
-const YEARS_BACK = 5;
-const YEARS_FORWARD = 2;
-
 const DocTypeMappingList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   const [mappingData, setMappingData] = useState([]);
-  const [branches, setBranches] = useState([]);
-  const [selectedBranch, setSelectedBranch] = useState("");
-  const [selectedYear, setSelectedYear] = useState("");
-
   const [loading, setLoading] = useState(false);
-  const [branchLoading, setBranchLoading] = useState(false);
 
   const ORG_ID = Number(localStorage.getItem("orgId"));
+  const BRANCH = Number(localStorage.getItem("branchId")||1000000001);
+  const prevRefreshRef = useRef(refreshTrigger);
 
-  const yearOptions = useMemo(() => {
-    const currentYear = new Date().getFullYear();
-    const years = [];
-    for (
-      let y = currentYear + YEARS_FORWARD;
-      y >= currentYear - YEARS_BACK;
-      y--
-    ) {
-      years.push(y);
-    }
-    return years;
-  }, []);
-
-  // Load branches
-  const loadBranches = useCallback(async () => {
-    try {
-      setBranchLoading(true);
-
-      const response = await branchAPI.getBranchByOrgId(ORG_ID);
-
-      setBranches(response || []);
-    } catch (error) {
-      console.error("Failed to load branches:", error);
-      toast.error("Failed to fetch branches");
-    } finally {
-      setBranchLoading(false);
-    }
-  }, [ORG_ID]);
-
-  // Load doc type mappings by branch + year
   const loadMappings = useCallback(async () => {
-    if (!selectedBranch || !selectedYear) {
-      setMappingData([]);
-      return;
-    }
-
+    if (!ORG_ID || !BRANCH) return;
     try {
       setLoading(true);
 
-      const response = await docTypeMappingAPI.getDocTypeMappingByOrgId(
-        selectedBranch,
-        selectedYear,
+      const response = await docTypeMappingAPI.getDocumentTypeMappingByOrgId(
         ORG_ID,
+        BRANCH,
       );
 
-      const sortedData = (response || []).sort(
+      const flattened = (response || []).map((item) => ({
+        ...item,
+        branchName: item.branch?.branchName || "",
+        finYear: item.financialYear?.finYear || "",
+        detailsCount: item.details?.length || 0,
+      }));
+
+      const sortedData = flattened.sort(
         (a, b) => (b.id || 0) - (a.id || 0),
       );
 
@@ -76,51 +40,42 @@ const DocTypeMappingList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     } finally {
       setLoading(false);
     }
-  }, [selectedBranch, selectedYear, ORG_ID]);
-
-  useEffect(() => {
-    loadBranches();
-  }, [loadBranches]);
+  }, [ORG_ID, BRANCH]);
 
   useEffect(() => {
     loadMappings();
-  }, [loadMappings, refreshTrigger]);
+  }, [loadMappings]);
+
+  useEffect(() => {
+    if (prevRefreshRef.current !== refreshTrigger) {
+      prevRefreshRef.current = refreshTrigger;
+      loadMappings();
+    }
+  }, [refreshTrigger, loadMappings]);
 
   const columns = [
     {
-      key: "screenName",
-      label: "Screen Name",
-      accessor: "screenName",
+      key: "description",
+      label: "Description",
+      accessor: "description",
       type: "text",
     },
     {
-      key: "screenCode",
-      label: "Screen Code",
-      accessor: "screenCode",
-      type: "text",
-    },
-    {
-      key: "docCode",
-      label: "Doc Code",
-      accessor: "docCode",
-      type: "text",
-    },
-    {
-      key: "prefix",
-      label: "Prefix",
-      accessor: "prefix",
-      type: "text",
-    },
-    {
-      key: "branch",
+      key: "branchName",
       label: "Branch",
-      accessor: "branch",
+      accessor: "branchName",
       type: "text",
     },
     {
-      key: "year",
-      label: "Year",
-      accessor: "year",
+      key: "finYear",
+      label: "Financial Year",
+      accessor: "finYear",
+      type: "text",
+    },
+    {
+      key: "detailsCount",
+      label: "Details",
+      accessor: "detailsCount",
       type: "text",
     },
     {
@@ -138,59 +93,7 @@ const DocTypeMappingList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     },
   ];
 
-  const searchFields = ["screenName", "screenCode", "docCode", "prefix"];
-
-  // Branch + Year filters, rendered inside CommonListViewTable's header row
-  // (next to the search box) via the customHeaderActions slot.
-  const headerFilters = (
-    <div className="flex items-center gap-2">
-      <select
-        value={selectedBranch}
-        onChange={(e) => setSelectedBranch(e.target.value)}
-        className="
-          w-full sm:w-44
-          px-3 py-1.5 rounded-md border text-sm
-          bg-white dark:bg-gray-800
-          text-gray-900 dark:text-gray-100
-          border-gray-300 dark:border-gray-600
-          focus:outline-none
-          focus:ring-2 focus:ring-blue-500
-          disabled:opacity-50
-        "
-        disabled={branchLoading}
-      >
-        <option value="">Select Branch</option>
-
-        {branches.map((branch) => (
-          <option key={branch.id} value={branch.branchCode}>
-            {branch.branchName} ({branch.branchCode})
-          </option>
-        ))}
-      </select>
-
-      <select
-        value={selectedYear}
-        onChange={(e) => setSelectedYear(e.target.value)}
-        className="
-          w-full sm:w-28
-          px-3 py-1.5 rounded-md border text-sm
-          bg-white dark:bg-gray-800
-          text-gray-900 dark:text-gray-100
-          border-gray-300 dark:border-gray-600
-          focus:outline-none
-          focus:ring-2 focus:ring-blue-500
-        "
-      >
-        <option value="">Select Year</option>
-
-        {yearOptions.map((year) => (
-          <option key={year} value={year}>
-            {year}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
+  const searchFields = ["description", "branchName"];
 
   return (
     <div className="h-full flex flex-col">
@@ -207,17 +110,12 @@ const DocTypeMappingList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
         showSerialNumber={true}
         itemsPerPageOptions={[5, 10, 20, 50, 100]}
         defaultItemsPerPage={10}
-        emptyMessage={
-          selectedBranch && selectedYear
-            ? "No Doc Type Mappings found"
-            : "Select branch and year to load mappings"
-        }
+        emptyMessage="No Doc Type Mappings found"
         loadingMessage="Loading Doc Type Mappings..."
         enableRefresh={true}
         onRefresh={loadMappings}
         enableExport={true}
         exportFileName="DocTypeMappings"
-        customHeaderActions={headerFilters}
       />
     </div>
   );
