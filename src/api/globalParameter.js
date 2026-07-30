@@ -8,54 +8,26 @@ export const GlobalParameterAPI = {
     return res?.paramObjectsMap?.financialYearVOs ?? [];
   },
 
-  getBranches: async (orgid, userName) => {
+  getBranches: async (orgid, user) => {
     const res = await apiClient.get(
-      "/api/commonmaster/globalparamBranchByUserName",
+      "/api/GlobalParam/globalparamBranchByUserName",
       {
-        params: { orgid, userName },
+        params: { orgid, user },
       }
     );
-    return res?.paramObjectsMap?.GlopalParameters ?? [];
+    return res?.paramObjectsMap?.GlobalParameters ?? [];
   },
 
-  getCustomer: async (orgid, branchcode, userName) => {
-    const res = await apiClient.get(
-      "/api/commonmaster/globalparamCustomerByUserName",
-      {
-        params: { orgid, branchcode, userName },
-      }
-    );
-    return res?.paramObjectsMap?.GlopalParameterCustomer ?? [];
-  },
-  getClients: async (orgid, branchcode, userName, customer) => {
-    const res = await apiClient.get(
-      "/api/commonmaster/globalparamClientByUserName",
-      {
-        params: { orgid, branchcode, userName, customer },
-      }
-    );
-    return res?.paramObjectsMap?.GlopalParameterClient ?? [];
-  },
-  getWarehouses: async (orgid, branchcode) => {
-    const res = await apiClient.get(
-      "/api/warehousemastercontroller/warehouse/branch",
-      {
-        params: { orgid, branchcode },
-      }
-    );
-    return res?.paramObjectsMap?.Warehouse;
-  },
-
-  getCurrentGlobalParameters: async (orgid, userId) => {
-    const res = await apiClient.get("/api/commonmaster/globalparam/username", {
-      params: { orgid, userId },
+  getCurrentGlobalParameters: async (orgid, userid) => {
+    const res = await apiClient.get("/api/GlobalParam/globalparam/username", {
+      params: { orgid, userid },
     });
     return res?.paramObjectsMap?.globalParam;
     
   },
 
   saveGlobalParameters: async (data) => {
-    const res = await apiClient.put("/api/commonmaster/globalparam", data);
+    const res = await apiClient.put("/api/GlobalParam/globalparam", data);
     return res;
   },
 };

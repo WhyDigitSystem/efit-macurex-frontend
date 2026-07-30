@@ -105,7 +105,7 @@ const GlobalSelectionDropdown = () => {
     setLoading(prev => ({ ...prev, branches: true }));
     setError(prev => ({ ...prev, branches: null }));
     try {
-      const branchData = await GlobalParameterAPI.getBranches(user.userData.orgId, user.userData.userName);
+      const branchData = await GlobalParameterAPI.getBranches(user.userData.orgId, user.userData.usersId);
       setBranches(branchData);
 
       // Only set default if we don't have current global params
@@ -228,10 +228,7 @@ const GlobalSelectionDropdown = () => {
   const handleApplyChanges = async () => {
     if (
       !selections.financialYear ||
-      !selections.branch ||
-      !selections.customer ||
-      !selections.client ||
-      !selections.warehouse
+      !selections.branch
     ) {
       setError(prev => ({ ...prev, saving: "Please fill all required fields" }));
       return;
@@ -247,15 +244,11 @@ const GlobalSelectionDropdown = () => {
       );
 
       const payload = {
-        branch: selectedBranch?.branch || "",
-        branchId: selectedBranch?.id || "",
-        branchcode: selections.branch,
-        customer: selections.customer,
-        client: selections.client,
-        finYear: selections.financialYear,
-        warehouse: selections.warehouse,
-        userid: user.userData.usersId,
+        branchId: selectedBranch?.branchId || 0,
+        financialYear: selections.financialYear,
+        id: currentGlobalParams?.id || 0,
         orgId: user.userData.orgId,
+        userId: user.userData.usersId,
       };
 
       console.log("Saving Payload:", payload);
@@ -264,17 +257,20 @@ const GlobalSelectionDropdown = () => {
 
       if (response.status) {
 
-        // Update localStorage
-        localStorage.setItem("branch", payload.branch);
-        localStorage.setItem("branchId", payload.branchId);
-        localStorage.setItem("branchcode", payload.branchcode);
-        localStorage.setItem("customer", payload.customer);
-        localStorage.setItem("client", payload.client);
-        localStorage.setItem("finYear", payload.finYear);
-        localStorage.setItem("warehouse", payload.warehouse);
-
-        // Optional: store everything together
-        localStorage.setItem("globalParams", JSON.stringify(payload));
+        // localStorage.setItem("branch", selectedBranch?.branch || "");
+        localStorage.setItem("branchId", selectedBranch?.branchId);
+        localStorage.setItem("finYear", selections.financialYear);
+console.log('Branchid', selectedBranch?.branchId)
+console.log('finYear', selections.financialYear)
+        localStorage.setItem(
+          "globalParams",
+          JSON.stringify({
+            ...payload,
+            branch: selectedBranch?.branch,
+            branchcode: selectedBranch?.branchcode,
+            finYear: selections.financialYear,
+          })
+        );
 
         setCurrentGlobalParams(payload);
         setSuccess(true);
@@ -336,16 +332,12 @@ const GlobalSelectionDropdown = () => {
     if (error.saving) setError(prev => ({ ...prev, saving: null }));
   };
 
+  // const formatFinancialYear = (finYear) => {
+  //   return `${finYear}-${parseInt(finYear) + 1}`;
+  // };
+
   const formatFinancialYear = (finYear) => {
-    return `${finYear}-${parseInt(finYear) + 1}`;
-  };
-
-  const getCustomerName = (customer) => {
-    return customer.customer || customer.customerName || customer.name || `Customer ${customer.id}`;
-  };
-
-  const getCustomerValue = (customer) => {
-    return customer.customer || customer.customerCode || customer.id?.toString() || '';
+    return `${finYear}`;
   };
 
   const getBranchName = (branch) => {
@@ -354,22 +346,6 @@ const GlobalSelectionDropdown = () => {
 
   const getBranchValue = (branch) => {
     return branch.branchcode || branch.id?.toString() || '';
-  };
-
-  const getClientName = (client) => {
-    return client.client || client.clientName || client.name || `Client ${client.id}`;
-  };
-
-  const getClientValue = (client) => {
-    return client.client || client.clientCode || client.id?.toString() || '';
-  };
-
-  const getWarehouseName = (warehouse) => {
-    return warehouse.Warehouse || warehouse.warehouse || warehouse.name || `Warehouse ${warehouse.id}`;
-  };
-
-  const getWarehouseValue = (warehouse) => {
-    return warehouse.Warehouse || warehouse.warehouse || warehouse.id?.toString() || '';
   };
 
   // Show current settings in the dropdown header
@@ -444,7 +420,6 @@ const GlobalSelectionDropdown = () => {
                     className={year.currentFinYear ? 'font-semibold bg-blue-50 dark:bg-blue-900/30' : ''}
                   >
                     {formatFinancialYear(year.finYear)}
-                    {year.currentFinYear}
                   </option>
                 ))}
               </select>
@@ -483,130 +458,6 @@ const GlobalSelectionDropdown = () => {
                     value={getBranchValue(branch)}
                   >
                     {getBranchName(branch)}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-
-          {/* Customer Dropdown */}
-          <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Customer
-            </label>
-            {loading.customers ? (
-              <div className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
-                Loading customers...
-              </div>
-            ) : error.customers ? (
-              <div className="w-full px-3 py-2 text-sm border border-red-300 dark:border-red-600 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400">
-                Error: {error.customers}
-                <button
-                  onClick={() => fetchCustomers(selections.branch)}
-                  className="ml-2 text-xs underline hover:text-red-700 dark:hover:text-red-300"
-                >
-                  Retry
-                </button>
-              </div>
-            ) : (
-              <select
-                value={selections.customer}
-                onChange={(e) => handleSelectionChange('customer', e.target.value)}
-                disabled={!selections.branch}
-                className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
-              >
-                <option value="">
-                  {!selections.branch ? 'Select branch first' : 'Select Customer'}
-                </option>
-                {customers.map((customer) => (
-                  <option
-                    key={getCustomerValue(customer)}
-                    value={getCustomerValue(customer)}
-                  >
-                    {getCustomerName(customer)}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-
-          {/* Client Dropdown */}
-          <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Client
-            </label>
-            {loading.clients ? (
-              <div className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
-                Loading clients...
-              </div>
-            ) : error.clients ? (
-              <div className="w-full px-3 py-2 text-sm border border-red-300 dark:border-red-600 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400">
-                Error: {error.clients}
-                <button
-                  onClick={() => fetchClients(selections.branch, selections.customer)}
-                  className="ml-2 text-xs underline hover:text-red-700 dark:hover:text-red-300"
-                >
-                  Retry
-                </button>
-              </div>
-            ) : (
-              <select
-                value={selections.client}
-                onChange={(e) => handleSelectionChange('client', e.target.value)}
-                disabled={!selections.branch || !selections.customer}
-                className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
-              >
-                <option value="">
-                  {!selections.branch ? 'Select branch first' :
-                    !selections.customer ? 'Select customer first' : 'Select Client'}
-                </option>
-                {clients.map((client) => (
-                  <option
-                    key={getClientValue(client)}
-                    value={getClientValue(client)}
-                  >
-                    {getClientName(client)}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-
-          {/* Warehouse Dropdown */}
-          <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Warehouse
-            </label>
-            {loading.warehouses ? (
-              <div className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
-                Loading warehouses...
-              </div>
-            ) : error.warehouses ? (
-              <div className="w-full px-3 py-2 text-sm border border-red-300 dark:border-red-600 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400">
-                Error: {error.warehouses}
-                <button
-                  onClick={() => fetchWarehouses(selections.branch)}
-                  className="ml-2 text-xs underline hover:text-red-700 dark:hover:text-red-300"
-                >
-                  Retry
-                </button>
-              </div>
-            ) : (
-              <select
-                value={selections.warehouse}
-                onChange={(e) => handleSelectionChange('warehouse', e.target.value)}
-                disabled={!selections.branch}
-                className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
-              >
-                <option value="">
-                  {!selections.branch ? 'Select branch first' : 'Select Warehouse'}
-                </option>
-                {warehouses.map((warehouse) => (
-                  <option
-                    key={getWarehouseValue(warehouse)}
-                    value={getWarehouseValue(warehouse)}
-                  >
-                    {getWarehouseName(warehouse)}
                   </option>
                 ))}
               </select>

@@ -42,7 +42,7 @@ const FinancialYearMasterList = ({
       label: "Financial Year",
       accessor: (row) =>
         row.financialYear ||
-        (row.finYear ? `${row.finYear}-${row.finYear + 1}` : "-"),
+        (row.finYear ? `${row.finYear}` : "-"),
       type: "text",
     },
     {

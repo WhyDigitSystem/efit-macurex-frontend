@@ -1,75 +1,75 @@
 import React, { useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import gstStateApi from "../../../api/gstStateApi";
-const GSTStateList = ({ onAddNew, onEdit,onBack }) => {
+const GSTStateList = ({ onAddNew, onEdit, onBack }) => {
   const [itemData, setItemData] = useState([]);
   const [loading, setLoading] = useState(false);
-   const [orgId] = useState(localStorage.getItem("orgId"));
-      const branchId = "1000000001";
- 
- 
-   const loadItems = async () => {
-     try{
-     setLoading(true);
-     const data = await gstStateApi.getGstStateList(Number(branchId),orgId);
-     setItemData(data);
- 
-     }catch(error){
-        console.log(error);
-     }finally{
-       setLoading(false);
-     }
-   };
+  const [orgId] = useState(localStorage.getItem("orgId"));
+  const branch = localStorage.getItem("branchId");
 
-     useEffect(() => {
-       loadItems();
-     }, []);
+
+  const loadItems = async () => {
+    try {
+      setLoading(true);
+      const data = await gstStateApi.getGstStateList(branch, orgId);
+      setItemData(data);
+
+    } catch (error) {
+      console.log(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadItems();
+  }, []);
 
   const handleEdit = (item) => {
     onEdit(item);
   };
 
   const columns = [
-  {
-    key: "statecode",
-    label: "State Code",
-    accessor: "stateCode",
-    type: "text",
-    noWrap: true,
-  },
-  {
-    key: "statename",
-    label: "State Name",
-    accessor: "statename",
-    type: "text",
-  },
-  {
-    key: "gststateid",
-    label: "GST State ID",
-    accessor: "gstStateId",
-    type: "text",
-  },
-  {
-    key: "actions",
-    label: "Actions",
-    type: "actions",
-    align: "center",
-    width: "90px",
-  },
-];
+    {
+      key: "statecode",
+      label: "State Code",
+      accessor: "stateCode",
+      type: "text",
+      noWrap: true,
+    },
+    {
+      key: "stateName",
+      label: "State Name",
+      accessor: "stateName",
+      type: "text",
+    },
+    {
+      key: "gststateid",
+      label: "GST State ID",
+      accessor: "gstStateId",
+      type: "text",
+    },
+    {
+      key: "actions",
+      label: "Actions",
+      type: "actions",
+      align: "center",
+      width: "90px",
+    },
+  ];
 
   const searchFields = [
-  "itemCode",
-  "itemType",
-  "itemName",
-  "itemDescription",
-  "materialType",
-  "materialGroup",
-  "materialSubGroup",
-  "primaryUnit",
-  "hsnCode",
-  "stockLocation",
-];
+    "itemCode",
+    "itemType",
+    "itemName",
+    "itemDescription",
+    "materialType",
+    "materialGroup",
+    "materialSubGroup",
+    "primaryUnit",
+    "hsnCode",
+    "stockLocation",
+  ];
 
   const filterOptions = [
     {
