@@ -1,7 +1,6 @@
 import { useState } from "react";
 import SalesZoneMasterList from "./SalesZoneMasterList";
 import SalesZoneMasterForm from "./SalesZoneMasterForm";
-import salesZoneAPI from "../../../api/salesZoneAPI";
 
 const SalesZoneMaster = () => {
   const [screen, setScreen] = useState("list");
@@ -21,16 +20,6 @@ const SalesZoneMaster = () => {
     setScreen("list");
   };
 
-  const handleSave = async (payload) => {
-    try {
-      await salesZoneAPI.updateCreateSalesZone(payload); // Create/Update
-      handleBack();
-    } catch (error) {
-      console.error("Error saving sales zone:", error);
-      throw error;
-    }
-  };
-
   return (
     <>
       {screen === "list" && (
@@ -45,7 +34,6 @@ const SalesZoneMaster = () => {
         <SalesZoneMasterForm
           editData={editData}
           onBack={handleBack}
-          onSave={handleSave}
         />
       )}
     </>

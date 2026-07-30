@@ -1,24 +1,24 @@
 import apiClient from "./apiClient";
 
-export const salesZoneAPI = {
+const salesZoneAPI = {
   getSalesZoneById: async (id) => {
     try {
-      const res = await apiClient.get(
-        `/api/commonmaster/getSalesZoneById?id=${id}`,
-      );
-      return res?.paramObjectsMap?.salesZoneVO || null;
+      const res = await apiClient.get("/api/commonmaster/getSalesZoneMasterById", {
+        params: { id },
+      });
+      return res?.paramObjectsMap?.salesZoneMasterVO || null;
     } catch (error) {
       console.error("Error fetching sales zone by ID:", error);
       throw error;
     }
   },
 
-  getSalesZoneByOrgId: async (orgId) => {
+  getSalesZoneByOrgId: async (orgId, branch) => {
     try {
-      const res = await apiClient.get(
-        `/api/commonmaster/getSalesZoneByOrgId?orgId=${orgId}`,
-      );
-      return res?.paramObjectsMap?.salesZoneList || [];
+      const res = await apiClient.get("/api/commonmaster/getSalesZoneMasterByOrgId", {
+        params: { orgId, branch },
+      });
+      return res?.paramObjectsMap?.salesZoneMasterList || [];
     } catch (error) {
       console.error("Error fetching sales zone list:", error);
       throw error;
@@ -28,7 +28,7 @@ export const salesZoneAPI = {
   updateCreateSalesZone: async (salesZoneDTO) => {
     try {
       const res = await apiClient.put(
-        "/api/commonmaster/updateCreateSalesZoneMaster",
+        "/api/commonmaster/createUpdateSalesZoneMaster",
         salesZoneDTO,
       );
       return res;

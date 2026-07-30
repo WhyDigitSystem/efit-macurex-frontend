@@ -13,7 +13,7 @@ const controlClasses =
 const labelClasses =
   "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
-const SalesZoneMasterForm = ({ onBack, onSave, editData }) => {
+const SalesZoneMasterForm = ({ onBack, editData }) => {
   const ORG_ID = parseInt(localStorage.getItem("orgId"));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { addToast } = useToast();
@@ -23,11 +23,12 @@ const SalesZoneMasterForm = ({ onBack, onSave, editData }) => {
   const [form, setForm] = useState({
     id: editData?.id || 0,
     zoneId: editData?.zoneId || "",
-    zoneDescription: editData?.zoneDescription || "",
-    active: editData?.active ?? true,
+    zoneDescription: editData?.zonedescription || editData?.zoneDescription || "",
+    active: editData?.active === "Active" || editData?.active === true,
     cancelRemarks: editData?.cancelRemarks || "",
     orgId: ORG_ID,
     createdBy: localStorage.getItem("userName") || "SYSTEM",
+    branch: Number(localStorage.getItem("branchId")||1000000001),
   });
 
   // Field labels for toast messages
@@ -128,11 +129,12 @@ const SalesZoneMasterForm = ({ onBack, onSave, editData }) => {
 
     const payload = {
       zoneId: form.zoneId,
-      zoneDescription: form.zoneDescription,
+      zonedescription: form.zoneDescription,
       active: Boolean(form.active),
       cancelRemarks: form.cancelRemarks,
       createdBy: form.createdBy,
       orgId: form.orgId,
+      branch: form.branch,
     };
 
     if (form.id && form.id > 0) {
@@ -148,15 +150,13 @@ const SalesZoneMasterForm = ({ onBack, onSave, editData }) => {
       const status = response?.status === true || response?.statusFlag === "Ok";
 
       if (status) {
-        const successMessage =
-          response?.paramObjectsMap?.message ||
-          (form.id && form.id > 0
+        addToast(
+          form.id && form.id > 0
             ? "Sales Zone updated successfully!"
-            : "Sales Zone created successfully!");
-
-        addToast(successMessage, "success");
-
-        if (onSave) onSave(payload);
+            : "Sales Zone created successfully!",
+          "success"
+        );
+        onBack();
       } else {
         const errorMessage =
           response?.paramObjectsMap?.message ||

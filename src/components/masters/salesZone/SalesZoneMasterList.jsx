@@ -8,17 +8,16 @@ const SalesZoneMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   const [loading, setLoading] = useState(false);
 
   const ORG_ID = Number(localStorage.getItem("orgId"));
+  const BRANCH = Number(localStorage.getItem("branchId")||1000000001);
 
   const loadZones = useCallback(async () => {
+    if (!ORG_ID) return;
     try {
       setLoading(true);
-
-      const response = await salesZoneAPI.getSalesZoneByOrgId(ORG_ID);
-
+      const response = await salesZoneAPI.getSalesZoneByOrgId(ORG_ID, BRANCH);
       const sortedData = (response || []).sort(
         (a, b) => (b.id || 0) - (a.id || 0),
       );
-
       setZoneData(sortedData);
     } catch (error) {
       console.error("Failed to load sales zones:", error);
@@ -27,7 +26,7 @@ const SalesZoneMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     } finally {
       setLoading(false);
     }
-  }, [ORG_ID]);
+  }, [ORG_ID, BRANCH]);
 
   useEffect(() => {
     loadZones();
@@ -43,7 +42,7 @@ const SalesZoneMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     {
       key: "zoneDescription",
       label: "Zone Description",
-      accessor: "zoneDescription",
+      accessor: "zonedescription",
       type: "text",
     },
     {
@@ -61,7 +60,7 @@ const SalesZoneMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     },
   ];
 
-  const searchFields = ["zoneId", "zoneDescription"];
+  const searchFields = ["zoneId", "zonedescription"];
 
   return (
     <div className="h-full flex flex-col">
