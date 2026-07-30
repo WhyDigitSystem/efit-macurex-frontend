@@ -1,7 +1,6 @@
 import { useState } from "react";
 import DailyExchangeRateMasterList from "./DailyExchangeRateMasterList";
 import DailyExchangeRateMasterForm from "./DailyExchangeRateMasterForm";
-import dailyExchangeRateAPI from "../../../api/dailyExchangeRateAPI";
 
 const DailyExchangeRateMaster = () => {
   const [screen, setScreen] = useState("list");
@@ -21,16 +20,6 @@ const DailyExchangeRateMaster = () => {
     setScreen("list");
   };
 
-  const handleSave = async (payload) => {
-    try {
-      await dailyExchangeRateAPI.updateCreateExchangeRate(payload); // Create/Update
-      handleBack();
-    } catch (error) {
-      console.error("Error saving exchange rate:", error);
-      throw error;
-    }
-  };
-
   return (
     <>
       {screen === "list" && (
@@ -45,7 +34,6 @@ const DailyExchangeRateMaster = () => {
         <DailyExchangeRateMasterForm
           editData={editData}
           onBack={handleBack}
-          onSave={handleSave}
         />
       )}
     </>

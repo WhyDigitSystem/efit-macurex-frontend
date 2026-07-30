@@ -1,37 +1,33 @@
 import apiClient from "./apiClient";
 
-export const dailyExchangeRateAPI = {
-  getExchangeRateById: async (id) => {
+const dailyExchangeRateAPI = {
+  getDailyExRateById: async (id) => {
     try {
-      const res = await apiClient.get(
-        `/api/commonmaster/getExchangeRateById?id=${id}`,
-      );
-      return res?.paramObjectsMap?.exchangeRateVO || null;
+      const res = await apiClient.get("/api/commonmaster/getDailyExRateById", {
+        params: { id },
+      });
+      return res?.paramObjectsMap?.dailyExchangeRateVO || null;
     } catch (error) {
       console.error("Error fetching exchange rate by ID:", error);
       throw error;
     }
   },
 
-  // month / year are optional filters - pass "" to skip a filter
-  getExchangeRateByOrgId: async (month, year, orgId) => {
+  getDailyExRateByOrgId: async (orgId, branch) => {
     try {
-      const res = await apiClient.get(
-        `/api/commonmaster/getExchangeRateByOrgId?month=${month}&year=${year}&orgId=${orgId}`,
-      );
-      return res?.paramObjectsMap?.exchangeRateList || [];
+      const res = await apiClient.get("/api/commonmaster/getDailyExRateByOrgId", {
+        params: { orgId, branch },
+      });
+      return res?.paramObjectsMap?.dailyExchangeRateVO || [];
     } catch (error) {
       console.error("Error fetching exchange rate list:", error);
       throw error;
     }
   },
 
-  updateCreateExchangeRate: async (exchangeRateDTO) => {
+  updateCreateDailyExRate: async (dto) => {
     try {
-      const res = await apiClient.put(
-        "/api/commonmaster/updateCreateExchangeRateMaster",
-        exchangeRateDTO,
-      );
+      const res = await apiClient.put("/api/commonmaster/updateCreateDailyExRate", dto);
       return res;
     } catch (error) {
       console.error("Error creating/updating exchange rate:", error);

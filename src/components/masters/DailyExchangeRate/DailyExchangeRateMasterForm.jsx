@@ -1,7 +1,8 @@
 import { ArrowLeft, Save, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useToast } from "../../Toast/ToastContext";
 import dailyExchangeRateAPI from "../../../api/dailyExchangeRateAPI";
+import currencyAPI from "../../../api/currencyAPI";
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -16,27 +17,41 @@ const labelClasses =
 const YEARS_BACK = 5;
 const YEARS_FORWARD = 2;
 
-const MONTHS = [
-  { value: 1, label: "January" },
-  { value: 2, label: "February" },
-  { value: 3, label: "March" },
-  { value: 4, label: "April" },
-  { value: 5, label: "May" },
-  { value: 6, label: "June" },
-  { value: 7, label: "July" },
-  { value: 8, label: "August" },
-  { value: 9, label: "September" },
-  { value: 10, label: "October" },
-  { value: 11, label: "November" },
-  { value: 12, label: "December" },
+const MONTH_VALUES = [
+  { value: "JANUARY", label: "January" },
+  { value: "FEBRUARY", label: "February" },
+  { value: "MARCH", label: "March" },
+  { value: "APRIL", label: "April" },
+  { value: "MAY", label: "May" },
+  { value: "JUNE", label: "June" },
+  { value: "JULY", label: "July" },
+  { value: "AUGUST", label: "August" },
+  { value: "SEPTEMBER", label: "September" },
+  { value: "OCTOBER", label: "October" },
+  { value: "NOVEMBER", label: "November" },
+  { value: "DECEMBER", label: "December" },
 ];
 
-const DailyExchangeRateMasterForm = ({ onBack, onSave, editData }) => {
+const DailyExchangeRateMasterForm = ({ onBack, editData }) => {
   const ORG_ID = parseInt(localStorage.getItem("orgId"));
+  const BRANCH = parseInt(localStorage.getItem("branchId") || 1000000001);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { addToast } = useToast();
 
   const [fieldErrors, setFieldErrors] = useState({});
+  const [currencyOptions, setCurrencyOptions] = useState([]);
+
+  useEffect(() => {
+    const loadCurrencies = async () => {
+      try {
+        const currencies = await currencyAPI.getCurrencies(ORG_ID);
+        setCurrencyOptions(currencies || []);
+      } catch (err) {
+        console.error("Failed to load currencies", err);
+      }
+    };
+    if (ORG_ID) loadCurrencies();
+  }, [ORG_ID]);
 
   const yearOptions = useMemo(() => {
     const currentYear = new Date().getFullYear();
@@ -51,15 +66,19 @@ const DailyExchangeRateMasterForm = ({ onBack, onSave, editData }) => {
     return years;
   }, []);
 
+  const todayStr = new Date().toISOString().split("T")[0];
+
   const [form, setForm] = useState({
     id: editData?.id || 0,
-    currency: editData?.currency || "",
-    currencyDesc: editData?.currencyDesc || "",
+    currency: editData?.currency?.id || "",
     sellingExRate: editData?.sellingExRate ?? "",
     buyingExRate: editData?.buyingExRate ?? "",
     month: editData?.month || "",
-    year: editData?.year || "",
-    active: editData?.active ?? true,
+    year: editData?.year ? Number(editData.year) : "",
+    effectiveFrom: editData?.effectiveFrom || todayStr,
+    financialYear: editData?.financialYear || "",
+    branch: BRANCH,
+    active: editData?.active === "Active" || editData?.active === true,
     cancelRemarks: editData?.cancelRemarks || "",
     orgId: ORG_ID,
     createdBy: localStorage.getItem("userName") || "SYSTEM",
@@ -68,7 +87,6 @@ const DailyExchangeRateMasterForm = ({ onBack, onSave, editData }) => {
   // Field labels for toast messages
   const fieldLabels = {
     currency: "Currency",
-    currencyDesc: "Currency Desc",
     sellingExRate: "Selling Ex.Rate",
     buyingExRate: "Buying Ex.Rate",
     month: "Month",
@@ -87,44 +105,10 @@ const DailyExchangeRateMasterForm = ({ onBack, onSave, editData }) => {
       return;
     }
 
-    const alphanumericRegex = /^[A-Za-z0-9]*$/;
-    const nameRegex = /^[A-Za-z0-9 .,&'-]*$/;
     const decimalRegex = /^\d*\.?\d{0,4}$/;
 
     switch (name) {
       case "currency":
-        if (!alphanumericRegex.test(value)) {
-          setFieldErrors((prev) => ({
-            ...prev,
-            currency: "Only alphanumeric characters are allowed",
-          }));
-          return;
-        }
-        if (value.length > 10) {
-          setFieldErrors((prev) => ({
-            ...prev,
-            currency: "Currency must be maximum 10 characters",
-          }));
-          return;
-        }
-        break;
-
-      case "currencyDesc":
-        if (!nameRegex.test(value)) {
-          setFieldErrors((prev) => ({
-            ...prev,
-            currencyDesc:
-              "Special characters other than . , & ' - are not allowed",
-          }));
-          return;
-        }
-        if (value.length > 100) {
-          setFieldErrors((prev) => ({
-            ...prev,
-            currencyDesc: "Currency Desc must be maximum 100 characters",
-          }));
-          return;
-        }
         break;
 
       case "sellingExRate":
@@ -152,17 +136,13 @@ const DailyExchangeRateMasterForm = ({ onBack, onSave, editData }) => {
         break;
     }
 
-    const updatedValue = name === "currency" ? value.toUpperCase() : value;
-
-    setForm((prev) => ({ ...prev, [name]: updatedValue }));
+    setForm((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSave = async () => {
     const errors = {};
 
-    if (!form.currency.trim()) errors.currency = "Currency is required";
-    if (!form.currencyDesc.trim())
-      errors.currencyDesc = "Currency Desc is required";
+    if (!form.currency) errors.currency = "Currency is required";
     if (form.sellingExRate === "" || Number(form.sellingExRate) <= 0)
       errors.sellingExRate = "Selling Ex.Rate is required";
     if (form.buyingExRate === "" || Number(form.buyingExRate) <= 0)
@@ -183,13 +163,17 @@ const DailyExchangeRateMasterForm = ({ onBack, onSave, editData }) => {
 
     setIsSubmitting(true);
 
+    const financialYearVal = form.financialYear || (form.year ? `${form.year}-${Number(form.year) + 1}` : "");
+
     const payload = {
-      currency: form.currency,
-      currencyDesc: form.currencyDesc,
+      currency: Number(form.currency),
       sellingExRate: Number(form.sellingExRate),
       buyingExRate: Number(form.buyingExRate),
       month: form.month,
-      year: form.year,
+      year: form.year ? Number(form.year) : null,
+      effectiveFrom: form.effectiveFrom || null,
+      financialYear: financialYearVal,
+      branch: form.branch,
       active: Boolean(form.active),
       cancelRemarks: form.cancelRemarks,
       createdBy: form.createdBy,
@@ -204,7 +188,7 @@ const DailyExchangeRateMasterForm = ({ onBack, onSave, editData }) => {
 
     try {
       const response =
-        await dailyExchangeRateAPI.updateCreateExchangeRate(payload);
+        await dailyExchangeRateAPI.updateCreateDailyExRate(payload);
       console.log("📥 Response:", response);
 
       const status = response?.status === true || response?.statusFlag === "Ok";
@@ -217,8 +201,7 @@ const DailyExchangeRateMasterForm = ({ onBack, onSave, editData }) => {
             : "Exchange Rate created successfully!");
 
         addToast(successMessage, "success");
-
-        if (onSave) onSave(payload);
+        if (onBack) onBack();
       } else {
         const errorMessage =
           response?.paramObjectsMap?.message ||
@@ -268,40 +251,26 @@ const DailyExchangeRateMasterForm = ({ onBack, onSave, editData }) => {
               Currency <span className="text-red-500">*</span>
             </label>
 
-            <input
+            <select
               name="currency"
               value={form.currency}
               onChange={handleChange}
               className={`${controlClasses} ${
                 fieldErrors.currency ? "border-red-500" : ""
               }`}
-            />
+            >
+              <option value="">Select Currency</option>
+
+              {currencyOptions.map((cur) => (
+                <option key={cur.id} value={cur.id}>
+                  {cur.currency} - {cur.mainCurrency}
+                </option>
+              ))}
+            </select>
 
             {fieldErrors.currency && (
               <p className="text-red-500 text-[11px] mt-1">
                 {fieldErrors.currency}
-              </p>
-            )}
-          </div>
-
-          {/* Currency Desc */}
-          <div>
-            <label className={labelClasses}>
-              Currency Desc <span className="text-red-500">*</span>
-            </label>
-
-            <input
-              name="currencyDesc"
-              value={form.currencyDesc}
-              onChange={handleChange}
-              className={`${controlClasses} ${
-                fieldErrors.currencyDesc ? "border-red-500" : ""
-              }`}
-            />
-
-            {fieldErrors.currencyDesc && (
-              <p className="text-red-500 text-[11px] mt-1">
-                {fieldErrors.currencyDesc}
               </p>
             )}
           </div>
@@ -368,7 +337,7 @@ const DailyExchangeRateMasterForm = ({ onBack, onSave, editData }) => {
             >
               <option value="">Select Month</option>
 
-              {MONTHS.map((month) => (
+              {MONTH_VALUES.map((month) => (
                 <option key={month.value} value={month.value}>
                   {month.label}
                 </option>
@@ -410,6 +379,31 @@ const DailyExchangeRateMasterForm = ({ onBack, onSave, editData }) => {
                 {fieldErrors.year}
               </p>
             )}
+          </div>
+
+          {/* Effective From */}
+          <div>
+            <label className={labelClasses}>Effective From</label>
+
+            <input
+              type="date"
+              name="effectiveFrom"
+              value={form.effectiveFrom}
+              onChange={handleChange}
+              className={controlClasses}
+            />
+          </div>
+
+          {/* Financial Year */}
+          <div>
+            <label className={labelClasses}>Financial Year</label>
+
+            <input
+              name="financialYear"
+              value={form.financialYear}
+              onChange={handleChange}
+              className={controlClasses}
+            />
           </div>
 
           {/* Active */}
