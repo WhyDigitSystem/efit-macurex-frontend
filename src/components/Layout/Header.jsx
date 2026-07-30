@@ -42,14 +42,17 @@ const Header = () => {
 
   const globalParam = JSON.parse(localStorage.getItem("globalParams") || "{}");
 
-  const loginBranch =
-    globalParam?.branch || localStorage.getItem("branch") || "";
+  // const loginBranch =
+  //   globalParam?.branch || localStorage.getItem("branch") || "";
 
-  const loginCustomer =
-    globalParam?.customer || localStorage.getItem("customer") || "";
+  const loginBranch =
+    globalParam?.branch?.branchName ||
+    globalParam?.branchName ||
+    localStorage.getItem("branch") ||
+    "";
 
   const loginFinYear =
-    globalParam?.finYear || localStorage.getItem("finYear") || "";
+    globalParam?.financialYear || localStorage.getItem("finYear") || "";
   const navigate = useNavigate();
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
@@ -104,6 +107,7 @@ const Header = () => {
   };
 
   const handleLogout = () => {
+    localStorage.clear();
     dispatch(logout());
   };
 
@@ -267,11 +271,10 @@ const Header = () => {
                           <button
                             onClick={() => goToScreen(screen)}
                             onMouseEnter={() => setActiveIndex(idx)}
-                            className={`w-full flex items-center justify-between text-left px-3 py-2 text-sm transition-colors ${
-                              idx === activeIndex
+                            className={`w-full flex items-center justify-between text-left px-3 py-2 text-sm transition-colors ${idx === activeIndex
                                 ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
                                 : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
-                            }`}
+                              }`}
                           >
                             <span className="font-medium">{screen.label}</span>
                           </button>
@@ -306,17 +309,6 @@ const Header = () => {
 
                 <span
                   className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full
-      bg-amber-50 dark:bg-amber-900/30
-      text-amber-700 dark:text-amber-300
-      border border-gray-300 dark:border-gray-600
-      text-xs font-medium"
-                >
-                  <UserCog className="h-3.5 w-3.5" />
-                  {loginCustomer || "Customer"}
-                </span>
-
-                <span
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full
       bg-blue-50 dark:bg-blue-900/30
       text-blue-700 dark:text-blue-300
       border border-gray-300 dark:border-gray-600
@@ -337,18 +329,16 @@ const Header = () => {
             >
               <span className="relative block h-5 w-5">
                 <Sun
-                  className={`absolute inset-0 h-5 w-5 text-yellow-400 transition-all duration-500 ease-out ${
-                    theme === "dark"
+                  className={`absolute inset-0 h-5 w-5 text-yellow-400 transition-all duration-500 ease-out ${theme === "dark"
                       ? "rotate-0 scale-100 opacity-100"
                       : "rotate-90 scale-50 opacity-0"
-                  }`}
+                    }`}
                 />
                 <Moon
-                  className={`absolute inset-0 h-5 w-5 text-slate-700 dark:text-slate-300 transition-all duration-500 ease-out ${
-                    theme === "dark"
+                  className={`absolute inset-0 h-5 w-5 text-slate-700 dark:text-slate-300 transition-all duration-500 ease-out ${theme === "dark"
                       ? "-rotate-90 scale-50 opacity-0"
                       : "rotate-0 scale-100 opacity-100"
-                  }`}
+                    }`}
                 />
               </span>
             </button>
@@ -379,9 +369,8 @@ const Header = () => {
                 </div>
 
                 <ChevronDown
-                  className={`h-4 w-4 text-gray-400 transition-transform ${
-                    showProfileDropdown ? "rotate-180" : ""
-                  }`}
+                  className={`h-4 w-4 text-gray-400 transition-transform ${showProfileDropdown ? "rotate-180" : ""
+                    }`}
                 />
               </button>
 

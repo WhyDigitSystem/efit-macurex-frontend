@@ -2,12 +2,12 @@ import apiClient from "./apiClient";
 
 export const gstStateApi = {
 
-  getGstStateList: async (branchId,orgId) => {
+  getGstStateList: async (branch,orgId) => {
     try {
       const res = await apiClient.get(
-        `/api/commonmaster/getGSTRateByOrgId?branchId=${branchId}&orgId=${orgId}`
+        `/api/commonmaster/getGSTStateMasterByOrgId?branch=${branch}&orgId=${orgId}`
       );
-      return res?.paramObjectsMap?.listOfValues || [];
+      return res?.paramObjectsMap?.gstStateMasterList || [];
     } catch (error) {
       console.error("Error fetching countries:", error);
       throw error;

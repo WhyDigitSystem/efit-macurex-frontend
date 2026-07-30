@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { ArrowLeft, Save, X, Plus, Trash2, Eye, EyeOff } from "lucide-react";
 import dayjs from "dayjs";
 import { userCreationAPI } from "../../../api/userCreationApi";
+import { useToast } from "../../Toast/ToastContext";
 
 const controlClasses =
     "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -100,6 +101,7 @@ const fieldGrid = "grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-x-3 gap-y-
 
 const UserCreationForm = ({ data, onBack }) => {
     const [orgId] = useState(localStorage.getItem("orgId") || "1000000006");
+    const [branch] = useState(localStorage.getItem("branch") || "");
     const [editId, setEditId] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -108,10 +110,11 @@ const UserCreationForm = ({ data, onBack }) => {
     const [roleList, setRoleList] = useState([]);
     const [branchList, setBranchList] = useState([]);
     const [activeTab, setActiveTab] = useState("roles");
+    const { addToast } = useToast();
 
     const [form, setForm] = useState({
         id: data?.id || null,
-        employeeCode: data?.employeeCode || "",
+        employeeCode: data?.employeeId || "",
         employeeName: data?.employeeName || "",
         userName: data?.userName || "",
         password: "",
@@ -134,7 +137,7 @@ const UserCreationForm = ({ data, onBack }) => {
 
     // Branch Table Data
     const [branchTableData, setBranchTableData] = useState([
-        { id: 1, branchCode: "", branch: "" }
+        { id: 1, branchId: "", branchCode: "", branch: "" }
     ]);
     const [branchTableErrors, setBranchTableErrors] = useState([
         { branchCode: "" }
@@ -150,14 +153,42 @@ const UserCreationForm = ({ data, onBack }) => {
         }
     }, []);
 
+    useEffect(() => {
+        console.log("Edit Data:", data);
+
+        loadEmployees();
+        loadRoles();
+        loadBranches();
+
+        if (data?.id) {
+            console.log("Calling getUserById:", data.id);
+            fetchUserData(data.id);
+        }
+    }, []);
+
+    // const loadEmployees = async () => {
+    //     try {
+    //         const response = await userCreationAPI.getAllEmployees(orgId, branch);
+    //         if (response && response.data) {
+    //             setEmpList(response.data);
+    //         }
+    //     } catch (error) {
+    //         console.error("Error loading employees:", error);
+    //     }
+    // };
+
     const loadEmployees = async () => {
         try {
             const response = await userCreationAPI.getAllEmployees(orgId);
-            if (response && response.data) {
-                setEmpList(response.data);
+
+            if (response?.paramObjectsMap?.employeeMasterVO) {
+                const employeeData = response.paramObjectsMap.employeeMasterVO || [];
+
+                // If API returns a single employee
+                setEmpList(employeeData);
             }
         } catch (error) {
-            console.error("Error loading employees:", error);
+            console.error(error);
         }
     };
 
@@ -195,54 +226,56 @@ const UserCreationForm = ({ data, onBack }) => {
 
     const fetchUserData = async (userId) => {
         setLoading(true);
+
         try {
             const response = await userCreationAPI.getUserById(userId);
-            if (response && response.data) {
-                const user = response.data;
-                setEditId(user.id);
-                setForm({
-                    id: user.id,
-                    employeeCode: user.employeeCode || "",
-                    employeeName: user.employeeName || "",
-                    userName: user.userName || "",
-                    password: "",
-                    email: user.email || "",
-                    active: user.active === "Active" ? true : false,
-                    allIndiaAccess: user.allIndiaAcces || false,
-                    userType: user.userType || "",
-                    orgId: parseInt(orgId),
-                });
 
-                // Set role table data
-                if (user.roleAccessVO && user.roleAccessVO.length > 0) {
-                    setRoleTableData(
-                        user.roleAccessVO.map((role, index) => ({
-                            id: index + 1,
-                            role: role.role || "",
-                            roleId: role.roleId || "",
-                            startDate: role.startDate || null,
-                            endDate: role.endDate || null,
-                        }))
-                    );
-                }
+            const user = response?.paramObjectsMap?.userVO;
 
-                // Set branch table data
-                if (user.branchAccessibleVO && user.branchAccessibleVO.length > 0) {
-                    setBranchTableData(
-                        user.branchAccessibleVO.map((branch, index) => {
-                            // Find the full branch details from branchList if available
-                            const fullBranch = branchList.find((b) => b.branchCode === branch.branchcode);
-                            return {
-                                id: index + 1,
-                                branchCode: branch.branchcode || "",
-                                branch: fullBranch?.branchName || branch.branch || "",
-                            };
-                        })
-                    );
-                }
+            if (!user) return;
+
+            setEditId(user.usersId);
+
+            setForm({
+                id: user.usersId,
+                employeeCode: user.employeeId || "",
+                employeeName: user.employeeName || "",
+                userName: user.userName || "",
+                password: "",
+                email: user.email || "",
+                active: user.active === "Active",
+                allIndiaAccess: user.allIndiaAcces,
+                userType: user.userType || "",
+                orgId: Number(orgId),
+            });
+
+            // Roles
+            if (user.roles?.length) {
+                setRoleTableData(
+                    user.roles.map((role, index) => ({
+                        id: index + 1,
+                        role: role.role,
+                        roleId: role.roleId,
+                        startDate: role.startDate,
+                        endDate: role.endDate,
+                    }))
+                );
             }
+
+            // Branches
+            if (user.branches?.length) {
+                setBranchTableData(
+                    user.branches.map((branch, index) => ({
+                        id: index + 1,
+                        branchId: branch.branchId,
+                        branchCode: branch.branchCode,
+                        branch: branch.branch,
+                    }))
+                );
+            }
+
         } catch (error) {
-            console.error("Error fetching user data:", error);
+            console.error("Error fetching user:", error);
         } finally {
             setLoading(false);
         }
@@ -257,14 +290,17 @@ const UserCreationForm = ({ data, onBack }) => {
 
         // Handle employee selection
         if (name === "employeeCode") {
-            const selectedEmp = empList.find((emp) => emp.employeeCode === value);
+            const selectedEmp = empList.find(
+                (emp) => String(emp.id) === value
+            );
+
             if (selectedEmp) {
                 setForm((prev) => ({
                     ...prev,
-                    employeeCode: selectedEmp.employeeCode,
-                    employeeName: selectedEmp.employeeName || "",
-                    email: selectedEmp.email || "",
-                    userName: selectedEmp.employeeCode || "",
+                    employeeCode: selectedEmp.id,          // Save employee id
+                    employeeName: selectedEmp.employeeName,
+                    email: selectedEmp.email,
+                    userName: selectedEmp.employeeId,      // EMP001
                 }));
                 return;
             }
@@ -305,6 +341,7 @@ const UserCreationForm = ({ data, onBack }) => {
             // Find the selected branch from branchList
             const selectedBranch = branchList.find((b) => b.branchCode === value);
             if (selectedBranch) {
+                updatedRows[index].branchId = selectedBranch.id;
                 // Set both branchCode and branchName
                 updatedRows[index].branchCode = selectedBranch.branchCode;
                 updatedRows[index].branch = selectedBranch.branchName || selectedBranch.branch || "";
@@ -340,9 +377,9 @@ const UserCreationForm = ({ data, onBack }) => {
     const handleAddBranchRow = () => {
         setBranchTableData([
             ...branchTableData,
-            { id: Date.now(), branchCode: "", branch: "" }
+            { id: Date.now(), branchId: "", branchCode: "", branch: "" }
         ]);
-        setBranchTableErrors([...branchTableErrors, { branchCode: "" }]);
+        setBranchTableErrors([...branchTableErrors, { branchId: "", branchCode: "" }]);
     };
 
     const handleRemoveBranchRow = (index) => {
@@ -412,31 +449,35 @@ const UserCreationForm = ({ data, onBack }) => {
         if (!validate()) return;
         setIsSubmitting(true);
 
-        const roleVo = roleTableData.map((row) => ({
-            role: row.role,
-            roleId: row.roleId,
-            startDate: row.startDate ? dayjs(row.startDate).format("YYYY-MM-DD") : null,
-            endDate: row.endDate ? dayjs(row.endDate).format("YYYY-MM-DD") : null,
-        }));
-
-        const branchVo = branchTableData.map((row) => ({
-            branchCode: row.branchCode,
-            branch: row.branch,
-        }));
-
         const payload = {
-            ...(editId && { id: form.id }),
+            active: form.active,
+            allIndiaAcces: form.allIndiaAccess,
+            createdBy: localStorage.getItem("userName") || "",
+            email: form.email,
+            employee: Number(form.employeeCode),
+            orgId: Number(orgId),
             userName: form.userName,
             userType: form.userType,
-            employeeCode: form.employeeCode,
-            employeeName: form.employeeName,
-            email: form.email,
-            allIndiaAcces: form.allIndiaAccess,
-            active: form.active,
-            orgId: parseInt(orgId),
-            roleAccessDTO: roleVo,
-            branchAccessDTOList: branchVo,
+
+            roleAccessDTO: roleTableData.map((row) => ({
+                roleId: Number(row.roleId),
+                startDate: row.startDate
+                    ? dayjs(row.startDate).format("YYYY-MM-DD")
+                    : null,
+                endDate: row.endDate
+                    ? dayjs(row.endDate).format("YYYY-MM-DD")
+                    : null,
+            })),
+
+            branchAccessDTOList: branchTableData.map((row) => ({
+                branch: Number(row.branchId),
+            })),
         };
+
+        // Only add id for update
+        if (editId) {
+            payload.id = editId;
+        }
 
         // Only add password for new users
         if (!editId) {
@@ -447,10 +488,14 @@ const UserCreationForm = ({ data, onBack }) => {
 
         try {
             const response = await userCreationAPI.saveUser(payload);
-            if (response && response.data) {
-                alert(editId ? "User Updated Successfully!" : "User Created Successfully!");
-                onBack();
-            }
+            const successMessage =
+                response?.paramObjectsMap?.message ||
+                (form.id && form.id > 0
+                    ? "User updated successfully!"
+                    : "User created successfully!");
+
+            addToast(successMessage, "success");
+            onBack();
         } catch (error) {
             console.error("Error saving user:", error);
             alert(error.response?.data?.message || "Failed to save user.");
@@ -496,8 +541,8 @@ const UserCreationForm = ({ data, onBack }) => {
                         error={fieldErrors.employeeCode}
                         required
                         options={empList.map((emp) => ({
-                            value: emp.employeeCode,
-                            label: emp.employeeCode,
+                            value: emp.id,
+                            label: emp.employeeId,
                         }))}
                     />
 
@@ -590,8 +635,8 @@ const UserCreationForm = ({ data, onBack }) => {
                         type="button"
                         onClick={() => setActiveTab("roles")}
                         className={`px-4 py-1.5 text-xs font-semibold rounded-t transition-colors ${activeTab === "roles"
-                                ? "bg-blue-600 text-white"
-                                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                            ? "bg-blue-600 text-white"
+                            : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                             }`}
                     >
                         Roles
@@ -600,8 +645,8 @@ const UserCreationForm = ({ data, onBack }) => {
                         type="button"
                         onClick={() => setActiveTab("branches")}
                         className={`px-4 py-1.5 text-xs font-semibold rounded-t transition-colors ${activeTab === "branches"
-                                ? "bg-blue-600 text-white"
-                                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                            ? "bg-blue-600 text-white"
+                            : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                             }`}
                     >
                         Branch Accessible
@@ -683,8 +728,8 @@ const UserCreationForm = ({ data, onBack }) => {
                                                     onClick={() => handleRemoveRoleRow(index)}
                                                     disabled={roleTableData.length <= 1}
                                                     className={`h-5 w-5 rounded text-white flex items-center justify-center transition-colors ${roleTableData.length <= 1
-                                                            ? "bg-gray-400 dark:bg-gray-600 cursor-not-allowed"
-                                                            : "bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800"
+                                                        ? "bg-gray-400 dark:bg-gray-600 cursor-not-allowed"
+                                                        : "bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800"
                                                         }`}
                                                 >
                                                     <Trash2 size={10} />
@@ -756,8 +801,8 @@ const UserCreationForm = ({ data, onBack }) => {
                                                     onClick={() => handleRemoveBranchRow(index)}
                                                     disabled={branchTableData.length <= 1}
                                                     className={`h-5 w-5 rounded text-white flex items-center justify-center transition-colors ${branchTableData.length <= 1
-                                                            ? "bg-gray-400 dark:bg-gray-600 cursor-not-allowed"
-                                                            : "bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800"
+                                                        ? "bg-gray-400 dark:bg-gray-600 cursor-not-allowed"
+                                                        : "bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800"
                                                         }`}
                                                 >
                                                     <Trash2 size={10} />

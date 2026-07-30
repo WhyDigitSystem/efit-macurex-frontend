@@ -122,16 +122,16 @@ const AuthForm = () => {
         localStorage.setItem("userName", userVO?.userName);
         localStorage.setItem("userType", userVO?.userType);
         localStorage.setItem("email", userVO?.email);
-        localStorage.setItem("nickName", userVO?.nickName);
+        // localStorage.setItem("nickName", userVO?.nickName);
         localStorage.setItem("orgId", userVO.orgId);
         localStorage.setItem("usersId", userVO.usersId);
         localStorage.setItem("employeeName", userVO.employeeName);
         localStorage.setItem("employeeCode", userVO.employeeCode);
-        localStorage.setItem("branch", userVO.branch);
-        localStorage.setItem("branchCode", userVO.branchCode);
+        // localStorage.setItem("branch", userVO.branch);
+        // localStorage.setItem("branchCode", userVO.branchCode);
         localStorage.setItem("department", userVO.department);
         localStorage.setItem("designation", userVO.designation);
-        localStorage.setItem("companyName", userVO.companyName);
+        // localStorage.setItem("companyName", userVO.companyName);
 
         // Store roles and screens exactly like original
         const userRoleVO = userVO.roleVO;

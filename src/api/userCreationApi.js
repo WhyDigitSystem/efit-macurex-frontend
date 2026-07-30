@@ -38,7 +38,7 @@ export const userCreationAPI = {
     // Get all employees by org ID
     getAllEmployees: async (orgId) => {
         try {
-            const response = await apiClient.get(`/api/master/getAllEmployeeByOrgId?orgId=${orgId}`);
+            const response = await apiClient.get(`/api/efitmaster/getEmployeeMasterByOrgId?orgId=${orgId}`);
             return response.data || response;
         } catch (error) {
             console.error('Error fetching employees:', error);

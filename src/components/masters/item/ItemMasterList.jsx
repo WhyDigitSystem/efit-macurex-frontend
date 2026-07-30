@@ -1,182 +1,26 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
+import itemAPI from "../../../api/itemAPI";
 
 const ItemMasterList = ({ onAddNew, onEdit,onBack }) => {
   const [itemData, setItemData] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [orgId] = useState(localStorage.getItem("orgId") || "");
 
-  const loadItems = async () => {
-    setLoading(true);
+  const loadItems = useCallback(async () => {
+    try {
+      setLoading(true);
 
-    // Dummy Data
-    const data = [
-  {
-    id: 8,
-    itemCode: "ITM008",
-    itemType: "Finished Goods",
-    itemName: "Wireless Mouse",
-    itemDescription: "2.4GHz Wireless Optical Mouse",
-    needQCApproval: "No",
-    materialType: "Electronic",
-    materialGroup: "Computer Accessories",
-    materialSubGroup: "Mouse",
-    inspection: "No",
-    instrumentSeqCode: "INS008",
-    primaryUnit: "Nos",
-    hsnCode: "84716070",
-    importLocal: "Local",
-    minimumOrderQuantity: 20,
-    stockLocation: "Main Warehouse",
-    reorderLevel: 50,
-    active: true,
-  },
-  {
-    id: 7,
-    itemCode: "ITM007",
-    itemType: "Finished Goods",
-    itemName: "Mechanical Keyboard",
-    itemDescription: "RGB Mechanical Keyboard",
-    needQCApproval: "Yes",
-    materialType: "Electronic",
-    materialGroup: "Computer Accessories",
-    materialSubGroup: "Keyboard",
-    inspection: "Yes",
-    instrumentSeqCode: "INS007",
-    primaryUnit: "Nos",
-    hsnCode: "84716040",
-    importLocal: "Import",
-    minimumOrderQuantity: 10,
-    stockLocation: "Warehouse A",
-    reorderLevel: 25,
-    active: true,
-  },
-  {
-    id: 6,
-    itemCode: "ITM006",
-    itemType: "Raw Material",
-    itemName: "Steel Sheet",
-    itemDescription: "MS Steel Sheet 2mm",
-    needQCApproval: "Yes",
-    materialType: "Metal",
-    materialGroup: "Steel",
-    materialSubGroup: "MS Sheet",
-    inspection: "Yes",
-    instrumentSeqCode: "INS006",
-    primaryUnit: "Kg",
-    hsnCode: "72083990",
-    importLocal: "Local",
-    minimumOrderQuantity: 500,
-    stockLocation: "Raw Material Store",
-    reorderLevel: 1000,
-    active: true,
-  },
-  {
-    id: 5,
-    itemCode: "ITM005",
-    itemType: "Consumable",
-    itemName: "A4 Paper",
-    itemDescription: "A4 Copier Paper",
-    needQCApproval: "No",
-    materialType: "Paper",
-    materialGroup: "Stationery",
-    materialSubGroup: "Paper",
-    inspection: "No",
-    instrumentSeqCode: "INS005",
-    primaryUnit: "Pack",
-    hsnCode: "48025690",
-    importLocal: "Local",
-    minimumOrderQuantity: 50,
-    stockLocation: "Stationery Store",
-    reorderLevel: 100,
-    active: false,
-  },
-  {
-    id: 4,
-    itemCode: "ITM004",
-    itemType: "Finished Goods",
-    itemName: "Office Chair",
-    itemDescription: "High Back Office Chair",
-    needQCApproval: "No",
-    materialType: "Furniture",
-    materialGroup: "Office",
-    materialSubGroup: "Chair",
-    inspection: "No",
-    instrumentSeqCode: "INS004",
-    primaryUnit: "Nos",
-    hsnCode: "94013000",
-    importLocal: "Import",
-    minimumOrderQuantity: 5,
-    stockLocation: "Finished Goods Store",
-    reorderLevel: 10,
-    active: true,
-  },
-  {
-    id: 3,
-    itemCode: "ITM003",
-    itemType: "Raw Material",
-    itemName: "Copper Wire",
-    itemDescription: "Copper Wire 2.5mm",
-    needQCApproval: "Yes",
-    materialType: "Metal",
-    materialGroup: "Copper",
-    materialSubGroup: "Wire",
-    inspection: "Yes",
-    instrumentSeqCode: "INS003",
-    primaryUnit: "Meter",
-    hsnCode: "74081900",
-    importLocal: "Import",
-    minimumOrderQuantity: 100,
-    stockLocation: "Raw Material Store",
-    reorderLevel: 500,
-    active: true,
-  },
-  {
-    id: 2,
-    itemCode: "ITM002",
-    itemType: "Finished Goods",
-    itemName: "LED Monitor",
-    itemDescription: "24 Inch Full HD Monitor",
-    needQCApproval: "No",
-    materialType: "Electronic",
-    materialGroup: "Displays",
-    materialSubGroup: "Monitor",
-    inspection: "No",
-    instrumentSeqCode: "INS002",
-    primaryUnit: "Nos",
-    hsnCode: "85285200",
-    importLocal: "Import",
-    minimumOrderQuantity: 5,
-    stockLocation: "Warehouse B",
-    reorderLevel: 15,
-    active: false,
-  },
-  {
-    id: 1,
-    itemCode: "ITM001",
-    itemType: "Finished Goods",
-    itemName: "Laptop",
-    itemDescription: "Core i7 Business Laptop",
-    needQCApproval: "No",
-    materialType: "Electronic",
-    materialGroup: "Computers",
-    materialSubGroup: "Laptop",
-    inspection: "No",
-    instrumentSeqCode: "INS001",
-    primaryUnit: "Nos",
-    hsnCode: "84713010",
-    importLocal: "Import",
-    minimumOrderQuantity: 2,
-    stockLocation: "Main Warehouse",
-    reorderLevel: 8,
-    active: true,
-  },
-];
+      const response = await itemAPI.getItems(orgId);
 
-    data.sort((a, b) => b.id - a.id);
-
-    setItemData(data);
-    setLoading(false);
-  };
+      setItemData(response);
+    } catch (error) {
+      console.error("Failed to load countries:", error);
+      setItemData([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [orgId]);
 
   useEffect(() => {
     loadItems();

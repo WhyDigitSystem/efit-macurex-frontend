@@ -98,7 +98,7 @@ const ToggleButton = ({ control, name }) => (
 const GSTStateForm = ({ data, onBack }) => {
    const { addToast } = useToast();
   const [orgId] = useState(localStorage.getItem("orgId"));
-  const branch = "1000000001"
+  const [branch] = useState(localStorage.getItem("branchId"));
   const [userName] = useState(localStorage.getItem("userName"));
   const [loading, setLoading] = useState(false);
 
@@ -136,6 +136,7 @@ const getDefaultValues = () => {
       stateName: formData.stateName,
       gstStateId: formData.GSTStateId, 
       orgId: Number(orgId),
+      active: true
     };
 
     // If editing, include the ID

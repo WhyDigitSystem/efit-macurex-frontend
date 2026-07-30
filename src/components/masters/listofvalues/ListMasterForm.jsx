@@ -102,7 +102,7 @@ const ToggleButton = ({ control, name }) => (
 const ListMasterForm = ({ data, onBack }) => {
   const { addToast } = useToast();
   const [orgId] = useState(localStorage.getItem("orgId"));
-  const [branch] = useState(localStorage.getItem("1000000001"));
+  const [branch] = useState(localStorage.getItem("branch"));
   const [userName] = useState(localStorage.getItem("userName"));
   const [loading, setLoading] = useState(false);
   const [activeChildTab, setActiveChildTab] = useState("details");

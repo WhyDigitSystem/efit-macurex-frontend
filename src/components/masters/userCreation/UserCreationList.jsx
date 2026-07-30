@@ -33,12 +33,15 @@ const UserCreationList = ({ onAddNew, onEdit, onBack }) => {
             }
 
             const mappedUsers = userList.map((item) => ({
-                id: item.id || 0,
+                id: item.usersId || item.id,
                 employeeCode: item.employee?.employeeCode || item.employeeCode || "",
                 employeeName: item.employee?.employeeName || item.employeeName || "",
                 userName: item.userName || "",
                 email: item.email || "",
-                active: item.active === "Active" ? true : (item.active === true || item.active === "true"),
+                active:
+                    item.active === "Active"
+                        ? true
+                        : item.active === true,
             }));
 
             const sortedUsers = mappedUsers.sort(
