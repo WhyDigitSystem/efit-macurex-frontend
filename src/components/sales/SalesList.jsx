@@ -42,13 +42,13 @@ const SECTIONS = [
       {
         name: "Order Acceptance",
         icon: CheckCircle2,
-        path: "/orderacceptance",
+        path: "/sales/orderacceptance",
         screenCode: "ORDER_ACCEPTANCE",
       },
       {
         name: "Sales Return",
         icon: RotateCcw,
-        path: "/salesreturn",
+        path: "/sales/salesreturn",
         screenCode: "SALES_RETURN",
       },
       {
@@ -60,7 +60,7 @@ const SECTIONS = [
       {
         name: "Sales Contract",
         icon: FileSignature,
-        path: "/salescontract",
+        path: "/sales/salescontract",
         screenCode: "SALES_CONTRACT",
       },
       {
@@ -78,7 +78,7 @@ const SECTIONS = [
       {
         name: "Despatch Instruction",
         icon: Send,
-        path: "/despatchinstruction",
+        path: "/sales/despatchinstruction",
         screenCode: "DESPATCH_INSTRUCTION",
       },
       {
@@ -108,7 +108,7 @@ const SECTIONS = [
       {
         name: "Proforma Invoice",
         icon: Receipt,
-        path: "/proformainvoice",
+        path: "/sales/proformainvoice",
         screenCode: "PROFORMA_INVOICE",
       },
       {

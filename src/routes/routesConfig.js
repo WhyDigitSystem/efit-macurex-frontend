@@ -63,7 +63,10 @@ import UserCreation from "../components/masters/userCreation/UserCreationMaster"
 import Enquiry from '../components/sales/enquiry/Enquiry'
 import Quotation from '../components/sales/quotation/Quotation'
 import SalesDelivery from '../components/sales/salesdeliveryschedule/SalesDelivery'
-
+import DespatchInstruction from '../components/sales/despatchinstruction/DespatchInstruction'
+import OrderAcceptance from '../components/sales/orderacceptance/OrderAcceptance'
+import SalesContract from '../components/sales/salescontract/SalesContract'
+import ProformaInvoice from '../components/sales/proformainvoice/ProformaInvoice'
 export const routesConfig = [
   { path: "/", label: "Dashboard", element: <Dashboard /> },
 
@@ -279,6 +282,30 @@ export const routesConfig = [
     keywords: ["salesdelivery"],
     element: <SalesDelivery />,
   },
+   {
+      path: "/sales/despatchinstruction",
+      label: "Despatch Instruction",
+      keywords: ["despatchinstruction"],
+      element: < DespatchInstruction/>,
+    },
+      {
+      path: "/sales/orderacceptance",
+      label: "Order Acceptance",
+      keywords: ["orderacceptance"],
+      element: < OrderAcceptance/>,
+    },
+     {
+      path: "/sales/salescontract",
+      label: "Sales Contract",
+      keywords: ["salescontract"],
+      element: < SalesContract/>,
+    },
+     {
+      path: "/sales/proformainvoice",
+      label: "Proforma Invoice",
+      keywords: ["proformainvoice"],
+      element: <ProformaInvoice/>,
+    },
   ...purchaseRoutes,
   ...inventoryRoutes,
 ];
