@@ -102,7 +102,7 @@ const ToggleButton = ({ control, name }) => (
 const ListMasterForm = ({ data, onBack }) => {
   const { addToast } = useToast();
   const [orgId] = useState(localStorage.getItem("orgId"));
-  const [branch] = useState(localStorage.getItem("branch"));
+  const [branch] = useState(localStorage.getItem("branchId"));
   const [userName] = useState(localStorage.getItem("userName"));
   const [loading, setLoading] = useState(false);
   const [activeChildTab, setActiveChildTab] = useState("details");
@@ -173,7 +173,7 @@ const ListMasterForm = ({ data, onBack }) => {
  const transformFormData = (formData) => {
   const payload = {
     active: formData.active,
-    branch: Number(branch),
+    branch: branch,
     createdBy: userName,
     details: formData.details.map((detail) => ({
       active: detail.active === 'Yes' ? true : false,

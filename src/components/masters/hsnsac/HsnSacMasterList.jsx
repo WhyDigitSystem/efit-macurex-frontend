@@ -10,7 +10,7 @@ const resolveCategory = (value) => {
   if (typeof value === "object") {
     if (value.listCode === "GOODS") return "Goods";
     if (value.listCode === "SERVICE") return "Services";
-    return value.listDescription || value.listCode || String(value.id);
+    return value.valueDescription;
   }
   if (typeof value === "number") return CATEGORY_MAP[value] || String(value);
   return String(value);
@@ -30,9 +30,7 @@ const HsnSacMasterList = ({ onAddNew, onEdit, onBack }) => {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const branchVal = localStorage.getItem("branch");
-      const branchId = Number(branchVal) || 1000000001;
-      console.log("HSN/SAC List - orgId:", orgId, "branch:", branchVal, "branchId:", branchId);
+      const branchId = localStorage.getItem("branchId");
 
       const data = await hsnSacAPI.getAll(orgId, branchId);
       data.sort((a, b) => (b.id || 0) - (a.id || 0));

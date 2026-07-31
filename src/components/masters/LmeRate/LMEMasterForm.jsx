@@ -81,8 +81,8 @@ const fieldGrid = "grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-x-3 gap-y-
 /* ---------------------------------------------------------------------------- */
 
 const LMEMasterForm = ({ data, onBack }) => {
-    const [orgId] = useState(localStorage.getItem("orgId") || "1000000006");
-    const [branch] = useState(localStorage.getItem("branch") || "1000000011");
+    const [orgId] = useState(localStorage.getItem("orgId"));
+    const [branch] = useState(localStorage.getItem("branchId"));
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [fieldErrors, setFieldErrors] = useState({});
     const [loading, setLoading] = useState(false);

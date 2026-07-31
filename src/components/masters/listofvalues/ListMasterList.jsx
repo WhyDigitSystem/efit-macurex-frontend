@@ -8,14 +8,14 @@ const ListMasterList = ({ onAddNew, onEdit,onBack }) => {
   const [mode, setMode] = useState("list");
   const [loading, setLoading] = useState(false);
     const [orgId] = useState(localStorage.getItem("orgId"));
-    const [branch] = useState(localStorage.getItem("branch"));
+    const [branch] = useState(localStorage.getItem("branchId"));
 
 
 
   const loadItems = async () => {
     try{
     setLoading(true);
-    const data = await listformApi.getList(Number(branch),orgId);
+    const data = await listformApi.getList(branch,orgId);
     setItemData(data);
 
     }catch(error){

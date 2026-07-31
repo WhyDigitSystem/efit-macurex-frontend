@@ -8,7 +8,7 @@ const DepartmentListView = ({ onAddNew, onEdit,onBack }) => {
   const [loading, setLoading] = useState(false);
 
   const ORG_ID = parseInt(localStorage.getItem("orgId"));
-  const branch = parseInt(localStorage.getItem("branch"));
+  const branch = parseInt(localStorage.getItem("branchId"));
 
   const loadDepartments = useCallback(async () => {
     try {

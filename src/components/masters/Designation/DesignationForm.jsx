@@ -29,7 +29,7 @@ const ToggleButton = ({ value, onChange }) => (
 
 const DesignationMasterForm = ({ editData, editId, onBack, onSave }) => {
     const ORG_ID = parseInt(localStorage.getItem("orgId"));
-    const branch = parseInt(localStorage.getItem("branch"));
+    const branch = parseInt(localStorage.getItem("branchId"));
     const { addToast } = useToast();
     const [isLoading, setIsLoading] = useState(false);
 

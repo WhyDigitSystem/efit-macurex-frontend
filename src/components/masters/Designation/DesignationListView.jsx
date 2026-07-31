@@ -8,7 +8,7 @@ const DesignationListView = ({ onAddNew, onEdit, onBack }) => {
   const [loading, setLoading] = useState(false);
 
   const ORG_ID = parseInt(localStorage.getItem("orgId"));
-  const branch = parseInt(localStorage.getItem("branch"));
+  const branch = parseInt(localStorage.getItem("branchId"));
 
   const loadDesignations = useCallback(async () => {
     try {

@@ -14,10 +14,10 @@ export const gstStateApi = {
     }
   },
 
-  getListById: async (id) => {
+  getGSTStateById: async (id) => {
     try {
-      const res = await apiClient.get(`/api/commonmaster/getListOfValuesById?id=${id}`);
-      return res?.paramObjectsMap?.listOfValuesVO || null;
+      const res = await apiClient.get(`/api/commonmaster/getGSTStateMasterById?id=${id}`);
+      return res?.paramObjectsMap?.gstStateMasterVO || null;
     } catch (error) {
       console.error("Error fetching country by ID:", error);
       throw error;

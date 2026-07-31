@@ -20,34 +20,34 @@ const ToggleButton = ({ value, onChange }) => (
   <button
     type="button"
     onClick={() => onChange(!value)}
-    className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${
-      value ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
-    }`}
+    className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${value ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
+      }`}
   >
-    <span className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${
-      value ? "translate-x-6" : "translate-x-0.5"
-    }`} />
+    <span className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${value ? "translate-x-6" : "translate-x-0.5"
+      }`} />
   </button>
 );
 
 const HsnSacMasterForm = ({ data, onBack }) => {
   const { addToast } = useToast();
-  const orgId = Number(localStorage.getItem("orgId")) || 0;
-  const branch = Number(localStorage.getItem("branch")) || Number(localStorage.getItem("branchId")) || 1000000001;
+  const orgId = Number(localStorage.getItem("orgId"));
+  const branch = localStorage.getItem("branchId");
+  const userName = localStorage.getItem("userName");
 
   const [categoryOptions, setCategoryOptions] = useState([]);
-
-  const [form, setForm] = useState({
-    category: "",
-    hsn: data?.hsn || "",
-    description: data?.description || "",
-    active: data?.active ?? true,
-    id: data?.id || 0,
-  });
-
+  const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
 
+  const [form, setForm] = useState({
+    category: "",
+    hsn: "",
+    description: "",
+    active: true,
+    id: 0,
+  });
+
+  // Load categories
   useEffect(() => {
     const loadCategories = async () => {
       try {
@@ -55,17 +55,68 @@ const HsnSacMasterForm = ({ data, onBack }) => {
         setCategoryOptions(list);
       } catch (error) {
         console.error("Failed to load categories:", error);
+        addToast("Failed to load categories", "error");
       }
     };
     loadCategories();
-  }, [orgId]);
+  }, [orgId, addToast]);
 
+  // Fetch HSN/SAC data by ID when editing
   useEffect(() => {
-    if (data?.category != null) {
-      const cat = typeof data.category === "object" ? data.category.valuesDescription : String(data.category);
-      setForm((prev) => ({ ...prev, category: cat }));
-    }
-  }, [data]);
+    const fetchHsnData = async () => {
+      // Check if we have an ID to fetch (from data prop)
+      const idToFetch = data?.id;
+
+      if (idToFetch) {
+        setIsLoading(true);
+        try {
+          const response = await hsnSacAPI.getById(idToFetch);
+
+          // Extract HSN data from response
+          const hsnData = response?.paramObjectsMap?.hsnVO;
+
+          if (hsnData) {
+            // Handle category - it might be an object or a primitive
+            let categoryValue = "";
+            if (hsnData.category) {
+              if (typeof hsnData.category === "object") {
+                // If category is an object, get its id or valueDescription
+                categoryValue = hsnData.category.id || hsnData.category.valueDescription || "";
+              } else {
+                categoryValue = String(hsnData.category);
+              }
+            }
+
+            setForm({
+              id: hsnData.id || 0,
+              category: categoryValue,
+              hsn: hsnData.hsn || "",
+              description: hsnData.description || "",
+              active: hsnData.active === "Active" || hsnData.active === true,
+            });
+          } else {
+            addToast("Failed to load HSN/SAC data", "error");
+          }
+        } catch (error) {
+          console.error("Error fetching HSN/SAC data:", error);
+          addToast(error.message || "Error loading HSN/SAC data", "error");
+        } finally {
+          setIsLoading(false);
+        }
+      } else if (data) {
+        // If data is passed directly (not by ID), use it
+        setForm({
+          id: data.id || 0,
+          category: data.category || "",
+          hsn: data.hsn || "",
+          description: data.description || "",
+          active: data.active ?? true,
+        });
+      }
+    };
+
+    fetchHsnData();
+  }, [data, addToast]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -90,25 +141,52 @@ const HsnSacMasterForm = ({ data, onBack }) => {
     const payload = {
       ...(form.id && { id: form.id }),
       orgId,
-      branch,
-      category: form.category,
+      branch: parseInt(branch),
+      category: parseInt(form.category),
       hsn: form.hsn.trim(),
       description: form.description.trim(),
       active: form.active,
-      createdBy: "ITC001",
+      createdBy: userName,
     };
 
     try {
       await hsnSacAPI.createUpdate(payload);
-      addToast(data ? "HSN/SAC Updated Successfully!" : "HSN/SAC Saved Successfully!", "success");
+      addToast(data?.id ? "HSN/SAC Updated Successfully!" : "HSN/SAC Saved Successfully!", "success");
       onBack();
     } catch (error) {
       console.error("Failed to save HSN/SAC:", error);
-      addToast("Failed to save HSN/SAC.", "error");
+      addToast(error.message || "Failed to save HSN/SAC.", "error");
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="p-2 max-w-7xl">
+        <div className="flex items-center gap-2 mb-3">
+          <button
+            onClick={onBack}
+            className="p-1 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+          <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+            Loading HSN/SAC...
+          </h2>
+        </div>
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-8">
+          <div className="flex justify-center items-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <span className="ml-2 text-gray-600 dark:text-gray-300">
+              Loading HSN/SAC data...
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-2 max-w-7xl">
@@ -120,7 +198,7 @@ const HsnSacMasterForm = ({ data, onBack }) => {
           <ArrowLeft className="h-4 w-4" />
         </button>
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-          {data ? "Edit HSN/SAC" : "Add HSN/SAC"}
+          {data?.id ? "Edit HSN/SAC" : "Add HSN/SAC"}
         </h2>
       </div>
 
@@ -138,7 +216,7 @@ const HsnSacMasterForm = ({ data, onBack }) => {
             >
               <option value="">Select Category</option>
               {categoryOptions.map((opt, idx) => (
-                <option key={idx} value={opt.valuesDescription}>
+                <option key={idx} value={opt.id}>
                   {opt.valuesDescription}
                 </option>
               ))}
@@ -204,7 +282,7 @@ const HsnSacMasterForm = ({ data, onBack }) => {
             className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
           >
             <Save className="h-3 w-3" />
-            {isSubmitting ? "Saving..." : data ? "Update" : "Save"}
+            {isSubmitting ? "Saving..." : data?.id ? "Update" : "Save"}
           </button>
         </div>
       </div>

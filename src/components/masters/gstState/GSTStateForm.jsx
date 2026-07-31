@@ -1,8 +1,9 @@
 import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm, Controller, useFieldArray } from "react-hook-form";
 import gstStateApi from "../../../api/gstStateApi";
 import { useToast } from "../../Toast/ToastContext";
+
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
   "bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 " +
@@ -13,7 +14,6 @@ const controlClasses =
 
 const labelClasses =
   "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
-
 
 const SelectField = ({ control, name, label, options, required, errors }) => (
   <div>
@@ -81,14 +81,12 @@ const ToggleButton = ({ control, name }) => (
       <button
         type="button"
         onClick={() => field.onChange(!field.value)}
-        className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${
-          field.value ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
-        }`}
+        className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${field.value ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
+          }`}
       >
         <span
-          className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${
-            field.value ? "translate-x-6" : "translate-x-0.5"
-          }`}
+          className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${field.value ? "translate-x-6" : "translate-x-0.5"
+            }`}
         />
       </button>
     )}
@@ -96,52 +94,91 @@ const ToggleButton = ({ control, name }) => (
 );
 
 const GSTStateForm = ({ data, onBack }) => {
-   const { addToast } = useToast();
+  const { addToast } = useToast();
   const [orgId] = useState(localStorage.getItem("orgId"));
   const [branch] = useState(localStorage.getItem("branchId"));
   const [userName] = useState(localStorage.getItem("userName"));
   const [loading, setLoading] = useState(false);
+  const [fetchLoading, setFetchLoading] = useState(false);
 
-  
-const getDefaultValues = () => {
-   if (data && data.id) {
-   const detailsArray = data.listOfValuesDetailsVO || data.details || [];
-    return {
-        stateCode: data.listCode || "",
-        stateName: data.listDescription || "",
-        GSTStateId: data.GSTStateId || ''
+  const getDefaultValues = () => {
+    if (data && data.id) {
+      // If data is passed directly from parent (like from a list)
+      return {
+        stateCode: data.stateCode || data.listCode || "",
+        stateName: data.stateName || data.listDescription || "",
+        gstStateId: data.gstStateId || data.GSTStateId || "",
+        id: data.id || "",
       };
-   }
-   return {
+    }
+    return {
       stateCode: "",
       stateName: "",
-      GSTStateId: '',
+      gstStateId: "",
+      id: "",
     };
-};
+  };
+
   const {
     control,
     handleSubmit,
     reset,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm({
     mode: "onTouched",
     defaultValues: getDefaultValues(),
   });
 
+  // Fetch GST State data by ID when component mounts or data changes
+  useEffect(() => {
+    const fetchGSTStateData = async () => {
+      // Check if we have an ID to fetch (either from data prop or from URL params)
+      const idToFetch = data?.id || data?.GSTStateId;
+
+      if (idToFetch) {
+        try {
+          setFetchLoading(true);
+          const response = await gstStateApi.getGSTStateById(idToFetch);
+
+          if (response) {
+            // Extract the actual GST state data from the response
+            const gstStateData = response.gstStateMasterVO || response;
+
+            // Set form values with the fetched data
+            setValue("stateCode", gstStateData.stateCode || "");
+            setValue("stateName", gstStateData.stateName || "");
+            setValue("gstStateId", gstStateData.gstStateId || "");
+
+            // If you need to update the parent's data, you can call a callback
+            // onDataLoaded && onDataLoaded(gstStateData);
+          }
+        } catch (error) {
+          console.error("Error fetching GST State data:", error);
+          addToast("Error loading GST State data", "error");
+        } finally {
+          setFetchLoading(false);
+        }
+      }
+    };
+
+    fetchGSTStateData();
+  }, [data?.id, data?.GSTStateId, setValue, addToast]);
+
   const transformFormData = (formData) => {
     const payload = {
       branch: Number(branch),
-      createdBy: userName,      
+      createdBy: userName,
       stateCode: formData.stateCode,
       stateName: formData.stateName,
-      gstStateId: formData.GSTStateId, 
+      gstStateId: formData.gstStateId,
       orgId: Number(orgId),
-      active: true
+      active: true,
     };
 
     // If editing, include the ID
-    if (data && data.id) {
-      payload.id = data.id;
+    if (formData.id) {
+      payload.id = formData.id;
     }
 
     return payload;
@@ -154,25 +191,51 @@ const getDefaultValues = () => {
       console.log("API Payload:", apiPayload);
       const res = await gstStateApi.createUpdateGstState(apiPayload);
       if (res.status === true) {
-      addToast(
-        data && data.id 
-          ? "Gst State updated successfully" 
-          : "Gst State created successfully",
-        "success"
-      );
-       reset(getDefaultValues());
-       onBack(); 
-    }
-    else {
-      addToast("Something went wrong", "error");
-    }
+        addToast(
+          data && data.id
+            ? "GST State updated successfully"
+            : "GST State created successfully",
+          "success"
+        );
+        reset(getDefaultValues());
+        onBack();
+      } else {
+        addToast(res.message || "Something went wrong", "error");
+      }
     } catch (error) {
       console.error(error);
-      addToast("Error saving Gst State", "error");
+      addToast(error.message || "Error saving GST State", "error");
     } finally {
-    setLoading(false);
-  }
+      setLoading(false);
+    }
   };
+
+  // Loading state for fetching data
+  if (fetchLoading) {
+    return (
+      <div className="p-2 max-w-7xl relative">
+        <div className="flex items-center gap-2 mb-3">
+          <button
+            onClick={onBack}
+            className="p-1 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+          <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+            Loading GST State...
+          </h2>
+        </div>
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-8">
+          <div className="flex justify-center items-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <span className="ml-2 text-gray-600 dark:text-gray-300">
+              Loading GST State data...
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-2 max-w-7xl relative">
@@ -185,7 +248,7 @@ const getDefaultValues = () => {
           <ArrowLeft className="h-4 w-4" />
         </button>
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-          {data ? "Edit GST State" : "Add GST State"}
+          {data && data.id ? "Edit GST State" : "Add GST State"}
         </h2>
       </div>
 
@@ -213,32 +276,42 @@ const getDefaultValues = () => {
               placeholder="Enter state name"
               errors={errors}
             />
+
             <InputField
               control={control}
-              name="GSTStateId"
+              name="gstStateId"
               label="GST State ID"
               required
-              placeholder="Enter gst State Id"
+              placeholder="Enter GST State ID"
               errors={errors}
             />
+
+            {/* Hidden field for ID */}
+            {/* <InputField
+              control={control}
+              name="id"
+              label="ID"
+              type="hidden"
+              errors={errors}
+            /> */}
           </div>
 
           {/* Buttons */}
           <div className="flex justify-end gap-2 pt-3 mt-3 border-t border-gray-200 dark:border-gray-700">
             <button
               onClick={onBack}
-              disabled={isSubmitting}
+              disabled={isSubmitting || loading}
               className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
             >
               <X className="h-3 w-3" /> Cancel
             </button>
             <button
-              onClick={handleSubmit(onSubmit)}
-              disabled={isSubmitting}
+              type="submit"
+              disabled={isSubmitting || loading}
               className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
             >
               <Save className="h-3 w-3" />{" "}
-              {isSubmitting ? "Saving..." : data ? "Update" : "Save"}
+              {isSubmitting || loading ? "Saving..." : data && data.id ? "Update" : "Save"}
             </button>
           </div>
         </form>
@@ -283,11 +356,10 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
         type="button"
         onClick={onRemove}
         disabled={disabled}
-        className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-          disabled
+        className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
             ? "bg-gray-400 cursor-not-allowed"
             : "bg-red-600 hover:bg-red-700"
-        }`}
+          }`}
       >
         <Trash2 size={10} />
       </button>

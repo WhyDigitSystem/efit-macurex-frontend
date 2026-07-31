@@ -5,8 +5,8 @@ import { lmeAPI } from "../../../api/lmeApi";
 const LMEMasterList = ({ onAddNew, onEdit, onBack }) => {
   const [lmeData, setLmeData] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [orgId] = useState(localStorage.getItem("orgId") || "1000000006");
-  const [branch] = useState(localStorage.getItem("branch") || "1000000011");
+  const [orgId] = useState(localStorage.getItem("orgId"));
+  const [branch] = useState(localStorage.getItem("branchId"));
 
   const loadLME = async () => {
     setLoading(true);
