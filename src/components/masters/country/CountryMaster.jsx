@@ -2,34 +2,51 @@ import { useState } from "react";
 import CountryMasterList from "./CountryMasterList";
 import CountryMasterForm from "./CountryMasterForm";
 
-const CountryMaster = () => {
-  const [screen, setScreen] = useState("list");
-  const [editData, setEditData] = useState(null);
+const CountryMaster = ({ onBack }) => {
+  const [currentView, setCurrentView] = useState("list"); // "list", "add", "edit"
+  const [selectedCountry, setSelectedCountry] = useState(null);
+  const [editId, setEditId] = useState(null);
 
-  const addNew = () => {
-    setEditData(null);
-    setScreen("form");
+  const handleAddNew = () => {
+    setSelectedCountry(null);
+    setEditId(null);
+    setCurrentView("add");
   };
 
-  const edit = (row) => {
-    setEditData(row);
-    setScreen("form");
+  const handleEdit = (country) => {
+    setSelectedCountry(country);
+    setEditId(country.id);
+    setCurrentView("edit");
+  };
+
+  const handleBackToList = () => {
+    setCurrentView("list");
+    setSelectedCountry(null);
+    setEditId(null);
+  };
+
+  const handleSave = async () => {
+    // The form now handles the save internally
+    // Just go back to the list after a successful save
+    handleBackToList();
   };
 
   return (
     <>
-      {screen === "list" && (
+      {currentView === "list" && (
         <CountryMasterList
-          onAddNew={addNew}
-          onEdit={edit}
-          onBack={() => window.history.back()}
+          onAddNew={handleAddNew}
+          onEdit={handleEdit}
+          onBack={onBack || (() => window.history.back())}
         />
       )}
 
-      {screen === "form" && (
+      {(currentView === "add" || currentView === "edit") && (
         <CountryMasterForm
-          data={editData}
-          onBack={() => setScreen("list")}
+          onBack={handleBackToList}
+          onSave={handleSave}
+          editData={selectedCountry}
+          editId={editId}
         />
       )}
     </>
