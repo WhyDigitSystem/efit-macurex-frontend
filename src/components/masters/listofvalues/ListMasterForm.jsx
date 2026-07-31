@@ -173,7 +173,7 @@ const ListMasterForm = ({ data, onBack }) => {
  const transformFormData = (formData) => {
   const payload = {
     active: formData.active,
-    branch: branch,
+    branch: parseInt(branch),
     createdBy: userName,
     details: formData.details.map((detail) => ({
       active: detail.active === 'Yes' ? true : false,
@@ -182,7 +182,7 @@ const ListMasterForm = ({ data, onBack }) => {
     })),
     listCode: formData.listCode,
     listDescription: formData.listDescription,
-    orgId: orgId,
+    orgId: parseInt(orgId),
   };
 
   // If editing, include the ID
