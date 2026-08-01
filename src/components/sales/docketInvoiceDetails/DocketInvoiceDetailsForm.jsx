@@ -1,0 +1,335 @@
+import { ArrowLeft, Save, X, Plus, Trash2, Copy } from "lucide-react";
+import { useState } from "react";
+import { useForm, Controller, useFieldArray } from "react-hook-form";
+import dayjs from "dayjs";
+import docketInvoiceDetailsAPI from "../../../api/Sales/docketInvoiceDetailsAPI";
+import { useToast } from "../../Toast/ToastContext";
+
+const controlClasses =
+  "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
+  "bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 " +
+  "text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 " +
+  "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
+  "dark:focus:ring-blue-400 dark:focus:border-blue-400 " +
+  "disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed";
+
+const labelClasses = "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
+
+const fieldGrid = "grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-x-4 gap-y-3 items-start";
+
+const SectionHeader = ({ children }) => (
+  <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">{children}</h3>
+);
+
+const InputField = ({ label, required, error, children }) => (
+  <div>
+    {label && <label className={labelClasses}>{label}{required && <span className="text-red-500"> *</span>}</label>}
+    {children}
+    {error && <p className="text-[10px] text-red-500 mt-0.5">{error}</p>}
+  </div>
+);
+
+const ToggleSwitch = ({ value, onChange }) => (
+  <button type="button" onClick={() => onChange(!value)}
+    className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${value ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"}`}>
+    <span className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${value ? "translate-x-6" : "translate-x-0.5"}`} />
+  </button>
+);
+
+const thClass = "px-1 py-0.5 text-left font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap text-[10px]";
+
+const TRANSPORT_OPTIONS = ["Truck India", "Blue Dart", "DHL Freight", "Transport Corp"];
+const MODE_OPTIONS = ["Road", "Rail", "Air", "Sea"];
+
+const getDefaultDocketRow = () => ({
+  docketNo: "",
+  docketDate: "",
+  invoiceNo: "",
+  qtyBoxes: "",
+  weightBoxes: "",
+  totalValue: "",
+  cumulativeTotal: "",
+  mode: "",
+});
+
+const getDefaultValues = (data) => ({
+  plantId: data?.plantId || "",
+  docNo: data?.docNo || `DK/${dayjs().format("DDD")}/${String(Date.now()).slice(-4)}`,
+  docDate: data?.docDate || dayjs().format("YYYY-MM-DD"),
+  transportName: data?.transportName || "",
+  billNo: data?.billNo || "",
+  billDate: data?.billDate || "",
+  totalAmount: data?.totalAmount ?? "",
+  active: data?.active === "Active" || data?.active !== false,
+  id: data?.id || 0,
+  docketDetails: data?.docketDetails?.length
+    ? data.docketDetails.map((r) => ({
+        docketNo: r.docketNo || "", docketDate: r.docketDate || "", invoiceNo: r.invoiceNo || "",
+        qtyBoxes: r.qtyBoxes ?? "", weightBoxes: r.weightBoxes ?? "", totalValue: r.totalValue ?? "",
+        cumulativeTotal: r.cumulativeTotal ?? "", mode: r.mode || "",
+      }))
+    : [getDefaultDocketRow()],
+});
+
+const DocketInvoiceDetailsForm = ({ data, onBack }) => {
+  const { addToast } = useToast();
+  const orgId = Number(localStorage.getItem("orgId")) || 0;
+  const branch = Number(localStorage.getItem("branchId")) || 1000000001;
+
+  const {
+    control, handleSubmit, setValue, watch, register,
+  } = useForm({
+    mode: "onTouched",
+    defaultValues: getDefaultValues(data),
+  });
+
+  const { fields, append, remove } = useFieldArray({
+    control, name: "docketDetails",
+  });
+
+  const watchRows = watch("docketDetails");
+
+  const [formErrs, setFormErrs] = useState({});
+
+  const computeCumulative = (rows) => {
+    let running = 0;
+    (rows || []).forEach((r, i) => {
+      running += parseFloat(r?.totalValue) || 0;
+      setValue(`docketDetails.${i}.cumulativeTotal`, running || "", { shouldDirty: false });
+    });
+  };
+
+  const handleDocketChange = (idx, field, value, row) => {
+    setValue(`docketDetails.${idx}.${field}`, value, { shouldDirty: true });
+    if (field === "totalValue") {
+      computeCumulative(watchRows);
+    }
+  };
+
+  const copyRow = (idx) => {
+    const row = watchRows?.[idx];
+    if (row) append({ ...getDefaultDocketRow(), ...row });
+  };
+
+  const addRow = () => append(getDefaultDocketRow());
+
+  const validate = () => {
+    const errs = {};
+    const vals = watch();
+    if (!vals.plantId) errs.plantId = "Required";
+    if (!vals.transportName) errs.transportName = "Required";
+    (watchRows || []).forEach((r, i) => {
+      if (!r.docketNo) errs[`docketDetails.${i}.docketNo`] = "Required";
+    });
+    return errs;
+  };
+
+  const onSubmit = async (formData) => {
+    const errs = validate();
+    setFormErrs(errs);
+    if (Object.keys(errs).length) {
+      addToast("Please fill all mandatory fields", "error");
+      return;
+    }
+    computeCumulative(watchRows);
+    const payload = {
+      ...(formData.id ? { id: formData.id } : {}),
+      orgId, branch,
+      ...formData,
+      createdBy: localStorage.getItem("userName") || "SYSTEM",
+      cancelRemarks: "",
+    };
+    try {
+      await docketInvoiceDetailsAPI.createUpdate(payload);
+      addToast(data ? "Docket/Invoice Details Updated!" : "Docket/Invoice Details Saved!", "success");
+      onBack();
+    } catch (error) {
+      console.error("Save error:", error);
+      addToast("Failed to save Docket/Invoice Details.", "error");
+    }
+  };
+
+  const renderHeader = (errMap) => (
+    <div className={fieldGrid}>
+      <InputField label="Plant ID" required error={errMap.plantId}>
+        <Controller control={control} name="plantId" render={({ field }) => (
+          <select {...field} className={`${controlClasses} ${errMap.plantId ? "border-red-500" : ""}`}>
+            <option value="">Select</option>
+            {["Plant 1", "Plant 2", "Plant 3"].map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+        )} />
+      </InputField>
+      <InputField label="Doc No">
+        <input {...register("docNo")} disabled className={`${controlClasses} bg-gray-50 dark:bg-gray-800`} />
+      </InputField>
+      <InputField label="Doc Date">
+        <input type="date" {...register("docDate")} className={controlClasses} />
+      </InputField>
+      <InputField label="Transport Name" required error={errMap.transportName}>
+        <Controller control={control} name="transportName" render={({ field }) => (
+          <select {...field} className={`${controlClasses} ${errMap.transportName ? "border-red-500" : ""}`}>
+            <option value="">Select</option>
+            {TRANSPORT_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+        )} />
+      </InputField>
+      <InputField label="Bill No">
+        <input {...register("billNo")} className={controlClasses} />
+      </InputField>
+      <InputField label="Bill Date">
+        <input type="date" {...register("billDate")} className={controlClasses} />
+      </InputField>
+      <InputField label="Total Amount">
+        <input type="number" step="0.01" {...register("totalAmount")} className={controlClasses} />
+      </InputField>
+    </div>
+  );
+
+  const docketColumns = [
+    { key: "docketNo", label: "Docket No", width: "110px", required: true },
+    { key: "docketDate", label: "Docket Date", width: "110px" },
+    { key: "invoiceNo", label: "Invoice No", width: "100px" },
+    { key: "qtyBoxes", label: "No. of Qty/Box", width: "100px" },
+    { key: "weightBoxes", label: "Weight/No. of Box", width: "110px" },
+    { key: "totalValue", label: "Total Value", width: "90px" },
+    { key: "cumulativeTotal", label: "Cumulative Total", width: "110px" },
+    { key: "mode", label: "Mode", width: "90px" },
+  ];
+
+  const renderDocketCell = (col, row, idx, cumulativeRows) => {
+    const base = `docketDetails.${idx}.`;
+    const cls = `${controlClasses} w-[${col.width}]`;
+
+    if (col.key === "cumulativeTotal") {
+      return <input value={cumulativeRows?.[idx] ?? ""} readOnly className={`${cls} bg-gray-50 dark:bg-gray-800`} />;
+    }
+    if (col.key === "mode") {
+      return (
+        <Controller control={control} name={`${base}${col.key}`} render={({ field }) => (
+          <select {...field} onChange={(e) => handleDocketChange(idx, col.key, e.target.value, row)} className={`${controlClasses} w-[${col.width}]`}>
+            <option value="">Select</option>
+            {MODE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+        )} />
+      );
+    }
+    if (col.key === "docketDate") {
+      return (
+        <input type="date" defaultValue={row?.[col.key] ?? ""}
+          onChange={(e) => handleDocketChange(idx, col.key, e.target.value, row)} className={cls} />
+      );
+    }
+    const numericFields = ["qtyBoxes", "weightBoxes", "totalValue"];
+    return (
+      <input
+        type={numericFields.includes(col.key) ? "number" : "text"}
+        step="0.01"
+        defaultValue={row?.[col.key] ?? ""}
+        onChange={(e) => handleDocketChange(idx, col.key, e.target.value, row)}
+        className={cls}
+      />
+    );
+  };
+
+  const getCumulative = () => {
+    const cumulative = [];
+    let running = 0;
+    (watchRows || []).forEach((r) => {
+      running += parseFloat(r?.totalValue) || 0;
+      cumulative.push(running || "");
+    });
+    return cumulative;
+  };
+
+  const renderDocketTab = (errMap) => (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <SectionHeader>Docket Details</SectionHeader>
+        <button type="button" onClick={addRow}
+          className="flex items-center gap-1 px-2 py-1 rounded text-[11px] bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50 transition-colors">
+          <Plus className="h-3 w-3" /> Add Row
+        </button>
+      </div>
+      <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
+        <table className="w-full text-xs">
+          <thead className="bg-gray-100 dark:bg-gray-700">
+            <tr>
+              <th className={thClass}>#</th>
+              {docketColumns.map((c) => (
+                <th key={c.key} className={thClass} style={{ minWidth: c.width }}>
+                  {c.label}{c.required && <span className="text-red-500"> *</span>}
+                </th>
+              ))}
+              <th className={`${thClass} text-center`} style={{ minWidth: "50px" }}>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {fields.map((row, idx) => (
+              <tr key={row.id} className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
+                <td className="px-1.5 py-1 text-gray-500 dark:text-gray-400 text-[10px] w-[25px]">{idx + 1}</td>
+                {docketColumns.map((col) => (
+                  <td key={col.key} className="px-1.5 py-1" style={{ minWidth: col.width }}>
+                    {renderDocketCell(col, watchRows?.[idx], idx, getCumulative())}
+                    {errMap[`docketDetails.${idx}.${col.key}`] && (
+                      <p className="text-[9px] text-red-500 leading-none mt-0.5">{errMap[`docketDetails.${idx}.${col.key}`]}</p>
+                    )}
+                  </td>
+                ))}
+                <td className="px-1.5 py-1 text-center whitespace-nowrap w-[50px]">
+                  <div className="flex items-center justify-center gap-0.5">
+                    <button type="button" onClick={() => copyRow(idx)}
+                      className="p-0.5 rounded text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
+                      <Copy className="h-3 w-3" />
+                    </button>
+                    <button type="button" onClick={() => remove(idx)} disabled={fields.length <= 1}
+                      className="p-0.5 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-30">
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="animate-fadeIn px-3 py-3 max-w-7xl mx-auto">
+      <div className="flex items-center gap-2 mb-3">
+        <button type="button" onClick={onBack} className="p-1 rounded-md text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+          <ArrowLeft className="h-4 w-4" />
+        </button>
+        <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+          {data ? "Edit Docket/Invoice Details" : "New Docket/Invoice Details"}
+        </h2>
+        <div className="ml-auto flex items-center gap-2">
+          <label className={labelClasses}>Active</label>
+          <Controller control={control} name="active" render={({ field }) => (
+            <ToggleSwitch value={field.value} onChange={field.onChange} />
+          )} />
+        </div>
+      </div>
+
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-4">
+        <SectionHeader>Docket Header</SectionHeader>
+        {renderHeader(formErrs)}
+        {renderDocketTab(formErrs)}
+
+        <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
+          <button type="button" onClick={onBack}
+            className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+            <X className="h-3 w-3" /> Cancel
+          </button>
+          <button type="button" onClick={handleSubmit(onSubmit)}
+            className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 transition-colors">
+            <Save className="h-3 w-3" /> Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default DocketInvoiceDetailsForm;

@@ -70,6 +70,7 @@ import ProformaInvoice from '../components/sales/proformainvoice/ProformaInvoice
 import StockTransferChallanMaster from '../components/sales/stockTransferChallan/StockTransferChallanMaster'
 import OtherSalesInvoiceMaster from '../components/sales/otherSalesInvoice/OtherSalesInvoiceMaster'
 import TransportBillMaster from '../components/sales/transportBill/TransportBillMaster'
+import DocketInvoiceDetailsMaster from '../components/sales/docketInvoiceDetails/DocketInvoiceDetailsMaster'
 import salesRoutes from "./salesRoutes";
 export const routesConfig = [
   { path: "/", label: "Dashboard", element: <Dashboard /> },
@@ -327,6 +328,12 @@ export const routesConfig = [
       label: "Transport Bill",
       keywords: ["transportbill", "transport"],
       element: <TransportBillMaster/>,
+    },
+     {
+      path: "/docketinvoicedetails",
+      label: "Docket/Invoice Details",
+      keywords: ["docketinvoicedetails", "docket"],
+      element: <DocketInvoiceDetailsMaster/>,
     },
   ...purchaseRoutes,
   ...inventoryRoutes,
