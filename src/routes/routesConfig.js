@@ -69,6 +69,7 @@ import SalesContract from '../components/sales/salescontract/SalesContract'
 import ProformaInvoice from '../components/sales/proformainvoice/ProformaInvoice'
 import StockTransferChallanMaster from '../components/sales/stockTransferChallan/StockTransferChallanMaster'
 import OtherSalesInvoiceMaster from '../components/sales/otherSalesInvoice/OtherSalesInvoiceMaster'
+import TransportBillMaster from '../components/sales/transportBill/TransportBillMaster'
 import salesRoutes from "./salesRoutes";
 export const routesConfig = [
   { path: "/", label: "Dashboard", element: <Dashboard /> },
@@ -315,12 +316,18 @@ export const routesConfig = [
     keywords: ["stocktransferchallan"],
     element: <StockTransferChallanMaster />,
   },
-  {
-    path: "/othersalesinvoice",
-    label: "Other Sales Invoice",
-    keywords: ["othersalesinvoice", "sales invoice"],
-    element: <OtherSalesInvoiceMaster />,
-  },
+     {
+      path: "/othersalesinvoice",
+      label: "Other Sales Invoice",
+      keywords: ["othersalesinvoice", "sales invoice"],
+      element: <OtherSalesInvoiceMaster/>,
+    },
+     {
+      path: "/transportbill",
+      label: "Transport Bill",
+      keywords: ["transportbill", "transport"],
+      element: <TransportBillMaster/>,
+    },
   ...purchaseRoutes,
   ...inventoryRoutes,
   ...salesRoutes,
