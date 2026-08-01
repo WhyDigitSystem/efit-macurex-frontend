@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
-import otherSalesInvoiceAPI from "../../../api/Sales/otherSalesInvoiceAPI";
+import stockTransferChallanAPI from "../../../api/Inventory/stockTransferChallanAPI";
 import { toast } from "../../../utils/toast";
 
 const normalizeActive = (value) => {
@@ -8,7 +8,7 @@ const normalizeActive = (value) => {
   return false;
 };
 
-const OtherSalesInvoiceList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
+const StockTransferChallanList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
   const ORG_ID = Number(localStorage.getItem("orgId")) || 0;
@@ -19,13 +19,13 @@ const OtherSalesInvoiceList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => 
     if (!ORG_ID) return;
     setLoading(true);
     try {
-      const res = await otherSalesInvoiceAPI.getAll(ORG_ID, BRANCH);
+      const res = await stockTransferChallanAPI.getAll(ORG_ID, BRANCH);
       const sorted = (res || []).sort((a, b) => (b.id || 0) - (a.id || 0));
       setData(sorted);
     } catch (error) {
-      console.error("Failed to load Other Sales Invoice records:", error);
+      console.error("Failed to load Stock Transfer Challan records:", error);
       setData([]);
-      toast.error("Failed to fetch Other Sales Invoice records");
+      toast.error("Failed to fetch Stock Transfer Challan records");
     } finally {
       setLoading(false);
     }
@@ -43,13 +43,12 @@ const OtherSalesInvoiceList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => 
   }, [refreshTrigger, loadData]);
 
   const columns = [
-    { key: "salesInvoiceNo", label: "Invoice No", accessor: "salesInvoiceNo", type: "text", noWrap: true },
-    { key: "invoiceDate", label: "Invoice Date", accessor: "invoiceDate", type: "text", noWrap: true },
+    { key: "docId", label: "Doc ID", accessor: "docId", type: "text", noWrap: true },
+    { key: "transferDate", label: "Transfer Date", accessor: "transferDate", type: "text", noWrap: true },
     { key: "customerName", label: "Customer", accessor: "customerName", type: "text" },
     { key: "plantId", label: "Plant", accessor: "plantId", type: "text" },
-    { key: "belongsTo", label: "Belongs To", accessor: "belongsTo", type: "text" },
-    { key: "currency", label: "Currency", accessor: "currency", type: "text", noWrap: true },
-    { key: "grossAmount", label: "Gross Amount", accessor: "grossAmount", type: "text", noWrap: true },
+    { key: "locationId", label: "Location", accessor: "locationId", type: "text", noWrap: true },
+    { key: "noOfPackages", label: "Packages", accessor: "noOfPackages", type: "text", noWrap: true },
     {
       key: "active", label: "Status", accessor: "active",
       render: (value) => {
@@ -68,7 +67,7 @@ const OtherSalesInvoiceList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => 
     { key: "actions", label: "Actions", type: "actions", align: "center", width: "90px" },
   ];
 
-  const searchFields = ["salesInvoiceNo", "customerName", "plantId", "belongsTo"];
+  const searchFields = ["docId", "customerName", "plantId", "locationId"];
 
   const filterOptions = [
     { value: "all", label: "All" },
@@ -78,8 +77,8 @@ const OtherSalesInvoiceList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => 
 
   return (
     <CommonListViewTable
-      title="Other Sales Invoice"
-      subtitle="Manage Other Sales Invoices"
+      title="Stock Transfer Challan"
+      subtitle="Manage Stock Transfer Challans"
       data={data}
       loading={loading}
       columns={columns}
@@ -93,14 +92,14 @@ const OtherSalesInvoiceList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => 
       showSerialNumber={true}
       itemsPerPageOptions={[5, 10, 20, 50, 100]}
       defaultItemsPerPage={10}
-      emptyMessage="No Other Sales Invoice records found"
-      loadingMessage="Loading Other Sales Invoice records..."
+      emptyMessage="No Stock Transfer Challan records found"
+      loadingMessage="Loading Stock Transfer Challan records..."
       enableRefresh={true}
       onRefresh={loadData}
       enableExport={true}
-      exportFileName="OtherSalesInvoice"
+      exportFileName="StockTransferChallan"
     />
   );
 };
 
-export default OtherSalesInvoiceList;
+export default StockTransferChallanList;

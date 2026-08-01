@@ -2,7 +2,7 @@ import { ArrowLeft, Save, X, Plus, Trash2, Copy } from "lucide-react";
 import { useState } from "react";
 import { useForm, Controller, useFieldArray } from "react-hook-form";
 import dayjs from "dayjs";
-import otherSalesInvoiceAPI from "../../../api/Sales/otherSalesInvoiceAPI";
+import stockTransferChallanAPI from "../../../api/Inventory/stockTransferChallanAPI";
 import { useToast } from "../../Toast/ToastContext";
 
 const controlClasses =
@@ -38,17 +38,15 @@ const ToggleSwitch = ({ value, onChange }) => (
 
 const thClass = "px-1 py-0.5 text-left font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap text-[10px]";
 
-const BELONGS_TO_OPTIONS = ["Other", "Sales Order", "Despatch Instruction", "DC Cum Invoice"];
-const DOC_TYPE_OPTIONS = ["INVOICE", "DEBIT NOTE", "CREDIT NOTE", "PROFORMA"];
-const INVOICE_TYPE_OPTIONS = ["Cash", "Credit", "Advance"];
-const CURRENCY_OPTIONS = ["₹", "$", "€", "£"];
-const TAX_TYPE_OPTIONS = ["SGST", "CGST", "IGST"];
+const TYPE_OPTIONS = ["Sales", "Transfer", "Return", "Sample"];
+const STOCK_POSTING_OPTIONS = ["Yes", "No"];
+const IMPORT_LOCAL_OPTIONS = ["Import", "Local"];
+const TAX_TYPE_OPTIONS = ["GST", "VAT", "CST", "Custom"];
 const UNIT_OPTIONS = ["Nos", "Kg", "Gms", "Ltr", "Mtr", "Pcs", "Box", "Pair"];
 const TRANSPORT_OPTIONS = ["Road", "Rail", "Air", "Sea", "Courier"];
 const CUSTOMER_OPTIONS = ["CUS001 - ABC Corp", "CUS002 - XYZ Ltd", "CUS003 - PQR Enterprises"];
 const ITEM_OPTIONS = ["ITEM001 - Raw Material A", "ITEM002 - Component B", "ITEM003 - Finished C"];
 const TAX_CODE_OPTIONS = ["TC-001", "TC-002", "TC-003"];
-const GL_ACCOUNT_OPTIONS = ["Ledger A", "Ledger B", "Ledger C"];
 
 const numberToWords = (num) => {
   if (!num || isNaN(num)) return "";
@@ -72,27 +70,26 @@ const numberToWords = (num) => {
   return (words || "Zero").trim() + " Only";
 };
 
-const getMonthYearOptions = () => {
-  const options = [];
-  const now = dayjs();
-  for (let i = 0; i < 12; i += 1) {
-    options.push(now.subtract(i, "month").format("MMMM YYYY"));
-  }
-  return options;
-};
-
 const getDefaultItemRow = () => ({
   itemCode: "",
   itemDescription: "",
   hsnSacCode: "",
   taxType: "",
   taxPerc: "",
-  customerPartNo: "",
   unit: "",
-  lastInvoicedDate: "",
-  tariffNo: "",
   stock: "",
-  soConf: false,
+  qty: "",
+  rate: "",
+  totalAssessableValue: "",
+  cvd: "",
+  addlDuty: "",
+  amount: "",
+  sgstRate: "",
+  sgstAmount: "",
+  cgstRate: "",
+  cgstAmount: "",
+  igstRate: "",
+  igstAmount: "",
 });
 
 const getDefaultTaxRow = () => ({
@@ -101,56 +98,48 @@ const getDefaultTaxRow = () => ({
   taxPerc: "",
   acceptedQtyAmount: "",
   revisedAmount: "",
-  glAccountName: "",
+  ledgerAccountName: "",
 });
 
 const getDefaultValues = (data) => ({
   plantId: data?.plantId || "",
-  monthYear: data?.monthYear || dayjs().format("MMMM YYYY"),
-  belongsTo: data?.belongsTo || "",
-  excisable: data?.excisable ?? false,
-  taxCode: data?.taxCode || "",
-  docType: data?.docType || "INVOICE",
-  locationId: data?.locationId || "",
-  salesInvoiceNo: data?.salesInvoiceNo || `MAC/${dayjs().format("DDD")}/${String(Date.now()).slice(-4)}`,
+  docId: data?.docId || "STCH" + String(Date.now()).slice(-6),
+  type: data?.type || "",
+  transferDate: data?.transferDate || dayjs().format("YYYY-MM-DD"),
   customerId: data?.customerId || "",
   customerName: data?.customerName || "",
-  customerCode: data?.customerCode || "",
-  vehicle: data?.vehicle || "",
-  invoiceDate: data?.invoiceDate || dayjs().format("YYYY-MM-DD"),
-  timeOfIssue: data?.timeOfIssue || dayjs().format("HH:mm"),
-  timeOfRemoval: data?.timeOfRemoval || dayjs().format("HH:mm"),
+  locationId: data?.locationId || "",
+  timeOfTransfer: data?.timeOfTransfer || dayjs().format("HH:mm"),
+  stockPosting: data?.stockPosting || "",
+  noOfPackages: data?.noOfPackages || "",
+  partyGstState: data?.partyGstState || "",
+  otherPackages: data?.otherPackages || "",
   isIgstApplicable: data?.isIgstApplicable ?? false,
-  currency: data?.currency || "₹",
-  gstnNo: data?.gstnNo || "",
-  invoiceType: data?.invoiceType || "",
-  schNo: data?.schNo || "",
-  dNo: data?.dNo || "",
-  schDate: data?.schDate || "",
-  dDate: data?.dDate || "",
-  exchangeRate: data?.exchangeRate ?? "",
-  kanbanCardNo: data?.kanbanCardNo || "",
-  stockPosting: data?.stockPosting ?? false,
+  importLocal: data?.importLocal || "",
+  gstinNo: data?.gstinNo || "",
+  taxCode: data?.taxCode || "",
   active: data?.active === "Active" || data?.active !== false,
   id: data?.id || 0,
   itemDetails: data?.itemDetails?.length
     ? data.itemDetails.map((r) => ({
         itemCode: r.itemCode || "", itemDescription: r.itemDescription || "", hsnSacCode: r.hsnSacCode || "",
-        taxType: r.taxType || "", taxPerc: r.taxPerc ?? "", customerPartNo: r.customerPartNo || "",
-        unit: r.unit || "", lastInvoicedDate: r.lastInvoicedDate || "", tariffNo: r.tariffNo || "",
-        stock: r.stock ?? "", soConf: r.soConf ?? false,
+        taxType: r.taxType || "", taxPerc: r.taxPerc ?? "", unit: r.unit || "", stock: r.stock ?? "",
+        qty: r.qty ?? "", rate: r.rate ?? "", totalAssessableValue: r.totalAssessableValue ?? "",
+        cvd: r.cvd ?? "", addlDuty: r.addlDuty ?? "", amount: r.amount ?? "",
+        sgstRate: r.sgstRate ?? "", sgstAmount: r.sgstAmount ?? "", cgstRate: r.cgstRate ?? "",
+        cgstAmount: r.cgstAmount ?? "", igstRate: r.igstRate ?? "", igstAmount: r.igstAmount ?? "",
       }))
     : [getDefaultItemRow()],
   taxDetails: data?.taxDetails?.length
     ? data.taxDetails.map((r) => ({
         particulars: r.particulars || "", taxId: r.taxId || "", taxPerc: r.taxPerc ?? "",
         acceptedQtyAmount: r.acceptedQtyAmount ?? "", revisedAmount: r.revisedAmount ?? "",
-        glAccountName: r.glAccountName || "",
+        ledgerAccountName: r.ledgerAccountName || "",
       }))
     : [getDefaultTaxRow()],
   totalInsurance: data?.totalInsurance ?? "",
   totalFreight: data?.totalFreight ?? "",
-  totalAssessableValue: data?.totalAssessableValue ?? "",
+  totalAssessableValueHeader: data?.totalAssessableValueHeader ?? "",
   modeOfTransport: data?.modeOfTransport || "",
   salesTax: data?.salesTax ?? "",
   grossAmount: data?.grossAmount ?? "",
@@ -160,7 +149,7 @@ const getDefaultValues = (data) => ({
   narration: data?.narration || "",
 });
 
-const OtherSalesInvoiceForm = ({ data, onBack }) => {
+const StockTransferChallanForm = ({ data, onBack }) => {
   const { addToast } = useToast();
   const orgId = Number(localStorage.getItem("orgId")) || 0;
   const branch = Number(localStorage.getItem("branchId")) || 1000000001;
@@ -182,15 +171,33 @@ const OtherSalesInvoiceForm = ({ data, onBack }) => {
 
   const watchItems = watch("itemDetails");
 
-  const [activeTab, setActiveTab] = useState("itemDetails");
-  const [formErrs, setFormErrs] = useState({});
+  const setCalc = (idx, field, val) => {
+    setValue(`itemDetails.${idx}.${field}`, val, { shouldValidate: false, shouldDirty: false });
+  };
 
   const handleItemChange = (idx, field, value, row) => {
     setValue(`itemDetails.${idx}.${field}`, value, { shouldDirty: true });
+
     if (field === "itemCode") {
       const item = ITEM_OPTIONS.find((o) => o === value);
       setValue(`itemDetails.${idx}.itemDescription`, item ? value.split(" - ")[1] || "" : "", { shouldDirty: true });
+      return;
     }
+
+    const qty = parseFloat(field === "qty" ? value : row.qty) || 0;
+    const rate = parseFloat(field === "rate" ? value : row.rate) || 0;
+    const cvd = parseFloat(field === "cvd" ? value : row.cvd) || 0;
+    const addl = parseFloat(field === "addlDuty" ? value : row.addlDuty) || 0;
+    const sgstR = parseFloat(field === "sgstRate" ? value : row.sgstRate) || 0;
+    const cgstR = parseFloat(field === "cgstRate" ? value : row.cgstRate) || 0;
+    const igstR = parseFloat(field === "igstRate" ? value : row.igstRate) || 0;
+
+    const assessable = qty * rate;
+    setCalc(idx, "totalAssessableValue", assessable || "");
+    setCalc(idx, "amount", (assessable + cvd + addl) || "");
+    setCalc(idx, "sgstAmount", ((assessable * sgstR) / 100) || "");
+    setCalc(idx, "cgstAmount", ((assessable * cgstR) / 100) || "");
+    setCalc(idx, "igstAmount", ((assessable * igstR) / 100) || "");
   };
 
   const handleTaxChange = (idx, field, value) => {
@@ -198,11 +205,6 @@ const OtherSalesInvoiceForm = ({ data, onBack }) => {
     if (field === "particulars") {
       setValue(`taxDetails.${idx}.taxId`, "TAX" + String(idx + 1).padStart(2, "0"), { shouldDirty: true });
     }
-  };
-
-  const handleGrossAmountChange = (value) => {
-    setValue("grossAmount", value, { shouldDirty: true });
-    setValue("amountInWords", numberToWords(parseFloat(value) || 0), { shouldDirty: true });
   };
 
   const copyItemRow = (idx) => {
@@ -217,43 +219,56 @@ const OtherSalesInvoiceForm = ({ data, onBack }) => {
     const errs = {};
     const vals = watch();
     if (!vals.plantId) errs.plantId = "Required";
-    if (!vals.belongsTo) errs.belongsTo = "Required";
-    if (!vals.invoiceDate) errs.invoiceDate = "Required";
-    if (typeof vals.isIgstApplicable !== "boolean") errs.isIgstApplicable = "Required";
+    if (!vals.docId) errs.docId = "Required";
+    if (!vals.transferDate) errs.transferDate = "Required";
+    if (!vals.customerId) errs.customerId = "Required";
+    if (!vals.partyGstState) errs.partyGstState = "Required";
+    const detailErrs = {};
     (watchItems || []).forEach((r, i) => {
-      if (!r.itemCode) errs[`itemDetails.${i}.itemCode`] = "Required";
-      if (!r.hsnSacCode) errs[`itemDetails.${i}.hsnSacCode`] = "Required";
+      if (!r.itemCode) detailErrs[`itemDetails.${i}.itemCode`] = "Required";
+      if (!r.hsnSacCode) detailErrs[`itemDetails.${i}.hsnSacCode`] = "Required";
+      if (!r.taxType) detailErrs[`itemDetails.${i}.taxType`] = "Required";
+      if ((r.qty === "" || r.qty === undefined) || Number(r.qty) <= 0) detailErrs[`itemDetails.${i}.qty`] = "Required";
+      if ((r.rate === "" || r.rate === undefined) || Number(r.rate) <= 0) detailErrs[`itemDetails.${i}.rate`] = "Required";
     });
-    return errs;
+    return { headerErrs: errs, detailErrs };
   };
 
   const onSubmit = async (formData) => {
-    const errs = validate();
-    setFormErrs(errs);
-    if (Object.keys(errs).length) {
+    const { headerErrs, detailErrs } = validate();
+    if (Object.keys(headerErrs).length || Object.keys(detailErrs).length) {
       addToast("Please fill all mandatory fields", "error");
       return;
     }
+    const totalAssessable = (watchItems || []).reduce((sum, r) => sum + (parseFloat(r.totalAssessableValue) || 0), 0);
+    const gross = (watchItems || []).reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0);
+    setValue("totalAssessableValueHeader", totalAssessable || "");
+    setValue("grossAmount", gross || "");
+    setValue("amountInWords", numberToWords(gross));
+
     const payload = {
       ...(formData.id ? { id: formData.id } : {}),
       orgId, branch,
       ...formData,
+      totalAssessableValueHeader: totalAssessable || "",
+      grossAmount: gross || "",
+      amountInWords: numberToWords(gross),
       createdBy: localStorage.getItem("userName") || "SYSTEM",
       cancelRemarks: "",
     };
     try {
-      await otherSalesInvoiceAPI.createUpdate(payload);
-      addToast(data ? "Other Sales Invoice Updated!" : "Other Sales Invoice Saved!", "success");
+      await stockTransferChallanAPI.createUpdate(payload);
+      addToast(data ? "Stock Transfer Challan Updated!" : "Stock Transfer Challan Saved!", "success");
       onBack();
     } catch (error) {
       console.error("Save error:", error);
-      addToast("Failed to save Other Sales Invoice.", "error");
+      addToast("Failed to save Stock Transfer Challan.", "error");
     }
   };
 
   const renderHeader = (errMap) => (
     <div className={fieldGrid}>
-      <InputField label="Plant Id" required error={errMap.plantId}>
+      <InputField label="Plant ID" required error={errMap.plantId}>
         <Controller control={control} name="plantId" render={({ field }) => (
           <select {...field} className={`${controlClasses} ${errMap.plantId ? "border-red-500" : ""}`}>
             <option value="">Select</option>
@@ -261,25 +276,78 @@ const OtherSalesInvoiceForm = ({ data, onBack }) => {
           </select>
         )} />
       </InputField>
-      <InputField label="Month Year">
-        <Controller control={control} name="monthYear" render={({ field }) => (
+      <InputField label="Doc ID" required error={errMap.docId}>
+        <input {...register("docId")} disabled className={`${controlClasses} bg-gray-50 dark:bg-gray-800 ${errMap.docId ? "border-red-500" : ""}`} />
+      </InputField>
+      <InputField label="Type">
+        <Controller control={control} name="type" render={({ field }) => (
           <select {...field} className={controlClasses}>
-            {getMonthYearOptions().map((o) => <option key={o} value={o}>{o}</option>)}
-          </select>
-        )} />
-      </InputField>
-      <InputField label="Belongs To" required error={errMap.belongsTo}>
-        <Controller control={control} name="belongsTo" render={({ field }) => (
-          <select {...field} className={`${controlClasses} ${errMap.belongsTo ? "border-red-500" : ""}`}>
             <option value="">Select</option>
-            {BELONGS_TO_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+            {TYPE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
           </select>
         )} />
       </InputField>
-      <InputField label="Excisable">
-        <Controller control={control} name="excisable" render={({ field }) => (
-          <ToggleSwitch value={field.value} onChange={field.onChange} />
+      <InputField label="Transfer Date" required error={errMap.transferDate}>
+        <input type="date" {...register("transferDate")} className={`${controlClasses} ${errMap.transferDate ? "border-red-500" : ""}`} />
+      </InputField>
+      <InputField label="Customer ID" required error={errMap.customerId}>
+        <Controller control={control} name="customerId" render={({ field }) => (
+          <select {...field} onChange={(e) => {
+            field.onChange(e.target.value);
+            const cust = CUSTOMER_OPTIONS.find((c) => c === e.target.value);
+            setValue("customerName", cust ? cust.split(" - ")[1] || "" : "", { shouldDirty: true });
+          }} className={`${controlClasses} ${errMap.customerId ? "border-red-500" : ""}`}>
+            <option value="">Select</option>
+            {CUSTOMER_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
         )} />
+      </InputField>
+      <InputField label="Customer Name">
+        <input {...register("customerName")} disabled className={`${controlClasses} bg-gray-50 dark:bg-gray-800`} />
+      </InputField>
+      <InputField label="Location ID">
+        <Controller control={control} name="locationId" render={({ field }) => (
+          <select {...field} className={controlClasses}>
+            <option value="">Select</option>
+            {["Warehouse A", "Warehouse B", "Store"].map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+        )} />
+      </InputField>
+      <InputField label="Time of Transfer">
+        <input type="time" {...register("timeOfTransfer")} disabled className={`${controlClasses} bg-gray-50 dark:bg-gray-800`} />
+      </InputField>
+      <InputField label="Stock Posting?">
+        <Controller control={control} name="stockPosting" render={({ field }) => (
+          <select {...field} className={controlClasses}>
+            <option value="">Select</option>
+            {STOCK_POSTING_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+        )} />
+      </InputField>
+      <InputField label="No of Packages">
+        <input type="number" step="1" {...register("noOfPackages")} className={controlClasses} />
+      </InputField>
+      <InputField label="Party GST State" required error={errMap.partyGstState}>
+        <input {...register("partyGstState")} className={`${controlClasses} ${errMap.partyGstState ? "border-red-500" : ""}`} />
+      </InputField>
+      <InputField label="Other Packages">
+        <input type="number" step="1" {...register("otherPackages")} className={controlClasses} />
+      </InputField>
+      <InputField label="Is IGST Applicable">
+        <Controller control={control} name="isIgstApplicable" render={({ field }) => (
+          <input type="checkbox" checked={field.value} onChange={(e) => field.onChange(e.target.checked)} className="h-4 w-4 rounded border-gray-300" />
+        )} />
+      </InputField>
+      <InputField label="Import / Local">
+        <Controller control={control} name="importLocal" render={({ field }) => (
+          <select {...field} className={controlClasses}>
+            <option value="">Select</option>
+            {IMPORT_LOCAL_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+        )} />
+      </InputField>
+      <InputField label="GSTIN No">
+        <input {...register("gstinNo")} className={controlClasses} />
       </InputField>
       <InputField label="Tax Code">
         <Controller control={control} name="taxCode" render={({ field }) => (
@@ -289,120 +357,34 @@ const OtherSalesInvoiceForm = ({ data, onBack }) => {
           </select>
         )} />
       </InputField>
-      <InputField label="Doc Type">
-        <Controller control={control} name="docType" render={({ field }) => (
-          <select {...field} className={controlClasses}>
-            {DOC_TYPE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
-          </select>
-        )} />
-      </InputField>
-      <InputField label="Location Id">
-        <Controller control={control} name="locationId" render={({ field }) => (
-          <select {...field} className={controlClasses}>
-            <option value="">Select</option>
-            {["Warehouse A", "Warehouse B", "Store"].map((o) => <option key={o} value={o}>{o}</option>)}
-          </select>
-        )} />
-      </InputField>
-      <InputField label="Sales Invoice No">
-        <input {...register("salesInvoiceNo")} disabled className={`${controlClasses} bg-gray-50 dark:bg-gray-800`} />
-      </InputField>
-      <InputField label="Customer Id">
-        <Controller control={control} name="customerId" render={({ field }) => (
-          <select {...field} onChange={(e) => {
-            field.onChange(e.target.value);
-            const cust = CUSTOMER_OPTIONS.find((c) => c === e.target.value);
-            setValue("customerName", cust ? cust.split(" - ")[1] || "" : "", { shouldDirty: true });
-          }} className={controlClasses}>
-            <option value="">Select</option>
-            {CUSTOMER_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
-          </select>
-        )} />
-      </InputField>
-      <InputField label="Customer Name">
-        <input {...register("customerName")} disabled className={`${controlClasses} bg-gray-50 dark:bg-gray-800`} />
-      </InputField>
-      <InputField label="Customer Code">
-        <input {...register("customerCode")} className={controlClasses} />
-      </InputField>
-      <InputField label="Vehicle">
-        <input {...register("vehicle")} className={controlClasses} />
-      </InputField>
-      <InputField label="Invoice Date" required error={errMap.invoiceDate}>
-        <input type="date" {...register("invoiceDate")} className={`${controlClasses} ${errMap.invoiceDate ? "border-red-500" : ""}`} />
-      </InputField>
-      <InputField label="Time of Issue">
-        <input type="time" {...register("timeOfIssue")} disabled className={`${controlClasses} bg-gray-50 dark:bg-gray-800`} />
-      </InputField>
-      <InputField label="Time of Removal">
-        <input type="time" {...register("timeOfRemoval")} disabled className={`${controlClasses} bg-gray-50 dark:bg-gray-800`} />
-      </InputField>
-      <InputField label="Is IGST Applicable" required error={errMap.isIgstApplicable}>
-        <Controller control={control} name="isIgstApplicable" render={({ field }) => (
-          <ToggleSwitch value={field.value} onChange={field.onChange} />
-        )} />
-      </InputField>
-      <InputField label="Currency">
-        <Controller control={control} name="currency" render={({ field }) => (
-          <select {...field} className={controlClasses}>
-            {CURRENCY_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
-          </select>
-        )} />
-      </InputField>
-      <InputField label="GSTN No">
-        <input {...register("gstnNo")} className={controlClasses} />
-      </InputField>
-      <InputField label="Invoice Type">
-        <Controller control={control} name="invoiceType" render={({ field }) => (
-          <select {...field} className={controlClasses}>
-            <option value="">Select</option>
-            {INVOICE_TYPE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
-          </select>
-        )} />
-      </InputField>
-      <InputField label="Sch. No">
-        <input {...register("schNo")} className={controlClasses} />
-      </InputField>
-      <InputField label="D. No">
-        <input {...register("dNo")} className={controlClasses} />
-      </InputField>
-      <InputField label="Sch. Date">
-        <input type="date" {...register("schDate")} className={controlClasses} />
-      </InputField>
-      <InputField label="D. Date">
-        <input type="date" {...register("dDate")} className={controlClasses} />
-      </InputField>
-      <InputField label="Exchange Rate">
-        <input type="number" step="0.01" {...register("exchangeRate")} className={controlClasses} />
-      </InputField>
-      <InputField label="Kanban Card No">
-        <input {...register("kanbanCardNo")} className={controlClasses} />
-      </InputField>
-      <InputField label="Stock Posting">
-        <Controller control={control} name="stockPosting" render={({ field }) => (
-          <ToggleSwitch value={field.value} onChange={field.onChange} />
-        )} />
-      </InputField>
     </div>
   );
 
   const itemColumns = [
     { key: "itemCode", label: "Item Code", width: "110px", required: true },
     { key: "itemDescription", label: "Item Description", width: "130px" },
-    { key: "hsnSacCode", label: "HSN/SAC Code", width: "90px", required: true },
-    { key: "taxType", label: "Tax Type", width: "85px" },
+    { key: "hsnSacCode", label: "HSN/SAC Code", width: "80px", required: true },
+    { key: "taxType", label: "Tax Type", width: "80px", required: true },
     { key: "taxPerc", label: "Tax %", width: "55px" },
-    { key: "customerPartNo", label: "Customer Part No", width: "100px" },
     { key: "unit", label: "Unit", width: "55px" },
-    { key: "lastInvoicedDate", label: "Last Invoiced Date", width: "115px" },
-    { key: "tariffNo", label: "Tariff No", width: "80px" },
     { key: "stock", label: "Stock", width: "60px" },
-    { key: "soConf", label: "S.O. Conf.", width: "60px" },
+    { key: "qty", label: "Qty", width: "55px", required: true },
+    { key: "rate", label: "Rate", width: "60px", required: true },
+    { key: "totalAssessableValue", label: "Total Assessable Value", width: "90px" },
+    { key: "cvd", label: "CVD 12.5%", width: "65px" },
+    { key: "addlDuty", label: "Addl Duty 4%", width: "70px" },
+    { key: "amount", label: "Amount", width: "65px" },
+    { key: "sgstRate", label: "SGST Rate", width: "60px" },
+    { key: "sgstAmount", label: "SGST Amount", width: "70px" },
+    { key: "cgstRate", label: "CGST Rate", width: "60px" },
+    { key: "cgstAmount", label: "CGST Amount", width: "70px" },
+    { key: "igstRate", label: "IGST Rate", width: "60px" },
+    { key: "igstAmount", label: "IGST Amount", width: "70px" },
   ];
 
   const renderItemCell = (col, row, idx) => {
     const base = `itemDetails.${idx}.`;
-    const isReadonly = ["itemDescription"].includes(col.key);
+    const isReadonly = ["itemDescription", "totalAssessableValue", "amount", "sgstAmount", "cgstAmount", "igstAmount"].includes(col.key);
     const cls = `${controlClasses} w-[${col.width}] ${isReadonly ? "bg-gray-50 dark:bg-gray-800" : ""}`;
 
     if (col.key === "itemCode") {
@@ -435,23 +417,10 @@ const OtherSalesInvoiceForm = ({ data, onBack }) => {
         )} />
       );
     }
-    if (col.key === "soConf") {
-      return (
-        <Controller control={control} name={`${base}${col.key}`} render={({ field }) => (
-          <input type="checkbox" checked={!!field.value} onChange={(e) => field.onChange(e.target.checked)} className="h-3.5 w-3.5 rounded border-gray-300 dark:border-gray-600" />
-        )} />
-      );
-    }
     if (isReadonly) {
       return <input value={row?.[col.key] ?? ""} readOnly className={cls} />;
     }
-    if (col.key === "lastInvoicedDate") {
-      return (
-        <input type="date" defaultValue={row?.[col.key] ?? ""}
-          onChange={(e) => handleItemChange(idx, col.key, e.target.value, row)} className={cls} />
-      );
-    }
-    const numericFields = ["taxPerc", "stock"];
+    const numericFields = ["taxPerc", "stock", "qty", "rate", "cvd", "addlDuty", "sgstRate", "cgstRate", "igstRate"];
     return (
       <input
         type={numericFields.includes(col.key) ? "number" : "text"}
@@ -497,7 +466,7 @@ const OtherSalesInvoiceForm = ({ data, onBack }) => {
                     )}
                   </td>
                 ))}
-                <td className="px-1.5 py-1 text-center whitespace-nowrap w-[50px]">
+                <td className="px-1 py-0.5 text-center whitespace-nowrap w-[50px]">
                   <div className="flex items-center justify-center gap-0.5">
                     <button type="button" onClick={() => copyItemRow(idx)}
                       className="p-0.5 rounded text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
@@ -523,7 +492,7 @@ const OtherSalesInvoiceForm = ({ data, onBack }) => {
     { key: "taxPerc", label: "Tax %", width: "70px" },
     { key: "acceptedQtyAmount", label: "Accepted Qty Amount", width: "120px" },
     { key: "revisedAmount", label: "Revised Amount", width: "110px" },
-    { key: "glAccountName", label: "GL Account Name", width: "150px" },
+    { key: "ledgerAccountName", label: "Ledger Account Name", width: "150px" },
   ];
 
   const renderTaxCell = (col, row, idx) => {
@@ -533,12 +502,12 @@ const OtherSalesInvoiceForm = ({ data, onBack }) => {
     if (col.key === "taxId") {
       return <input value={row?.[col.key] ?? ""} readOnly className={`${cls} bg-gray-50 dark:bg-gray-800`} />;
     }
-    if (col.key === "glAccountName") {
+    if (col.key === "ledgerAccountName") {
       return (
         <Controller control={control} name={`${base}${col.key}`} render={({ field }) => (
           <select {...field} className={cls}>
             <option value="">Select</option>
-            {GL_ACCOUNT_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+            {["Ledger A", "Ledger B", "Ledger C"].map((o) => <option key={o} value={o}>{o}</option>)}
           </select>
         )} />
       );
@@ -583,7 +552,7 @@ const OtherSalesInvoiceForm = ({ data, onBack }) => {
                     {renderTaxCell(col, watch("taxDetails")?.[idx], idx)}
                   </td>
                 ))}
-                <td className="px-1.5 py-1 text-center whitespace-nowrap w-[50px]">
+                <td className="px-1 py-0.5 text-center whitespace-nowrap w-[50px]">
                   <button type="button" onClick={() => removeTax(idx)} disabled={taxFields.length <= 1}
                     className="p-0.5 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-30">
                     <Trash2 className="h-3 w-3" />
@@ -608,7 +577,7 @@ const OtherSalesInvoiceForm = ({ data, onBack }) => {
           <input type="number" step="0.01" {...register("totalFreight")} className={controlClasses} />
         </InputField>
         <InputField label="Total Assessable Value">
-          <input type="number" step="0.01" {...register("totalAssessableValue")} className={controlClasses} />
+          <input type="number" step="0.01" {...register("totalAssessableValueHeader")} className={controlClasses} />
         </InputField>
         <InputField label="Mode of Transport">
           <Controller control={control} name="modeOfTransport" render={({ field }) => (
@@ -622,9 +591,7 @@ const OtherSalesInvoiceForm = ({ data, onBack }) => {
           <input type="number" step="0.01" {...register("salesTax")} className={controlClasses} />
         </InputField>
         <InputField label="Gross Amount">
-          <input type="number" step="0.01" {...register("grossAmount")}
-            onChange={(e) => handleGrossAmountChange(e.target.value)}
-            className={controlClasses} />
+          <input type="number" step="0.01" {...register("grossAmount")} className={controlClasses} />
         </InputField>
         <div className="col-span-1 md:col-span-2 xl:col-span-3">
           <label className={labelClasses}>Amount in Words</label>
@@ -645,6 +612,7 @@ const OtherSalesInvoiceForm = ({ data, onBack }) => {
     </div>
   );
 
+  const [activeTab, setActiveTab] = useState("itemDetails");
   const tabs = [
     { key: "itemDetails", label: "Item Details" },
     { key: "taxDetails", label: "Tax Details" },
@@ -658,7 +626,7 @@ const OtherSalesInvoiceForm = ({ data, onBack }) => {
           <ArrowLeft className="h-4 w-4" />
         </button>
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-          {data ? "Edit Other Sales Invoice" : "New Other Sales Invoice"}
+          {data ? "Edit Stock Transfer Challan" : "New Stock Transfer Challan"}
         </h2>
         <div className="ml-auto flex items-center gap-2">
           <label className={labelClasses}>Active</label>
@@ -669,8 +637,8 @@ const OtherSalesInvoiceForm = ({ data, onBack }) => {
       </div>
 
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-4">
-        <SectionHeader>Invoice Header</SectionHeader>
-        {renderHeader(formErrs)}
+        <SectionHeader>Challan Header</SectionHeader>
+        {renderHeader({})}
 
         <div className="border-b border-gray-200 dark:border-gray-700">
           <div className="flex">
@@ -687,7 +655,7 @@ const OtherSalesInvoiceForm = ({ data, onBack }) => {
           </div>
         </div>
 
-        {activeTab === "itemDetails" && renderItemDetailsTab(formErrs)}
+        {activeTab === "itemDetails" && renderItemDetailsTab({})}
         {activeTab === "taxDetails" && renderTaxDetailsTab()}
         {activeTab === "terms" && renderTermsTab()}
 
@@ -706,4 +674,4 @@ const OtherSalesInvoiceForm = ({ data, onBack }) => {
   );
 };
 
-export default OtherSalesInvoiceForm;
+export default StockTransferChallanForm;
