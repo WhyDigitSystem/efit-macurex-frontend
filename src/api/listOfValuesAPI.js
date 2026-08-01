@@ -12,6 +12,18 @@ const listOfValuesAPI = {
       throw error;
     }
   },
+  getListOfValuesByOrgId: async (branchId, orgId) => {
+    try {
+      const res = await apiClient.get(
+        "/api/commonmaster/getListOfValuesByOrgId",
+        { params: { branchId, orgId } },
+      );
+      return res?.paramObjectsMap?.listOfValues || [];
+    } catch (error) {
+      console.error("Error fetching List Of Values:", error);
+      throw error;
+    }
+  },
 };
 
 export default listOfValuesAPI;
