@@ -69,6 +69,7 @@ import SalesContract from '../components/sales/salescontract/SalesContract'
 import ProformaInvoice from '../components/sales/proformainvoice/ProformaInvoice'
 import StockTransferChallanMaster from '../components/sales/stockTransferChallan/StockTransferChallanMaster'
 import OtherSalesInvoiceMaster from '../components/sales/otherSalesInvoice/OtherSalesInvoiceMaster'
+import salesRoutes from "./salesRoutes";
 export const routesConfig = [
   { path: "/", label: "Dashboard", element: <Dashboard /> },
 
@@ -266,60 +267,61 @@ export const routesConfig = [
     element: <Profile />,
   },
   // sales module
-   {
+  {
     path: "/sales/enquiry",
     label: "Enquiry",
     keywords: ["enquiry"],
     element: <Enquiry />,
   },
-   {
+  {
     path: "/sales/quotation",
     label: "Quotation",
     keywords: ["quotation"],
     element: <Quotation />,
   },
-    {
+  {
     path: "/sales/salesdelivery",
     label: "Sales Delivery Schedule",
     keywords: ["salesdelivery"],
     element: <SalesDelivery />,
   },
-   {
-      path: "/sales/despatchinstruction",
-      label: "Despatch Instruction",
-      keywords: ["despatchinstruction"],
-      element: < DespatchInstruction/>,
-    },
-      {
-      path: "/sales/orderacceptance",
-      label: "Order Acceptance",
-      keywords: ["orderacceptance"],
-      element: < OrderAcceptance/>,
-    },
-     {
-      path: "/sales/salescontract",
-      label: "Sales Contract",
-      keywords: ["salescontract"],
-      element: < SalesContract/>,
-    },
-     {
-      path: "/sales/proformainvoice",
-      label: "Proforma Invoice",
-      keywords: ["proformainvoice"],
-      element: <ProformaInvoice/>,
-    },
-     {
-      path: "/stocktransferchallan",
-      label: "Stock Transfer Challan",
-      keywords: ["stocktransferchallan"],
-      element: <StockTransferChallanMaster/>,
-    },
-     {
-      path: "/othersalesinvoice",
-      label: "Other Sales Invoice",
-      keywords: ["othersalesinvoice", "sales invoice"],
-      element: <OtherSalesInvoiceMaster/>,
-    },
+  {
+    path: "/sales/despatchinstruction",
+    label: "Despatch Instruction",
+    keywords: ["despatchinstruction"],
+    element: <DespatchInstruction />,
+  },
+  {
+    path: "/sales/orderacceptance",
+    label: "Order Acceptance",
+    keywords: ["orderacceptance"],
+    element: <OrderAcceptance />,
+  },
+  {
+    path: "/sales/salescontract",
+    label: "Sales Contract",
+    keywords: ["salescontract"],
+    element: <SalesContract />,
+  },
+  {
+    path: "/sales/proformainvoice",
+    label: "Proforma Invoice",
+    keywords: ["proformainvoice"],
+    element: <ProformaInvoice />,
+  },
+  {
+    path: "/stocktransferchallan",
+    label: "Stock Transfer Challan",
+    keywords: ["stocktransferchallan"],
+    element: <StockTransferChallanMaster />,
+  },
+  {
+    path: "/othersalesinvoice",
+    label: "Other Sales Invoice",
+    keywords: ["othersalesinvoice", "sales invoice"],
+    element: <OtherSalesInvoiceMaster />,
+  },
   ...purchaseRoutes,
   ...inventoryRoutes,
+  ...salesRoutes,
 ];

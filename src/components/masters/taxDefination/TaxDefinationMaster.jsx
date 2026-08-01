@@ -28,10 +28,7 @@ const TaxDefinationMaster = () => {
       )}
 
       {screen === "form" && (
-        <TaxDefinationForm
-          data={editData}
-          onBack={() => setScreen("list")}
-        />
+        <TaxDefinationForm data={editData} onBack={() => setScreen("list")} />
       )}
     </>
   );

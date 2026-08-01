@@ -1,5 +1,12 @@
 import { ArrowLeft, Save, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import countryAPI from "../../../api/countryAPI";
+import stateAPI from "../../../api/stateAPI";
+import cityAPI from "../../../api/cityAPI";
+import employeeAPI from "../../../api/employeeAPI";
+import { departmentAPI } from "../../../api/departmentAPI";
+import { designationAPI } from "../../../api/designationAPI";
+import { useToast } from "../../Toast/ToastContext";
 
 const UPPERCASE_FIELDS = ["employeeId"];
 
@@ -14,7 +21,8 @@ const controlClasses =
   "disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed " +
   "[color-scheme:light] dark:[color-scheme:dark]";
 
-const labelClasses = "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
+const labelClasses =
+  "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
 const Field = ({
   label,
@@ -28,6 +36,7 @@ const Field = ({
   options = [],
   className = "",
   placeholder = "",
+  disabled = false,
 }) => {
   if (type === "select") {
     return (
@@ -36,15 +45,29 @@ const Field = ({
           {label}
           {required && <span className="text-red-500"> *</span>}
         </label>
-        <select name={name} value={value} onChange={onChange} className={controlClasses}>
+        <select
+          name={name}
+          value={value}
+          onChange={onChange}
+          disabled={disabled}
+          className={`${controlClasses} text-gray-900 dark:text-white`}
+        >
           <option value="">Select</option>
           {options.map((opt) => (
-            <option key={opt.value} value={opt.value}>
+            <option
+              key={opt.value}
+              value={opt.value}
+              className="text-black dark:text-white"
+            >
               {opt.label}
             </option>
           ))}
         </select>
-        {error && <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">{error}</p>}
+        {error && (
+          <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
+            {error}
+          </p>
+        )}
       </div>
     );
   }
@@ -53,7 +76,9 @@ const Field = ({
     return (
       <div className={`w-full ${className}`}>
         <label className={`${labelClasses} select-none opacity-0`}>-</label>
-        <label className={`${controlClasses} flex items-center gap-1.5 cursor-pointer`}>
+        <label
+          className={`${controlClasses} flex items-center gap-1.5 cursor-pointer`}
+        >
           <input
             type="checkbox"
             name={name}
@@ -75,13 +100,19 @@ const Field = ({
       </label>
       <input
         type={type}
+        className={`${controlClasses} appearance-none`}
         name={name}
         value={value}
         onChange={onChange}
+        disabled={disabled}
         className={controlClasses}
         placeholder={placeholder}
       />
-      {error && <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">{error}</p>}
+      {error && (
+        <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
+          {error}
+        </p>
+      )}
     </div>
   );
 };
@@ -92,88 +123,450 @@ const SectionHeader = ({ children }) => (
   </h3>
 );
 
-// New grid layout for vertical/structured fields
-const fieldGrid = "grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-x-3 gap-y-2 items-start";
+const fieldGrid =
+  "grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-x-3 gap-y-2 items-start";
+
+/* ---------------------------------------------------------------------------- */
+/* helpers                                                                      */
+
+// Normalizes a nested API ref object (e.g. tempCountry / tempState / tempCitys)
+// into a flat { id, name } shape, or falls back to a plain string value.
+const normalizeRef = (val, nameKey) => {
+  if (val && typeof val === "object") {
+    return { id: val.id ?? "", name: val[nameKey] || "" };
+  }
+  return { id: "", name: val ?? "" };
+};
+
+// Unwraps a department/designation list response regardless of envelope shape.
+// Handles: plain array, { paramObjectsMap: { departmentVO / designationVO } }, { data }.
+const unwrapList = (res, ...keys) => {
+  if (Array.isArray(res)) return res;
+  for (const k of keys) {
+    if (Array.isArray(res?.paramObjectsMap?.[k])) return res.paramObjectsMap[k];
+  }
+  if (Array.isArray(res?.data)) return res.data;
+  return [];
+};
+
+const emptyForm = () => ({
+  id: "",
+  employeeId: "",
+  surName: "",
+  middleName: "",
+  fatherHusbandName: "",
+  salutation: "Mr.",
+  accountHead: "",
+  sex: "Male",
+  dateOfBirth: "",
+
+  // Temp Address (id + display name kept separately)
+  tempAddressLine: "",
+  tempCountry: "",
+  tempCountryName: "",
+  tempState: "",
+  tempStateName: "",
+  tempCity: "",
+  tempCityName: "",
+  tempPinCode: "",
+
+  telephone: "",
+  mobile: "",
+  email: "",
+  qualification: "",
+  grade: "",
+  passportNo: "",
+  panNo: "",
+  bloodGroup: "",
+  nominee: "",
+
+  // Permanent Address
+  permanentAddressLine: "",
+  permCountry: "",
+  permCountryName: "",
+  permState: "",
+  permStateName: "",
+  permCity: "",
+  permCityName: "",
+  permPincode: "",
+
+  cardNo: "",
+  pfNo: "",
+  temporaryCardNo: "",
+  esiNo: "",
+  esiDispName: "",
+  dateOfJoining: "",
+  plantId: "",
+  vpfPercent: "",
+  department: "",
+  departmentId: "",
+  dateOfConfirmation: "",
+  designation: "",
+  designationId: "",
+  branchId: "",
+  active: true,
+  natureOfEmployment: "",
+  trainingStartDate: "",
+  overtimeApplicable: "No",
+  trainingEndDate: "",
+  refBy: "",
+  noticePeriod: "",
+  okdBy: "",
+  okdById: "",
+  currentSalaryPeriodStart: "",
+  modeOfPayment: "",
+  currentSalaryPeriodEnd: "",
+  bankAcNo: "",
+  bankName: "",
+});
 
 /* ---------------------------------------------------------------------------- */
 
 const EmployeeMasterForm = ({ data, onBack }) => {
   const [orgId] = useState(localStorage.getItem("orgId"));
   const [activeTab, setActiveTab] = useState("official");
+  const { addToast } = useToast();
 
-  const [form, setForm] = useState({
-    // Official Information (Tab 1)
-    employeeId: data?.employeeId || "",
-    surName: data?.surName || "",
-    middleName: data?.middleName || "",
-    fatherHusbandName: data?.fatherHusbandName || "",
-    salutation: data?.salutation || "Mr.",
-    accountHead: data?.accountHead || "",
-    sex: data?.sex || "Male",
-    dateOfBirth: data?.dateOfBirth || "",
-
-    // Temp Address
-    tempCity: data?.tempCity || "",
-    tempState: data?.tempState || "",
-    tempCountry: data?.tempCountry || "India",
-    tempPinCode: data?.tempPinCode || "",
-
-    // Telephone/Contact
-    telephone: data?.telephone || "",
-    mobile: data?.mobile || "",
-    email: data?.email || "",
-    qualification: data?.qualification || "",
-    grade: data?.grade || "",
-    passportNo: data?.passportNo || "",
-    panNo: data?.panNo || "",
-    bloodGroup: data?.bloodGroup || "",
-    nominee: data?.nominee || "",
-
-    // Permanent Address
-    permCity: data?.permCity || "",
-    permState: data?.permState || "",
-    permCountry: data?.permCountry || "India",
-    permPincode: data?.permPincode || "",
-
-    // Personal Information (Tab 2)
-    cardNo: data?.cardNo || "",
-    pfNo: data?.pfNo || "",
-    temporaryCardNo: data?.temporaryCardNo || "",
-    esiNo: data?.esiNo || "",
-    dateOfJoining: data?.dateOfJoining || "",
-    plantId: data?.plantId || "",
-    vpfPercent: data?.vpfPercent || "",
-    department: data?.department || "",
-    dateOfConfirmation: data?.dateOfConfirmation || "",
-    designation: data?.designation || "",
-    active: data?.active ?? true,
-    natureOfEmployment: data?.natureOfEmployment || "",
-    trainingStartDate: data?.trainingStartDate || "",
-    overtimeApplicable: data?.overtimeApplicable || "No",
-    trainingEndDate: data?.trainingEndDate || "",
-    refBy: data?.refBy || "",
-    noticePeriod: data?.noticePeriod || "",
-    okdBy: data?.okdBy || "",
-    currentSalaryPeriodStart: data?.currentSalaryPeriodStart || "",
-    modeOfPayment: data?.modeOfPayment || "",
-    currentSalaryPeriodEnd: data?.currentSalaryPeriodEnd || "",
-    bankAcNo: data?.bankAcNo || "",
-    bankName: data?.bankName || "",
-
-    id: data?.id || "",
-  });
-
+  const [form, setForm] = useState(emptyForm());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
 
+  // Country/State/City lists — kept separate for Temp vs Permanent address
+  const [countries, setCountries] = useState([]);
+  const [tempStates, setTempStates] = useState([]);
+  const [tempCities, setTempCities] = useState([]);
+  const [permStates, setPermStates] = useState([]);
+  const [permCities, setPermCities] = useState([]);
+
+  // Department/Designation lists — scoped to the selected Plant (branch)
+  const [departments, setDepartments] = useState([]);
+  const [designations, setDesignations] = useState([]);
+
+  /* ---------------- load countries once ---------------- */
+  useEffect(() => {
+    const fetchCountries = async () => {
+      try {
+        const res = await countryAPI.getCountries(orgId);
+        setCountries(res || []);
+      } catch (error) {
+        console.error("Country loading error", error);
+      }
+    };
+    if (orgId) fetchCountries();
+  }, [orgId]);
+
+  /* ---------------- load department/designation whenever Plant ID changes ---------------- */
+  useEffect(() => {
+    if (!orgId || !form.plantId) {
+      setDepartments([]);
+      setDesignations([]);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        const res = await departmentAPI.getAllDepartments(orgId, form.plantId);
+        setDepartments(unwrapList(res, "departmentVO", "departmentList"));
+      } catch (error) {
+        console.error("Department loading error", error);
+      }
+      try {
+        const res = await designationAPI.getAllDesignations(
+          orgId,
+          form.plantId,
+        );
+        setDesignations(unwrapList(res, "designationVO", "designationList"));
+      } catch (error) {
+        console.error("Designation loading error", error);
+      }
+    }, 350); // small debounce since Plant ID is a free-typed field
+
+    return () => clearTimeout(timer);
+  }, [orgId, form.plantId]);
+
+  /* ---------------- populate form from API record ---------------- */
+  const populateForm = async (emp) => {
+    if (!emp) return;
+
+    const tempCountryRef = normalizeRef(emp.tempCountry, "countryName");
+    const tempStateRef = normalizeRef(emp.tempState, "stateName");
+    const tempCityRef = normalizeRef(emp.tempCitys, "cityName");
+
+    const permCountryRef = normalizeRef(emp.permanentCountry, "countryName");
+    const permStateRef = normalizeRef(emp.permanentState, "stateName");
+    const permCityRef = normalizeRef(emp.permanentCitys, "cityName");
+
+    setForm({
+      ...emptyForm(),
+      id: emp.id || "",
+      employeeId: emp.employeeId || "",
+      surName: emp.surName || "",
+      middleName: emp.middleName || "",
+      fatherHusbandName: emp.fatherHusbandName || "",
+      salutation: emp.title || "Mr.",
+      accountHead: emp.accountHead || "",
+      sex: emp.sex || "Male",
+      dateOfBirth: emp.dateOfBirth || "",
+
+      tempAddressLine: emp.tempAddressLine || "",
+      tempCountry: tempCountryRef.id,
+      tempCountryName: tempCountryRef.name,
+      tempState: tempStateRef.id,
+      tempStateName: tempStateRef.name,
+      tempCity: tempCityRef.id,
+      tempCityName: tempCityRef.name,
+      tempPinCode: emp.tempPincode ?? "",
+
+      telephone: emp.telephone ?? "",
+      mobile: emp.mobile ?? "",
+      email: emp.email || "",
+      qualification: emp.qualification || "",
+      grade: emp.grade || "",
+      passportNo: emp.passportNo || "",
+      panNo: emp.panNo || "",
+      bloodGroup: emp.bloodGroup || "",
+      nominee: emp.nominee || "",
+
+      permanentAddressLine: emp.permanentAddressLine || "",
+      permCountry: permCountryRef.id,
+      permCountryName: permCountryRef.name,
+      permState: permStateRef.id,
+      permStateName: permStateRef.name,
+      permCity: permCityRef.id,
+      permCityName: permCityRef.name,
+      permPincode: emp.permanentPincode ?? "",
+
+      cardNo: emp.cardNo || "",
+      pfNo: emp.pfNo || "",
+      temporaryCardNo: emp.temporaryCardNo || "",
+      esiNo: emp.esiNo || "",
+      esiDispName: emp.esiDispName || "",
+      dateOfJoining: emp.dateOfJoining || "",
+      plantId: emp.plant?.id || "",
+      vpfPercent: emp.vpfPercentage ?? "",
+
+      department: emp.department?.departmentName || "",
+      departmentId: emp.department?.id || "",
+
+      dateOfConfirmation: emp.dateOfConfirmation || "",
+
+      designation: emp.designation?.designationName || "",
+      designationId: emp.designation?.id || "",
+
+      branchId: emp.branch?.id || emp.plant?.id || "",
+      active: emp.active ?? true,
+      natureOfEmployment: emp.natureOfEmployment || "",
+      trainingStartDate: emp.trainingStartDate || "",
+      overtimeApplicable: emp.overTimeApplicable || "No",
+      trainingEndDate: emp.trainingEndDate || "",
+      refBy: emp.referenceBy || "",
+      noticePeriod: emp.noticePeriod ?? "",
+      okdBy: emp.okdBy?.employeeName || "",
+      okdById: emp.okdBy?.id || "",
+      currentSalaryPeriodStart: emp.currentSalaryPeriodStart || "",
+      modeOfPayment: emp.modeOfPayment || "",
+      currentSalaryPeriodEnd: emp.currentSalaryPeriodEnd || "",
+      bankAcNo: emp.bankAccountNo || "",
+      bankName: emp.bankName || "",
+    });
+
+    // Preload dependent dropdowns so edit shows correct chain
+    if (tempCountryRef.id) {
+      try {
+        const st = await stateAPI.getStatesByCountry(tempCountryRef.id, orgId);
+        setTempStates(st || []);
+      } catch (e) {
+        console.error("Temp state preload error", e);
+      }
+    }
+    if (tempStateRef.id) {
+      try {
+        const ct = await cityAPI.getCitiesByState(orgId, tempStateRef.id);
+        setTempCities(ct || []);
+      } catch (e) {
+        console.error("Temp city preload error", e);
+      }
+    }
+    if (permCountryRef.id) {
+      try {
+        const st = await stateAPI.getStatesByCountry(permCountryRef.id, orgId);
+        setPermStates(st || []);
+      } catch (e) {
+        console.error("Perm state preload error", e);
+      }
+    }
+    if (permStateRef.id) {
+      try {
+        const ct = await cityAPI.getCitiesByState(orgId, permStateRef.id);
+        setPermCities(ct || []);
+      } catch (e) {
+        console.error("Perm city preload error", e);
+      }
+    }
+    // Department/Designation lists load automatically via the plantId effect above.
+  };
+
+  useEffect(() => {
+    if (data) populateForm(data);
+  }, [data]);
+
+  /* ---------------- cascading handlers: TEMP address ---------------- */
+  const handleTempCountryChange = async (e) => {
+    const countryId = e.target.value;
+    const selected = countries.find((c) => String(c.id) === String(countryId));
+
+    setForm((prev) => ({
+      ...prev,
+      tempCountry: countryId,
+      tempCountryName: selected?.countryName || "",
+      tempState: "",
+      tempStateName: "",
+      tempCity: "",
+      tempCityName: "",
+    }));
+    setTempCities([]);
+    setTempStates([]);
+
+    if (countryId) {
+      try {
+        const st = await stateAPI.getStatesByCountry(countryId, orgId);
+        setTempStates(st || []);
+      } catch (error) {
+        console.error("Temp state loading error", error);
+      }
+    }
+  };
+
+  const handleTempStateChange = async (e) => {
+    const stateId = e.target.value;
+    const selected = tempStates.find((s) => String(s.id) === String(stateId));
+
+    setForm((prev) => ({
+      ...prev,
+      tempState: stateId,
+      tempStateName: selected?.stateName || "",
+      tempCity: "",
+      tempCityName: "",
+    }));
+    setTempCities([]);
+
+    if (stateId) {
+      try {
+        const ct = await cityAPI.getCitiesByState(orgId, stateId);
+        setTempCities(ct || []);
+      } catch (error) {
+        console.error("Temp city loading error", error);
+      }
+    }
+  };
+
+  const handleTempCityChange = (e) => {
+    const cityId = e.target.value;
+    const selected = tempCities.find((c) => String(c.id) === String(cityId));
+    setForm((prev) => ({
+      ...prev,
+      tempCity: cityId,
+      tempCityName: selected?.cityName || "",
+    }));
+  };
+
+  /* ---------------- cascading handlers: PERMANENT address ---------------- */
+  const handlePermCountryChange = async (e) => {
+    const countryId = e.target.value;
+    const selected = countries.find((c) => String(c.id) === String(countryId));
+
+    setForm((prev) => ({
+      ...prev,
+      permCountry: countryId,
+      permCountryName: selected?.countryName || "",
+      permState: "",
+      permStateName: "",
+      permCity: "",
+      permCityName: "",
+    }));
+    setPermCities([]);
+    setPermStates([]);
+
+    if (countryId) {
+      try {
+        const st = await stateAPI.getStatesByCountry(countryId, orgId);
+        setPermStates(st || []);
+      } catch (error) {
+        console.error("Perm state loading error", error);
+      }
+    }
+  };
+
+  const handlePermStateChange = async (e) => {
+    const stateId = e.target.value;
+    const selected = permStates.find((s) => String(s.id) === String(stateId));
+
+    setForm((prev) => ({
+      ...prev,
+      permState: stateId,
+      permStateName: selected?.stateName || "",
+      permCity: "",
+      permCityName: "",
+    }));
+    setPermCities([]);
+
+    if (stateId) {
+      try {
+        const ct = await cityAPI.getCitiesByState(orgId, stateId);
+        setPermCities(ct || []);
+      } catch (error) {
+        console.error("Perm city loading error", error);
+      }
+    }
+  };
+
+  const handlePermCityChange = (e) => {
+    const cityId = e.target.value;
+    const selected = permCities.find((c) => String(c.id) === String(cityId));
+    setForm((prev) => ({
+      ...prev,
+      permCity: cityId,
+      permCityName: selected?.cityName || "",
+    }));
+  };
+
+  /* ---------------- Department / Designation handlers ---------------- */
+  const handleDepartmentChange = (e) => {
+    const deptId = e.target.value;
+    const selected = departments.find((d) => String(d.id) === String(deptId));
+
+    if (fieldErrors.department) {
+      setFieldErrors((prev) => ({ ...prev, department: "" }));
+    }
+
+    setForm((prev) => ({
+      ...prev,
+      departmentId: deptId,
+      department: selected?.departmentName || "",
+    }));
+  };
+
+  const handleDesignationChange = (e) => {
+    const desigId = e.target.value;
+    const selected = designations.find((d) => String(d.id) === String(desigId));
+
+    if (fieldErrors.designation) {
+      setFieldErrors((prev) => ({ ...prev, designation: "" }));
+    }
+
+    setForm((prev) => ({
+      ...prev,
+      designationId: desigId,
+      designation: selected?.designationName || "",
+    }));
+  };
+
+  /* ---------------- generic change handler ---------------- */
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
 
     if (fieldErrors[name]) {
-      setFieldErrors((prev) => ({
-        ...prev,
-        [name]: "",
-      }));
+      setFieldErrors((prev) => ({ ...prev, [name]: "" }));
     }
 
     setForm((prev) => ({
@@ -187,56 +580,136 @@ const EmployeeMasterForm = ({ data, onBack }) => {
     }));
   };
 
+  /* ---------------- validation ---------------- */
   const validate = () => {
     const errors = {};
 
-    if (!form.employeeId.trim())
-      errors.employeeId = "Employee ID is required";
-    if (!form.surName.trim())
-      errors.surName = "Sur Name is required";
-    if (!form.sex)
-      errors.sex = "Sex is required";
-    if (!form.dateOfBirth)
-      errors.dateOfBirth = "Date of Birth is required";
-    if (!form.permCity.trim())
-      errors.permCity = "City is required";
-    if (!form.permState.trim())
+    if (!form.surName.trim()) errors.surName = "Sur Name is required";
+    if (!form.sex) errors.sex = "Sex is required";
+    if (!form.dateOfBirth) errors.dateOfBirth = "Date of Birth is required";
+
+    if (!String(form.permCountry || "").trim())
+      errors.permCountry = "Country is required";
+    if (!String(form.permState || "").trim())
       errors.permState = "State is required";
+    if (!String(form.permCity || "").trim())
+      errors.permCity = "City is required";
+
     if (!form.dateOfJoining)
       errors.dateOfJoining = "Date of Joining is required";
-    if (!form.department.trim())
+    if (!String(form.departmentId || "").trim())
       errors.department = "Department is required";
-    if (!form.designation.trim())
+    if (!String(form.designationId || "").trim())
       errors.designation = "Designation is required";
 
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
+  /* ---------------- save ---------------- */
   const handleSave = async () => {
     if (!validate()) return;
     setIsSubmitting(true);
 
+    // Matches the updateCreateEmployeeMaster DTO shape
     const payload = {
-      ...(data?.id && { id: data.id }),
-      orgId,
-      ...form,
-      cancel: false,
-      createdBy: "ITC001",
+      ...(form.id && { id: Number(form.id) }),
+      employeeId: form.employeeId || null,
+      surName: form.surName,
+      middleName: form.middleName,
+      fatherHusbandName: form.fatherHusbandName,
+      title: form.salutation,
+      accountHead: form.accountHead,
+      sex: form.sex,
+      dateOfBirth: form.dateOfBirth,
+
+      tempAddressLine: form.tempAddressLine,
+      tempCountryId: form.tempCountry ? Number(form.tempCountry) : null,
+      tempStateId: form.tempState ? Number(form.tempState) : null,
+      tempCityId: form.tempCity ? Number(form.tempCity) : null,
+      tempPincode: form.tempPinCode ? Number(form.tempPinCode) : null,
+
+      telephone: form.telephone ? Number(form.telephone) : null,
+      mobile: form.mobile ? Number(form.mobile) : null,
+      email: form.email,
+      qualification: form.qualification,
+      grade: form.grade,
+      passportNo: form.passportNo,
+      panNo: form.panNo,
+      bloodGroup: form.bloodGroup,
+      nominee: form.nominee,
+
+      permanentAddressLine: form.permanentAddressLine,
+      permanentCountryId: form.permCountry ? Number(form.permCountry) : null,
+      permanentStateId: form.permState ? Number(form.permState) : null,
+      permanentCity: form.permCity ? Number(form.permCity) : null,
+      permanentPincode: form.permPincode ? Number(form.permPincode) : null,
+
+      cardNo: form.cardNo,
+      temporaryCardNo: form.temporaryCardNo,
+      pfNo: form.pfNo,
+      esiNo: form.esiNo,
+      esiDispName: form.esiDispName,
+      vpfPercentage: form.vpfPercent ? Number(form.vpfPercent) : null,
+
+      dateOfJoining: form.dateOfJoining,
+      plantId: form.plantId ? Number(form.plantId) : null,
+      branchId: form.branchId ? Number(form.branchId) : null,
+
+      departmentId: form.departmentId ? Number(form.departmentId) : null,
+      designationId: form.designationId ? Number(form.designationId) : null,
+
+      dateOfConfirmation: form.dateOfConfirmation,
+
+      natureOfEmployment: form.natureOfEmployment,
+      overTimeApplicable: form.overtimeApplicable,
+      trainingStartDate: form.trainingStartDate,
+      trainingEndDate: form.trainingEndDate,
+      referenceBy: form.refBy,
+      noticePeriod: form.noticePeriod ? Number(form.noticePeriod) : null,
+      okdById: form.okdById ? Number(form.okdById) : null,
+
+      currentSalaryPeriodStart: form.currentSalaryPeriodStart,
+      currentSalaryPeriodEnd: form.currentSalaryPeriodEnd,
+      modeOfPayment: form.modeOfPayment,
+      bankAccountNo: form.bankAcNo,
+      bankName: form.bankName,
+
+      active: form.active,
+
+      cancelRemarks: "",
+      screenName: "Employee Master",
+      screenCode: "EMP001",
+      orgId: Number(orgId),
+      financialYear: new Date().getFullYear().toString(),
+      createdBy: data ? undefined : "Admin",
+      updatedBy: "Admin",
     };
 
-    console.log(payload);
-
     try {
-      alert(
-        data
-          ? "Employee Updated Successfully!"
-          : "Employee Saved Successfully!"
-      );
-      onBack();
+      const response = await employeeAPI.updateCreateEmployee(payload);
+
+      if (response?.status) {
+        addToast(
+          data
+            ? "Employee updated successfully!"
+            : "Employee saved successfully!",
+        );
+        onBack();
+      } else {
+        const msg =
+          response?.errors?.[0]?.shortMessage ||
+          response?.errors?.[0]?.longMessage ||
+          "Failed to save employee";
+        addToast(msg);
+      }
     } catch (error) {
-      console.error(error);
-      alert("Failed to save Employee.");
+      console.error("Error saving employee:", error);
+      const serverMsg =
+        error?.response?.data?.errors?.[0]?.longMessage ||
+        error?.response?.data?.message ||
+        "Something went wrong. Please try again.";
+      addToast(serverMsg);
     } finally {
       setIsSubmitting(false);
     }
@@ -257,28 +730,28 @@ const EmployeeMasterForm = ({ data, onBack }) => {
         </h2>
       </div>
 
-      {/* Card */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-3">
-
         {/* Tabs */}
         <div className="flex items-center border-b border-gray-200 dark:border-gray-700 mb-0">
           <button
             type="button"
             onClick={() => setActiveTab("official")}
-            className={`px-4 py-1.5 text-xs font-semibold rounded-t ${activeTab === "official"
-              ? "bg-blue-600 text-white"
-              : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-              } transition-colors`}
+            className={`px-4 py-1.5 text-xs font-semibold rounded-t ${
+              activeTab === "official"
+                ? "bg-blue-600 text-white"
+                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+            } transition-colors`}
           >
             Official Information
           </button>
           <button
             type="button"
             onClick={() => setActiveTab("personal")}
-            className={`px-4 py-1.5 text-xs font-semibold rounded-t ${activeTab === "personal"
-              ? "bg-blue-600 text-white"
-              : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-              } transition-colors`}
+            className={`px-4 py-1.5 text-xs font-semibold rounded-t ${
+              activeTab === "personal"
+                ? "bg-blue-600 text-white"
+                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+            } transition-colors`}
           >
             Personal Information
           </button>
@@ -287,7 +760,6 @@ const EmployeeMasterForm = ({ data, onBack }) => {
         {/* Tab 1: Official Information */}
         {activeTab === "official" && (
           <div className="space-y-3 pt-2">
-            {/* Official Information Section */}
             <div>
               <SectionHeader>Official Information</SectionHeader>
               <div className={fieldGrid}>
@@ -296,8 +768,6 @@ const EmployeeMasterForm = ({ data, onBack }) => {
                   name="employeeId"
                   value={form.employeeId}
                   onChange={handleChange}
-                  error={fieldErrors.employeeId}
-                  required
                   placeholder="Enter Employee ID"
                 />
                 <Field
@@ -374,39 +844,67 @@ const EmployeeMasterForm = ({ data, onBack }) => {
               <SectionHeader>Temp. Address</SectionHeader>
               <div className={fieldGrid}>
                 <Field
-                  label="City"
-                  type="select"
-                  name="tempCity"
-                  value={form.tempCity}
+                  label="Address Line"
+                  name="tempAddressLine"
+                  value={form.tempAddressLine}
                   onChange={handleChange}
-                  placeholder="Enter City"
-                  options={[
-                    { value: "Bengaluru", label: "Bengaluru" },
-                    { value: "Chennai", label: "Chennai" },
-                  ]}
+                  placeholder="Enter Address"
+                  className="col-span-2"
                 />
                 <Field
-                  label="State"
                   type="select"
-                  name="tempState"
-                  value={form.tempState}
-                  onChange={handleChange}
-                  placeholder="Enter State"
-                  options={[
-                    { value: "Karnataka", label: "Karnataka" },
-                    { value: "TamilNadu", label: "Tamil Nadu" },
-                  ]}
-                />
-                <Field
                   label="Country"
-                  type="select"
                   name="tempCountry"
                   value={form.tempCountry}
-                  onChange={handleChange}
-                  placeholder="Enter Country"
+                  onChange={handleTempCountryChange}
                   options={[
-                    { value: "India", label: "India" },
-                  ]}
+                    ...(form.tempCountry &&
+                    !countries.some(
+                      (c) => String(c.id) === String(form.tempCountry),
+                    )
+                      ? [
+                          {
+                            id: form.tempCountry,
+                            countryName: form.tempCountryName,
+                          },
+                        ]
+                      : []),
+                    ...countries,
+                  ].map((c) => ({ value: c.id, label: c.countryName }))}
+                />
+                <Field
+                  type="select"
+                  label="State"
+                  name="tempState"
+                  value={form.tempState}
+                  onChange={handleTempStateChange}
+                  disabled={!form.tempCountry}
+                  options={[
+                    ...(form.tempState &&
+                    !tempStates.some(
+                      (s) => String(s.id) === String(form.tempState),
+                    )
+                      ? [{ id: form.tempState, stateName: form.tempStateName }]
+                      : []),
+                    ...tempStates,
+                  ].map((s) => ({ value: s.id, label: s.stateName }))}
+                />
+                <Field
+                  type="select"
+                  label="City"
+                  name="tempCity"
+                  value={form.tempCity}
+                  onChange={handleTempCityChange}
+                  disabled={!form.tempState}
+                  options={[
+                    ...(form.tempCity &&
+                    !tempCities.some(
+                      (c) => String(c.id) === String(form.tempCity),
+                    )
+                      ? [{ id: form.tempCity, cityName: form.tempCityName }]
+                      : []),
+                    ...tempCities,
+                  ].map((c) => ({ value: c.id, label: c.cityName }))}
                 />
                 <Field
                   label="Pin Code"
@@ -494,43 +992,73 @@ const EmployeeMasterForm = ({ data, onBack }) => {
               <SectionHeader>Permanent Address</SectionHeader>
               <div className={fieldGrid}>
                 <Field
-                  label="City"
-                  type="select"
-                  name="permCity"
-                  value={form.permCity}
+                  label="Address Line"
+                  name="permanentAddressLine"
+                  value={form.permanentAddressLine}
                   onChange={handleChange}
-                  error={fieldErrors.permCity}
-                  required
-                  placeholder="Enter City"
-                   options={[
-                    { value: "Bengaluru", label: "Bengaluru" },
-                    { value: "Chennai", label: "Chennai" },
-                  ]}
+                  placeholder="Enter Address"
+                  className="col-span-2"
                 />
                 <Field
-                  label="State"
                   type="select"
-                  name="permState"
-                  value={form.permState}
-                  onChange={handleChange}
-                  error={fieldErrors.permState}
-                  required
-                  placeholder="Enter State"
-                  options={[
-                    { value: "Karnataka", label: "Karnataka" },
-                    { value: "TamilNadu", label: "Tamil Nadu" },
-                  ]}
-                />
-                <Field
                   label="Country"
-                  type="select"
                   name="permCountry"
                   value={form.permCountry}
-                  onChange={handleChange}
-                  placeholder="Enter Country"
+                  onChange={handlePermCountryChange}
+                  error={fieldErrors.permCountry}
+                  required
                   options={[
-                    { value: "India", label: "India" },
-                  ]}
+                    ...(form.permCountry &&
+                    !countries.some(
+                      (c) => String(c.id) === String(form.permCountry),
+                    )
+                      ? [
+                          {
+                            id: form.permCountry,
+                            countryName: form.permCountryName,
+                          },
+                        ]
+                      : []),
+                    ...countries,
+                  ].map((c) => ({ value: c.id, label: c.countryName }))}
+                />
+                <Field
+                  type="select"
+                  label="State"
+                  name="permState"
+                  value={form.permState}
+                  onChange={handlePermStateChange}
+                  error={fieldErrors.permState}
+                  required
+                  disabled={!form.permCountry}
+                  options={[
+                    ...(form.permState &&
+                    !permStates.some(
+                      (s) => String(s.id) === String(form.permState),
+                    )
+                      ? [{ id: form.permState, stateName: form.permStateName }]
+                      : []),
+                    ...permStates,
+                  ].map((s) => ({ value: s.id, label: s.stateName }))}
+                />
+                <Field
+                  type="select"
+                  label="City"
+                  name="permCity"
+                  value={form.permCity}
+                  onChange={handlePermCityChange}
+                  error={fieldErrors.permCity}
+                  required
+                  disabled={!form.permState}
+                  options={[
+                    ...(form.permCity &&
+                    !permCities.some(
+                      (c) => String(c.id) === String(form.permCity),
+                    )
+                      ? [{ id: form.permCity, cityName: form.permCityName }]
+                      : []),
+                    ...permCities,
+                  ].map((c) => ({ value: c.id, label: c.cityName }))}
                 />
                 <Field
                   label="Pincode"
@@ -581,22 +1109,55 @@ const EmployeeMasterForm = ({ data, onBack }) => {
                   placeholder="Enter Plant ID"
                 />
                 <Field
+                  type="select"
                   label="Department"
-                  name="department"
-                  value={form.department}
-                  onChange={handleChange}
+                  name="departmentId"
+                  value={form.departmentId}
+                  onChange={handleDepartmentChange}
                   error={fieldErrors.department}
                   required
-                  placeholder="Enter Department"
+                  disabled={!form.plantId}
+                  options={[
+                    ...(form.departmentId &&
+                    !departments.some(
+                      (d) => String(d.id) === String(form.departmentId),
+                    )
+                      ? [
+                          {
+                            id: form.departmentId,
+                            departmentName: form.department,
+                          },
+                        ]
+                      : []),
+                    ...departments,
+                  ].map((d) => ({ value: d.id, label: d.departmentName }))}
                 />
                 <Field
+                  type="select"
                   label="Designation"
-                  name="designation"
-                  value={form.designation}
-                  onChange={handleChange}
+                  name="designationId"
+                  value={form.designationId}
+                  onChange={handleDesignationChange}
                   error={fieldErrors.designation}
                   required
-                  placeholder="Enter Designation"
+                  disabled={!form.departmentId}
+                  options={[
+                    ...(form.designationId &&
+                    !designations.some(
+                      (d) => String(d.id) === String(form.designationId),
+                    )
+                      ? [
+                          {
+                            id: form.designationId,
+                            designationName: form.designation,
+                          },
+                        ]
+                      : []),
+                    ...designations,
+                  ].map((d) => ({
+                    value: d.id,
+                    label: d.designationName,
+                  }))}
                 />
                 <Field
                   label="Nature of Employment"
@@ -656,7 +1217,6 @@ const EmployeeMasterForm = ({ data, onBack }) => {
                   onChange={handleChange}
                   placeholder="Enter Bank Name"
                 />
-
                 <Field
                   label="PF No."
                   name="pfNo"
@@ -684,7 +1244,6 @@ const EmployeeMasterForm = ({ data, onBack }) => {
                   name="dateOfConfirmation"
                   value={form.dateOfConfirmation}
                   onChange={handleChange}
-                  placeholder="Enter Date Of Confirmation"
                 />
                 <Field
                   type="checkbox"
@@ -699,7 +1258,6 @@ const EmployeeMasterForm = ({ data, onBack }) => {
                   name="trainingStartDate"
                   value={form.trainingStartDate}
                   onChange={handleChange}
-                  placeholder="Enter Training Start Date"
                 />
                 <Field
                   type="date"
@@ -707,7 +1265,6 @@ const EmployeeMasterForm = ({ data, onBack }) => {
                   name="trainingEndDate"
                   value={form.trainingEndDate}
                   onChange={handleChange}
-                  placeholder="Enter Training End Date"
                 />
                 <Field
                   label="Notice Period"
@@ -722,7 +1279,6 @@ const EmployeeMasterForm = ({ data, onBack }) => {
                   name="currentSalaryPeriodStart"
                   value={form.currentSalaryPeriodStart}
                   onChange={handleChange}
-                  placeholder="Enter Current Salary Period Start"
                 />
                 <Field
                   type="date"
@@ -730,7 +1286,6 @@ const EmployeeMasterForm = ({ data, onBack }) => {
                   name="currentSalaryPeriodEnd"
                   value={form.currentSalaryPeriodEnd}
                   onChange={handleChange}
-                  placeholder="Enter Current Salary Period End"
                 />
               </div>
             </div>
