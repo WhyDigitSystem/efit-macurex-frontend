@@ -1,8 +1,10 @@
 import { ArrowLeft, Save, X, Plus, Trash2, Copy } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm, Controller, useFieldArray } from "react-hook-form";
 import dayjs from "dayjs";
 import stockTransferChallanAPI from "../../../api/Inventory/stockTransferChallanAPI";
+import branchAPI from "../../../api/branchAPI";
+import locationMasterAPI from "../../../api/locationMasterAPI";
 import { useToast } from "../../Toast/ToastContext";
 
 const controlClasses =
@@ -154,6 +156,34 @@ const StockTransferChallanForm = ({ data, onBack }) => {
   const orgId = Number(localStorage.getItem("orgId")) || 0;
   const branch = Number(localStorage.getItem("branchId")) || 1000000001;
 
+  const userData = JSON.parse(localStorage.getItem("userData") || "{}");
+  const orgName = (userData?.companyVO?.companyName || userData?.orgName || "").trim();
+  const isMacurex = ["mecurex", "macurex"].includes(orgName.toLowerCase());
+
+  const [plantOptions, setPlantOptions] = useState([]);
+  const [lookupLoading, setLookupLoading] = useState(false);
+
+  useEffect(() => {
+    const loadOptions = async () => {
+      setLookupLoading(true);
+      try {
+        if (isMacurex) {
+          const res = await locationMasterAPI.getPlants(orgId);
+          setPlantOptions((res || []).map((p) => ({ id: p.id, label: p.plantName || p.plantId || p.id })));
+        } else {
+          const res = await branchAPI.getBranchByOrgId(orgId);
+          setPlantOptions((res || []).map((b) => ({ id: b.id, label: b.branchName || b.id })));
+        }
+      } catch (error) {
+        console.error("Failed to load plant/branch options", error);
+        setPlantOptions([]);
+      } finally {
+        setLookupLoading(false);
+      }
+    };
+    if (orgId) loadOptions();
+  }, [orgId, isMacurex]);
+
   const {
     control, handleSubmit, setValue, watch, register,
   } = useForm({
@@ -268,11 +298,11 @@ const StockTransferChallanForm = ({ data, onBack }) => {
 
   const renderHeader = (errMap) => (
     <div className={fieldGrid}>
-      <InputField label="Plant ID" required error={errMap.plantId}>
+      <InputField label={isMacurex ? "Plant ID" : "Branch"} required error={errMap.plantId}>
         <Controller control={control} name="plantId" render={({ field }) => (
-          <select {...field} className={`${controlClasses} ${errMap.plantId ? "border-red-500" : ""}`}>
-            <option value="">Select</option>
-            {["Plant 1", "Plant 2", "Plant 3"].map((o) => <option key={o} value={o}>{o}</option>)}
+          <select {...field} disabled={lookupLoading} className={`${controlClasses} ${errMap.plantId ? "border-red-500" : ""}`}>
+            <option value="">{isMacurex ? "Select Plant" : "Select Branch"}</option>
+            {plantOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
           </select>
         )} />
       </InputField>

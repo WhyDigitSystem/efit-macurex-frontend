@@ -1,169 +1,233 @@
-import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
-import { useForm, Controller, useFieldArray } from "react-hook-form";
+import { ArrowLeft, Save, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useToast } from "../../Toast/ToastContext";
+import locationMasterAPI from "../../../api/locationMasterAPI";
+import listOfValuesAPI from "../../../api/listOfValuesAPI";
+import { employeeAPI } from "../../../api/employeeAPI";
+import { masterAPI } from "../../../api/customerAPI";
+import branchAPI from "../../../api/branchAPI";
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
   "bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 " +
   "text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 " +
   "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
-  "dark:focus:ring-blue-400 dark:focus:border-blue-400 " +
-  "disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed";
+  "dark:focus:ring-blue-400 dark:focus:border-blue-400";
 
 const labelClasses =
   "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
-const getDefaultValues = () => ({
-  // Required fields
-  plantId: "",
-  LocationId: "",
-  locationName: "",
-  locationType: "",
-  belongs: "",
-  address: "",
-  name: "",
-  honeNo: "",
-  faxNo: "",
-  Email: "",
-  ConsiderMRP: "",
-  partyName: "",
-});
+// List codes for the dropdowns backed by List Of Values. Adjust if the
+// backend uses different list codes.
+const LOCATION_TYPE_LIST_CODE = "location Type";
+const BELONGS_TO_LIST_CODE = "location";
 
-// ============================================================================
-// HELPER COMPONENTS
-// ============================================================================
-const SelectField = ({ control, name, label, options, required, errors }) => (
-  <div>
-    <label className={labelClasses}>
-      {label} {required && <span className="text-red-500">*</span>}
-    </label>
-    <Controller
-      name={name}
-      control={control}
-      rules={required ? { required: `${label} is required` } : undefined}
-      render={({ field }) => (
-        <select {...field} className={controlClasses}>
-          <option value="">Select</option>
-          {options.map((opt) => (
-            <option key={opt} value={opt}>
-              {opt}
-            </option>
-          ))}
-        </select>
-      )}
-    />
-    {errors?.[name] && (
-      <p className="text-red-500 text-[10px] mt-0.5">{errors[name].message}</p>
-    )}
-  </div>
-);
+const YES_NO_OPTIONS = ["Yes", "No"];
+const FALLBACK_LOCATION_TYPES = ["Main Warehouse", "Raw Material Store", "Finished Goods Store"];
+const FALLBACK_BELONGS = ["PURCHASE", "SALES", "STORE", "PRODUCTION"];
 
-const InputField = ({
-  control,
-  name,
-  label,
-  type = "text",
-  required,
-  placeholder,
-  errors,
-  validation = {},
-}) => (
-  <div>
-    <label className={labelClasses}>
-      {label} {required && <span className="text-red-500">*</span>}
-    </label>
-    <Controller
-      name={name}
-      control={control}
-      rules={{
-        required: required ? `${label} is required` : false,
-        ...validation,
-      }}
-      render={({ field }) => (
-        <input
-          {...field}
-          type={type}
-          className={controlClasses}
-          placeholder={placeholder}
-        />
-      )}
-    />
-    {errors?.[name] && (
-      <p className="text-red-500 text-[10px] mt-0.5">{errors[name].message}</p>
-    )}
-  </div>
-);
+const getFinancialYears = () => {
+  const year = new Date().getFullYear();
+  return [String(year), String(year + 1), String(year - 1)];
+};
 
-const ToggleButton = ({ control, name }) => (
-  <Controller
-    name={name}
-    control={control}
-    render={({ field }) => (
-      <button
-        type="button"
-        onClick={() => field.onChange(!field.value)}
-        className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${
-          field.value ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
-        }`}
-      >
-        <span
-          className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${
-            field.value ? "translate-x-6" : "translate-x-0.5"
-          }`}
-        />
-      </button>
-    )}
-  />
-);
+const refId = (ref) => (ref?.id ? String(ref.id) : "");
 
-const CurrencyForm = ({ data, onBack }) => {
-  const [orgId] = useState(localStorage.getItem("orgId"));
+const LocationMasterForm = ({ data, onBack }) => {
+  const ORG_ID = parseInt(localStorage.getItem("orgId"));
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { addToast } = useToast();
 
-  // Sample options for dropdowns
-  const countryOptions = [
-    "USA",
-    "UK",
-    "India",
-    "Australia",
-    "Canada",
-    "Germany",
-    "France",
-    "Japan",
-  ];
-  const currencyOptions = [
-    "USD",
-    "EUR",
-    "GBP",
-    "INR",
-    "AUD",
-    "CAD",
-    "JPY",
-    "CHF",
-  ];
-  const currencySymbolOptions = ["$", "€", "£", "₹", "A$", "C$", "¥", "Fr"];
-  const currencyRepresentationOptions = ["Symbol", "Code", "Name"];
+  const userData = JSON.parse(localStorage.getItem("userData") || "{}");
+  const orgName = (userData?.companyVO?.companyName || userData?.orgName || "").trim();
+  const isMacurex = ["mecurex", "macurex"].includes(orgName.toLowerCase());
 
-  const {
-    control,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-  } = useForm({
-    mode: "all",
-    defaultValues: getDefaultValues(),
+  const [plants, setPlants] = useState([]);
+  const [locationTypes, setLocationTypes] = useState([]);
+  const [belongsList, setBelongsList] = useState([]);
+  const [employees, setEmployees] = useState([]);
+  const [parties, setParties] = useState([]);
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({});
+
+  const [form, setForm] = useState({
+    id: data?.id || 0,
+    plantId: refId(data?.plantId),
+    locationId: data?.locationId || "",
+    locationName: data?.locationName || "",
+    locationTypeId: refId(data?.locationTypeId),
+    belongsToId: refId(data?.belongsToId),
+    address: data?.address || "",
+    contactPersonNameId: refId(data?.contactPersonNameId),
+    phoneNo: data?.phoneNo ?? "",
+    faxNo: data?.faxNo || "",
+    email: data?.email || "",
+    considerMrp: data?.considerMrp || "Yes",
+    partyNameId: refId(data?.partyNameId),
+    financialYear: data?.financialYear || String(new Date().getFullYear()),
+    cancelRemarks: data?.cancelRemarks || "",
+    active: !(data?.cancelRemarks),
+    orgId: ORG_ID,
+    createdBy: localStorage.getItem("userName") || "SYSTEM",
+    branchId: Number(localStorage.getItem("branchId")) ,
   });
 
-  const onSubmit = async (formData) => {
+  const fieldLabels = {
+    plantId: isMacurex ? "Plant ID" : "Branch",
+    locationId: "Location ID",
+    locationTypeId: "Location Type",
+    belongsToId: "Belongs To",
+  };
+
+  useEffect(() => {
+    const loadLookups = async () => {
+      setLookupLoading(true);
+      try {
+        if (isMacurex) {
+          const plantRes = await locationMasterAPI.getPlants(ORG_ID);
+          setPlants((plantRes || []).map((p) => ({ id: p.id, label: p.plantName || p.plantId || p.id })));
+        } else {
+          const branchRes = await branchAPI.getBranchByOrgId(ORG_ID);
+          setPlants((branchRes || []).map((b) => ({ id: b.id, label: b.branchName || b.id })));
+        }
+      } catch (error) {
+        console.warn("Failed to load plant/branch options", error);
+        setPlants([]);
+      }
+      try {
+        const lt = await listOfValuesAPI.getListValuesGroup(LOCATION_TYPE_LIST_CODE, ORG_ID);
+        setLocationTypes((lt || []).map((v) => ({ id: v.id, label: v.valuesDescription || v.valueDescription || v.valueCode || v.id })));
+      } catch (error) {
+        console.warn(`Failed to load location types (list code: ${LOCATION_TYPE_LIST_CODE})`, error);
+        setLocationTypes(FALLBACK_LOCATION_TYPES.map((t) => ({ id: t, label: t })));
+      }
+      try {
+        const bt = await listOfValuesAPI.getListValuesGroup(BELONGS_TO_LIST_CODE, ORG_ID);
+        setBelongsList((bt || []).map((v) => ({ id: v.id, label: v.valuesDescription || v.valueDescription || v.valueCode || v.id })));
+      } catch (error) {
+        console.warn(`Failed to load belongs-to values (list code: ${BELONGS_TO_LIST_CODE})`, error);
+        setBelongsList(FALLBACK_BELONGS.map((b) => ({ id: b, label: b })));
+      }
+      try {
+        const emp = await employeeAPI.getEmployeeByOrgId(ORG_ID);
+        setEmployees((emp || []).map((e) => ({ id: e.id, label: e.employeeName || e.id })));
+      } catch (error) {
+        console.warn("Failed to load employees", error);
+        setEmployees([]);
+      }
+      try {
+        const cust = await masterAPI.getCustomer(ORG_ID);
+        setParties((cust || []).map((c) => ({ id: c.id, label: c.customerName || c.id })));
+      } catch (error) {
+        console.warn("Failed to load customers", error);
+        setParties([]);
+      }
+      setLookupLoading(false);
+    };
+    if (ORG_ID) loadLookups();
+  }, [ORG_ID, isMacurex]);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    if (fieldErrors[name]) {
+      setFieldErrors((prev) => ({ ...prev, [name]: "" }));
+    }
+    setForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const renderOptions = (options) =>
+    options.map((opt) => (
+      <option key={opt.id} value={opt.id}>
+        {opt.label}
+      </option>
+    ));
+
+  const handleSave = async () => {
+    const errors = {};
+
+    if (!form.plantId) errors.plantId = "Plant ID is required";
+    if (!form.locationId.trim()) errors.locationId = "Location ID is required";
+    if (!form.locationTypeId) errors.locationTypeId = "Location Type is required";
+    if (!form.belongsToId) errors.belongsToId = "Belongs To is required";
+
+    setFieldErrors(errors);
+
+    if (Object.keys(errors).length > 0) {
+      const firstErrorField = Object.keys(errors)[0];
+      const fieldLabel = fieldLabels[firstErrorField] || firstErrorField;
+      addToast(`${fieldLabel}: ${errors[firstErrorField]}`, "error");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    const toNumber = (val) => (val ? Number(val) || val : "");
+    const payload = {
+      address: form.address,
+      belongsToId: toNumber(form.belongsToId),
+      branchId: form.branchId,
+      cancelRemarks: form.active ? "" : form.cancelRemarks,
+      considerMrp: form.considerMrp,
+      contactPersonNameId: toNumber(form.contactPersonNameId),
+      createdBy: form.createdBy,
+      email: form.email,
+      faxNo: form.faxNo,
+      financialYear: form.financialYear,
+      locationId: form.locationId,
+      locationName: form.locationName,
+      locationTypeId: toNumber(form.locationTypeId),
+      orgId: form.orgId,
+      partyNameId: toNumber(form.partyNameId),
+      phoneNo: toNumber(form.phoneNo),
+      plantId: toNumber(form.plantId),
+    };
+
+    if (form.id && form.id > 0) {
+      payload.id = form.id;
+    }
+
+    console.log("Saving Location Payload:", payload);
+
     try {
-      console.log("Form Data:", formData, "Org Id:", orgId);
-      // API call here
+      const response = await locationMasterAPI.createUpdateLocationMaster(payload);
+
+      const status = response?.status === true || response?.statusFlag === "Ok";
+
+      if (status) {
+        addToast(
+          response?.paramObjectsMap?.message ||
+            (form.id && form.id > 0
+              ? "Location updated successfully!"
+              : "Location created successfully!"),
+          "success"
+        );
+        onBack();
+      } else {
+        const errorMessage =
+          response?.paramObjectsMap?.message ||
+          response?.paramObjectsMap?.errorMessage ||
+          response?.message ||
+          "Failed to save location";
+
+        addToast(errorMessage, "error");
+      }
     } catch (error) {
-      console.error(error);
+      console.error("Save Error:", error);
+      const errorMessage =
+        error.response?.data?.paramObjectsMap?.message ||
+        error.response?.data?.paramObjectsMap?.errorMessage ||
+        error.response?.data?.message ||
+        "Save failed! Try again.";
+
+      addToast(errorMessage, "error");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="p-2 max-w-7xl relative">
-      {/* Header */}
+    <div className="p-2 max-w-7xl">
+      {/* HEADER */}
       <div className="flex items-center gap-2 mb-3">
         <button
           onClick={onBack}
@@ -176,289 +240,262 @@ const CurrencyForm = ({ data, onBack }) => {
         </h2>
       </div>
 
-      {/* Main Card */}
+      {/* MAIN CARD */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
-        <form onSubmit={handleSubmit(onSubmit)}>
-          {/* All fields in one row - 5 columns */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-            {/* Required Fields */}
-            <SelectField
-              control={control}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+          {/* Plant / Branch */}
+          <div>
+            <label className={labelClasses}>
+              {isMacurex ? "Plant ID" : "Branch"} <span className="text-red-500">*</span>
+            </label>
+            <select
               name="plantId"
-              label="Plant ID"
-              options={countryOptions}
-              required
-              errors={errors}
-            />
+              value={form.plantId}
+              onChange={handleChange}
+              disabled={lookupLoading}
+              className={`${controlClasses} ${fieldErrors.plantId ? "border-red-500" : ""}`}
+            >
+              <option value="">{isMacurex ? "Select Plant" : "Select Branch"}</option>
+              {renderOptions(plants)}
+            </select>
+            {fieldErrors.plantId && (
+              <p className="text-red-500 text-[10px] mt-0.5">{fieldErrors.plantId}</p>
+            )}
+          </div>
 
-            <InputField
-              control={control}
+          {/* Location ID */}
+          <div>
+            <label className={labelClasses}>
+              Location ID <span className="text-red-500">*</span>
+            </label>
+            <input
               name="locationId"
-              label="Location ID"
-              required
+              value={form.locationId}
+              onChange={handleChange}
               placeholder="Enter location id"
-              errors={errors}
+              className={`${controlClasses} ${fieldErrors.locationId ? "border-red-500" : ""}`}
             />
+            {fieldErrors.locationId && (
+              <p className="text-red-500 text-[10px] mt-0.5">{fieldErrors.locationId}</p>
+            )}
+          </div>
 
-            <InputField
-              control={control}
+          {/* Location Name */}
+          <div>
+            <label className={labelClasses}>Location Name</label>
+            <input
               name="locationName"
-              label="Location Name"
+              value={form.locationName}
+              onChange={handleChange}
               placeholder="Enter location name"
-              errors={errors}
+              className={controlClasses}
             />
-            <SelectField
-              control={control}
-              name="locationType"
-              label="Location Type"
-              required
-              options={currencySymbolOptions}
-              errors={errors}
-            />
-            <SelectField
-              control={control}
-              name="belongs"
-              label="Belongs To"
-              required
-              options={currencySymbolOptions}
-              errors={errors}
-            />
-            <InputField
-              control={control}
+          </div>
+
+          {/* Location Type */}
+          <div>
+            <label className={labelClasses}>
+              Location Type <span className="text-red-500">*</span>
+            </label>
+            <select
+              name="locationTypeId"
+              value={form.locationTypeId}
+              onChange={handleChange}
+              disabled={lookupLoading}
+              className={`${controlClasses} ${fieldErrors.locationTypeId ? "border-red-500" : ""}`}
+            >
+              <option value="">Select</option>
+              {renderOptions(locationTypes)}
+            </select>
+            {fieldErrors.locationTypeId && (
+              <p className="text-red-500 text-[10px] mt-0.5">{fieldErrors.locationTypeId}</p>
+            )}
+          </div>
+
+          {/* Belongs To */}
+          <div>
+            <label className={labelClasses}>
+              Belongs To <span className="text-red-500">*</span>
+            </label>
+            <select
+              name="belongsToId"
+              value={form.belongsToId}
+              onChange={handleChange}
+              disabled={lookupLoading}
+              className={`${controlClasses} ${fieldErrors.belongsToId ? "border-red-500" : ""}`}
+            >
+              <option value="">Select</option>
+              {renderOptions(belongsList)}
+            </select>
+            {fieldErrors.belongsToId && (
+              <p className="text-red-500 text-[10px] mt-0.5">{fieldErrors.belongsToId}</p>
+            )}
+          </div>
+
+          {/* Address */}
+          <div>
+            <label className={labelClasses}>Address</label>
+            <input
               name="address"
-              label="Address"
+              value={form.address}
+              onChange={handleChange}
               placeholder="Enter address"
-              errors={errors}
+              className={controlClasses}
             />
+          </div>
 
-            <SelectField
-              control={control}
-              name="name"
-              label="Contact Person Name"
-              options={currencySymbolOptions}
-              errors={errors}
-            />
+          {/* Contact Person Name */}
+          <div>
+            <label className={labelClasses}>Contact Person Name</label>
+            <select
+              name="contactPersonNameId"
+              value={form.contactPersonNameId}
+              onChange={handleChange}
+              disabled={lookupLoading}
+              className={controlClasses}
+            >
+              <option value="">Select</option>
+              {renderOptions(employees)}
+            </select>
+          </div>
 
-            <InputField
-              control={control}
+          {/* Phone No */}
+          <div>
+            <label className={labelClasses}>Phone No</label>
+            <input
               name="phoneNo"
-              label="Phone No"
+              value={form.phoneNo}
+              onChange={handleChange}
               placeholder="eg: 9659597177"
-              errors={errors}
-              validation={{
-                pattern: {
-                  value: /^[0-9]{10}$/,
-                  message: "Phone number must be exactly 10 digits",
-                },
-                // minLength: {
-                //   value: 10,
-                //   message: "Phone number must be at least 10 digits",
-                // },
-                // maxLength: {
-                //   value: 15,
-                //   message: "Phone number must not exceed 15 digits",
-                // },
-              }}
+              className={controlClasses}
             />
-            <InputField
-              control={control}
+          </div>
+
+          {/* Fax No */}
+          <div>
+            <label className={labelClasses}>Fax No</label>
+            <input
               name="faxNo"
-              label="Fax No"
+              value={form.faxNo}
+              onChange={handleChange}
               placeholder="eg: Enter fax no"
-              errors={errors}
+              className={controlClasses}
             />
-            <InputField
-              control={control}
-              type="email"
+          </div>
+
+          {/* E-mail */}
+          <div>
+            <label className={labelClasses}>E-mail</label>
+            <input
               name="email"
-              label="E-mail"
+              type="email"
+              value={form.email}
+              onChange={handleChange}
               placeholder="eg: whydigit@gmail.com"
-              errors={errors}
-              validation={{
-                pattern: {
-                  value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                  message: "Please enter a valid email address",
-                },
-              }}
-            />
-
-            <SelectField
-              control={control}
-              name="considerMRP"
-              label="Consider MRP"
-              options={currencyRepresentationOptions}
-              errors={errors}
-            />
-            <SelectField
-              control={control}
-              name="partyName"
-              label="Party Name"
-              options={currencyRepresentationOptions}
-              errors={errors}
+              className={controlClasses}
             />
           </div>
 
-          {/* Buttons */}
-          <div className="flex justify-end gap-2 pt-3 mt-3 border-t border-gray-200 dark:border-gray-700">
-            <button
-              onClick={onBack}
-              disabled={isSubmitting}
-              className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+          {/* Consider MRP */}
+          <div>
+            <label className={labelClasses}>Consider MRP</label>
+            <select
+              name="considerMrp"
+              value={form.considerMrp}
+              onChange={handleChange}
+              className={controlClasses}
             >
-              <X className="h-3 w-3" /> Cancel
-            </button>
-            <button
-              onClick={handleSubmit(onSubmit)}
-              disabled={isSubmitting}
-              className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+              {YES_NO_OPTIONS.map((o) => (
+                <option key={o} value={o}>{o}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Party Name */}
+          <div>
+            <label className={labelClasses}>Party Name</label>
+            <select
+              name="partyNameId"
+              value={form.partyNameId}
+              onChange={handleChange}
+              disabled={lookupLoading}
+              className={controlClasses}
             >
-              <Save className="h-3 w-3" />{" "}
-              {isSubmitting ? "Saving..." : data ? "Update" : "Save"}
+              <option value="">Select</option>
+              {renderOptions(parties)}
+            </select>
+          </div>
+
+          {/* Financial Year */}
+          <div>
+            <label className={labelClasses}>Financial Year</label>
+            <select
+              name="financialYear"
+              value={form.financialYear}
+              onChange={handleChange}
+              className={controlClasses}
+            >
+              {getFinancialYears().map((y) => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Active */}
+          <div>
+            <label className={labelClasses}>Active</label>
+            <button
+              type="button"
+              onClick={() => setForm((prev) => ({ ...prev, active: !prev.active }))}
+              className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${
+                form.active ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
+              }`}
+            >
+              <span
+                className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${
+                  form.active ? "translate-x-6" : "translate-x-0.5"
+                }`}
+              />
             </button>
           </div>
-        </form>
+
+          {/* Cancel Remarks - only relevant when marking inactive */}
+          {!form.active && (
+            <div className="lg:col-span-3">
+              <label className={labelClasses}>Cancel Remarks</label>
+              <input
+                name="cancelRemarks"
+                value={form.cancelRemarks}
+                onChange={handleChange}
+                placeholder="Reason for cancellation"
+                className={controlClasses}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* ACTION BUTTONS */}
+        <div className="flex justify-end gap-2 pt-3 mt-3 border-t border-gray-200 dark:border-gray-700">
+          <button
+            onClick={onBack}
+            disabled={isSubmitting}
+            className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60"
+          >
+            <X className="h-3 w-3" />
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={isSubmitting}
+            className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60"
+          >
+            <Save className="h-3 w-3" />
+            {isSubmitting ? "Saving..." : data ? "Update" : "Save"}
+          </button>
+        </div>
       </div>
     </div>
   );
 };
 
-const TableWrapper = ({ children }) => (
-  <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
-    <table className="w-full text-xs">{children}</table>
-  </div>
-);
-
-const TableHead = ({ headers }) => (
-  <thead className="bg-gray-100 dark:bg-gray-700">
-    <tr>
-      {headers.map((h, i) => (
-        <th
-          key={i}
-          className={`p-1 ${i === 0 ? "w-8 text-center" : "text-left"} dark:text-white`}
-        >
-          {h.label}
-          {h.required && <span className="text-red-500 ml-0.5">*</span>}
-        </th>
-      ))}
-    </tr>
-  </thead>
-);
-
-const TableRow = ({ children, index, onRemove, disabled }) => (
-  <tr className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-    <td className="p-1 text-center font-medium dark:text-white align-middle">
-      {index + 1}
-    </td>
-    {children}
-    <td className="p-1 text-center align-middle">
-      <button
-        type="button"
-        onClick={onRemove}
-        disabled={disabled}
-        className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-          disabled
-            ? "bg-gray-400 cursor-not-allowed"
-            : "bg-red-600 hover:bg-red-700"
-        }`}
-      >
-        <Trash2 size={10} />
-      </button>
-    </td>
-  </tr>
-);
-
-const SelectCell = ({ control, name, options, required, errors }) => {
-  const getError = () => {
-    const parts = name.split(".");
-    let error = errors;
-    for (const part of parts) {
-      if (error && error[part]) {
-        error = error[part];
-      } else {
-        return null;
-      }
-    }
-    return error?.message;
-  };
-
-  const errorMessage = getError();
-
-  return (
-    <td className="p-1 align-top">
-      <Controller
-        name={name}
-        control={control}
-        rules={required ? { required: "This field is required" } : undefined}
-        render={({ field }) => (
-          <select
-            {...field}
-            className={`${controlClasses} h-8 text-xs w-full ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
-          >
-            <option value="">Select</option>
-            {options.map((opt) => (
-              <option key={opt} value={opt}>
-                {opt}
-              </option>
-            ))}
-          </select>
-        )}
-      />
-      {errorMessage && (
-        <div className="text-red-500 text-[10px] mt-0.5 text-left w-full">
-          {errorMessage}
-        </div>
-      )}
-    </td>
-  );
-};
-
-const InputCell = ({
-  control,
-  name,
-  type = "text",
-  step,
-  placeholder,
-  required,
-  errors,
-}) => {
-  const getError = () => {
-    const parts = name.split(".");
-    let error = errors;
-    for (const part of parts) {
-      if (error && error[part]) {
-        error = error[part];
-      } else {
-        return null;
-      }
-    }
-    return error?.message;
-  };
-
-  const errorMessage = getError();
-
-  return (
-    <td className="p-1 align-top">
-      <Controller
-        name={name}
-        control={control}
-        rules={required ? { required: "This field is required" } : undefined}
-        render={({ field }) => (
-          <input
-            {...field}
-            type={type}
-            step={step}
-            className={`${controlClasses} h-8 text-xs w-full ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
-            placeholder={placeholder}
-          />
-        )}
-      />
-      {errorMessage && (
-        <div className="text-red-500 text-[10px] mt-0.5 text-left w-full">
-          {errorMessage}
-        </div>
-      )}
-    </td>
-  );
-};
-
-export default CurrencyForm;
+export default LocationMasterForm;
