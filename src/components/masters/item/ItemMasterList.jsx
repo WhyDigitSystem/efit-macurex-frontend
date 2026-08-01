@@ -2,153 +2,171 @@ import React, { useCallback, useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import itemAPI from "../../../api/itemAPI";
 
-const ItemMasterList = ({ onAddNew, onEdit,onBack }) => {
+const ItemMasterList = ({ onAddNew, onEdit, onBack }) => {
   const [itemData, setItemData] = useState([]);
+  const [originalData, setOriginalData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [orgId] = useState(localStorage.getItem("orgId") || "");
+  const [branch] = useState(localStorage.getItem("branchId") || "");
 
   const loadItems = useCallback(async () => {
     try {
       setLoading(true);
+      const response = await itemAPI.getItems(orgId, branch);
+      console.log("API Response:", response);
 
-      const response = await itemAPI.getItems(orgId);
+      // Store original data
+      setOriginalData(response);
 
-      setItemData(response);
+      // Transform data for display
+      const transformedData = transformItemData(response);
+      console.log("Transformed Data:", transformedData);
+
+      setItemData(transformedData);
     } catch (error) {
-      console.error("Failed to load countries:", error);
+      console.error("Failed to load items:", error);
       setItemData([]);
+      setOriginalData([]);
     } finally {
       setLoading(false);
     }
-  }, [orgId]);
+  }, [orgId, branch]);
 
   useEffect(() => {
     loadItems();
-  }, []);
+  }, [loadItems]);
+
+  const transformItemData = (data) => {
+    if (!Array.isArray(data)) return [];
+
+    return data.map((item) => ({
+      ...item, // Keep all original data
+      // Flatten nested objects for display
+      itemType: item.itemTypes?.valueDescription || item.itemType || "",
+      itemGroup: item.itemGroups?.valueDescription || "",
+      materialGroup: item.itemGroups?.valueDescription || "",
+      materialSubGroup: item.capitalOrInputs?.valueDescription || "",
+      grade: item.listOfGrades?.gradeDescription || "",
+      itemCode: item.itemCode || "",
+      itemDescription: item.itemDescription || "",
+      // capitalOrInputs: item.capitalOrInputs?.valueDescription || "",
+      primaryUnit: item.primaryUnits?.primaryUnit || "",
+      hsnCode: item.itemHsn?.hsnCode || "",
+      importLocal: item.importOrLocal || "",
+      minimumOrderQuantity: item.minimumOrderQty || 0,
+      stockLocation: item.defaultLocationId || "",
+      reorderLevel: item.reorderLevel || "0",
+      needQCApproval: item.needQcApproval || "",
+      inspection: item.inspections?.valueDescription || "",
+      // Keep nested objects for editing
+      itemTypes: item.itemTypes,
+      itemGroups: item.itemGroups,
+      primaryUnits: item.primaryUnits,
+      itemHsn: item.itemHsn,
+      inspections: item.inspections,
+      listOfGrades: item.listOfGrades,
+      capitalOrInputs: item.capitalOrInputs,
+      exciseTariffNos: item.exciseTariffNos,
+      purchaseUnit: item.purchaseUnit,
+      sellingUnit: item.sellingUnit,
+      pricingUnit: item.pricingUnit,
+      secondaryUnit: item.secondaryUnit,
+    }));
+  };
 
   const handleEdit = (item) => {
-    onEdit(item);
+    console.log("Edit clicked with item:", item);
+
+    // Find the original data from the stored originalData array
+    const originalItem = originalData.find(orig => orig.id === item.id);
+
+    if (originalItem) {
+      console.log("Original data found:", originalItem);
+      onEdit(originalItem);
+    } else {
+      console.warn("Original data not found, using transformed data");
+      onEdit(item);
+    }
   };
 
   const columns = [
-  {
-    key: "itemCode",
-    label: "Item Code",
-    accessor: "itemCode",
-    type: "text",
-    noWrap: true,
-  },
-  {
-    key: "itemType",
-    label: "Item Type",
-    accessor: "itemType",
-    type: "text",
-  },
-  {
-    key: "itemName",
-    label: "Item Name",
-    accessor: "itemName",
-    type: "text",
-  },
-  {
-    key: "materialGroup",
-    label: "Material Group",
-    accessor: "materialGroup",
-    type: "text",
-  },
-  {
-    key: "materialSubGroup",
-    label: "Sub Group",
-    accessor: "materialSubGroup",
-    type: "text",
-  },
-  {
-    key: "primaryUnit",
-    label: "Primary Unit",
-    accessor: "primaryUnit",
-    type: "text",
-  },
-  {
-    key: "hsnCode",
-    label: "HSN Code",
-    accessor: "hsnCode",
-    type: "text",
-  },
-  {
-    key: "importLocal",
-    label: "Import/Local",
-    accessor: "importLocal",
-    type: "text",
-  },
-  {
-    key: "minimumOrderQuantity",
-    label: "Min Order Qty",
-    accessor: "minimumOrderQuantity",
-    type: "text",
-  },
-  {
-    key: "stockLocation",
-    label: "Stock Location",
-    accessor: "stockLocation",
-    type: "text",
-  },
-  {
-    key: "reorderLevel",
-    label: "Reorder Level",
-    accessor: "reorderLevel",
-    type: "text",
-  },
-  {
-    key: "needQCApproval",
-    label: "QC Approval",
-    accessor: "needQCApproval",
-    type: "text",
-  },
-  {
-    key: "inspection",
-    label: "Inspection",
-    accessor: "inspection",
-    type: "text",
-  },
-  {
-    key: "active",
-    label: "Status",
-    accessor: "active",
-    type: "status",
-    statusVariants: {
-      true: {
-        label: "Active",
-        className:
-          "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
-      },
-      false: {
-        label: "Inactive",
-        className:
-          "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
-      },
+    {
+      key: "materialGroup",
+      label: "Item Group",
+      accessor: "materialGroup",
+      type: "text",
     },
-  },
-  {
-    key: "actions",
-    label: "Actions",
-    type: "actions",
-    align: "center",
-    width: "90px",
-  },
-];
+    {
+      key: "materialSubGroup",
+      label: "Capital/Inputs",
+      accessor: "materialSubGroup",
+      type: "text",
+    },
+    {
+      key: "itemType",
+      label: "Item Type",
+      accessor: "itemType",
+      type: "text",
+    },
+    {
+      key: "grade",
+      label: "Grade",
+      accessor: "grade",
+      type: "text",
+      noWrap: true,
+    },
+    {
+      key: "itemCode",
+      label: "Item Code",
+      accessor: "itemCode",
+      type: "text",
+      noWrap: true,
+    },
+
+    {
+      key: "itemDescription",
+      label: "Item Name",
+      accessor: "itemDescription",
+      type: "text",
+    },
+
+
+    {
+      key: "primaryUnit",
+      label: "Primary Unit",
+      accessor: "primaryUnit",
+      type: "text",
+    },
+    {
+      key: "hsnCode",
+      label: "HSN Code",
+      accessor: "hsnCode",
+      type: "text",
+    },
+    {
+      key: "importLocal",
+      label: "Import/Local",
+      accessor: "importLocal",
+      type: "text",
+    },
+    {
+      key: "actions",
+      label: "Actions",
+      type: "actions",
+      align: "center",
+      width: "90px",
+    },
+  ];
 
   const searchFields = [
-  "itemCode",
-  "itemType",
-  "itemName",
-  "itemDescription",
-  "materialType",
-  "materialGroup",
-  "materialSubGroup",
-  "primaryUnit",
-  "hsnCode",
-  "stockLocation",
-];
+    "itemCode",
+    "itemType",
+    "itemDescription",
+    "materialGroup",
+    "primaryUnit",
+    "hsnCode",
+    "stockLocation",
+  ];
 
   const filterOptions = [
     {
@@ -160,22 +178,19 @@ const ItemMasterList = ({ onAddNew, onEdit,onBack }) => {
       value: "active",
       label: "Active",
       field: "active",
-      filterValue: "active",
-      activeValue: "Active",
+      filterValue: true,
     },
     {
       value: "inactive",
       label: "Inactive",
       field: "active",
-      filterValue: "inactive",
-      activeValue: "Active",
+      filterValue: false,
     },
   ];
 
   return (
     <CommonListViewTable
       title="Item"
-   
       data={itemData}
       loading={loading}
       columns={columns}

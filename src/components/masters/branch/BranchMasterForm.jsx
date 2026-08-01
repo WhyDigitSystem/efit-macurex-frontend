@@ -847,7 +847,7 @@ const BranchMasterForm = ({
         </div>
 
         {/* Bank Details */}
-        <div>
+        {/* <div>
           <SectionHeader>Bank Details</SectionHeader>
 
           <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
@@ -964,7 +964,7 @@ const BranchMasterForm = ({
             <Plus className="h-4 w-4" />
             Add Bank Row
           </button>
-        </div>
+        </div> */}
 
         <FormButtons
           onCancel={onBack}

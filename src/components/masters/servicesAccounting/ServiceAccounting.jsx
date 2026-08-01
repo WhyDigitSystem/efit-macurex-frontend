@@ -1,8 +1,8 @@
 import { useState } from "react";
-import UnitConversionMasterList from "./UnitConversionMasterList";
-import UnitConversionMasterForm from "./UnitConversionMasterForm";
+import ServiceAccountingList from "./ServiceAccountingList";
+import ServiceAccountingForm from "./ServicesAccountingMaster";
 
-const UnitConversionMaster = () => {
+const ServiceAccounting = () => {
   const [screen, setScreen] = useState("list");
   const [editData, setEditData] = useState(null);
 
@@ -12,7 +12,6 @@ const UnitConversionMaster = () => {
   };
 
   const handleEdit = (data) => {
-    console.log("Parent handleEdit received:", data);
     setEditData(data);
     setScreen("form");
   };
@@ -24,7 +23,7 @@ const UnitConversionMaster = () => {
   return (
     <>
       {screen === "list" && (
-        <UnitConversionMasterList
+        <ServiceAccountingList
           onAddNew={handleAddNew}
           onEdit={handleEdit}
           onBack={() => window.history.back()}
@@ -32,8 +31,8 @@ const UnitConversionMaster = () => {
       )}
 
       {screen === "form" && (
-        <UnitConversionMasterForm
-          data={editData}  // Pass as 'data' prop
+        <ServiceAccountingForm
+          editData={editData}
           onBack={handleBack}
         />
       )}
@@ -41,4 +40,4 @@ const UnitConversionMaster = () => {
   );
 };
 
-export default UnitConversionMaster;
+export default ServiceAccounting;

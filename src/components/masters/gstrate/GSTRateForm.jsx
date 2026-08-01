@@ -295,7 +295,7 @@ const GSTRateForm = ({ data, onBack }) => {
       const payload = {
         orgId: Number(orgId),
         branch: Number(branch),
-        category: selectedCategory?.id || parseInt(formData.category) || 0,
+        category: Number(selectedCategory?.id) || parseInt(formData.category) || 0,
         hsnSacCode: selectedHsn?.id || parseInt(formData.hsnCode) || 0,
         description: formData.description || "",
         wef: formData.WEF || "",

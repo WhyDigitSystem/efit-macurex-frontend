@@ -5,12 +5,12 @@ export const unitConversionAPI = {
   getUnitConversion: async (branch, orgId) => {
     try {
       const res = await apiClient.get(
-        `/api/commonmaster/getUomConversionByOrgId?branch=${branch}&orgId=${orgId}`,
+        `/api/commonmaster/getUomConversionByOrgId?branchId=${branch}&orgId=${orgId}`,
       );
 
       console.log("Unit Conversion List Response:", res);
 
-      return res?.paramObjectsMap?.uomConversionList || [];
+      return res?.paramObjectsMap?.uomConversionVO || [];
     } catch (error) {
       console.error("Error fetching unit conversions:", error);
       throw error;

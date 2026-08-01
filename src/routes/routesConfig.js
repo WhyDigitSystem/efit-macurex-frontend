@@ -71,6 +71,7 @@ import StockTransferChallanMaster from '../components/sales/stockTransferChallan
 import OtherSalesInvoiceMaster from '../components/sales/otherSalesInvoice/OtherSalesInvoiceMaster'
 import TransportBillMaster from '../components/sales/transportBill/TransportBillMaster'
 import DocketInvoiceDetailsMaster from '../components/sales/docketInvoiceDetails/DocketInvoiceDetailsMaster'
+import ServiceAccounting from "../components/masters/servicesAccounting/ServiceAccounting";
 import salesRoutes from "./salesRoutes";
 export const routesConfig = [
   { path: "/", label: "Dashboard", element: <Dashboard /> },
@@ -230,6 +231,11 @@ export const routesConfig = [
   },
   { path: "/calendar", label: "Calendar Master", element: <CalendarMaster /> },
   { path: "/holiday", label: "Holiday Master", element: <HolidayMaster /> },
+  {
+    path: "/services-accounting",
+    label: "Services Accounting Master",
+    element: <ServiceAccounting />,
+  },
   {
     path: "/services-accounting",
     label: "Services Accounting Master",

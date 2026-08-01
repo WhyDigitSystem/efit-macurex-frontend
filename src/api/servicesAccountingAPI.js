@@ -1,33 +1,55 @@
 import apiClient from "./apiClient";
 
 const servicesAccountingAPI = {
-  getAll: async (orgId) => {
-    const response = await apiClient.get("/api/commonmaster/getServicesAccounting", {
-      params: { orgId },
-    });
-    return Array.isArray(response) ? response : response?.data ?? [];
+  // Get all services with pagination/filter
+  getAll: async (branchId, orgId) => {
+    try {
+      const response = await apiClient.get(
+        `/api/commonmaster/getServiceAccMasterByOrgId?branchId=${branchId}&orgId=${orgId}`
+      );
+      console.log("Get All Services Response:", response);
+
+      // Return the full response object, not just the array
+      return response;
+    } catch (error) {
+      console.error("Error fetching services:", error);
+      throw error;
+    }
   },
 
+  // Get service by ID
   getById: async (id) => {
-    const response = await apiClient.get("/api/commonmaster/getServicesAccountingById", {
-      params: { id },
-    });
-    return response;
+    try {
+      const response = await apiClient.get(
+        `/api/commonmaster/getServiceAccMasterById?id=${id}`
+      );
+      console.log("Get Service By ID Response:", response);
+
+      // Extract data from response
+      const serviceData = response?.paramObjectsMap?.serviceAccMasterVO ||
+        response?.paramObjectsMap?.serviceVO ||
+        response?.data ||
+        null;
+      return serviceData;
+    } catch (error) {
+      console.error("Error fetching service by ID:", error);
+      throw error;
+    }
   },
 
+  // Create or Update service
   createUpdate: async (data) => {
-    const response = await apiClient.put(
-      "/api/commonmaster/createUpdateServicesAccounting",
-      data
-    );
-    return response;
-  },
-
-  checkUnique: async (serviceName, orgId) => {
-    const response = await apiClient.get("/api/commonmaster/checkServiceNameUnique", {
-      params: { serviceName, orgId },
-    });
-    return response;
+    try {
+      const response = await apiClient.put(
+        "/api/commonmaster/updateCreateServiceAccMaster",
+        data
+      );
+      console.log("Create/Update Service Response:", response);
+      return response;
+    } catch (error) {
+      console.error("Error creating/updating service:", error);
+      throw error;
+    }
   },
 };
 

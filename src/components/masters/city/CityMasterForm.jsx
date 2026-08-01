@@ -362,7 +362,7 @@ const CityMasterForm = ({ onBack, onSave, editData, editId }) => {
         {/* MAIN FORM GRID */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
           <FloatingInput
-            label="City Name *"
+            label="City Name"
             name="cityName"
             value={form.cityName}
             onChange={handleChange}
@@ -371,7 +371,7 @@ const CityMasterForm = ({ onBack, onSave, editData, editId }) => {
           />
 
           <FloatingInput
-            label="City Code *"
+            label="City Code"
             name="cityCode"
             value={form.cityCode}
             onChange={handleChange}
@@ -380,7 +380,7 @@ const CityMasterForm = ({ onBack, onSave, editData, editId }) => {
           />
 
           <FloatingSelect
-            label="Country *"
+            label="Country"
             name="country"
             value={form.country}
             onChange={(name, value) => handleSelectChange(name, value)}
@@ -390,7 +390,7 @@ const CityMasterForm = ({ onBack, onSave, editData, editId }) => {
           />
 
           <FloatingSelect
-            label="State *"
+            label="State"
             name="state"
             value={form.state}
             onChange={(name, value) => handleSelectChange(name, value)}

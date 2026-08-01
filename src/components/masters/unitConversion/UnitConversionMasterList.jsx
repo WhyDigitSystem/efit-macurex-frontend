@@ -3,7 +3,8 @@ import CommonListViewTable from "../../../utils/CommonListViewTable";
 import unitConversionAPI from "../../../api/unitConversionAPI";
 
 const UnitConversionMasterList = ({ onAddNew, onEdit, onBack }) => {
-  const [conversionData, setConversionData] = useState([]);
+  const [displayData, setDisplayData] = useState([]);
+  const [originalDataMap, setOriginalDataMap] = useState({});
   const [loading, setLoading] = useState(false);
 
   const branchId = localStorage.getItem("branchId");
@@ -13,34 +14,70 @@ const UnitConversionMasterList = ({ onAddNew, onEdit, onBack }) => {
     setLoading(true);
     try {
       const data = await unitConversionAPI.getUnitConversion(branchId, orgId);
-      setConversionData(data);
+      console.log("Loaded conversion data:", data);
+
+      // Store original data in a map for easy retrieval
+      const dataMap = {};
+      if (Array.isArray(data)) {
+        data.forEach(item => {
+          dataMap[item.id] = item;
+        });
+      }
+      setOriginalDataMap(dataMap);
+
+      // Transform for display
+      const transformedData = Array.isArray(data) ? data.map((item) => ({
+        ...item,
+        fromUnitDisplay: item.fromUnit?.unitId || item.fromUnit || "",
+        toUnitDisplay: item.toUnit?.unitId || item.toUnit || "",
+        branchName: item.branch?.branchName || "",
+      })) : [];
+
+      setDisplayData(transformedData);
     } catch (error) {
-      console.error("Failed to load HSN/SAC data:", error);
-      setConversionData([]);
+      console.error("Failed to load Unit Conversions:", error);
+      setDisplayData([]);
+      setOriginalDataMap({});
     } finally {
       setLoading(false);
     }
-  }, [orgId]);
+  }, [branchId, orgId]);
 
   useEffect(() => {
     loadConversions();
-  }, []);
+  }, [loadConversions]);
 
   const handleEdit = (conversion) => {
-    onEdit(conversion);
+    console.log("=== DEBUGGING EDIT ===");
+    console.log("Conversion object:", conversion);
+    console.log("Conversion ID:", conversion?.id);
+    console.log("=====================");
+
+    // Get the original data from the map
+    const originalData = originalDataMap[conversion?.id];
+
+    if (originalData) {
+      console.log("Found original data with nested objects:", originalData);
+      // Pass the original data with nested objects
+      onEdit(originalData);
+    } else {
+      console.warn("Original data not found for ID:", conversion?.id);
+      // Pass what we have
+      onEdit(conversion);
+    }
   };
 
   const columns = [
     {
-      key: "fromUnit",
+      key: "fromUnitDisplay",
       label: "From Unit",
-      accessor: "fromUnit",
+      accessor: "fromUnitDisplay",
       type: "text",
     },
     {
-      key: "toUnit",
+      key: "toUnitDisplay",
       label: "To Unit",
-      accessor: "toUnit",
+      accessor: "toUnitDisplay",
       type: "text",
     },
     {
@@ -49,24 +86,6 @@ const UnitConversionMasterList = ({ onAddNew, onEdit, onBack }) => {
       accessor: "multiplicationFactor",
       type: "text",
       align: "center",
-    },
-    {
-      key: "active",
-      label: "Status",
-      accessor: "active",
-      type: "status",
-      statusVariants: {
-        true: {
-          label: "Active",
-          className:
-            "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
-        },
-        false: {
-          label: "Inactive",
-          className:
-            "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
-        },
-      },
     },
     {
       key: "actions",
@@ -78,9 +97,9 @@ const UnitConversionMasterList = ({ onAddNew, onEdit, onBack }) => {
   ];
 
   const searchFields = [
-    "conversionCode",
-    "fromUnit",
-    "toUnit",
+    "fromUnitDisplay",
+    "toUnitDisplay",
+    "branchName",
   ];
 
   const filterOptions = [
@@ -93,15 +112,13 @@ const UnitConversionMasterList = ({ onAddNew, onEdit, onBack }) => {
       value: "active",
       label: "Active",
       field: "active",
-      filterValue: "active",
-      activeValue: "Active",
+      filterValue: true,
     },
     {
       value: "inactive",
       label: "Inactive",
       field: "active",
-      filterValue: "inactive",
-      activeValue: "Active",
+      filterValue: false,
     },
   ];
 
@@ -109,7 +126,7 @@ const UnitConversionMasterList = ({ onAddNew, onEdit, onBack }) => {
     <CommonListViewTable
       title="Unit Conversion"
       subtitle="Manage Unit Conversions"
-      data={conversionData}
+      data={displayData}
       loading={loading}
       columns={columns}
       searchFields={searchFields}

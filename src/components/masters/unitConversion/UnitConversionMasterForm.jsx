@@ -1,5 +1,5 @@
 import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useForm, Controller, useFieldArray } from "react-hook-form";
 import listOfValuesAPI from "../../../api/listOfValuesAPI";
 import unitConversionAPI from "../../../api/unitConversionAPI";
@@ -121,7 +121,7 @@ const UnitConversionMasterForm = ({ data, onBack }) => {
     fromUnit: "",
     toUnit: "",
     multiplicationFactor: "",
-    id: data?.id || 0,
+    id: 0,
   });
 
   const [fieldErrors, setFieldErrors] = useState({});
@@ -144,33 +144,92 @@ const UnitConversionMasterForm = ({ data, onBack }) => {
   // Fetch unit conversion data by ID when editing
   useEffect(() => {
     const fetchUnitConversionData = async () => {
-      const idToFetch = data?.id;
+      console.log("=== FORM DEBUGGING ===");
+      console.log("Data prop received:", data);
+      console.log("Data type:", typeof data);
+      console.log("Data keys:", data ? Object.keys(data) : "No data");
+      console.log("======================");
+
+      // Get the ID from data prop - check multiple possible sources
+      const idToFetch = data?.id || data?.conversionId || data?.uomConversionId || data?.uomId;
+
+      console.log("ID to fetch:", idToFetch);
 
       if (idToFetch) {
         setIsLoading(true);
         try {
-          // Fetch the conversion data by ID using the corrected API
+          // Fetch the conversion data by ID
           const response = await unitConversionAPI.getUnitConversionById(idToFetch);
-          console.log("Conversion data response:", response);
+          console.log("API Response:", response);
 
           // Extract the conversion data from response
           const conversionData = response?.paramObjectsMap?.uomConversionVO || response;
 
+          console.log("Extracted conversion data:", conversionData);
+
           if (conversionData && conversionData.id) {
+            // Extract unit IDs from nested objects
+            let fromUnitId = "";
+            let toUnitId = "";
+
+            // Check if fromUnit is an object with id property
+            if (conversionData.fromUnit && typeof conversionData.fromUnit === 'object') {
+              fromUnitId = conversionData.fromUnit.id || conversionData.fromUnit.unitId || "";
+              console.log("FromUnit is object with ID:", fromUnitId);
+            } else {
+              fromUnitId = conversionData.fromUnit || "";
+              console.log("FromUnit is direct value:", fromUnitId);
+            }
+
+            // Check if toUnit is an object with id property
+            if (conversionData.toUnit && typeof conversionData.toUnit === 'object') {
+              toUnitId = conversionData.toUnit.id || conversionData.toUnit.unitId || "";
+              console.log("ToUnit is object with ID:", toUnitId);
+            } else {
+              toUnitId = conversionData.toUnit || "";
+              console.log("ToUnit is direct value:", toUnitId);
+            }
+
+            console.log("Setting form with:", {
+              id: conversionData.id,
+              fromUnitId: fromUnitId,
+              toUnitId: toUnitId,
+              multiplicationFactor: conversionData.multiplicationFactor
+            });
+
             setForm({
               id: conversionData.id || 0,
-              fromUnit: conversionData.fromUnit || "",
-              toUnit: conversionData.toUnit || "",
+              fromUnit: fromUnitId,
+              toUnit: toUnitId,
               multiplicationFactor: conversionData.multiplicationFactor || conversionData.conversionFactor || "",
             });
           } else if (data) {
             // Fallback to passed data
+            console.log("Using fallback data:", data);
+            // Handle both nested object and direct value cases
+            let fromUnitId = "";
+            let toUnitId = "";
+
+            if (data.fromUnit && typeof data.fromUnit === 'object') {
+              fromUnitId = data.fromUnit.id || data.fromUnit.unitId || "";
+            } else {
+              fromUnitId = data.fromUnit || "";
+            }
+
+            if (data.toUnit && typeof data.toUnit === 'object') {
+              toUnitId = data.toUnit.id || data.toUnit.unitId || "";
+            } else {
+              toUnitId = data.toUnit || "";
+            }
+
             setForm({
               id: data.id || 0,
-              fromUnit: data.fromUnit || "",
-              toUnit: data.toUnit || "",
+              fromUnit: fromUnitId,
+              toUnit: toUnitId,
               multiplicationFactor: data.multiplicationFactor || data.conversionFactor || "",
             });
+          } else {
+            console.log("No data to load, this is a new entry");
           }
         } catch (error) {
           console.error("Error fetching unit conversion data:", error);
@@ -182,11 +241,38 @@ const UnitConversionMasterForm = ({ data, onBack }) => {
           setIsLoading(false);
         }
       } else if (data) {
+        // If data is passed directly (not through API)
+        console.log("No ID found, using data directly:", data);
+        // Handle both nested object and direct value cases
+        let fromUnitId = "";
+        let toUnitId = "";
+
+        if (data.fromUnit && typeof data.fromUnit === 'object') {
+          fromUnitId = data.fromUnit.id || data.fromUnit.unitId || "";
+        } else {
+          fromUnitId = data.fromUnit || "";
+        }
+
+        if (data.toUnit && typeof data.toUnit === 'object') {
+          toUnitId = data.toUnit.id || data.toUnit.unitId || "";
+        } else {
+          toUnitId = data.toUnit || "";
+        }
+
         setForm({
           id: data.id || 0,
-          fromUnit: data.fromUnit || "",
-          toUnit: data.toUnit || "",
+          fromUnit: fromUnitId,
+          toUnit: toUnitId,
           multiplicationFactor: data.multiplicationFactor || data.conversionFactor || "",
+        });
+      } else {
+        console.log("No data provided, this is a new entry");
+        // Reset form for new entry
+        setForm({
+          fromUnit: "",
+          toUnit: "",
+          multiplicationFactor: "",
+          id: 0,
         });
       }
     };
@@ -284,7 +370,6 @@ const UnitConversionMasterForm = ({ data, onBack }) => {
 
       console.log("Saving payload:", payload);
 
-      // Use the corrected save method
       const response = await unitConversionAPI.saveUnitConversion(payload);
       console.log("Save response:", response);
 
@@ -292,7 +377,7 @@ const UnitConversionMasterForm = ({ data, onBack }) => {
         // Success
         setToastMessage({
           type: "success",
-          message: data?.id ? "Unit Conversion Updated Successfully!" : "Unit Conversion Saved Successfully!"
+          message: form.id ? "Unit Conversion Updated Successfully!" : "Unit Conversion Saved Successfully!"
         });
 
         // Close the form after short delay
@@ -349,8 +434,8 @@ const UnitConversionMasterForm = ({ data, onBack }) => {
       {/* Toast Message */}
       {toastMessage && (
         <div className={`mb-3 p-3 rounded-lg ${toastMessage.type === "success"
-            ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-600 dark:text-green-400"
-            : "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400"
+          ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-600 dark:text-green-400"
+          : "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400"
           }`}>
           {toastMessage.message}
         </div>
@@ -365,7 +450,7 @@ const UnitConversionMasterForm = ({ data, onBack }) => {
           <ArrowLeft className="h-4 w-4" />
         </button>
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-          {data?.id ? "Edit Unit Conversion" : "Add Unit Conversion"}
+          {form.id && form.id !== 0 ? "Edit Unit Conversion" : "Add Unit Conversion"}
         </h2>
       </div>
 
@@ -474,7 +559,7 @@ const UnitConversionMasterForm = ({ data, onBack }) => {
               className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
             >
               <Save className="h-3 w-3" />{" "}
-              {isSubmitting ? "Saving..." : data?.id ? "Update" : "Save"}
+              {isSubmitting ? "Saving..." : form.id && form.id !== 0 ? "Update" : "Save"}
             </button>
           </div>
         </form>
