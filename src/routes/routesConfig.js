@@ -46,6 +46,7 @@ import PurchaseList from "../components/purchase/purchaseList";
 import ItemGradeMaster from "../components/masters/itemGrade/ItemGradeMaster";
 import InventoryList from "../components/inventory/InventoryList";
 import SubContractList from "../components/subContract/SubContractList";
+import ScrapMaterialReturnMaster from "../components/subContract/scrapMaterialReturn/ScrapMaterialReturnMaster";
 import PpcList from "../components/PPC/PpcList";
 import TdcList from "../components/TDC/TdcList";
 import ProductionList from "../components/Production/ProductionList";
@@ -108,6 +109,11 @@ export const routesConfig = [
   },
   { path: "/inventory", label: "Inventory", element: <InventoryList /> },
   { path: "/subcontract", label: "Sub Contract", element: <SubContractList /> },
+  {
+    path: "/scrapmaterialreturn",
+    label: "Scrap/Material Return/Rejection From S.C.",
+    element: <ScrapMaterialReturnMaster />,
+  },
   { path: "/ppc", label: "PPC", element: <PpcList /> },
   { path: "/TDC", label: "TDC", element: <TdcList /> },
   { path: "/production", label: "Production", element: <ProductionList /> },

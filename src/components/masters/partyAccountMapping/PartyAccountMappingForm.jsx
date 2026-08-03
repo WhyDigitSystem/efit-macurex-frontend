@@ -177,10 +177,7 @@ const PartyAccountMappingForm = ({ onBack, onSave, editData }) => {
   };
 
   const handleRemoveRow = (rowId) => {
-    if (rows.length === 1) {
-      addToast("At least one mapping row is required", "error");
-      return;
-    }
+    if (rows.length <= 1) return;
     setRows((prev) => prev.filter((row) => row.rowId !== rowId));
     setRowErrors((prev) => {
       const next = { ...prev };
@@ -300,13 +297,14 @@ const PartyAccountMappingForm = ({ onBack, onSave, editData }) => {
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
           {editData
             ? "Edit Mapping Of Party To Account"
-            : "Mapping Of Party To Account"}
+            : "Add Mapping Of Party To Account"}
         </h2>
       </div>
 
-      {/* HEADER FIELDS CARD */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 mb-3">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+      {/* MAIN CARD */}
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+        {/* HEADER FIELDS */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
           {/* Doc Id - auto generated, read-only */}
           <div>
             <label className={labelClasses}>Doc Id</label>
@@ -424,7 +422,7 @@ const PartyAccountMappingForm = ({ onBack, onSave, editData }) => {
 
           {/* Cancel Remarks - only relevant when marking inactive */}
           {!form.active && (
-            <div>
+            <div className="md:col-span-2 lg:col-span-3">
               <label className={labelClasses}>Cancel Remarks</label>
               <input
                 name="cancelRemarks"
@@ -436,148 +434,152 @@ const PartyAccountMappingForm = ({ onBack, onSave, editData }) => {
             </div>
           )}
         </div>
-      </div>
 
-      {/* MAPPING DETAIL CARD */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
-          Mapping Detail
-        </h3>
+        {/* DETAILS SECTION */}
+        <div className="border-t border-gray-200 dark:border-gray-700 pt-3">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+              Mapping Detail
+            </h3>
+            <button
+              type="button"
+              onClick={handleAddRow}
+              className="flex items-center gap-1 px-2 py-1 rounded text-xs text-blue-600 border border-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+            >
+              <Plus className="h-3 w-3" /> Add Row
+            </button>
+          </div>
 
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-            <thead className="bg-gray-50 dark:bg-gray-900">
-              <tr>
-                <th className="px-3 py-2 text-left text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400 w-14">
-                  S.No
-                </th>
-                <th className="px-3 py-2 text-left text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                  Party
-                </th>
-                <th className="px-3 py-2 text-left text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                  Party Name
-                </th>
-                <th className="px-3 py-2 text-left text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                  Account Name
-                </th>
-                <th className="px-3 py-2 w-10"></th>
-              </tr>
-            </thead>
-
-            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-              {rows.map((row, index) => (
-                <tr key={row.rowId}>
-                  <td className="px-3 py-1.5 text-xs text-gray-500 dark:text-gray-400">
-                    {index + 1}
-                  </td>
-
-                  {/* Party */}
-                  <td className="px-3 py-1.5">
-                    <select
-                      value={row.partyId}
-                      onChange={(e) =>
-                        handlePartyChange(row.rowId, e.target.value)
-                      }
-                      disabled={partiesLoading}
-                      className={`${controlClasses} ${
-                        rowErrors[row.rowId]?.partyId ? "border-red-500" : ""
-                      }`}
-                    >
-                      <option value="">Select Party</option>
-                      {parties.map((party) => {
-                        const partyId = party.partyId ?? party.id;
-                        const partyLabel =
-                          party.partyName || party.name || partyId;
-                        return (
-                          <option key={partyId} value={partyId}>
-                            {partyLabel}
-                          </option>
-                        );
-                      })}
-                    </select>
-                  </td>
-
-                  {/* Party Name */}
-                  <td className="px-3 py-1.5">
-                    <input
-                      value={row.partyName}
-                      disabled
-                      className={`${controlClasses} bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed`}
-                    />
-                  </td>
-
-                  {/* Account Name */}
-                  <td className="px-3 py-1.5">
-                    <select
-                      value={row.accountName}
-                      onChange={(e) =>
-                        handleAccountChange(row.rowId, e.target.value)
-                      }
-                      disabled={accountsLoading}
-                      className={`${controlClasses} ${
-                        rowErrors[row.rowId]?.accountName
-                          ? "border-red-500"
-                          : ""
-                      }`}
-                    >
-                      <option value="">Select Account</option>
-                      {accounts.map((account) => {
-                        const accountLabel =
-                          account.accountName || account.name || account.accountId;
-                        return (
-                          <option key={account.accountId ?? accountLabel} value={accountLabel}>
-                            {accountLabel}
-                          </option>
-                        );
-                      })}
-                    </select>
-                  </td>
-
-                  <td className="px-3 py-1.5 text-center">
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveRow(row.rowId)}
-                      className="text-red-500 hover:text-red-700 transition-colors"
-                      title="Remove Row"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="min-w-full">
+              <thead>
+                <tr className="bg-gray-50 dark:bg-gray-700/50">
+                  <th className="px-2 py-1.5 text-[11px] font-medium text-gray-500 dark:text-gray-400 text-center w-8">
+                    #
+                  </th>
+                  <th className="px-2 py-1.5 text-[11px] font-medium text-gray-500 dark:text-gray-400 text-left">
+                    Party
+                  </th>
+                  <th className="px-2 py-1.5 text-[11px] font-medium text-gray-500 dark:text-gray-400 text-left">
+                    Party Name
+                  </th>
+                  <th className="px-2 py-1.5 text-[11px] font-medium text-gray-500 dark:text-gray-400 text-left">
+                    Account Name
+                  </th>
+                  <th className="px-2 py-1.5 text-[11px] font-medium text-gray-500 dark:text-gray-400 text-center w-10"></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+
+              <tbody>
+                {rows.map((row, index) => (
+                  <tr
+                    key={row.rowId}
+                    className="border-b border-gray-100 dark:border-gray-700/50"
+                  >
+                    <td className="px-2 py-1 text-xs text-gray-500 dark:text-gray-400 text-center">
+                      {index + 1}
+                    </td>
+
+                    {/* Party */}
+                    <td className="px-2 py-1">
+                      <select
+                        value={row.partyId}
+                        onChange={(e) =>
+                          handlePartyChange(row.rowId, e.target.value)
+                        }
+                        disabled={partiesLoading}
+                        className={`${controlClasses} ${
+                          rowErrors[row.rowId]?.partyId ? "border-red-500" : ""
+                        }`}
+                      >
+                        <option value="">Select Party</option>
+                        {parties.map((party) => {
+                          const partyId = party.partyId ?? party.id;
+                          const partyLabel =
+                            party.partyName || party.name || partyId;
+                          return (
+                            <option key={partyId} value={partyId}>
+                              {partyLabel}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </td>
+
+                    {/* Party Name */}
+                    <td className="px-2 py-1">
+                      <input
+                        value={row.partyName}
+                        disabled
+                        className={`${controlClasses} bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed`}
+                      />
+                    </td>
+
+                    {/* Account Name */}
+                    <td className="px-2 py-1">
+                      <select
+                        value={row.accountName}
+                        onChange={(e) =>
+                          handleAccountChange(row.rowId, e.target.value)
+                        }
+                        disabled={accountsLoading}
+                        className={`${controlClasses} ${
+                          rowErrors[row.rowId]?.accountName
+                            ? "border-red-500"
+                            : ""
+                        }`}
+                      >
+                        <option value="">Select Account</option>
+                        {accounts.map((account) => {
+                          const accountLabel =
+                            account.accountName || account.name || account.accountId;
+                          return (
+                            <option key={account.accountId ?? accountLabel} value={accountLabel}>
+                              {accountLabel}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </td>
+
+                    <td className="px-2 py-1 text-center">
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveRow(row.rowId)}
+                        disabled={rows.length <= 1}
+                        className="p-0.5 rounded text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-30 disabled:cursor-not-allowed"
+                        title="Remove Row"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
 
-        <button
-          type="button"
-          onClick={handleAddRow}
-          className="mt-3 inline-flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-blue-600 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-        >
-          <Plus className="h-3 w-3" />
-          Add Row
-        </button>
-      </div>
+        {/* ACTION BUTTONS */}
+        <div className="flex justify-end gap-2 pt-3 mt-3 border-t border-gray-200 dark:border-gray-700">
+          <button
+            onClick={onBack}
+            disabled={isSubmitting}
+            className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60"
+          >
+            <X className="h-3 w-3" />
+            Cancel
+          </button>
 
-      {/* ACTION BUTTONS */}
-      <div className="flex justify-end gap-2 pt-3 mt-3">
-        <button
-          onClick={onBack}
-          disabled={isSubmitting}
-          className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60"
-        >
-          <X className="h-3 w-3" />
-          Cancel
-        </button>
-
-        <button
-          onClick={handleSave}
-          disabled={isSubmitting}
-          className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60"
-        >
-          <Save className="h-3 w-3" />
-          {isSubmitting ? "Saving..." : editData ? "Update" : "Save"}
-        </button>
+          <button
+            onClick={handleSave}
+            disabled={isSubmitting}
+            className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60"
+          >
+            <Save className="h-3 w-3" />
+            {isSubmitting ? "Saving..." : editData ? "Update" : "Save"}
+          </button>
+        </div>
       </div>
     </div>
   );
