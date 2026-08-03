@@ -2,6 +2,7 @@ import { ArrowLeft, Plus, Save, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useToast } from "../../Toast/ToastContext";
 import partyAccountMappingAPI from "../../../api/partyAccountMappingAPI";
+import listOfValuesAPI from "../../../api/listOfValuesAPI";
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -13,22 +14,39 @@ const controlClasses =
 const labelClasses =
   "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
-const CATEGORY_OPTIONS = ["CUSTOMER", "SUPPLIER", "AGENT", "OTHER"];
+const CATEGORY_LIST_CODE = "MAPPING OF PARTY TO ACCOUNT";
+const FALLBACK_CATEGORIES = ["CAPITAL GOODS", "CUSTOMER", "SUPPLIER", "TRANSPORTER"];
+
+const normalizeListValue = (v) => ({
+  id: v.id,
+  label: v.valuesDescription || v.valueDescription || v.valueCode || v.id,
+});
 
 let rowIdCounter = 1;
 const newRow = () => ({
   rowId: `row-${rowIdCounter++}`,
   partyId: "",
   partyName: "",
-  accountId: "",
   accountName: "",
 });
 
+const normalizeDetail = (d) => ({
+  rowId: `row-${rowIdCounter++}`,
+  partyId: d?.party?.id != null ? String(d.party.id) : d?.partyId != null ? String(d.partyId) : "",
+  partyName: d?.party?.partyName || d?.partyName || "",
+  accountName: d?.accountName || "",
+});
+
+const toNumber = (val) => (val ? Number(val) || val : "");
+
 const PartyAccountMappingForm = ({ onBack, onSave, editData }) => {
   const ORG_ID = parseInt(localStorage.getItem("orgId"));
+  const BRANCH = Number(localStorage.getItem("branchId"));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { addToast } = useToast();
 
+  const [categories, setCategories] = useState([]);
+  const [categoryGroupId, setCategoryGroupId] = useState(null);
   const [parties, setParties] = useState([]);
   const [partiesLoading, setPartiesLoading] = useState(false);
   const [accounts, setAccounts] = useState([]);
@@ -42,94 +60,109 @@ const PartyAccountMappingForm = ({ onBack, onSave, editData }) => {
     docId: editData?.docId || "",
     docDate: editData?.docDate || new Date().toISOString().slice(0, 10),
     asOnDate: editData?.asOnDate || new Date().toISOString().slice(0, 10),
-    category: editData?.category || "CUSTOMER",
-    active: editData?.active ?? true,
+    branch: editData?.branch?.id || BRANCH,
+    category: editData?.category?.id || "",
+    active: editData?.active === true || editData?.active === "Active",
+    cancelRemarks: "",
     orgId: ORG_ID,
     createdBy: localStorage.getItem("userName") || "SYSTEM",
   });
 
   const [rows, setRows] = useState(
-    editData?.mappingDetails?.length
-      ? editData.mappingDetails.map((d) => ({
-          rowId: `row-${rowIdCounter++}`,
-          ...d,
-        }))
+    editData?.details?.length
+      ? editData.details.map(normalizeDetail)
       : [newRow()],
   );
 
+  useEffect(() => {
+    const loadCategories = async () => {
+      try {
+        const [values, groups] = await Promise.all([
+          listOfValuesAPI.getListValuesGroup(CATEGORY_LIST_CODE, ORG_ID),
+          listOfValuesAPI.getListOfValuesByOrgId(BRANCH, ORG_ID),
+        ]);
+        setCategories((values || []).map(normalizeListValue));
+        const group = (groups || []).find(
+          (g) =>
+            (g.listDescription || g.listCode || "").toUpperCase() ===
+            CATEGORY_LIST_CODE,
+        );
+        setCategoryGroupId(group?.id || null);
+      } catch (error) {
+        console.warn(
+          `Failed to load categories (list code: ${CATEGORY_LIST_CODE})`,
+          error,
+        );
+        setCategories(FALLBACK_CATEGORIES.map((c) => ({ id: c, label: c })));
+      }
+    };
+    if (ORG_ID) loadCategories();
+  }, [ORG_ID, BRANCH]);
+
   // Reload the party list whenever the category changes, since party options
-  // are category-specific (CUSTOMER vs SUPPLIER etc.)
+  // are category-specific. The backend stores parties under the LOV *group*
+  // id, so getParty must be called with the group id rather than the
+  // value-level id the dropdown exposes.
   useEffect(() => {
-    fetchParties(form.category);
-  }, [form.category]);
+    if (!form.category || !categoryGroupId) {
+      setParties([]);
+      return;
+    }
+    const fetchParties = async () => {
+      try {
+        setPartiesLoading(true);
+        const response = await partyAccountMappingAPI.getParties(
+          ORG_ID,
+          categoryGroupId,
+          BRANCH,
+        );
+        setParties(response || []);
+      } catch (error) {
+        console.error("Error fetching parties:", error);
+        setParties([]);
+      } finally {
+        setPartiesLoading(false);
+      }
+    };
+    fetchParties();
+  }, [form.category, categoryGroupId, ORG_ID, BRANCH]);
 
   useEffect(() => {
+    const fetchAccounts = async () => {
+      try {
+        setAccountsLoading(true);
+        const response = await partyAccountMappingAPI.getAccounts(ORG_ID);
+        setAccounts(response || []);
+      } catch (error) {
+        console.error("Error fetching accounts:", error);
+        setAccounts([]);
+      } finally {
+        setAccountsLoading(false);
+      }
+    };
     fetchAccounts();
-  }, []);
-
-  const fetchParties = async (category) => {
-    try {
-      setPartiesLoading(true);
-      const response = await partyAccountMappingAPI.getParties(
-        ORG_ID,
-        category,
-      );
-      setParties(response || []);
-    } catch (error) {
-      console.error("Error fetching parties:", error);
-      addToast("Failed to load parties", "error");
-    } finally {
-      setPartiesLoading(false);
-    }
-  };
-
-  const fetchAccounts = async () => {
-    try {
-      setAccountsLoading(true);
-      const response = await partyAccountMappingAPI.getAccounts(ORG_ID);
-      setAccounts(response || []);
-    } catch (error) {
-      console.error("Error fetching accounts:", error);
-      addToast("Failed to load accounts", "error");
-    } finally {
-      setAccountsLoading(false);
-    }
-  };
+  }, [ORG_ID]);
 
   const handleHeaderChange = (e) => {
     const { name, value } = e.target;
-
     if (fieldErrors[name]) {
       setFieldErrors((prev) => ({ ...prev, [name]: "" }));
     }
-
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
-  // Party Id and Party Name are kept in sync - selecting either one fills
-  // the other from the same party master record.
-  const handlePartyIdChange = (rowId, partyId) => {
-    const selected = parties.find((p) => p.partyId === partyId);
+  const handlePartyChange = (rowId, partyId) => {
+    const selected = parties.find(
+      (p) => String(p.partyId ?? p.id) === String(partyId),
+    );
     updateRow(rowId, {
       partyId,
-      partyName: selected?.partyName || "",
-    });
-  };
-
-  const handlePartyNameChange = (rowId, partyName) => {
-    const selected = parties.find((p) => p.partyName === partyName);
-    updateRow(rowId, {
-      partyName,
-      partyId: selected?.partyId || "",
+      partyName: selected?.partyName || selected?.name || "",
     });
   };
 
   const handleAccountChange = (rowId, accountName) => {
-    const selected = accounts.find((a) => a.accountName === accountName);
-    updateRow(rowId, {
-      accountName,
-      accountId: selected?.accountId || "",
-    });
+    updateRow(rowId, { accountName });
   };
 
   const updateRow = (rowId, changes) => {
@@ -167,10 +200,8 @@ const PartyAccountMappingForm = ({ onBack, onSave, editData }) => {
 
     rows.forEach((row) => {
       const rErr = {};
-      if (!row.partyId) rErr.partyId = "Party Id is required";
-      if (!row.partyName) rErr.partyName = "Party Name is required";
+      if (!row.partyId) rErr.partyId = "Party is required";
       if (!row.accountName) rErr.accountName = "Account Name is required";
-
       if (Object.keys(rErr).length > 0) {
         hasRowError = true;
         newRowErrors[row.rowId] = rErr;
@@ -195,20 +226,19 @@ const PartyAccountMappingForm = ({ onBack, onSave, editData }) => {
     setIsSubmitting(true);
 
     const payload = {
-      docDate: form.docDate,
-      asOnDate: form.asOnDate,
-      category: form.category,
       active: Boolean(form.active),
+      asOnDate: form.asOnDate,
+      branch: toNumber(form.branch),
+      cancelRemarks: form.active ? "" : form.cancelRemarks,
+      category: toNumber(categoryGroupId) || toNumber(form.category),
       createdBy: form.createdBy,
+      details: rows.map(({ partyId, accountName }) => ({
+        partyId: toNumber(partyId),
+        accountName,
+      })),
+      docDate: form.docDate,
+      docId: form.docId ? toNumber(form.docId) : null,
       orgId: form.orgId,
-      mappingDetails: rows.map(
-        ({ partyId, partyName, accountId, accountName }) => ({
-          partyId,
-          partyName,
-          accountId,
-          accountName,
-        }),
-      ),
     };
 
     if (form.id && form.id > 0) {
@@ -232,7 +262,6 @@ const PartyAccountMappingForm = ({ onBack, onSave, editData }) => {
             : "Mapping created successfully!");
 
         addToast(successMessage, "success");
-
         if (onSave) onSave(payload);
       } else {
         const errorMessage =
@@ -258,7 +287,7 @@ const PartyAccountMappingForm = ({ onBack, onSave, editData }) => {
   };
 
   return (
-    <div className="p-2 max-w-7xl ">
+    <div className="p-2 max-w-7xl">
       {/* HEADER */}
       <div className="flex items-center gap-2 mb-3">
         <button
@@ -281,7 +310,6 @@ const PartyAccountMappingForm = ({ onBack, onSave, editData }) => {
           {/* Doc Id - auto generated, read-only */}
           <div>
             <label className={labelClasses}>Doc Id</label>
-
             <input
               value={form.docId || "Auto"}
               disabled
@@ -294,7 +322,6 @@ const PartyAccountMappingForm = ({ onBack, onSave, editData }) => {
             <label className={labelClasses}>
               Doc Date <span className="text-red-500">*</span>
             </label>
-
             <input
               type="date"
               name="docDate"
@@ -304,7 +331,6 @@ const PartyAccountMappingForm = ({ onBack, onSave, editData }) => {
                 fieldErrors.docDate ? "border-red-500" : ""
               }`}
             />
-
             {fieldErrors.docDate && (
               <p className="text-red-500 text-[11px] mt-1">
                 {fieldErrors.docDate}
@@ -317,7 +343,6 @@ const PartyAccountMappingForm = ({ onBack, onSave, editData }) => {
             <label className={labelClasses}>
               As On Date <span className="text-red-500">*</span>
             </label>
-
             <input
               type="date"
               name="asOnDate"
@@ -327,7 +352,6 @@ const PartyAccountMappingForm = ({ onBack, onSave, editData }) => {
                 fieldErrors.asOnDate ? "border-red-500" : ""
               }`}
             />
-
             {fieldErrors.asOnDate && (
               <p className="text-red-500 text-[11px] mt-1">
                 {fieldErrors.asOnDate}
@@ -335,12 +359,23 @@ const PartyAccountMappingForm = ({ onBack, onSave, editData }) => {
             )}
           </div>
 
+          {/* Branch - read-only, always the current branch */}
+          <div>
+            <label className={labelClasses}>
+              Branch <span className="text-red-500">*</span>
+            </label>
+            <input
+              value={editData?.branch?.branchName || editData?.branch?.id || BRANCH}
+              disabled
+              className={`${controlClasses} bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed`}
+            />
+          </div>
+
           {/* Category */}
           <div>
             <label className={labelClasses}>
               Category <span className="text-red-500">*</span>
             </label>
-
             <select
               name="category"
               value={form.category}
@@ -349,19 +384,57 @@ const PartyAccountMappingForm = ({ onBack, onSave, editData }) => {
                 fieldErrors.category ? "border-red-500" : ""
               }`}
             >
-              {CATEGORY_OPTIONS.map((cat) => (
-                <option key={cat} value={cat}>
-                  {cat}
+              <option value="">Select Category</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.label}
                 </option>
               ))}
             </select>
-
             {fieldErrors.category && (
               <p className="text-red-500 text-[11px] mt-1">
                 {fieldErrors.category}
               </p>
             )}
           </div>
+
+          {/* Active */}
+          <div>
+            <label className={labelClasses}>Active</label>
+            <button
+              type="button"
+              onClick={() =>
+                setForm((prev) => ({
+                  ...prev,
+                  active: !prev.active,
+                  cancelRemarks: "",
+                }))
+              }
+              className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${
+                form.active ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
+              }`}
+            >
+              <span
+                className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${
+                  form.active ? "translate-x-6" : "translate-x-0.5"
+                }`}
+              />
+            </button>
+          </div>
+
+          {/* Cancel Remarks - only relevant when marking inactive */}
+          {!form.active && (
+            <div>
+              <label className={labelClasses}>Cancel Remarks</label>
+              <input
+                name="cancelRemarks"
+                value={form.cancelRemarks}
+                onChange={handleHeaderChange}
+                placeholder="Reason for cancellation"
+                className={controlClasses}
+              />
+            </div>
+          )}
         </div>
       </div>
 
@@ -379,7 +452,7 @@ const PartyAccountMappingForm = ({ onBack, onSave, editData }) => {
                   S.No
                 </th>
                 <th className="px-3 py-2 text-left text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                  Party Id
+                  Party
                 </th>
                 <th className="px-3 py-2 text-left text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
                   Party Name
@@ -398,46 +471,39 @@ const PartyAccountMappingForm = ({ onBack, onSave, editData }) => {
                     {index + 1}
                   </td>
 
-                  {/* Party Id */}
+                  {/* Party */}
                   <td className="px-3 py-1.5">
                     <select
                       value={row.partyId}
                       onChange={(e) =>
-                        handlePartyIdChange(row.rowId, e.target.value)
+                        handlePartyChange(row.rowId, e.target.value)
                       }
                       disabled={partiesLoading}
                       className={`${controlClasses} ${
                         rowErrors[row.rowId]?.partyId ? "border-red-500" : ""
                       }`}
                     >
-                      <option value="">Select Party Id</option>
-                      {parties.map((party) => (
-                        <option key={party.partyId} value={party.partyId}>
-                          {party.partyId}
-                        </option>
-                      ))}
+                      <option value="">Select Party</option>
+                      {parties.map((party) => {
+                        const partyId = party.partyId ?? party.id;
+                        const partyLabel =
+                          party.partyName || party.name || partyId;
+                        return (
+                          <option key={partyId} value={partyId}>
+                            {partyLabel}
+                          </option>
+                        );
+                      })}
                     </select>
                   </td>
 
                   {/* Party Name */}
                   <td className="px-3 py-1.5">
-                    <select
+                    <input
                       value={row.partyName}
-                      onChange={(e) =>
-                        handlePartyNameChange(row.rowId, e.target.value)
-                      }
-                      disabled={partiesLoading}
-                      className={`${controlClasses} ${
-                        rowErrors[row.rowId]?.partyName ? "border-red-500" : ""
-                      }`}
-                    >
-                      <option value="">Select Party Name</option>
-                      {parties.map((party) => (
-                        <option key={party.partyId} value={party.partyName}>
-                          {party.partyName}
-                        </option>
-                      ))}
-                    </select>
+                      disabled
+                      className={`${controlClasses} bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed`}
+                    />
                   </td>
 
                   {/* Account Name */}
@@ -455,14 +521,15 @@ const PartyAccountMappingForm = ({ onBack, onSave, editData }) => {
                       }`}
                     >
                       <option value="">Select Account</option>
-                      {accounts.map((account) => (
-                        <option
-                          key={account.accountId}
-                          value={account.accountName}
-                        >
-                          {account.accountName}
-                        </option>
-                      ))}
+                      {accounts.map((account) => {
+                        const accountLabel =
+                          account.accountName || account.name || account.accountId;
+                        return (
+                          <option key={account.accountId ?? accountLabel} value={accountLabel}>
+                            {accountLabel}
+                          </option>
+                        );
+                      })}
                     </select>
                   </td>
 

@@ -1,7 +1,6 @@
 import { useState } from "react";
 import PartyAccountMappingList from "./PartyAccountMappingList";
 import PartyAccountMappingForm from "./PartyAccountMappingForm";
-import partyAccountMappingAPI from "../../../api/partyAccountMappingAPI";
 
 const PartyAccountMappingMaster = () => {
   const [screen, setScreen] = useState("list");
@@ -21,14 +20,10 @@ const PartyAccountMappingMaster = () => {
     setScreen("list");
   };
 
-  const handleSave = async (payload) => {
-    try {
-      await partyAccountMappingAPI.updateCreateMapping(payload); // Create/Update
-      handleBack();
-    } catch (error) {
-      console.error("Error saving party account mapping:", error);
-      throw error;
-    }
+  // The form performs the create/update call itself and invokes this after a
+  // successful save, so we only need to return to the list here.
+  const handleSave = () => {
+    handleBack();
   };
 
   return (
