@@ -1,11 +1,11 @@
 import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import ScrapMaterialReturnList from "./ScrapMaterialReturnList";
-import ScrapMaterialReturnForm from "./ScrapMaterialReturnForm";
-import scrapMaterialReturnAPI from "../../../api/scrapMaterialReturnAPI";
+import JobOrderList from "./JobOrderList";
+import JobOrderForm from "./JobOrderForm";
+import jobOrderAPI from "../../../api/jobOrderAPI";
 import { toast } from "../../../utils/toast";
 
-const ScrapMaterialReturnMaster = () => {
+const JobOrderMaster = () => {
   const navigate = useNavigate();
   const [view, setView] = useState("list"); // "list" | "form"
   const [editData, setEditData] = useState(null);
@@ -23,16 +23,13 @@ const ScrapMaterialReturnMaster = () => {
   const handleEdit = useCallback(
     async (row) => {
       try {
-        const records = await scrapMaterialReturnAPI.getScrapMaterialReturnByOrgId(
-          ORG_ID,
-          BRANCH_ID,
-        );
+        const records = await jobOrderAPI.getJobOrderByOrgId(ORG_ID, BRANCH_ID);
         const fresh = records.find((r) => r.id === row.id) || row;
         setEditData(fresh);
         setView("form");
       } catch (error) {
-        console.error("Failed to fetch scrap/material return for edit:", error);
-        toast.error("Failed to load scrap/material return details");
+        console.error("Failed to fetch job order for edit:", error);
+        toast.error("Failed to load job order details");
       }
     },
     [ORG_ID, BRANCH_ID],
@@ -52,11 +49,11 @@ const ScrapMaterialReturnMaster = () => {
   };
 
   if (view === "form") {
-    return <ScrapMaterialReturnForm data={editData} onBack={handleBack} />;
+    return <JobOrderForm data={editData} onBack={handleBack} />;
   }
 
   return (
-    <ScrapMaterialReturnList
+    <JobOrderList
       onAddNew={handleAddNew}
       onEdit={handleEdit}
       onBack={handleNavigateHome}
@@ -65,4 +62,4 @@ const ScrapMaterialReturnMaster = () => {
   );
 };
 
-export default ScrapMaterialReturnMaster;
+export default JobOrderMaster;

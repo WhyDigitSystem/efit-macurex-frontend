@@ -1,12 +1,19 @@
-import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import {
+  ArrowLeft,
+  Save,
+  X,
+  Plus,
+  Trash2,
+  UploadCloud,
+} from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import jobOrderAPI from "../../../api/jobOrderAPI";
 import supplierRateContractAPI from "../../../api/supplierRateContractAPI";
 import locationMasterAPI from "../../../api/locationMasterAPI";
 import branchAPI from "../../../api/branchAPI";
 import partyMasterAPI from "../../../api/partyMasterAPI";
 import itemAPI from "../../../api/itemAPI";
 import unitMasterAPI from "../../../api/unitAPI";
-import employeeAPI from "../../../api/employeeAPI";
 import { useToast } from "../../Toast/ToastContext";
 
 /* ---------------------------------------------------------------------------- */
@@ -197,7 +204,7 @@ const TableHead = ({ headers }) => (
       {headers.map((h, i) => (
         <th
           key={i}
-          className={`p-1 whitespace-nowrap ${
+          className={`p-2 whitespace-nowrap ${
             i === 0
               ? "w-8 text-center"
               : i === headers.length - 1
@@ -233,7 +240,7 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
   </tr>
 );
 
-/* Generic dynamic table. Supports text / select / date / readonly columns.
+/* Generic dynamic table. Supports text / select / readonly columns.
    Options may be plain strings or { value, label } objects. */
 const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
   <TableWrapper>
@@ -283,17 +290,122 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
 );
 
 /* ---------------------------------------------------------------------------- */
+/* Quotation Attachment tab: dropzone + file table                              */
+
+const ACCEPTED_EXTENSIONS = [".pdf", ".docx", ".xlsx", ".png", ".jpg", ".jpeg"];
+
+const ACCEPTED_FORMATS_LABEL = "PDF, DOCX, XLSX, PNG, JPG";
+
+const AttachmentTable = ({ rows, onCellChange, onRemoveRow, onAddRow }) => {
+  const fileInputRefs = useRef({});
+  const [fileErrors, setFileErrors] = useState({});
+
+  const validateFile = (file) => {
+    const ext = "." + (file.name.split(".").pop() || "").toLowerCase();
+    return ACCEPTED_EXTENSIONS.includes(ext);
+  };
+
+  const handleFileSelect = (idx, file) => {
+    if (!validateFile(file)) {
+      setFileErrors((prev) => ({
+        ...prev,
+        [idx]: `Unsupported file type. Allowed formats: ${ACCEPTED_FORMATS_LABEL}`,
+      }));
+      return;
+    }
+    setFileErrors((prev) => ({ ...prev, [idx]: "" }));
+    onCellChange(idx, "attachment", file);
+    onCellChange(idx, "fileName", file.name);
+  };
+
+  const handleInputChange = (idx, e) => {
+    const file = e.target.files?.[0];
+    if (file) handleFileSelect(idx, file);
+    e.target.value = "";
+  };
+
+  return (
+    <div className="w-full space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-[11px] text-gray-400 dark:text-gray-500">
+          Supported formats: {ACCEPTED_FORMATS_LABEL}
+        </span>
+        <button
+          type="button"
+          onClick={onAddRow}
+          className="flex items-center gap-1 px-3 h-8 rounded text-xs whitespace-nowrap text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 transition-colors"
+        >
+          <Plus size={12} />
+          Add Attachment
+        </button>
+      </div>
+
+      <TableWrapper>
+        <TableHead headers={["#", "Attachment", "Action"]} />
+        <tbody>
+          {rows.map((row, idx) => (
+            <TableRow
+              key={idx}
+              index={idx}
+              onRemove={() => onRemoveRow(idx)}
+              disabled={rows.length <= 1}
+            >
+              <td className="p-2 align-middle">
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    ref={(el) => {
+                      fileInputRefs.current[idx] = el;
+                    }}
+                    type="file"
+                    accept={ACCEPTED_EXTENSIONS.join(",")}
+                    className="hidden"
+                    onChange={(e) => handleInputChange(idx, e)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRefs.current[idx]?.click()}
+                    className="flex items-center gap-1.5 px-3 h-8 rounded text-xs font-medium whitespace-nowrap border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 hover:border-blue-500 dark:hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                  >
+                    <UploadCloud className="h-3.5 w-3.5" />
+                    Choose File
+                  </button>
+                  <span
+                    className={`flex-1 min-w-0 text-xs truncate ${
+                      row.attachment
+                        ? "text-gray-700 dark:text-gray-200"
+                        : "text-gray-400 dark:text-gray-500"
+                    }`}
+                  >
+                    {row.attachment?.name || "No file chosen"}
+                  </span>
+                </div>
+                {fileErrors[idx] && (
+                  <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
+                    {fileErrors[idx]}
+                  </p>
+                )}
+              </td>
+            </TableRow>
+          ))}
+        </tbody>
+      </TableWrapper>
+    </div>
+  );
+};
+
+/* ---------------------------------------------------------------------------- */
 /* Options                                                                      */
 
 const DEPARTMENTS = ["Purchase", "Stores", "Quality", "Production", "Finance"];
 const BELONGS_TO = ["APPLIANCES", "ELECTRICALS", "PACKAGING", "RAW MATERIAL"];
-const CONTRACT_FOR = ["Rate Contract", "Annual Rate Contract", "One Time"];
+const JOB_ORDER_FOR = ["Sub Contract", "Job Work", "Rate Contract", "Repair"];
 const YES_NO = ["YES", "NO"];
-const TAX_CODES = ["TX-STD", "TX-ZERO", "TX-EXEMPT", "TX-COMP"];
+const GST_STATUS = ["Registered", "Unregistered", "Composition", "SEZ"];
 const SERVICE_NAMES = ["Amortization", "Machining", "Plating", "Assembly"];
-const SCOPE_OPTIONS = ["Local", "Inter-State", "SEZ", "Overseas"];
+const TAX_CODES = ["TX-STD", "TX-ZERO", "TX-EXEMPT", "TX-COMP"];
 const TAX_TYPES = ["SGST", "CGST", "IGST", "GST", "Exempt", "Nil Rated"];
-const PARTICULARS = ["Basic", "Freight", "Packing", "Insurance", "Discount"];
+const BOM_IDS = ["BOM-001", "BOM-002", "BOM-003"];
+const INCOMING_TYPES = ["Raw Material", "Semi-Finished", "Component", "Service"];
 const PAYMENT_TERMS = [
   "Immediate",
   "15 Days",
@@ -302,32 +414,37 @@ const PAYMENT_TERMS = [
   "60 Days",
   "Advance",
 ];
-const FREIGHT_TYPES = ["Prepaid", "To Pay", "FOB", "CIF"];
-const PACKING_TYPES = ["Standard", "Export Worthy", "Custom", "None"];
-const MODE_OF_DESPATCH = ["Road", "Rail", "Air", "Sea", "Courier"];
+const PARTICULARS = ["Basic", "Freight", "Packing", "Insurance", "Discount"];
 
 const CHILD_TABS = [
-  { key: "itemDetails", label: "Item Details", kind: "table" },
+  { key: "orderDetails", label: "Order Details", kind: "table" },
+  { key: "terms", label: "Terms and Conditions", kind: "fields" },
   { key: "taxDetails", label: "Tax Details", kind: "table" },
-  { key: "terms", label: "Terms And Conditions", kind: "fields" },
+  { key: "quotationAttachment", label: "Quotation Attachment", kind: "attachment" },
 ];
 
-const emptyItemDetailRow = () => ({
-  itemCode: "",
+const emptyOrderDetailRow = () => ({
+  incomingItem: "",
   itemDescription: "",
-  purchaseUnit: "",
-  platingType: "",
-  thickness: "",
+  bomId: "",
+  unit: "",
+  incomingType: "",
+  orderQty: "",
   rate: "",
+  amount: "",
   sgstRate: "",
   sgstAmount: "",
   cgstRate: "",
   cgstAmount: "",
   igstRate: "",
   igstAmount: "",
-  validFrom: "",
-  validTo: "",
-  totalAmortizationRate: "",
+});
+
+const emptyTerms = () => ({
+  paymentTerms: "",
+  deliveryDate: "",
+  narration: "",
+  notes: "",
 });
 
 const emptyTaxDetailRow = () => ({
@@ -335,19 +452,9 @@ const emptyTaxDetailRow = () => ({
   amount: "",
 });
 
-const emptyTerms = () => ({
-  discountPct: "",
-  paymentTerms: "",
-  deliveryTerms: "",
-  freight: "",
-  freightType: "",
-  packingType: "",
-  insurance: "",
-  modeOfDespatch: "",
-  inlandCharge: "",
-  preparedBy: "",
-  authorizedBy: "",
-  narration: "",
+const emptyAttachmentRow = () => ({
+  fileName: "",
+  attachment: null,
 });
 
 const todayStr = () => {
@@ -356,12 +463,18 @@ const todayStr = () => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
 
-const autoContractNo = () =>
-  `SRC-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, "0")}${String(new Date().getDate()).padStart(2, "0")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
+const nowTimeStr = () => {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+};
+
+const autoJobOrderNo = () =>
+  `JO-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, "0")}${String(new Date().getDate()).padStart(2, "0")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
 
 /* ---------------------------------------------------------------------------- */
 
-const SupplierRateContractForm = ({ data, onBack }) => {
+const JobOrderForm = ({ data, onBack }) => {
   const [orgId] = useState(Number(localStorage.getItem("orgId")) || 0);
   const [branch] = useState(Number(localStorage.getItem("branchId")) || 0);
   const { addToast } = useToast();
@@ -370,52 +483,53 @@ const SupplierRateContractForm = ({ data, onBack }) => {
   const orgName = (userData?.companyVO?.companyName || userData?.orgName || "").trim();
   const isMacurex = ["mecurex", "macurex"].includes(orgName.toLowerCase());
 
-  const [activeChildTab, setActiveChildTab] = useState("itemDetails");
+  const [activeChildTab, setActiveChildTab] = useState("orderDetails");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
 
   const [plantOptions, setPlantOptions] = useState([]);
   const [vendorOptions, setVendorOptions] = useState([]);
+  const [contractOptions, setContractOptions] = useState([]);
   const [itemOptions, setItemOptions] = useState([]);
   const [itemMasterMap, setItemMasterMap] = useState({});
   const [unitOptions, setUnitOptions] = useState([]);
-  const [employeeOptions, setEmployeeOptions] = useState([]);
 
   const [header, setHeader] = useState(() => ({
     plantId: data?.plantId || "",
+    jobOrderNo: data?.jobOrderNo || (data ? "" : autoJobOrderNo()),
+    date: data?.date || todayStr(),
     department: data?.department || "",
     belongsTo: data?.belongsTo || "",
-    contractNo: data?.contractNo || (data ? "" : autoContractNo()),
-    contractDate: data?.contractDate || todayStr(),
-    validFrom: data?.validFrom || "",
-    validTo: data?.validTo || "",
     vendorId: data?.vendorId || "",
     vendorName: data?.vendorName || "",
-    contractFor: data?.contractFor || "",
-    deliveryDate: data?.deliveryDate || "",
+    jobOrderFor: data?.jobOrderFor || "",
     gstState: data?.gstState || "",
+    gstStatus: data?.gstStatus || "",
+    contractNo: data?.contractNo || "",
+    serviceName: data?.serviceName || "",
     isIgstApplicable: data?.isIgstApplicable || "",
     gstinNo: data?.gstinNo || "",
-    taxCode: data?.taxCode || "",
-    serviceName: data?.serviceName || "",
+    indentTime: data?.indentTime || nowTimeStr(),
     hsnSacCode: data?.hsnSacCode || "",
-    scope: data?.scope || "",
-    scrap: data?.scrap || "",
+    taxCode: data?.taxCode || "",
     taxType: data?.taxType || "SGST",
     taxPct: data?.taxPct ?? "",
     active: data?.active !== false,
   }));
 
-  const [itemDetailRows, setItemDetailRows] = useState(
-    data?.itemDetails?.length ? data.itemDetails : [emptyItemDetailRow()],
-  );
-  const [taxDetailRows, setTaxDetailRows] = useState(
-    data?.taxDetails?.length ? data.taxDetails : [emptyTaxDetailRow()],
+  const [orderDetailRows, setOrderDetailRows] = useState(
+    data?.orderDetails?.length ? data.orderDetails : [emptyOrderDetailRow()],
   );
   const [terms, setTerms] = useState({
     ...emptyTerms(),
     ...data?.terms,
   });
+  const [taxDetailRows, setTaxDetailRows] = useState(
+    data?.taxDetails?.length ? data.taxDetails : [emptyTaxDetailRow()],
+  );
+  const [attachmentRows, setAttachmentRows] = useState(
+    data?.attachments?.length ? data.attachments : [emptyAttachmentRow()],
+  );
 
   /* ---------------- Lookup loading ---------------- */
 
@@ -459,6 +573,24 @@ const SupplierRateContractForm = ({ data, onBack }) => {
     }
   }, [orgId, branch]);
 
+  const loadContracts = useCallback(async () => {
+    try {
+      const res = await supplierRateContractAPI.getSupplierRateContractByOrgId(
+        orgId,
+        branch,
+      );
+      setContractOptions(
+        (res || []).map((c) => ({
+          value: c.contractNo,
+          label: c.contractNo,
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to load contract options:", error);
+      setContractOptions([]);
+    }
+  }, [orgId, branch]);
+
   const loadItems = useCallback(async () => {
     try {
       const res = await itemAPI.getItems(orgId, branch);
@@ -491,21 +623,6 @@ const SupplierRateContractForm = ({ data, onBack }) => {
     }
   }, [orgId, branch]);
 
-  const loadEmployees = useCallback(async () => {
-    try {
-      const res = await employeeAPI.getEmployeeByOrgId(orgId);
-      setEmployeeOptions(
-        (res || []).map((e) => ({
-          value: e.id,
-          label: e.employeeName || e.id,
-        })),
-      );
-    } catch (error) {
-      console.error("Failed to load employee options:", error);
-      setEmployeeOptions([]);
-    }
-  }, [orgId]);
-
   useEffect(() => {
     if (orgId) loadPlants();
   }, [orgId, loadPlants]);
@@ -513,11 +630,11 @@ const SupplierRateContractForm = ({ data, onBack }) => {
   useEffect(() => {
     if (orgId && branch) {
       loadVendors();
+      loadContracts();
       loadItems();
       loadUnits();
     }
-    if (orgId) loadEmployees();
-  }, [orgId, branch, loadVendors, loadItems, loadUnits, loadEmployees]);
+  }, [orgId, branch, loadVendors, loadContracts, loadItems, loadUnits]);
 
   /* ---------------- Handlers ---------------- */
 
@@ -540,35 +657,39 @@ const SupplierRateContractForm = ({ data, onBack }) => {
     setTerms((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleItemCellChange = (idx, key, value) => {
-    setItemDetailRows((prev) =>
+  const handleOrderCellChange = (idx, key, value) => {
+    setOrderDetailRows((prev) =>
       prev.map((row, i) => {
         if (i !== idx) return row;
 
         let next = { ...row, [key]: value };
 
-        if (key === "itemCode") {
+        if (key === "incomingItem") {
           const item = itemMasterMap[value];
           next = {
             ...next,
             itemDescription: item?.itemDescription || "",
-            purchaseUnit: item?.primaryUnits?.id || "",
+            unit: item?.primaryUnits?.id || "",
           };
         }
 
-        if (["rate", "sgstRate", "cgstRate", "igstRate"].includes(key)) {
+        if (["orderQty", "rate", "sgstRate", "cgstRate", "igstRate"].includes(key)) {
+          const qty = parseFloat(next.orderQty) || 0;
           const rate = parseFloat(next.rate) || 0;
+          const amount = qty * rate;
+          next.amount = amount ? amount.toFixed(2) : "";
+          const base = amount || 0;
           next.sgstAmount =
-            (parseFloat(next.sgstRate) || 0) && rate
-              ? (rate * (parseFloat(next.sgstRate) || 0) / 100).toFixed(2)
+            (parseFloat(next.sgstRate) || 0) && base
+              ? (base * (parseFloat(next.sgstRate) || 0) / 100).toFixed(2)
               : "";
           next.cgstAmount =
-            (parseFloat(next.cgstRate) || 0) && rate
-              ? (rate * (parseFloat(next.cgstRate) || 0) / 100).toFixed(2)
+            (parseFloat(next.cgstRate) || 0) && base
+              ? (base * (parseFloat(next.cgstRate) || 0) / 100).toFixed(2)
               : "";
           next.igstAmount =
-            (parseFloat(next.igstRate) || 0) && rate
-              ? (rate * (parseFloat(next.igstRate) || 0) / 100).toFixed(2)
+            (parseFloat(next.igstRate) || 0) && base
+              ? (base * (parseFloat(next.igstRate) || 0) / 100).toFixed(2)
               : "";
         }
 
@@ -583,14 +704,25 @@ const SupplierRateContractForm = ({ data, onBack }) => {
     );
   };
 
-  const handleAddItemRow = () =>
-    setItemDetailRows((prev) => [...prev, emptyItemDetailRow()]);
-  const handleRemoveItemRow = (idx) =>
-    setItemDetailRows((prev) => prev.filter((_, i) => i !== idx));
+  const handleAttachmentCellChange = (idx, key, value) => {
+    setAttachmentRows((prev) =>
+      prev.map((row, i) => (i === idx ? { ...row, [key]: value } : row)),
+    );
+  };
+
+  const handleAddOrderRow = () =>
+    setOrderDetailRows((prev) => [...prev, emptyOrderDetailRow()]);
+  const handleRemoveOrderRow = (idx) =>
+    setOrderDetailRows((prev) => prev.filter((_, i) => i !== idx));
   const handleAddTaxRow = () =>
     setTaxDetailRows((prev) => [...prev, emptyTaxDetailRow()]);
   const handleRemoveTaxRow = (idx) =>
     setTaxDetailRows((prev) => prev.filter((_, i) => i !== idx));
+
+  const handleAddAttachmentRow = () =>
+    setAttachmentRows((prev) => [...prev, emptyAttachmentRow()]);
+  const handleRemoveAttachmentRow = (idx) =>
+    setAttachmentRows((prev) => prev.filter((_, i) => i !== idx));
 
   /* ---------------- Validation & Save ---------------- */
 
@@ -598,40 +730,32 @@ const SupplierRateContractForm = ({ data, onBack }) => {
     const errors = {};
 
     if (!header.plantId) errors.plantId = "Plant ID is required";
+    if (!header.jobOrderNo?.trim())
+      errors.jobOrderNo = "Job Order No is required";
+    if (!header.date) errors.date = "Date is required";
     if (!header.department) errors.department = "Department is required";
-    if (!header.contractNo?.trim()) errors.contractNo = "Contract No is required";
-    if (!header.contractDate) errors.contractDate = "Contract Date is required";
-    if (!header.validFrom) errors.validFrom = "Valid From is required";
-    if (
-      header.validFrom &&
-      header.validTo &&
-      header.validTo < header.validFrom
-    )
-      errors.validTo = "Valid To cannot be before Valid From";
     if (!header.vendorId) errors.vendorId = "Vendor Id is required";
-    if (!header.vendorName?.trim()) errors.vendorName = "Vendor Name is required";
-    if (!header.contractFor) errors.contractFor = "Contract For is required";
+    if (!header.vendorName?.trim())
+      errors.vendorName = "Vendor Name is required";
+    if (!header.jobOrderFor) errors.jobOrderFor = "Job Order For is required";
     if (!header.gstState?.trim()) errors.gstState = "GST State is required";
-    if (!header.isIgstApplicable)
-      errors.isIgstApplicable = "Is IGST Applicable is required";
+    if (!header.gstStatus) errors.gstStatus = "GST Status is required";
+    if (!header.contractNo) errors.contractNo = "Contract No is required";
     if (!header.taxCode) errors.taxCode = "Tax Code is required";
     if (!header.taxType) errors.taxType = "Tax Type is required";
 
-    const hasValidItemRow = itemDetailRows.some(
+    const hasValidOrderRow = orderDetailRows.some(
       (r) =>
-        r.itemCode &&
-        r.purchaseUnit &&
-        Number(r.rate) > 0 &&
-        r.validFrom &&
-        r.validTo,
+        r.incomingItem &&
+        r.unit &&
+        Number(r.orderQty) > 0 &&
+        Number(r.rate) > 0,
     );
-    if (!hasValidItemRow)
-      errors.itemDetails =
-        "Add at least one item with Item Code, Purchase Unit, Rate, Valid From and Valid To";
+    if (!hasValidOrderRow)
+      errors.orderDetails =
+        "Add at least one item with Incoming Item, Unit, Order Qty and Rate";
 
     if (!terms.paymentTerms) errors.paymentTerms = "Payment Terms is required";
-    if (!terms.modeOfDespatch)
-      errors.modeOfDespatch = "Mode of Despatch is required";
 
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
@@ -649,9 +773,14 @@ const SupplierRateContractForm = ({ data, onBack }) => {
       orgId,
       branch,
       ...header,
-      itemDetails: itemDetailRows.filter((r) => r.itemCode?.trim()),
-      taxDetails: taxDetailRows.filter((r) => r.particular?.trim()),
+      orderDetails: orderDetailRows.filter((r) => r.incomingItem?.trim()),
       terms,
+      taxDetails: taxDetailRows.filter((r) => r.particular?.trim()),
+      // NOTE: attachment files need multipart/FormData handling on the API
+      // layer once the upload endpoint is confirmed — sending file names only.
+      attachments: attachmentRows
+        .filter((r) => r.fileName?.trim())
+        .map((r) => ({ fileName: r.fileName })),
       createdBy: isUpdate
         ? data?.createdBy || localStorage.getItem("usersId")
         : localStorage.getItem("usersId"),
@@ -659,15 +788,14 @@ const SupplierRateContractForm = ({ data, onBack }) => {
     };
 
     try {
-      const response =
-        await supplierRateContractAPI.createUpdateSupplierRateContract(payload);
+      const response = await jobOrderAPI.createUpdateJobOrder(payload);
 
       if (response?.status) {
         addToast(
           response?.paramObjectsMap?.message ||
             (isUpdate
-              ? "Supplier Rate Contract updated successfully!"
-              : "Supplier Rate Contract created successfully!"),
+              ? "Job Order updated successfully!"
+              : "Job Order created successfully!"),
         );
         onBack?.();
       } else {
@@ -675,11 +803,11 @@ const SupplierRateContractForm = ({ data, onBack }) => {
           response?.errors?.[0]?.shortMessage ||
             response?.errors?.[0]?.longMessage ||
             response?.message ||
-            "Failed to save Supplier Rate Contract.",
+            "Failed to save Job Order.",
         );
       }
     } catch (err) {
-      console.error("Save Supplier Rate Contract Error:", err);
+      console.error("Save Job Order Error:", err);
       if (err.response?.data) {
         addToast(
           err.response.data.message ||
@@ -709,9 +837,7 @@ const SupplierRateContractForm = ({ data, onBack }) => {
         </button>
 
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-          {data
-            ? "Edit Supplier Rate Contract"
-            : "Add Supplier Rate Contract"}
+          {data ? "Edit Job Order" : "Add Job Order"}
         </h2>
       </div>
 
@@ -719,7 +845,7 @@ const SupplierRateContractForm = ({ data, onBack }) => {
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
         {/* ---------------- Header Info ---------------- */}
         <div>
-          <SectionHeader>Supplier Rate Contract</SectionHeader>
+          <SectionHeader>Job Order</SectionHeader>
           <div className={fieldGrid}>
             <Field
               type="select"
@@ -730,6 +856,25 @@ const SupplierRateContractForm = ({ data, onBack }) => {
               error={fieldErrors.plantId}
               options={plantOptions}
               required
+            />
+            <Field
+              label="Job Order No"
+              name="jobOrderNo"
+              value={header.jobOrderNo}
+              onChange={handleHeaderChange}
+              error={fieldErrors.jobOrderNo}
+              required
+              disabled={!data}
+            />
+            <Field
+              type="date"
+              label="Date"
+              name="date"
+              value={header.date}
+              onChange={handleHeaderChange}
+              error={fieldErrors.date}
+              required
+              disabled
             />
             <Field
               type="select"
@@ -748,42 +893,6 @@ const SupplierRateContractForm = ({ data, onBack }) => {
               value={header.belongsTo}
               onChange={handleHeaderChange}
               options={BELONGS_TO}
-            />
-            <Field
-              label="Contract No"
-              name="contractNo"
-              value={header.contractNo}
-              onChange={handleHeaderChange}
-              error={fieldErrors.contractNo}
-              required
-              disabled={!data}
-            />
-            <Field
-              type="date"
-              label="Contract Date"
-              name="contractDate"
-              value={header.contractDate}
-              onChange={handleHeaderChange}
-              error={fieldErrors.contractDate}
-              required
-              disabled
-            />
-            <Field
-              type="date"
-              label="Valid From"
-              name="validFrom"
-              value={header.validFrom}
-              onChange={handleHeaderChange}
-              error={fieldErrors.validFrom}
-              required
-            />
-            <Field
-              type="date"
-              label="Valid To"
-              name="validTo"
-              value={header.validTo}
-              onChange={handleHeaderChange}
-              error={fieldErrors.validTo}
             />
             <Field
               type="select"
@@ -806,20 +915,13 @@ const SupplierRateContractForm = ({ data, onBack }) => {
             />
             <Field
               type="select"
-              label="Contract For"
-              name="contractFor"
-              value={header.contractFor}
+              label="Job Order For"
+              name="jobOrderFor"
+              value={header.jobOrderFor}
               onChange={handleHeaderChange}
-              error={fieldErrors.contractFor}
-              options={CONTRACT_FOR}
+              error={fieldErrors.jobOrderFor}
+              options={JOB_ORDER_FOR}
               required
-            />
-            <Field
-              type="date"
-              label="Delivery Date"
-              name="deliveryDate"
-              value={header.deliveryDate}
-              onChange={handleHeaderChange}
             />
             <Field
               label="GST State"
@@ -831,28 +933,22 @@ const SupplierRateContractForm = ({ data, onBack }) => {
             />
             <Field
               type="select"
-              label="Is IGST Applicable"
-              name="isIgstApplicable"
-              value={header.isIgstApplicable}
+              label="GST Status"
+              name="gstStatus"
+              value={header.gstStatus}
               onChange={handleHeaderChange}
-              error={fieldErrors.isIgstApplicable}
-              options={YES_NO}
+              error={fieldErrors.gstStatus}
+              options={GST_STATUS}
               required
             />
             <Field
-              label="GSTIN No"
-              name="gstinNo"
-              value={header.gstinNo}
-              onChange={handleHeaderChange}
-            />
-            <Field
               type="select"
-              label="Tax Code"
-              name="taxCode"
-              value={header.taxCode}
+              label="Contract No"
+              name="contractNo"
+              value={header.contractNo}
               onChange={handleHeaderChange}
-              error={fieldErrors.taxCode}
-              options={TAX_CODES}
+              error={fieldErrors.contractNo}
+              options={contractOptions}
               required
             />
             <Field
@@ -864,6 +960,28 @@ const SupplierRateContractForm = ({ data, onBack }) => {
               options={SERVICE_NAMES}
             />
             <Field
+              type="select"
+              label="Is IGST Applicable"
+              name="isIgstApplicable"
+              value={header.isIgstApplicable}
+              onChange={handleHeaderChange}
+              options={YES_NO}
+            />
+            <Field
+              label="GSTIN No"
+              name="gstinNo"
+              value={header.gstinNo}
+              onChange={handleHeaderChange}
+            />
+            <Field
+              type="text"
+              label="Indent Time"
+              name="indentTime"
+              value={header.indentTime}
+              onChange={handleHeaderChange}
+              disabled
+            />
+            <Field
               label="HSN/SAC Code"
               name="hsnSacCode"
               value={header.hsnSacCode}
@@ -871,19 +989,13 @@ const SupplierRateContractForm = ({ data, onBack }) => {
             />
             <Field
               type="select"
-              label="Scope"
-              name="scope"
-              value={header.scope}
+              label="Tax Code"
+              name="taxCode"
+              value={header.taxCode}
               onChange={handleHeaderChange}
-              options={SCOPE_OPTIONS}
-            />
-            <Field
-              type="select"
-              label="Scrap"
-              name="scrap"
-              value={header.scrap}
-              onChange={handleHeaderChange}
-              options={YES_NO}
+              error={fieldErrors.taxCode}
+              options={TAX_CODES}
+              required
             />
             <Field
               type="select"
@@ -930,8 +1042,8 @@ const SupplierRateContractForm = ({ data, onBack }) => {
               <button
                 type="button"
                 onClick={() =>
-                  activeChildTab === "itemDetails"
-                    ? handleAddItemRow()
+                  activeChildTab === "orderDetails"
+                    ? handleAddOrderRow()
                     : handleAddTaxRow()
                 }
                 className="h-6 w-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-colors"
@@ -941,31 +1053,43 @@ const SupplierRateContractForm = ({ data, onBack }) => {
             )}
           </div>
 
-          {/* Item Details tab */}
-          {activeChildTab === "itemDetails" && (
+          {/* Order Details tab */}
+          {activeChildTab === "orderDetails" && (
             <div className="pt-3">
               <DynamicTable
                 columns={[
                   {
-                    key: "itemCode",
-                    label: "Incoming Item Code",
+                    key: "incomingItem",
+                    label: "Incoming Item",
                     type: "select",
                     options: itemOptions,
                   },
                   {
                     key: "itemDescription",
-                    label: "Incoming Item Description",
+                    label: "Item Description",
                     readOnly: true,
                   },
                   {
-                    key: "purchaseUnit",
-                    label: "Purchase Unit",
+                    key: "bomId",
+                    label: "BOM ID",
+                    type: "select",
+                    options: BOM_IDS,
+                  },
+                  {
+                    key: "unit",
+                    label: "Unit",
                     type: "select",
                     options: unitOptions,
                   },
-                  { key: "platingType", label: "Plating Type" },
-                  { key: "thickness", label: "Thickness" },
+                  {
+                    key: "incomingType",
+                    label: "Incoming Type",
+                    type: "select",
+                    options: INCOMING_TYPES,
+                  },
+                  { key: "orderQty", label: "Order Qty" },
                   { key: "rate", label: "Rate" },
+                  { key: "amount", label: "Amount", readOnly: true },
                   { key: "sgstRate", label: "SGST Rate" },
                   {
                     key: "sgstAmount",
@@ -984,22 +1108,55 @@ const SupplierRateContractForm = ({ data, onBack }) => {
                     label: "IGST Amount",
                     readOnly: true,
                   },
-                  { key: "validFrom", label: "Valid From", type: "date" },
-                  { key: "validTo", label: "Valid To", type: "date" },
-                  {
-                    key: "totalAmortizationRate",
-                    label: "Total Amortization Rate",
-                  },
                 ]}
-                rows={itemDetailRows}
-                onCellChange={handleItemCellChange}
-                onRemoveRow={handleRemoveItemRow}
+                rows={orderDetailRows}
+                onCellChange={handleOrderCellChange}
+                onRemoveRow={handleRemoveOrderRow}
               />
-              {fieldErrors.itemDetails && (
+              {fieldErrors.orderDetails && (
                 <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
-                  {fieldErrors.itemDetails}
+                  {fieldErrors.orderDetails}
                 </p>
               )}
+            </div>
+          )}
+
+          {/* Terms and Conditions tab */}
+          {activeChildTab === "terms" && (
+            <div className="pt-3">
+              <div className={subTabFieldGrid}>
+                <Field
+                  type="select"
+                  label="Payment Terms"
+                  name="paymentTerms"
+                  value={terms.paymentTerms}
+                  onChange={handleTermsChange}
+                  error={fieldErrors.paymentTerms}
+                  options={PAYMENT_TERMS}
+                  required
+                />
+                <Field
+                  type="date"
+                  label="Delivery Date"
+                  name="deliveryDate"
+                  value={terms.deliveryDate}
+                  onChange={handleTermsChange}
+                />
+                <Field
+                  type="textarea"
+                  label="Narration"
+                  name="narration"
+                  value={terms.narration}
+                  onChange={handleTermsChange}
+                />
+                <Field
+                  type="textarea"
+                  label="Notes"
+                  name="notes"
+                  value={terms.notes}
+                  onChange={handleTermsChange}
+                />
+              </div>
             </div>
           )}
 
@@ -1023,105 +1180,15 @@ const SupplierRateContractForm = ({ data, onBack }) => {
             </div>
           )}
 
-          {/* Terms And Conditions tab */}
-          {activeChildTab === "terms" && (
+          {/* Quotation Attachment tab */}
+          {activeChildTab === "quotationAttachment" && (
             <div className="pt-3">
-              <div className={subTabFieldGrid}>
-                <Field
-                  type="number"
-                  label="Discount %"
-                  name="discountPct"
-                  value={terms.discountPct}
-                  onChange={handleTermsChange}
-                />
-                <Field
-                  type="select"
-                  label="Payment Terms"
-                  name="paymentTerms"
-                  value={terms.paymentTerms}
-                  onChange={handleTermsChange}
-                  error={fieldErrors.paymentTerms}
-                  options={PAYMENT_TERMS}
-                  required
-                />
-                <Field
-                  type="textarea"
-                  label="Delivery Terms"
-                  name="deliveryTerms"
-                  value={terms.deliveryTerms}
-                  onChange={handleTermsChange}
-                />
-                <Field
-                  type="number"
-                  label="Freight"
-                  name="freight"
-                  value={terms.freight}
-                  onChange={handleTermsChange}
-                />
-                <Field
-                  type="select"
-                  label="Freight Type"
-                  name="freightType"
-                  value={terms.freightType}
-                  onChange={handleTermsChange}
-                  options={FREIGHT_TYPES}
-                />
-                <Field
-                  type="select"
-                  label="Packing Type"
-                  name="packingType"
-                  value={terms.packingType}
-                  onChange={handleTermsChange}
-                  options={PACKING_TYPES}
-                />
-                <Field
-                  type="number"
-                  label="Insurance"
-                  name="insurance"
-                  value={terms.insurance}
-                  onChange={handleTermsChange}
-                />
-                <Field
-                  type="select"
-                  label="Mode of Despatch"
-                  name="modeOfDespatch"
-                  value={terms.modeOfDespatch}
-                  onChange={handleTermsChange}
-                  error={fieldErrors.modeOfDespatch}
-                  options={MODE_OF_DESPATCH}
-                  required
-                />
-                <Field
-                  type="number"
-                  label="Inland Charge"
-                  name="inlandCharge"
-                  value={terms.inlandCharge}
-                  onChange={handleTermsChange}
-                />
-                <Field
-                  type="select"
-                  label="Prepared By"
-                  name="preparedBy"
-                  value={terms.preparedBy}
-                  onChange={handleTermsChange}
-                  options={employeeOptions}
-                />
-                <Field
-                  type="select"
-                  label="Authorized By"
-                  name="authorizedBy"
-                  value={terms.authorizedBy}
-                  onChange={handleTermsChange}
-                  options={employeeOptions}
-                />
-                <Field
-                  type="textarea"
-                  label="Narration"
-                  name="narration"
-                  value={terms.narration}
-                  onChange={handleTermsChange}
-                />
-              </div>
+              <AttachmentTable
+                rows={attachmentRows}
+                onCellChange={handleAttachmentCellChange}
+                onRemoveRow={handleRemoveAttachmentRow}
+                onAddRow={handleAddAttachmentRow}
+              />
             </div>
           )}
         </section>
@@ -1137,4 +1204,4 @@ const SupplierRateContractForm = ({ data, onBack }) => {
   );
 };
 
-export default SupplierRateContractForm;
+export default JobOrderForm;

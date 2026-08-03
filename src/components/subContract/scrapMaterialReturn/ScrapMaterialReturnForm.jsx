@@ -42,7 +42,11 @@ const labelClasses =
   "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
 const fieldGrid =
-  "grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-x-3 gap-y-2 items-start";
+  "grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-x-4 gap-y-3 items-start";
+
+// Spacious grid used inside the child tabs so fields breathe more.
+const subTabFieldGrid =
+  "grid grid-cols-[repeat(auto-fit,minmax(210px,1fr))] gap-x-5 gap-y-4 items-start";
 
 /* ---------------------------------------------------------------------------- */
 /* Shared building blocks                                                      */
@@ -103,9 +107,9 @@ const Field = ({
           name={name}
           value={value}
           onChange={onChange}
-          rows={3}
+          rows={1}
           className={
-            "w-full px-2 py-1.5 rounded border text-xs leading-snug transition-colors resize-none " +
+            "w-full h-[30px] px-2 py-1 rounded border text-xs leading-none transition-colors overflow-y-auto resize-none " +
             "bg-white dark:bg-gray-900 " +
             `${error ? controlErrClasses : "border-gray-300 dark:border-gray-600"} ` +
             "text-gray-900 dark:text-gray-100 " +
@@ -160,7 +164,7 @@ const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
     <button
       onClick={onCancel}
       disabled={isSubmitting}
-      className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+      className="flex items-center gap-1 px-3 py-1.5 rounded text-xs whitespace-nowrap border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
     >
       <X className="h-3 w-3" />
       Cancel
@@ -169,7 +173,7 @@ const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
     <button
       onClick={onSave}
       disabled={isSubmitting}
-      className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+      className="flex items-center gap-1 px-3 py-1.5 rounded text-xs whitespace-nowrap text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
     >
       <Save className="h-3 w-3" />
       {isSubmitting ? "Saving..." : saveLabel}
@@ -181,8 +185,8 @@ const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
 /* Table helpers                                                               */
 
 const TableWrapper = ({ children }) => (
-  <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
-    <table className="w-full text-xs">{children}</table>
+  <div className="w-full overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
+    <table className="w-full min-w-max text-xs">{children}</table>
   </div>
 );
 
@@ -209,9 +213,9 @@ const TableHead = ({ headers }) => (
 
 const TableRow = ({ children, index, onRemove, disabled }) => (
   <tr className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-    <td className="p-1 text-center font-medium dark:text-white">{index + 1}</td>
+    <td className="p-2 text-center font-medium dark:text-white">{index + 1}</td>
     {children}
-    <td className="p-1 text-center">
+    <td className="p-2 text-center">
       <button
         type="button"
         onClick={onRemove}
@@ -250,7 +254,7 @@ const ScrapDetailTable = ({
           {columns.map((col) => {
             if (col.type === "select") {
               return (
-                <td className="p-1 align-top" key={col.key}>
+                <td className="p-2 align-top" key={col.key}>
                   <select
                     value={row[col.key]}
                     onChange={(e) => onCellChange(idx, col.key, e.target.value)}
@@ -267,7 +271,7 @@ const ScrapDetailTable = ({
               );
             }
             return (
-              <td className="p-1 align-top" key={col.key}>
+              <td className="p-2 align-top" key={col.key}>
                 <input
                   type={col.type === "date" ? "date" : "text"}
                   value={row[col.key]}
@@ -618,7 +622,7 @@ const ScrapMaterialReturnForm = ({ data, onBack }) => {
   const activeTabMeta = CHILD_TABS.find((t) => t.key === activeChildTab);
 
   return (
-    <div className="p-2 max-w-7xl">
+    <div className="w-full p-2">
       {/* Header */}
       <div className="flex items-center gap-2 mb-3">
         <button
@@ -630,8 +634,8 @@ const ScrapMaterialReturnForm = ({ data, onBack }) => {
 
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
           {data
-            ? "Edit Scrap/Material Return/Rejection From S.C."
-            : "Add Scrap/Material Return/Rejection From S.C."}
+            ? "Edit Scrap/Material Return/Rejection "
+            : "Add Scrap/Material Return/Rejection "}
         </h2>
       </div>
 
@@ -639,7 +643,7 @@ const ScrapMaterialReturnForm = ({ data, onBack }) => {
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
         {/* ---------------- Header Info ---------------- */}
         <div>
-          <SectionHeader>Scrap/Material Return/Rejection From S.C.</SectionHeader>
+          <SectionHeader>Scrap/Material Return/Rejection</SectionHeader>
           <div className={fieldGrid}>
             <Field
               type="select"
@@ -822,7 +826,7 @@ const ScrapMaterialReturnForm = ({ data, onBack }) => {
           {/* Scrap Summary tab */}
           {activeTabMeta.kind === "fields" && (
             <div className="pt-3">
-              <div className={fieldGrid}>
+              <div className={subTabFieldGrid}>
                 <Field
                   type="select"
                   label="Approval By QC"
@@ -845,7 +849,6 @@ const ScrapMaterialReturnForm = ({ data, onBack }) => {
                   name="reasonForRejection"
                   value={summary.reasonForRejection}
                   onChange={handleSummaryChange}
-                  className="col-span-2 xl:col-span-3"
                 />
               </div>
             </div>
