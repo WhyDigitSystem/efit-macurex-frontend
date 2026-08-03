@@ -68,11 +68,11 @@ import OrderAcceptance from '../components/sales/orderacceptance/OrderAcceptance
 import SalesContract from '../components/sales/salescontract/SalesContract'
 import ProformaInvoice from '../components/sales/proformainvoice/ProformaInvoice'
 import StockTransferChallanMaster from '../components/sales/stockTransferChallan/StockTransferChallanMaster'
-import OtherSalesInvoiceMaster from '../components/sales/otherSalesInvoice/OtherSalesInvoiceMaster'
 import TransportBillMaster from '../components/sales/transportBill/TransportBillMaster'
 import DocketInvoiceDetailsMaster from '../components/sales/docketInvoiceDetails/DocketInvoiceDetailsMaster'
 import ServiceAccounting from "../components/masters/servicesAccounting/ServiceAccounting";
 import salesRoutes from "./salesRoutes";
+import OtherSalesInvoicesMaster from "../components/sales/othersalesinvoice/OtherSalesInvoicesMaster";
 export const routesConfig = [
   { path: "/", label: "Dashboard", element: <Dashboard /> },
 
@@ -327,7 +327,7 @@ export const routesConfig = [
       path: "/othersalesinvoice",
       label: "Other Sales Invoice",
       keywords: ["othersalesinvoice", "sales invoice"],
-      element: <OtherSalesInvoiceMaster/>,
+      element: <OtherSalesInvoicesMaster />,
     },
      {
       path: "/transportbill",

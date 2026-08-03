@@ -2,7 +2,7 @@ import { useState } from "react";
 import OtherSalesInvoiceList from "./OtherSalesInvoiceList";
 import OtherSalesInvoiceForm from "./OtherSalesInvoiceForm";
 
-const OtherSalesInvoiceMaster = () => {
+const OtherSalesInvoicesMaster = () => {
   const [screen, setScreen] = useState("list");
   const [editData, setEditData] = useState(null);
 
@@ -35,4 +35,4 @@ const OtherSalesInvoiceMaster = () => {
   );
 };
 
-export default OtherSalesInvoiceMaster;
+export default OtherSalesInvoicesMaster;
