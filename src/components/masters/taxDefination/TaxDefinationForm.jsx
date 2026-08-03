@@ -351,51 +351,91 @@ const TaxDefinationForm = ({ data, onBack }) => {
     if (orgId) fetchBranches();
   }, [orgId]);
 
-  /* ---------------- reload MODULE / TAX dropdown options whenever the selected branch changes ---------------- */
+  /* ---------------- when branch (+ org) is set, load MODULE / TAX lists for it ---------------- */
+  // listOfValuesAPI.getListValuesGroup returns the RAW detail rows for that
+  // group ([{ id, valueCode, valueDescription, active }, ...]) — mapping to
+  // { value, label } for the <select> happens right here, same pattern as
+  // your original Module fetch.
   useEffect(() => {
-    const fetchLookups = async () => {
-      setLookupsLoading(true);
+    const fetchModules = async () => {
       try {
-        const modules = await listOfValuesAPI.getListValuesGroup(
+        console.log("Module API Params:", {
+          listCode: MODULE_LIST_CODE,
+          branch: form.branch,
+          orgId,
+        });
+
+        const values = await listOfValuesAPI.getListValuesGroup(
           MODULE_LIST_CODE,
           form.branch,
           orgId,
         );
-        setModuleOptions(modules);
+
+        console.log("Module API Response:", values);
+
+        setModuleOptions(
+          values.map((v) => ({
+            value: v.id,
+            label: v.valueDescription,
+          })),
+        );
       } catch (error) {
         console.error("Module loading error", error);
-        setModuleOptions([]);
       }
+    };
 
+    const fetchTaxLists = async () => {
       try {
-        const taxTypes = await listOfValuesAPI.getListValuesGroup(
+        console.log("Tax API Params:", {
+          listCode: TAX_TYPE_LIST_CODE,
+          branch: form.branch,
+          orgId,
+        });
+
+        const taxTypeValues = await listOfValuesAPI.getListValuesGroup(
           TAX_TYPE_LIST_CODE,
           form.branch,
           orgId,
         );
-        setTaxTypeOptions(taxTypes);
+
+        console.log("Tax API Response:", taxTypeValues);
+
+        const mappedTaxTypes = taxTypeValues.map((v) => ({
+          value: v.id,
+          label: v.valueDescription,
+        }));
+        setTaxTypeOptions(mappedTaxTypes);
 
         // Only fetch a second time if Tax Name actually uses a different group
         if (TAX_NAME_LIST_CODE === TAX_TYPE_LIST_CODE) {
-          setTaxNameOptions(taxTypes);
+          setTaxNameOptions(mappedTaxTypes);
         } else {
-          const taxNames = await listOfValuesAPI.getListValuesGroup(
+          const taxNameValues = await listOfValuesAPI.getListValuesGroup(
             TAX_NAME_LIST_CODE,
             form.branch,
             orgId,
           );
-          setTaxNameOptions(taxNames);
+          setTaxNameOptions(
+            taxNameValues.map((v) => ({
+              value: v.id,
+              label: v.valueDescription,
+            })),
+          );
         }
       } catch (error) {
         console.error("Tax list loading error", error);
         setTaxTypeOptions([]);
         setTaxNameOptions([]);
-      } finally {
-        setLookupsLoading(false);
       }
     };
 
-    if (orgId && form.branch) fetchLookups();
+    const run = async () => {
+      setLookupsLoading(true);
+      await Promise.all([fetchModules(), fetchTaxLists()]);
+      setLookupsLoading(false);
+    };
+
+    if (orgId && form.branch) run();
   }, [orgId, form.branch]);
 
   /* ---------------- populate form from a full tax definition record ---------------- */

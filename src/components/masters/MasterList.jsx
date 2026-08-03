@@ -107,12 +107,6 @@ const SECTIONS = [
         screenCode: "FINYEAR",
       },
       {
-        name: "Calendar Master",
-        icon: CalendarDays,
-        path: "/calendar",
-        screenCode: "CALENDAR",
-      },
-      {
         name: "Holiday Master",
         icon: CalendarDays,
         path: "/holiday",
