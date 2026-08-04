@@ -1,14 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
-import scrapMaterialReturnAPI from "../../../api/scrapMaterialReturnAPI";
+import jobOrderAmendmentAPI from "../../../api/jobOrderAmendmentAPI";
 import { toast } from "../../../utils/toast";
 
-const ScrapMaterialReturnList = ({
-  onAddNew,
-  onEdit,
-  refreshTrigger,
-  onBack,
-}) => {
+const JobOrderAmendmentList = ({ onAddNew, onEdit, refreshTrigger, onBack }) => {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -18,17 +13,16 @@ const ScrapMaterialReturnList = ({
   const loadRecords = useCallback(async () => {
     try {
       setLoading(true);
-      const data =
-        await scrapMaterialReturnAPI.getScrapMaterialReturnByOrgId(
-          ORG_ID,
-          BRANCH_ID,
-        );
+      const data = await jobOrderAmendmentAPI.getJobOrderAmendmentByOrgId(
+        ORG_ID,
+        BRANCH_ID,
+      );
       data.sort((a, b) => (b.id || 0) - (a.id || 0));
       setRecords(data);
     } catch (error) {
-      console.error("Failed to load scrap/material return records:", error);
+      console.error("Failed to load job order amendments:", error);
       setRecords([]);
-      toast.error("Failed to fetch Scrap/Material Return records");
+      toast.error("Failed to fetch Job Order Amendments");
     } finally {
       setLoading(false);
     }
@@ -40,57 +34,45 @@ const ScrapMaterialReturnList = ({
 
   const columns = [
     {
-      key: "docNo",
-      label: "Doc No",
-      accessor: "docNo",
-      type: "text",
-    },
-    {
       key: "docId",
       label: "Doc Id",
       accessor: "docId",
       type: "text",
     },
     {
-      key: "date",
-      label: "Date",
-      accessor: "date",
+      key: "docDate",
+      label: "Doc Date",
+      accessor: "docDate",
       type: "text",
     },
     {
-      key: "entryFor",
-      label: "Entry For",
-      accessor: "entryFor",
+      key: "partyId",
+      label: "Party Id",
+      accessor: "partyId",
       type: "text",
     },
     {
-      key: "entryType",
-      label: "Entry Type",
-      accessor: "entryType",
+      key: "partyName",
+      label: "Party Name",
+      accessor: "partyName",
       type: "text",
     },
     {
-      key: "plantId",
-      label: "Plant",
-      accessor: "plantId",
+      key: "jobOrderNo",
+      label: "Job Order No",
+      accessor: "jobOrderNo",
       type: "text",
     },
     {
-      key: "vendorId",
-      label: "Vendor Id",
-      accessor: "vendorId",
+      key: "jobOrderDate",
+      label: "Job Order Date",
+      accessor: "jobOrderDate",
       type: "text",
     },
     {
-      key: "vendorName",
-      label: "Vendor Name",
-      accessor: "vendorName",
-      type: "text",
-    },
-    {
-      key: "toLocation",
-      label: "To Location",
-      accessor: "toLocation",
+      key: "revisionNo",
+      label: "Revision No",
+      accessor: "revisionNo",
       type: "text",
     },
     {
@@ -121,14 +103,13 @@ const ScrapMaterialReturnList = ({
   ];
 
   const searchFields = [
-    "docNo",
     "docId",
-    "entryFor",
-    "entryType",
-    "plantId",
-    "vendorId",
-    "vendorName",
-    "toLocation",
+    "docDate",
+    "partyId",
+    "partyName",
+    "jobOrderNo",
+    "jobOrderDate",
+    "revisionNo",
   ];
 
   const filterOptions = [
@@ -155,7 +136,7 @@ const ScrapMaterialReturnList = ({
 
   return (
     <CommonListViewTable
-      title="Scrap/Material Return/Rejection"
+      title="Job Order Amendment"
       data={records}
       loading={loading}
       columns={columns}
@@ -169,14 +150,14 @@ const ScrapMaterialReturnList = ({
       showSerialNumber={true}
       itemsPerPageOptions={[5, 10, 20, 50, 100]}
       defaultItemsPerPage={10}
-      emptyMessage="No Scrap/Material Return records found"
-      loadingMessage="Loading Scrap/Material Return records..."
+      emptyMessage="No Job Order Amendments found"
+      loadingMessage="Loading Job Order Amendments..."
       enableRefresh={true}
       onRefresh={loadRecords}
       enableExport={true}
-      exportFileName="ScrapMaterialReturns"
+      exportFileName="JobOrderAmendments"
     />
   );
 };
 
-export default ScrapMaterialReturnList;
+export default JobOrderAmendmentList;

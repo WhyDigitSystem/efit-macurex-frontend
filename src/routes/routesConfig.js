@@ -49,6 +49,7 @@ import SubContractList from "../components/subContract/SubContractList";
 import ScrapMaterialReturnMaster from "../components/subContract/scrapMaterialReturn/ScrapMaterialReturnMaster";
 import SupplierRateContractMaster from "../components/subContract/supplierRateContract/SupplierRateContractMaster";
 import JobOrderMaster from "../components/subContract/jobOrder/JobOrderMaster";
+import JobOrderAmendmentMaster from "../components/subContract/jobOrderAmendment/JobOrderAmendmentMaster";
 import PpcList from "../components/PPC/PpcList";
 import TdcList from "../components/TDC/TdcList";
 import ProductionList from "../components/Production/ProductionList";
@@ -125,6 +126,11 @@ export const routesConfig = [
     path: "/joborder",
     label: "Job Order",
     element: <JobOrderMaster />,
+  },
+  {
+    path: "/joborderamendment",
+    label: "Job Order Amendment",
+    element: <JobOrderAmendmentMaster />,
   },
   { path: "/ppc", label: "PPC", element: <PpcList /> },
   { path: "/TDC", label: "TDC", element: <TdcList /> },
