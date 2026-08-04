@@ -56,6 +56,7 @@ import SubContractSupplyScheduleMaster from "../components/subContract/subContra
 import SupplierRateContractAmendmentMaster from "../components/subContract/supplierRateContractAmendment/SupplierRateContractAmendmentMaster";
 import SubContractReconciliationMaster from "../components/subContract/subContractReconciliation/SubContractReconciliationMaster";
 import JobOrderShortCloseMaster from "../components/subContract/jobOrderShortClose/JobOrderShortCloseMaster";
+import AdvEntryMaster from "../components/subContract/advEntry/AdvEntryMaster";
 import PpcList from "../components/PPC/PpcList";
 import TdcList from "../components/TDC/TdcList";
 import ProductionList from "../components/Production/ProductionList";
@@ -167,6 +168,11 @@ export const routesConfig = [
     path: "/jobordershortclose",
     label: "Job Order Short Close",
     element: <JobOrderShortCloseMaster />,
+  },
+  {
+    path: "/advforstores",
+    label: "ADV For Stores",
+    element: <AdvEntryMaster />,
   },
   { path: "/ppc", label: "PPC", element: <PpcList /> },
   { path: "/TDC", label: "TDC", element: <TdcList /> },
