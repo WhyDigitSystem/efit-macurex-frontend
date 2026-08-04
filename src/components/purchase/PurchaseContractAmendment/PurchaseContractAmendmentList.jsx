@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import purchaseContractAmendmentAPI from "../../../api/Purchase/purchaseContractAmendmentAPI";
 
-const PurchaseContractAmendmentList = ({ onAdd, onEdit }) => {
+const PurchaseContractAmendmentList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -24,7 +24,7 @@ const PurchaseContractAmendmentList = ({ onAdd, onEdit }) => {
 
   useEffect(() => {
     loadData();
-  }, [loadData]);
+  }, [loadData, refreshTrigger]);
 
   const columns = [
     { key: "sno", label: "#", type: "text" },
@@ -61,8 +61,9 @@ const PurchaseContractAmendmentList = ({ onAdd, onEdit }) => {
       loading={loading}
       columns={columns}
       searchFields={searchFields}
-      onAddNew={onAdd}
+      onAddNew={onAddNew}
       onEdit={onEdit}
+      onBack={onBack}
       emptyMessage="No PC amendments found"
     />
   );

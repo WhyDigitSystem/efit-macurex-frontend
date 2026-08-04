@@ -1,14 +1,15 @@
 import { useCallback, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import PurchaseContractList from "./PurchaseContractList";
 import PurchaseContractForm from "./PurchaseContractForm";
 import { purchaseContractAPI } from "../../../api/Purchase/purchaseContractAPI";
 import { toast } from "../../../utils/toast";
 
 const PurchaseContractMaster = () => {
+  const navigate = useNavigate();
   const [view, setView] = useState("list"); // "list" | "form"
   const [editData, setEditData] = useState(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const [loadingEdit, setLoadingEdit] = useState(false);
 
   const ORG_ID = localStorage.getItem("orgId");
 
@@ -21,7 +22,6 @@ const PurchaseContractMaster = () => {
   const handleEdit = useCallback(
     async (row) => {
       try {
-        setLoadingEdit(true);
         const contracts = await purchaseContractAPI.getContractByOrgId(ORG_ID);
         const fresh = contracts.find((c) => c.id === row.id) || row;
         setEditData(fresh);
@@ -29,8 +29,6 @@ const PurchaseContractMaster = () => {
       } catch (error) {
         console.error("Failed to fetch purchase contract for edit:", error);
         toast.error("Failed to load Purchase Contract details");
-      } finally {
-        setLoadingEdit(false);
       }
     },
     [ORG_ID],
@@ -43,6 +41,12 @@ const PurchaseContractMaster = () => {
     setRefreshTrigger((prev) => prev + 1);
   };
 
+  // List screen back button -> return to the Purchase module home.
+  // (Form's back button goes back to the list via handleBack.)
+  const handleNavigateHome = () => {
+    navigate("/purchase");
+  };
+
   if (view === "form") {
     return <PurchaseContractForm data={editData} onBack={handleBack} />;
   }
@@ -51,7 +55,7 @@ const PurchaseContractMaster = () => {
     <PurchaseContractList
       onAddNew={handleAddNew}
       onEdit={handleEdit}
-      onBack={handleBack}
+      onBack={handleNavigateHome}
       refreshTrigger={refreshTrigger}
     />
   );

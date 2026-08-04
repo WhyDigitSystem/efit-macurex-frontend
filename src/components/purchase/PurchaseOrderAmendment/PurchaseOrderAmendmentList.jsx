@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import purchaseOrderAmendmentAPI from "../../../api/Purchase/purchaseOrderAmendmentAPI";
 
-const PurchaseOrderAmendmentList = ({ onAdd, onEdit }) => {
+const PurchaseOrderAmendmentList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -24,7 +24,7 @@ const PurchaseOrderAmendmentList = ({ onAdd, onEdit }) => {
 
   useEffect(() => {
     loadData();
-  }, [loadData]);
+  }, [loadData, refreshTrigger]);
 
   const columns = [
     { key: "sno", label: "#", type: "text" },
@@ -61,8 +61,9 @@ const PurchaseOrderAmendmentList = ({ onAdd, onEdit }) => {
       loading={loading}
       columns={columns}
       searchFields={searchFields}
-      onAddNew={onAdd}
+      onAddNew={onAddNew}
       onEdit={onEdit}
+      onBack={onBack}
       emptyMessage="No PO amendments found"
     />
   );

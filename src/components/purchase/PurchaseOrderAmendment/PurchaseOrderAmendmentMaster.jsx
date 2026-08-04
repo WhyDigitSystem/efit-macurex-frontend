@@ -1,31 +1,65 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import PurchaseOrderAmendmentForm from "./PurchaseOrderAmendmentForm";
 import PurchaseOrderAmendmentList from "./PurchaseOrderAmendmentList";
+import purchaseOrderAmendmentAPI from "../../../api/Purchase/purchaseOrderAmendmentAPI";
+import { toast } from "../../../utils/toast";
 
 const PurchaseOrderAmendmentMaster = () => {
-  const [screen, setScreen] = useState("list");
+  const navigate = useNavigate();
+  const [view, setView] = useState("list"); // "list" | "form"
   const [editData, setEditData] = useState(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  const handleAdd = () => {
+  const ORG_ID = localStorage.getItem("orgId");
+  const BRANCH_ID = localStorage.getItem("branchId");
+
+  const handleAddNew = () => {
     setEditData(null);
-    setScreen("form");
+    setView("form");
   };
 
-  const handleEdit = (row) => {
-    setEditData(row);
-    setScreen("form");
-  };
+  // Pencil icon click -> fetch fresh data by orgId, find the matching record, open form
+  const handleEdit = useCallback(
+    async (row) => {
+      try {
+        const records = await purchaseOrderAmendmentAPI.getAll(ORG_ID, BRANCH_ID);
+        const fresh = records.find((r) => r.id === row.id) || row;
+        setEditData(fresh);
+        setView("form");
+      } catch (error) {
+        console.error("Failed to fetch PO amendment for edit:", error);
+        toast.error("Failed to load PO amendment details");
+      }
+    },
+    [ORG_ID, BRANCH_ID],
+  );
 
   const handleBack = () => {
     setEditData(null);
-    setScreen("list");
+    setView("list");
+    // bump refreshTrigger so the list re-fetches after add/update
+    setRefreshTrigger((prev) => prev + 1);
   };
 
-  if (screen === "form") {
+  // List screen back button -> return to the Purchase module home.
+  // (Form's back button goes back to the list via handleBack.)
+  const handleNavigateHome = () => {
+    navigate("/purchase");
+  };
+
+  if (view === "form") {
     return <PurchaseOrderAmendmentForm data={editData} onBack={handleBack} />;
   }
 
-  return <PurchaseOrderAmendmentList onAdd={handleAdd} onEdit={handleEdit} />;
+  return (
+    <PurchaseOrderAmendmentList
+      onAddNew={handleAddNew}
+      onEdit={handleEdit}
+      onBack={handleNavigateHome}
+      refreshTrigger={refreshTrigger}
+    />
+  );
 };
 
 export default PurchaseOrderAmendmentMaster;
