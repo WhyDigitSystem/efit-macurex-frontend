@@ -55,6 +55,7 @@ import ScBillMaster from "../components/subContract/scBill/ScBillMaster";
 import SubContractSupplyScheduleMaster from "../components/subContract/subContractSupplySchedule/SubContractSupplyScheduleMaster";
 import SupplierRateContractAmendmentMaster from "../components/subContract/supplierRateContractAmendment/SupplierRateContractAmendmentMaster";
 import SubContractReconciliationMaster from "../components/subContract/subContractReconciliation/SubContractReconciliationMaster";
+import JobOrderShortCloseMaster from "../components/subContract/jobOrderShortClose/JobOrderShortCloseMaster";
 import PpcList from "../components/PPC/PpcList";
 import TdcList from "../components/TDC/TdcList";
 import ProductionList from "../components/Production/ProductionList";
@@ -161,6 +162,11 @@ export const routesConfig = [
     path: "/subcontractreconciliation",
     label: "Sub Contract Re-Conciliation",
     element: <SubContractReconciliationMaster />,
+  },
+  {
+    path: "/jobordershortclose",
+    label: "Job Order Short Close",
+    element: <JobOrderShortCloseMaster />,
   },
   { path: "/ppc", label: "PPC", element: <PpcList /> },
   { path: "/TDC", label: "TDC", element: <TdcList /> },
