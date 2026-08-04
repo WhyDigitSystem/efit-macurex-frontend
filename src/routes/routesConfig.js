@@ -53,6 +53,7 @@ import JobOrderAmendmentMaster from "../components/subContract/jobOrderAmendment
 import SubContractingDcMaster from "../components/subContract/subContractingDc/SubContractingDcMaster";
 import ScBillMaster from "../components/subContract/scBill/ScBillMaster";
 import SubContractSupplyScheduleMaster from "../components/subContract/subContractSupplySchedule/SubContractSupplyScheduleMaster";
+import SupplierRateContractAmendmentMaster from "../components/subContract/supplierRateContractAmendment/SupplierRateContractAmendmentMaster";
 import PpcList from "../components/PPC/PpcList";
 import TdcList from "../components/TDC/TdcList";
 import ProductionList from "../components/Production/ProductionList";
@@ -149,6 +150,11 @@ export const routesConfig = [
     path: "/subcontractsupplyschedule",
     label: "Sub Contract Supply Schedule",
     element: <SubContractSupplyScheduleMaster />,
+  },
+  {
+    path: "/supplierratecontractamendment",
+    label: "Supplier Rate Contract Amendment",
+    element: <SupplierRateContractAmendmentMaster />,
   },
   { path: "/ppc", label: "PPC", element: <PpcList /> },
   { path: "/TDC", label: "TDC", element: <TdcList /> },
