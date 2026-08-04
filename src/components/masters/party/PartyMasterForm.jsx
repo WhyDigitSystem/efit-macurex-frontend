@@ -518,9 +518,9 @@ const PartyMasterForm = ({ data, onBack }) => {
         cstNo: apiData.cstNo || "",
         eccNo: apiData.eccNo || "",
         eccType: apiData.eccType || "",
-        pan: "",
-        esiNo: "",
-        tinNo: "",
+        pan: apiData.panNo || "",
+        esiNo: apiData.esiNo || "",
+        tinNo: apiData.tinNo || "",
         kstNo: apiData.kstNo || "",
         phone: apiData.phone || "",
         contactPerson: apiData.contactPerson || "",
@@ -569,9 +569,9 @@ const PartyMasterForm = ({ data, onBack }) => {
         : [emptyContactRow()],
       items: apiData.customerItemDetails?.length > 0
         ? apiData.customerItemDetails.map(item => ({
-          itemCode: item.id ? String(item.id) : "",
-          itemDescription: "",
-          unit: "",
+          itemCode: item.item?.id ? String(item.item.id) : "",
+          itemDescription: item.item?.itemDescription || "",
+          unit: item.item?.unit?.unitId || "",
         }))
         : [emptyItemRow()],
       // Address Book - mapping shipping address types
@@ -919,6 +919,9 @@ const PartyMasterForm = ({ data, onBack }) => {
       // ECC Details
       eccNo: general.eccNo || "",
       eccType: general.eccType || "",
+      panNo: general.pan || "",
+      esiNo: general.esiNo || "",
+      tinNo: general.tinNo || "",
       effectiveFrom: general.effFrom || "",
       email: general.email || "",
       excisable: general.excisable === "YES",
@@ -1543,8 +1546,8 @@ const PartyMasterForm = ({ data, onBack }) => {
 
                 <Field
                   label="Mobile"
-                  name="mobile"
-                  value={general.mobile}
+                  name="phone"
+                  value={general.phone}
                   onChange={handleGeneralChange}
                 />
 
