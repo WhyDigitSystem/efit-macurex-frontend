@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import otherSalesInvoiceAPI from "../../../api/Sales/otherSalesInvoiceAPI";
 import { toast } from "../../../utils/toast";
-
+ 
 const normalizeActive = (value) => {
   if (value === true || value === "Yes" || value === "Active") return true;
   return false;

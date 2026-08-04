@@ -4,7 +4,7 @@ import { useForm, Controller, useFieldArray } from "react-hook-form";
 import dayjs from "dayjs";
 import otherSalesInvoiceAPI from "../../../api/Sales/otherSalesInvoiceAPI";
 import { useToast } from "../../Toast/ToastContext";
-
+ 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
   "bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 " +

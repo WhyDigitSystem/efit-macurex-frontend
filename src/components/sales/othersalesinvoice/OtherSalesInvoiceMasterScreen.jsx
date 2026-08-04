@@ -1,7 +1,7 @@
 import { useState } from "react";
 import OtherSalesInvoiceList from "./OtherSalesInvoiceList";
 import OtherSalesInvoiceForm from "./OtherSalesInvoiceForm";
-
+ 
 const OtherSalesInvoiceMasterScreen = () => {
   const [screen, setScreen] = useState("list");
   const [editData, setEditData] = useState(null);
