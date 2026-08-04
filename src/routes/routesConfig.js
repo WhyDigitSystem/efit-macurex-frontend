@@ -57,6 +57,7 @@ import SupplierRateContractAmendmentMaster from "../components/subContract/suppl
 import SubContractReconciliationMaster from "../components/subContract/subContractReconciliation/SubContractReconciliationMaster";
 import JobOrderShortCloseMaster from "../components/subContract/jobOrderShortClose/JobOrderShortCloseMaster";
 import AdvEntryMaster from "../components/subContract/advEntry/AdvEntryMaster";
+import DcForCapitalItemsMaster from "../components/subContract/dcForCapitalItems/DcForCapitalItemsMaster";
 import PpcList from "../components/PPC/PpcList";
 import TdcList from "../components/TDC/TdcList";
 import ProductionList from "../components/Production/ProductionList";
@@ -173,6 +174,11 @@ export const routesConfig = [
     path: "/advforstores",
     label: "ADV For Stores",
     element: <AdvEntryMaster />,
+  },
+  {
+    path: "/dcforcapitalitems",
+    label: "DC For Capital Items",
+    element: <DcForCapitalItemsMaster />,
   },
   { path: "/ppc", label: "PPC", element: <PpcList /> },
   { path: "/TDC", label: "TDC", element: <TdcList /> },
