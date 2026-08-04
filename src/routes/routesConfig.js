@@ -50,6 +50,7 @@ import ScrapMaterialReturnMaster from "../components/subContract/scrapMaterialRe
 import SupplierRateContractMaster from "../components/subContract/supplierRateContract/SupplierRateContractMaster";
 import JobOrderMaster from "../components/subContract/jobOrder/JobOrderMaster";
 import JobOrderAmendmentMaster from "../components/subContract/jobOrderAmendment/JobOrderAmendmentMaster";
+import SubContractingDcMaster from "../components/subContract/subContractingDc/SubContractingDcMaster";
 import PpcList from "../components/PPC/PpcList";
 import TdcList from "../components/TDC/TdcList";
 import ProductionList from "../components/Production/ProductionList";
@@ -76,7 +77,7 @@ import TransportBillMaster from '../components/sales/transportBill/TransportBill
 import DocketInvoiceDetailsMaster from '../components/sales/docketInvoiceDetails/DocketInvoiceDetailsMaster'
 import ServiceAccounting from "../components/masters/servicesAccounting/ServiceAccounting";
 import salesRoutes from "./salesRoutes";
-import OtherSalesInvoicesMaster from "../components/sales/othersalesinvoice/OtherSalesInvoicesMaster";
+import OtherSalesInvoicesMaster from "../components/sales/otherSalesInvoice/OtherSalesInvoicesMaster";
 export const routesConfig = [
   { path: "/", label: "Dashboard", element: <Dashboard /> },
 
@@ -131,6 +132,11 @@ export const routesConfig = [
     path: "/joborderamendment",
     label: "Job Order Amendment",
     element: <JobOrderAmendmentMaster />,
+  },
+  {
+    path: "/dcforsubcontracting",
+    label: "D.C For Sub Contracting (JO)",
+    element: <SubContractingDcMaster />,
   },
   { path: "/ppc", label: "PPC", element: <PpcList /> },
   { path: "/TDC", label: "TDC", element: <TdcList /> },
