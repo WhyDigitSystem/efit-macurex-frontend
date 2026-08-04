@@ -76,7 +76,7 @@ import TransportBillMaster from '../components/sales/transportBill/TransportBill
 import DocketInvoiceDetailsMaster from '../components/sales/docketInvoiceDetails/DocketInvoiceDetailsMaster'
 import ServiceAccounting from "../components/masters/servicesAccounting/ServiceAccounting";
 import salesRoutes from "./salesRoutes";
-import OtherSalesInvoicesMaster from "../components/sales/otherSalesInvoice/OtherSalesInvoicesMaster";
+import OtherSalesInvoicesMaster from "../components/sales/othersalesinvoice/OtherSalesInvoicesMaster";
 export const routesConfig = [
   { path: "/", label: "Dashboard", element: <Dashboard /> },
 
