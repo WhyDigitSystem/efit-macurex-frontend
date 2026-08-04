@@ -84,3 +84,5 @@ const numberToWords = (num) => {
 
   return str + " Only";
 };
+
+export { numberToWords, formatCurrency };
