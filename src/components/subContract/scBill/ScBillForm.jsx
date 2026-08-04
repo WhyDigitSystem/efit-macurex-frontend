@@ -113,7 +113,7 @@ const Field = ({
           onChange={onChange}
           rows={1}
           className={
-            "w-full h-[30px] px-2 py-[9px] rounded border text-xs leading-none transition-colors overflow-y-auto resize-none " +
+            "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors resize-none pt-1 scrollbar-hide " +
             "bg-white dark:bg-gray-900 " +
             `${error ? controlErrClasses : "border-gray-300 dark:border-gray-600"} ` +
             "text-gray-900 dark:text-gray-100 " +

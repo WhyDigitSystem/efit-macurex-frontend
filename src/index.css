@@ -21,6 +21,15 @@ code {
   }
 }
 
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
 .dark input[type="date"]::-webkit-calendar-picker-indicator,
 .dark input[type="datetime-local"]::-webkit-calendar-picker-indicator,
 .dark input[type="time"]::-webkit-calendar-picker-indicator {

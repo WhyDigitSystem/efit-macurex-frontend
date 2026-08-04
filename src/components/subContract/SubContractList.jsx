@@ -89,12 +89,6 @@ const SECTIONS = [
         screenCode: "JOB_ORDER_SHORT_CLOSE",
       },
       {
-        name: "Pending Approval for Sub Contract or Job Order",
-        icon: Clock3,
-        path: "/pendingapprovalsubcontract",
-        screenCode: "PENDING_APPROVAL_SUB_CONTRACT",
-      },
-      {
         name: "DC For Capital Items",
         icon: PackageCheck,
         path: "/dcforcapitalitems",
