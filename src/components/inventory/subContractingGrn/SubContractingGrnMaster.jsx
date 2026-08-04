@@ -1,14 +1,15 @@
 import { useCallback, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import SubContractingGrnList from "./SubContractingGrnList";
 import SubContractingGrnForm from "./SubContractingGrnForm";
 import { subContractingGrnAPI } from "../../../api/Inventory/subContractingGrnAPI";
 import { toast } from "../../../utils/toast";
 
 const SubContractingGrnMaster = () => {
+  const navigate = useNavigate();
   const [view, setView] = useState("list"); // "list" | "form"
   const [editData, setEditData] = useState(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const [loadingEdit, setLoadingEdit] = useState(false);
 
   const ORG_ID = localStorage.getItem("orgId");
 
@@ -21,7 +22,6 @@ const SubContractingGrnMaster = () => {
   const handleEdit = useCallback(
     async (row) => {
       try {
-        setLoadingEdit(true);
         const grns = await subContractingGrnAPI.getGrnByOrgId(ORG_ID);
         const fresh = grns.find((g) => g.id === row.id) || row;
         setEditData(fresh);
@@ -29,8 +29,6 @@ const SubContractingGrnMaster = () => {
       } catch (error) {
         console.error("Failed to fetch sub contracting GRN for edit:", error);
         toast.error("Failed to load Sub Contracting GRN details");
-      } finally {
-        setLoadingEdit(false);
       }
     },
     [ORG_ID],
@@ -43,6 +41,12 @@ const SubContractingGrnMaster = () => {
     setRefreshTrigger((prev) => prev + 1);
   };
 
+  // List screen back button -> return to the Inventory module home.
+  // (Form's back button goes back to the list via handleBack.)
+  const handleNavigateHome = () => {
+    navigate("/inventory");
+  };
+
   if (view === "form") {
     return <SubContractingGrnForm data={editData} onBack={handleBack} />;
   }
@@ -51,7 +55,7 @@ const SubContractingGrnMaster = () => {
     <SubContractingGrnList
       onAddNew={handleAddNew}
       onEdit={handleEdit}
-      onBack={handleBack}
+      onBack={handleNavigateHome}
       refreshTrigger={refreshTrigger}
     />
   );

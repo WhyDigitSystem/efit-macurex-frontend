@@ -1,30 +1,23 @@
 import { useMemo, useState } from "react";
-import {
-  Search,
-  X,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-} from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Search, X, ArrowLeft } from "lucide-react";
 import { qtyShortageReportAPI } from "../../../api/Inventory/qtyShortageReportAPI";
 import { toast } from "../../../utils/toast";
 
 /* ---------------------------------------------------------------------------- */
-/* Shared design tokens (matches other master forms in this app)               */
+/* Shared design tokens (matches subContract module forms / CommonListViewTable) */
 
 const controlClasses =
-  "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
-  "bg-white dark:bg-gray-900 " +
-  "border-gray-300 dark:border-gray-600 " +
-  "text-gray-900 dark:text-gray-100 " +
-  "placeholder-gray-400 dark:placeholder-gray-500 " +
-  "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
-  "dark:focus:ring-blue-400 dark:focus:border-blue-400";
+  "w-full py-1.5 px-3 text-sm border border-gray-300 dark:border-gray-600 " +
+  "rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white " +
+  "placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 " +
+  "focus:border-transparent";
 
 const labelClasses =
   "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
-const ITEMS_PER_PAGE = 10;
+const ITEMS_PER_PAGE_OPTIONS = [10, 20, 50, 100];
+const DEFAULT_ITEMS_PER_PAGE = 10;
 
 /* ---------------------------------------------------------------------------- */
 /* Columns shown in the results table                                          */
@@ -48,7 +41,11 @@ const emptyFilters = () => ({
   partyName: "",
 });
 
+const formatNumber = (value) =>
+  Number(value) || value === 0 ? Number(value).toLocaleString() : "--";
+
 const QtyShortageReport = () => {
+  const navigate = useNavigate();
   const ORG_ID = localStorage.getItem("orgId");
 
   const [filters, setFilters] = useState(emptyFilters());
@@ -57,9 +54,8 @@ const QtyShortageReport = () => {
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
 
-  const [sortKey, setSortKey] = useState(null);
-  const [sortDir, setSortDir] = useState("asc"); // "asc" | "desc"
   const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(DEFAULT_ITEMS_PER_PAGE);
 
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
@@ -102,46 +98,19 @@ const QtyShortageReport = () => {
     setAppliedFilters(null);
     setRows([]);
     setHasSearched(false);
-    setSortKey(null);
-    setSortDir("asc");
     setCurrentPage(1);
   };
 
-  const handleSort = (key) => {
-    if (sortKey === key) {
-      setSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
-    } else {
-      setSortKey(key);
-      setSortDir("asc");
-    }
-  };
+  const totalRows = rows.length;
+  const totalPages = Math.max(1, Math.ceil(totalRows / itemsPerPage));
+  const pageStart = totalRows === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
+  const pageEnd = Math.min(currentPage * itemsPerPage, totalRows);
+  const pageRows = rows.slice(pageStart - 1, pageEnd);
 
-  const sortedRows = useMemo(() => {
-    if (!sortKey) return rows;
-
-    const col = COLUMNS.find((c) => c.key === sortKey);
-
-    return [...rows].sort((a, b) => {
-      const aVal = a[sortKey];
-      const bVal = b[sortKey];
-
-      let cmp;
-      if (col?.numeric) {
-        cmp = (Number(aVal) || 0) - (Number(bVal) || 0);
-      } else {
-        cmp = String(aVal ?? "").localeCompare(String(bVal ?? ""));
-      }
-
-      return sortDir === "asc" ? cmp : -cmp;
-    });
-  }, [rows, sortKey, sortDir]);
-
-  const totalRows = sortedRows.length;
-  const totalPages = Math.max(1, Math.ceil(totalRows / ITEMS_PER_PAGE));
-  const pageStart =
-    totalRows === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1;
-  const pageEnd = Math.min(currentPage * ITEMS_PER_PAGE, totalRows);
-  const pageRows = sortedRows.slice(pageStart - 1, pageEnd);
+  const totalShortage = useMemo(
+    () => rows.reduce((sum, row) => sum + (Number(row.shortageQty) || 0), 0),
+    [rows],
+  );
 
   const appliedChips = appliedFilters
     ? [
@@ -158,142 +127,144 @@ const QtyShortageReport = () => {
     : [];
 
   return (
-    <div className="p-2 max-w-6xl">
-      <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-3">
-        Report For Qty Shortage
-      </h2>
-
-      {/* ---------------- Filter bar ---------------- */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 mb-4">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-x-3 gap-y-2 items-end">
-          <div>
-            <label className={labelClasses}>From Date</label>
-            <input
-              type="date"
-              name="fromDate"
-              value={filters.fromDate}
-              onChange={handleFilterChange}
-              className={controlClasses}
-            />
-          </div>
+    <div className="p-3">
+      {/* ---------------- Header ---------------- */}
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate("/inventory")}
+            className="flex items-center justify-center h-8 w-8 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition flex-shrink-0"
+            title="Back"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </button>
 
           <div>
-            <label className={labelClasses}>To Date</label>
-            <input
-              type="date"
-              name="toDate"
-              value={filters.toDate}
-              onChange={handleFilterChange}
-              className={controlClasses}
-            />
-          </div>
-
-          <div>
-            <label className={labelClasses}>Party Name</label>
-            <input
-              type="text"
-              name="partyName"
-              value={filters.partyName}
-              onChange={handleFilterChange}
-              placeholder="Search party..."
-              className={controlClasses}
-            />
-          </div>
-
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={handleSearch}
-              disabled={loading}
-              className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-            >
-              <Search className="h-3 w-3" />
-              {loading ? "Searching..." : "Search"}
-            </button>
-
-            <button
-              type="button"
-              onClick={handleClear}
-              disabled={loading}
-              className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-            >
-              <X className="h-3 w-3" />
-              Clear
-            </button>
+            <h1 className="text-xl font-bold tracking-tight text-gray-700 dark:text-gray-200">
+              Report For Qty Shortage
+            </h1>
+            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+              Filter by date range and party to view quantity shortages
+            </p>
           </div>
         </div>
+      </div>
 
-        {/* Applied params chips */}
-        {appliedChips.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5 mt-3 pt-2 border-t border-gray-100 dark:border-gray-700">
-            <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">
-              Params:
-            </span>
-            {appliedChips.map((chip) => (
-              <span
-                key={chip.label}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+      {/* ---------------- Filter bar ---------------- */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700 overflow-hidden mb-4">
+        <div className="p-3 border-b border-gray-200 dark:border-gray-700">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-x-3 gap-y-2 items-end">
+            <div>
+              <label className={labelClasses}>From Date</label>
+              <input
+                type="date"
+                name="fromDate"
+                value={filters.fromDate}
+                onChange={handleFilterChange}
+                className={controlClasses}
+              />
+            </div>
+
+            <div>
+              <label className={labelClasses}>To Date</label>
+              <input
+                type="date"
+                name="toDate"
+                value={filters.toDate}
+                onChange={handleFilterChange}
+                className={controlClasses}
+              />
+            </div>
+
+            <div>
+              <label className={labelClasses}>Party Name</label>
+              <input
+                type="text"
+                name="partyName"
+                value={filters.partyName}
+                onChange={handleFilterChange}
+                placeholder="Search party..."
+                className={controlClasses}
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleSearch}
+                disabled={loading}
+                className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
               >
-                {chip.label}: {chip.value}
-              </span>
-            ))}
-            <button
-              type="button"
-              onClick={handleClear}
-              className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline ml-1"
-            >
-              clear
-            </button>
+                <Search className="h-3 w-3" />
+                {loading ? "Searching..." : "Search"}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleClear}
+                disabled={loading}
+                className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+              >
+                <X className="h-3 w-3" />
+                Clear
+              </button>
+            </div>
           </div>
-        )}
+
+          {/* Applied params chips */}
+          {appliedChips.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 mt-3 pt-2 border-t border-gray-100 dark:border-gray-700">
+              <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">
+                Params:
+              </span>
+              {appliedChips.map((chip) => (
+                <span
+                  key={chip.label}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+                >
+                  {chip.label}: {chip.value}
+                </span>
+              ))}
+              <button
+                type="button"
+                onClick={handleClear}
+                className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline ml-1"
+              >
+                clear
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ---------------- Results ---------------- */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-            Report For Qty Shortage
-          </h3>
-          <span className="text-[11px] text-gray-500 dark:text-gray-400">
-            Rows: {pageStart}-{pageEnd} of {totalRows}
-          </span>
-        </div>
-
-        <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
-          <table className="w-full text-xs">
-            <thead className="bg-gray-100 dark:bg-gray-700">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <thead className="bg-gray-50 dark:bg-gray-900">
               <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                  S.No
+                </th>
                 {COLUMNS.map((col) => (
                   <th
                     key={col.key}
-                    onClick={() => handleSort(col.key)}
-                    className="p-1.5 text-left font-medium text-gray-600 dark:text-gray-200 whitespace-nowrap cursor-pointer select-none hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                    className={`px-6 py-3 text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400 ${
+                      col.numeric ? "text-right" : "text-left"
+                    }`}
                   >
-                    <span className="inline-flex items-center gap-0.5">
-                      {col.label}
-                      <ChevronDown
-                        className={`h-3 w-3 transition-transform ${
-                          sortKey === col.key
-                            ? "text-blue-600 dark:text-blue-400"
-                            : "text-gray-400"
-                        } ${
-                          sortKey === col.key && sortDir === "desc"
-                            ? "rotate-180"
-                            : ""
-                        }`}
-                      />
-                    </span>
+                    {col.label}
                   </th>
                 ))}
               </tr>
             </thead>
 
-            <tbody>
+            <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
               {loading && (
                 <tr>
                   <td
-                    colSpan={COLUMNS.length}
-                    className="p-4 text-center text-gray-400"
+                    colSpan={COLUMNS.length + 1}
+                    className="px-6 py-8 text-center text-gray-500 dark:text-gray-400"
                   >
                     Loading report...
                   </td>
@@ -303,8 +274,8 @@ const QtyShortageReport = () => {
               {!loading && !hasSearched && (
                 <tr>
                   <td
-                    colSpan={COLUMNS.length}
-                    className="p-4 text-center text-gray-400"
+                    colSpan={COLUMNS.length + 1}
+                    className="px-6 py-8 text-center text-gray-500 dark:text-gray-400"
                   >
                     Set your filters and click Search to view the report.
                   </td>
@@ -314,8 +285,8 @@ const QtyShortageReport = () => {
               {!loading && hasSearched && pageRows.length === 0 && (
                 <tr>
                   <td
-                    colSpan={COLUMNS.length}
-                    className="p-4 text-center text-gray-400"
+                    colSpan={COLUMNS.length + 1}
+                    className="px-6 py-8 text-center text-gray-500 dark:text-gray-400"
                   >
                     No shortage records found for the selected filters.
                   </td>
@@ -326,14 +297,21 @@ const QtyShortageReport = () => {
                 pageRows.map((row, idx) => (
                   <tr
                     key={row.id ?? idx}
-                    className="border-t border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"
+                    className="transition-colors hover:bg-gray-50 dark:hover:bg-gray-700"
                   >
+                    <td className="px-6 py-1.5 whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">
+                      {pageStart + idx}
+                    </td>
                     {COLUMNS.map((col) => (
                       <td
                         key={col.key}
-                        className="p-1.5 text-gray-700 dark:text-gray-200 whitespace-nowrap"
+                        className={`px-6 py-1.5 text-xs text-gray-900 dark:text-white whitespace-nowrap ${
+                          col.numeric ? "text-right tabular-nums" : "text-left"
+                        }`}
                       >
-                        {row[col.key] ?? "--"}
+                        {col.numeric
+                          ? formatNumber(row[col.key])
+                          : (row[col.key] ?? "--")}
                       </td>
                     ))}
                   </tr>
@@ -342,28 +320,137 @@ const QtyShortageReport = () => {
           </table>
         </div>
 
-        {/* Pagination */}
-        {totalRows > ITEMS_PER_PAGE && (
-          <div className="flex items-center justify-end gap-2 mt-2">
-            <button
-              type="button"
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
-              className="h-6 w-6 flex items-center justify-center rounded border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700"
-            >
-              <ChevronLeft className="h-3 w-3" />
-            </button>
-            <span className="text-[11px] text-gray-500 dark:text-gray-400">
-              Page {currentPage} of {totalPages}
-            </span>
-            <button
-              type="button"
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
-              className="h-6 w-6 flex items-center justify-center rounded border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700"
-            >
-              <ChevronRight className="h-3 w-3" />
-            </button>
+        {/* Footer */}
+        {!loading && hasSearched && rows.length > 0 && (
+          <div className="px-6 py-2 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                Total Shortage Qty:{" "}
+                <span className="font-medium text-gray-900 dark:text-white">
+                  {formatNumber(totalShortage)}
+                </span>
+                <span className="mx-2">•</span>
+                Showing {pageStart} to {pageEnd} of {totalRows} entries
+              </div>
+
+              {totalPages > 1 && (
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                    <span>Show</span>
+                    <select
+                      value={itemsPerPage}
+                      onChange={(e) => {
+                        setItemsPerPage(Number(e.target.value));
+                        setCurrentPage(1);
+                      }}
+                      className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      {ITEMS_PER_PAGE_OPTIONS.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setCurrentPage(1)}
+                      disabled={currentPage === 1}
+                      className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      «
+                    </button>
+                    <button
+                      onClick={() =>
+                        setCurrentPage((p) => Math.max(1, p - 1))
+                      }
+                      disabled={currentPage === 1}
+                      className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      ‹
+                    </button>
+
+                    {(() => {
+                      const pages = [];
+                      const maxVisiblePages = 3;
+
+                      if (totalPages <= maxVisiblePages) {
+                        for (let i = 1; i <= totalPages; i++) pages.push(i);
+                      } else {
+                        pages.push(1);
+
+                        let startPage = Math.max(2, currentPage - 1);
+                        let endPage = Math.min(
+                          totalPages - 1,
+                          currentPage + 1,
+                        );
+
+                        if (currentPage <= 3) {
+                          startPage = 2;
+                          endPage = 4;
+                        }
+
+                        if (currentPage >= totalPages - 2) {
+                          startPage = totalPages - 3;
+                          endPage = totalPages - 1;
+                        }
+
+                        if (startPage > 2) pages.push("...");
+
+                        for (let i = startPage; i <= endPage; i++) {
+                          if (i > 1 && i < totalPages) pages.push(i);
+                        }
+
+                        if (endPage < totalPages - 1) pages.push("...");
+
+                        pages.push(totalPages);
+                      }
+
+                      return pages.map((page, index) =>
+                        page === "..." ? (
+                          <span
+                            key={`ellipsis-${index}`}
+                            className="px-3 py-1 text-gray-500 dark:text-gray-400"
+                          >
+                            ...
+                          </span>
+                        ) : (
+                          <button
+                            key={page}
+                            onClick={() => setCurrentPage(page)}
+                            className={`px-3 py-1 rounded-lg transition-colors ${
+                              currentPage === page
+                                ? "bg-blue-600 text-white"
+                                : "border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                            }`}
+                          >
+                            {page}
+                          </button>
+                        ),
+                      );
+                    })()}
+
+                    <button
+                      onClick={() =>
+                        setCurrentPage((p) => Math.min(totalPages, p + 1))
+                      }
+                      disabled={currentPage === totalPages}
+                      className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      ›
+                    </button>
+                    <button
+                      onClick={() => setCurrentPage(totalPages)}
+                      disabled={currentPage === totalPages}
+                      className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      »
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

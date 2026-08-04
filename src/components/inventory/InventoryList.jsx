@@ -67,22 +67,10 @@ const SECTIONS = [
         screenCode: "REPORT_FOR_QTY_SHORTAGE",
       },
       {
-        name: "Pending Sub Contracting GRN for Inspection",
-        icon: SearchCheck,
-        path: "/pendingsubcontractinggrninspection",
-        screenCode: "PENDING_SUB_CONTRACTING_GRN_INSPECTION",
-      },
-      {
         name: "Sub Contracting GRN",
         icon: Factory,
         path: "/subcontractinggrn",
         screenCode: "SUB_CONTRACTING_GRN",
-      },
-      {
-        name: "Pending SRC",
-        icon: Clock3,
-        path: "/pendingsrc",
-        screenCode: "PENDING_SRC",
       },
       {
         name: "Import GRN",
