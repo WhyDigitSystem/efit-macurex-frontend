@@ -54,6 +54,7 @@ import SubContractingDcMaster from "../components/subContract/subContractingDc/S
 import ScBillMaster from "../components/subContract/scBill/ScBillMaster";
 import SubContractSupplyScheduleMaster from "../components/subContract/subContractSupplySchedule/SubContractSupplyScheduleMaster";
 import SupplierRateContractAmendmentMaster from "../components/subContract/supplierRateContractAmendment/SupplierRateContractAmendmentMaster";
+import SubContractReconciliationMaster from "../components/subContract/subContractReconciliation/SubContractReconciliationMaster";
 import PpcList from "../components/PPC/PpcList";
 import TdcList from "../components/TDC/TdcList";
 import ProductionList from "../components/Production/ProductionList";
@@ -155,6 +156,11 @@ export const routesConfig = [
     path: "/supplierratecontractamendment",
     label: "Supplier Rate Contract Amendment",
     element: <SupplierRateContractAmendmentMaster />,
+  },
+  {
+    path: "/subcontractreconciliation",
+    label: "Sub Contract Re-Conciliation",
+    element: <SubContractReconciliationMaster />,
   },
   { path: "/ppc", label: "PPC", element: <PpcList /> },
   { path: "/TDC", label: "TDC", element: <TdcList /> },
