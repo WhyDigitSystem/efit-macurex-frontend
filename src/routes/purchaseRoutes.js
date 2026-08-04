@@ -5,6 +5,7 @@ import PurchaseDeliveryMaster from "../components/purchase/purchaseDeliverySched
 import PoShortCloseMaster from "../components/purchase/poDelvSch/PoShortCloseMaster";
 import PurchaseBill from "../components/purchase/purchaseBill/PurchaseBill";
 import LocalPurchaseOrderMaster from "../components/purchase/localPurchaseOrder/LocalPurchaseOrderMaster";
+import ExcelPurchaseOrderMaster from "../components/purchase/excelPurchaseOrder/ExcelPurchaseOrderMaster";
 
 const purchaseRoutes = [
   {
@@ -36,6 +37,11 @@ const purchaseRoutes = [
     path: "/localpurchaseorder",
     label: "Local Purchase Order",
     element: <LocalPurchaseOrderMaster />,
+  },
+  {
+    path: "/excelpurchaseorder",
+    label: "Excel Purchase Order",
+    element: <ExcelPurchaseOrderMaster />,
   },
 
 ];
