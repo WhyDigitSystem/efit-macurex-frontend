@@ -59,6 +59,10 @@ import JobOrderShortCloseMaster from "../components/subContract/jobOrderShortClo
 import AdvEntryMaster from "../components/subContract/advEntry/AdvEntryMaster";
 import DcForCapitalItemsMaster from "../components/subContract/dcForCapitalItems/DcForCapitalItemsMaster";
 import PpcList from "../components/PPC/PpcList";
+import MaterialPlanningMaster from "../components/PPC/materialPlanning/MaterialPlanningMaster";
+import TransferOrderMaster from "../components/PPC/transferOrder/TransferOrderMaster";
+import BomCorrectionRequestMaster from "../components/PPC/bomCorrectionRequest/BomCorrectionRequestMaster";
+import DrawingAttachmentMaster from "../components/PPC/drawingAttachment/DrawingAttachmentMaster";
 import TdcList from "../components/TDC/TdcList";
 import ProductionList from "../components/Production/ProductionList";
 import PlantMaintenanceList from "../components/plantMaintenance/PlantMaintenanceList";
@@ -181,6 +185,26 @@ export const routesConfig = [
     element: <DcForCapitalItemsMaster />,
   },
   { path: "/ppc", label: "PPC", element: <PpcList /> },
+  {
+    path: "/materialplan",
+    label: "Material Plan",
+    element: <MaterialPlanningMaster />,
+  },
+  {
+    path: "/transferorders",
+    label: "Transfer Orders",
+    element: <TransferOrderMaster />,
+  },
+  {
+    path: "/bomcorrectionrequest",
+    label: "BOM Correction Request/Note",
+    element: <BomCorrectionRequestMaster />,
+  },
+  {
+    path: "/drawingattachments",
+    label: "Drawing Attachments",
+    element: <DrawingAttachmentMaster />,
+  },
   { path: "/TDC", label: "TDC", element: <TdcList /> },
   { path: "/production", label: "Production", element: <ProductionList /> },
   {
