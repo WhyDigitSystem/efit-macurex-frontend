@@ -28,12 +28,6 @@ const SECTIONS = [
         screenCode: "TRANSFER_ORDERS",
       },
       {
-        name: "MRP Run Output",
-        icon: Boxes,
-        path: "/mrprunoutput",
-        screenCode: "MRP_RUN_OUTPUT",
-      },
-      {
         name: "BOM Correction Request/Note",
         icon: FileEdit,
         path: "/bomcorrectionrequest",
