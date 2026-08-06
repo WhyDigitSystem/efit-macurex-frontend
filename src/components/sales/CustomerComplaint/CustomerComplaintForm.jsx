@@ -1,12 +1,10 @@
-import {
-  ArrowLeft,
-  Save,
-  CheckCircle2,
-  ImagePlus,
-  X as XIcon,
-} from "lucide-react";
-import { useRef, useState } from "react";
+import { ArrowLeft, Save, ImagePlus, Trash2, Upload } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import dayjs from "dayjs";
 import { customerComplaintAPI } from "../../../api/Sales/customerComplaintAPI";
+import { branchAPI } from "../../../api/branchAPI";
+import { itemAPI } from "../../../api/itemAPI";
+import listOfValuesAPI from "../../../api/listOfValuesAPI";
 import { useToast } from "../../Toast/ToastContext";
 
 /* ---------------------------------------------------------------------------- */
@@ -25,11 +23,13 @@ const controlClasses =
 const controlErrClasses =
   "border-red-500 dark:border-red-500 focus:ring-red-500 focus:border-red-500";
 
-const labelClasses =
-  "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
+const labelClasses = "block text-[11px] text-gray-500 dark:text-gray-400 mb-1";
 
 const fieldGrid =
-  "grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-x-3 gap-y-2 items-start";
+  "grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-x-6 gap-y-4 items-start";
+
+const BELONGS_TO_GROUP = "CUSTOMER COMPLAINT ENTRY BELONGS TO";
+const COMPLAINT_TYPES = ["REGISTER", "VERBAL"];
 
 /* ---------------------------------------------------------------------------- */
 /* Shared building blocks                                                      */
@@ -45,6 +45,7 @@ const Field = ({
   options,
   className = "",
   disabled = false,
+  placeholder,
 }) => {
   if (type === "select") {
     return (
@@ -61,10 +62,10 @@ const Field = ({
           disabled={disabled}
           className={`${controlClasses} ${error ? controlErrClasses : ""}`}
         >
-          <option value="">-- Select --</option>
+          <option value="">Select {label}</option>
           {(options || []).map((opt) => (
-            <option key={opt} value={opt}>
-              {opt}
+            <option key={opt.value ?? opt} value={opt.value ?? opt}>
+              {opt.label ?? opt}
             </option>
           ))}
         </select>
@@ -124,6 +125,7 @@ const Field = ({
         value={value}
         onChange={onChange}
         disabled={disabled}
+        placeholder={placeholder}
         className={`${controlClasses} ${error ? controlErrClasses : ""}`}
       />
 
@@ -143,70 +145,101 @@ const SectionHeader = ({ children }) => (
 );
 
 /* ---------------------------------------------------------------------------- */
-/* Image upload field - single image, preview + replace/remove                 */
+/* Image upload - drag-and-drop / click-to-upload with previews                 */
 
-const ImageUploadField = ({ label, value, onChange, error, required }) => {
+const ImageUploadField = ({ images, onChange, error }) => {
   const fileInputRef = useRef(null);
-  const previewUrl =
-    value instanceof File ? URL.createObjectURL(value) : value || null;
+  const [dragOver, setDragOver] = useState(false);
+
+  const addFiles = (files) => {
+    const next = [...files].filter(
+      (f) => !images.some((img) => img instanceof File && img.name === f.name),
+    );
+    onChange([...images, ...next]);
+  };
 
   return (
-    <div className="w-full col-span-2">
+    <div className="w-full">
       <label className={labelClasses}>
-        {label}
-        {required && <span className="text-red-500"> *</span>}
+        Image
+        <span className="text-red-500"> *</span>
       </label>
 
-      <div className="flex items-center gap-3">
-        <div
-          onClick={() => fileInputRef.current?.click()}
-          className={`flex items-center justify-center h-[60px] w-[60px] rounded border-2 border-dashed cursor-pointer overflow-hidden ${
-            error ? "border-red-500" : "border-gray-300 dark:border-gray-600"
-          }`}
-        >
-          {previewUrl ? (
-            <img
-              src={previewUrl}
-              alt="Complaint attachment"
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <ImagePlus className="h-5 w-5 text-gray-400" />
-          )}
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="text-xs text-blue-600 dark:text-blue-400 hover:underline text-left"
-          >
-            {value ? "Replace image" : "Upload image"}
-          </button>
-
-          {value && (
-            <button
-              type="button"
-              onClick={() => onChange(null)}
-              className="flex items-center gap-0.5 text-xs text-red-500 hover:underline text-left"
-            >
-              <XIcon className="h-3 w-3" />
-              Remove
-            </button>
-          )}
-        </div>
-
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={(e) => {
-            if (e.target.files?.[0]) onChange(e.target.files[0]);
-            e.target.value = "";
-          }}
-        />
+      <div
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragOver(true);
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragOver(false);
+          if (e.dataTransfer.files?.length) addFiles(e.dataTransfer.files);
+        }}
+        onClick={() => fileInputRef.current?.click()}
+        className={`flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed px-3 py-4 cursor-pointer transition-colors ${
+          dragOver
+            ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
+            : error
+              ? "border-red-500"
+              : "border-gray-300 dark:border-gray-600 hover:border-blue-400"
+        }`}
+      >
+        <Upload className="h-4 w-4 text-gray-400 dark:text-gray-500" />
+        <span className="text-[11px] text-gray-500 dark:text-gray-400">
+          Drag & drop or click to upload
+        </span>
       </div>
+
+      {images.length > 0 && (
+        <div className="flex flex-wrap gap-2 mt-2">
+          {images.map((img, index) => {
+            const isFile = img instanceof File;
+            const previewUrl = isFile ? URL.createObjectURL(img) : img;
+            return (
+              <div
+                key={index}
+                className="relative h-[60px] w-[60px] rounded border border-gray-200 dark:border-gray-700 overflow-hidden group"
+              >
+                {previewUrl ? (
+                  <img
+                    src={previewUrl}
+                    alt={`Complaint attachment ${index + 1}`}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="h-full w-full flex items-center justify-center bg-gray-100 dark:bg-gray-700">
+                    <ImagePlus className="h-4 w-4 text-gray-400" />
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onChange(images.filter((_, i) => i !== index));
+                  }}
+                  className="absolute top-0 right-0 h-4 w-4 bg-red-600 text-white flex items-center justify-center rounded-bl opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <Trash2 size={8} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          if (e.target.files?.length) addFiles(e.target.files);
+          e.target.value = "";
+        }}
+      />
 
       {error && (
         <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
@@ -218,121 +251,263 @@ const ImageUploadField = ({ label, value, onChange, error, required }) => {
 };
 
 /* ---------------------------------------------------------------------------- */
-/* Options (swap for real API-driven lists)                                    */
-
-const PLANT_IDS = ["BANGALORE", "CHENNAI", "PUNE", "DELHI"];
-const BELONGS_TO = ["APPLIANCES", "ELECTRICALS", "PACKAGING", "RAW MATERIAL"];
-const DEPARTMENTS = ["Quality", "Sales", "Production", "Customer Service"];
-const COMPLAINT_TYPES = [
-  "Dimensional",
-  "Functional",
-  "Cosmetic/Visual",
-  "Packaging",
-  "Delivery Delay",
-  "Documentation",
-];
-const ITEM_CODES = ["RM-001", "RM-002", "PKG-001", "SVC-001"];
-
-/* ---------------------------------------------------------------------------- */
 /* Empty state                                                                 */
 
 const emptyForm = () => ({
-  plantId: "",
-  complaintNo: "", // Auto — populated by backend on create
-  belongsTo: "",
-  complaintDate: "",
-  department: "",
-  customerPartNo: "",
-  complaintType: "",
-  qtyNo: "",
-  complaintRefNo: "",
-  image: null,
-  refDate: "",
-  customerId: "",
+  active: true,
+  branch: "",
   buyerName: "",
+  cancelRemarks: "",
+  complaintDate: dayjs().format("YYYY-MM-DD"),
+  complaintNo: "", // Auto — populated by backend on create
+  complaintType: "",
+  customerId: "",
   customerName: "",
-  itemCode: "",
-  itemDescription: "",
+  customerRefNo: "",
+  department: "",
   detailsOfComplaint: "",
+  financialYear: "",
+  images: [],
+  item: "",
+  itemDescription: "",
+  prefix: "",
+  preparedBy: "",
+  qtyNo: "",
+  refDate: "",
   remarks: "",
+  customerPartNo: "",
+  userCategory: "",
 });
 
 const CustomerComplaintForm = ({ data, onBack }) => {
-  const [orgId] = useState(localStorage.getItem("orgId"));
+  const orgId = Number(localStorage.getItem("orgId"));
+  const branch = Number(localStorage.getItem("branchId"));
+  const usersId = localStorage.getItem("usersId");
   const { addToast } = useToast();
 
-  const [form, setForm] = useState({ ...emptyForm(), ...data });
+  const [form, setForm] = useState(() => {
+    const base = { ...emptyForm(), ...data };
+    base.complaintDate = data?.complaintDate
+      ? dayjs(data.complaintDate).format("YYYY-MM-DD")
+      : dayjs().format("YYYY-MM-DD");
+    base.refDate = data?.refDate ? dayjs(data.refDate).format("YYYY-MM-DD") : "";
+    base.images =
+      Array.isArray(data?.images) && data.images.length ? data.images : [];
+    return base;
+  });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
+
+  /* ---------------- Lookup options ---------------- */
+  const [branchOptions, setBranchOptions] = useState([]);
+  const [departmentOptions, setDepartmentOptions] = useState([]);
+  const [belongsToOptions, setBelongsToOptions] = useState([]);
+  const [customerOptions, setCustomerOptions] = useState([]);
+  const [customerMap, setCustomerMap] = useState({});
+  const [itemOptions, setItemOptions] = useState([]);
+  const [itemMap, setItemMap] = useState({});
+
+  useEffect(() => {
+    if (!orgId) return;
+
+    const loadBranches = async () => {
+      try {
+        const res = await branchAPI.getBranchByOrgId(orgId);
+        setBranchOptions(
+          (res || []).map((b) => ({
+            value: b.id,
+            label: b.branchName || b.branchcode || b.id,
+          })),
+        );
+      } catch {
+        setBranchOptions([]);
+      }
+    };
+
+    const loadDepartments = async () => {
+      try {
+        const departments =
+          await customerComplaintAPI.getDepartmentList();
+        setDepartmentOptions(
+          (departments || []).map((d) => ({
+            value: d.id,
+            label: d.departmentName,
+          })),
+        );
+      } catch {
+        setDepartmentOptions([]);
+      }
+    };
+
+    const loadBelongsTo = async () => {
+      try {
+        const res = await listOfValuesAPI.getListValuesGroup(
+          BELONGS_TO_GROUP,
+          orgId,
+        );
+        if (Array.isArray(res) && res.length) {
+          setBelongsToOptions(
+            res.map((v) => ({
+              value: v.id,
+              label: v.valuesDescription || v.valueDescription || "",
+            })),
+          );
+        }
+      } catch {
+        setBelongsToOptions([]);
+      }
+    };
+
+    const loadCustomers = async () => {
+      try {
+        const customers = await customerComplaintAPI.getCustomerList();
+        const map = {};
+        const opts = (customers || []).map((c) => {
+          const code = c.customerId || c.docId || c.customerCode;
+          map[code] = c.customerName || c.name || "";
+          return { value: code, label: c.customerName || c.name || code };
+        });
+        setCustomerOptions(opts);
+        setCustomerMap(map);
+      } catch {
+        setCustomerOptions([]);
+        setCustomerMap({});
+      }
+    };
+
+    const loadItems = async () => {
+      try {
+        const res = await itemAPI.getItems(orgId, branch);
+        const map = {};
+        const opts = (res || []).map((it) => {
+          const code = it.itemCode || it.code || it.id?.toString() || "";
+          map[code] = it;
+          return { value: code, label: code };
+        });
+        setItemOptions(opts);
+        setItemMap(map);
+      } catch {
+        setItemOptions([]);
+        setItemMap({});
+      }
+    };
+
+    Promise.all([
+      loadBranches(),
+      loadDepartments(),
+      loadBelongsTo(),
+      loadCustomers(),
+      loadItems(),
+    ]);
+  }, [orgId, branch]);
+
+  /* ---------------- Handlers ---------------- */
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     if (fieldErrors[name]) setFieldErrors((prev) => ({ ...prev, [name]: "" }));
     setForm((prev) => ({ ...prev, [name]: value }));
+
+    if (name === "customerId") {
+      const custName = customerMap[value];
+      setForm((prev) => ({
+        ...prev,
+        customerId: value,
+        customerName: custName || prev.customerName,
+      }));
+    }
+
+    if (name === "item") {
+      const it = itemMap[value];
+      setForm((prev) => ({
+        ...prev,
+        item: value,
+        itemDescription: it?.itemDescription || prev.itemDescription,
+      }));
+    }
   };
 
-  const handleImageChange = (file) => {
-    if (fieldErrors.image) setFieldErrors((prev) => ({ ...prev, image: "" }));
-    setForm((prev) => ({ ...prev, image: file }));
+  const handleImagesChange = (images) => {
+    if (fieldErrors.images) setFieldErrors((prev) => ({ ...prev, images: "" }));
+    setForm((prev) => ({ ...prev, images }));
   };
+
+  /* ---------------- Validation ---------------- */
 
   const validate = () => {
     const errors = {};
 
-    if (!form.plantId) errors.plantId = "Plant ID is required";
-    if (!form.belongsTo) errors.belongsTo = "Belongs to is required";
-    if (!form.complaintDate)
-      errors.complaintDate = "Complaint Date is required";
+    if (!form.branch) errors.branch = "Plant ID is required";
+    if (!form.userCategory) errors.userCategory = "Belongs To is required";
     if (!form.department) errors.department = "Department is required";
-    if (!form.customerPartNo?.trim())
-      errors.customerPartNo = "Customer Part No is required";
-    if (!form.complaintType)
-      errors.complaintType = "Complaint Type is required";
-    if (!form.complaintRefNo?.trim())
-      errors.complaintRefNo = "Complaint Ref No. is required";
+    if (!form.complaintType) errors.complaintType = "Complaint Type is required";
+    if (!form.complaintNo?.trim()) errors.complaintNo = "Complaint No is required";
+    if (!form.complaintDate) errors.complaintDate = "Complaint Date is required";
     if (!form.customerId?.trim()) errors.customerId = "Customer ID is required";
-    if (!form.customerName?.trim())
-      errors.customerName = "Customer Name is required";
-    if (!form.itemCode) errors.itemCode = "Item Code is required";
+    if (!form.item?.trim()) errors.item = "Item Code is required";
+    if (!form.itemDescription?.trim())
+      errors.itemDescription = "Item Description is required";
     if (!form.detailsOfComplaint?.trim())
       errors.detailsOfComplaint = "Details of Complaint is required";
+    if (!form.images.length) errors.images = "At least one image is required";
 
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
-  const buildPayload = (status, isUpdate) => ({
-    ...(isUpdate ? { id: data.id } : {}),
-    orgId: Number(orgId),
-    ...form,
-    // NOTE: image needs multipart/FormData handling on the API layer once
-    // the upload endpoint is confirmed — sending file name only for now.
-    image: form.image instanceof File ? form.image.name : form.image,
-    status,
-    createdBy: isUpdate
-      ? data?.createdBy || localStorage.getItem("usersId")
-      : localStorage.getItem("usersId"),
-    ...(isUpdate ? { updatedBy: localStorage.getItem("usersId") } : {}),
-  });
+  /* ---------------- Persist ---------------- */
 
-  const persist = async (status) => {
+  const persist = async () => {
     if (!validate()) return;
 
     setIsSubmitting(true);
 
     const isUpdate = Boolean(data?.id);
-    const payload = buildPayload(status, isUpdate);
+
+    // Existing images (urls/names) stay in the DTO; new Files get uploaded.
+    const dtoImages = form.images.filter((img) => !(img instanceof File));
+    const newImages = form.images.filter((img) => img instanceof File);
+
+    const dto = {
+      active: data?.active ?? true,
+      branch: Number(form.branch) || 0,
+      buyerName: form.buyerName,
+      cancelRemarks: form.cancelRemarks,
+      complaintDate: form.complaintDate,
+      complaintNo: form.complaintNo,
+      complaintType: form.complaintType,
+      createdBy: isUpdate ? data?.createdBy || usersId : usersId,
+      customerId: Number(form.customerId) || 0,
+      customerName: form.customerName,
+      customerRefNo: form.customerRefNo,
+      department: Number(form.department) || 0,
+      detailsOfComplaint: form.detailsOfComplaint,
+      financialYear: form.financialYear,
+      id: isUpdate ? data.id : 0,
+      images: dtoImages,
+      item: Number(form.item) || 0,
+      orgId,
+      prefix: form.prefix,
+      preparedBy: form.preparedBy,
+      qtyNo: Number(form.qtyNo) || 0,
+      refDate: form.refDate,
+      remarks: form.remarks,
+      customerPartNo: form.customerPartNo,
+      itemDescription: form.itemDescription,
+      userCategory: form.userCategory,
+      ...(isUpdate ? { updatedBy: usersId } : {}),
+    };
 
     try {
-      const response =
-        await customerComplaintAPI.createUpdateComplaint(payload);
+      const response = await customerComplaintAPI.createUpdateComplaint({
+        dto,
+        images: newImages,
+      });
 
       if (response?.status) {
         addToast(
           response?.paramObjectsMap?.message ||
-            (status === "Submitted"
-              ? "Complaint submitted successfully!"
-              : "Complaint saved as draft!"),
+            "Customer Complaint saved successfully!",
         );
         onBack?.();
       } else {
@@ -340,6 +515,7 @@ const CustomerComplaintForm = ({ data, onBack }) => {
           response?.errors?.[0]?.shortMessage ||
             response?.errors?.[0]?.longMessage ||
             response?.message ||
+            response?.paramObjectsMap?.message ||
             "Failed to save complaint.",
         );
       }
@@ -360,11 +536,8 @@ const CustomerComplaintForm = ({ data, onBack }) => {
     }
   };
 
-  const handleSave = () => persist("Draft");
-  const handleSubmit = () => persist("Submitted");
-
   return (
-    <div className="p-2 max-w-6xl">
+    <div className="p-2 max-w-[1500px]">
       {/* Header */}
       <div className="flex items-center gap-2 mb-3">
         <button
@@ -381,35 +554,65 @@ const CustomerComplaintForm = ({ data, onBack }) => {
 
       {/* Main Card */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
+        {/* ---------------- Complaint Header Section ---------------- */}
         <div>
-          <SectionHeader>Customer Complaint Entry</SectionHeader>
+          <SectionHeader>Complaint Header</SectionHeader>
           <div className={fieldGrid}>
             <Field
               type="select"
               label="Plant ID"
-              name="plantId"
-              value={form.plantId}
+              name="branch"
+              value={form.branch}
               onChange={handleChange}
-              error={fieldErrors.plantId}
-              options={PLANT_IDS}
+              error={fieldErrors.branch}
+              options={branchOptions}
               required
+            />
+            <Field
+              type="select"
+              label="Belongs To"
+              name="userCategory"
+              value={form.userCategory}
+              onChange={handleChange}
+              error={fieldErrors.userCategory}
+              options={belongsToOptions}
+              required
+            />
+            <Field
+              type="select"
+              label="Department"
+              name="department"
+              value={form.department}
+              onChange={handleChange}
+              error={fieldErrors.department}
+              options={departmentOptions}
+              required
+            />
+            <Field
+              type="select"
+              label="Complaint Type"
+              name="complaintType"
+              value={form.complaintType}
+              onChange={handleChange}
+              error={fieldErrors.complaintType}
+              options={COMPLAINT_TYPES.map((v) => ({ value: v, label: v }))}
+              required
+            />
+            <Field
+              label="Complaint Ref No"
+              name="customerRefNo"
+              value={form.customerRefNo}
+              onChange={handleChange}
+              placeholder="Customer Ref No."
             />
             <Field
               label="Complaint No"
               name="complaintNo"
               value={form.complaintNo}
               onChange={handleChange}
+              error={fieldErrors.complaintNo}
               placeholder="Auto"
               disabled
-            />
-            <Field
-              type="select"
-              label="Belongs to"
-              name="belongsTo"
-              value={form.belongsTo}
-              onChange={handleChange}
-              error={fieldErrors.belongsTo}
-              options={BELONGS_TO}
               required
             />
             <Field
@@ -422,61 +625,20 @@ const CustomerComplaintForm = ({ data, onBack }) => {
               required
             />
             <Field
-              type="select"
-              label="Department"
-              name="department"
-              value={form.department}
-              onChange={handleChange}
-              error={fieldErrors.department}
-              options={DEPARTMENTS}
-              required
-            />
-            <Field
-              label="Customer Part No"
-              name="customerPartNo"
-              value={form.customerPartNo}
-              onChange={handleChange}
-              error={fieldErrors.customerPartNo}
-              required
-            />
-            <Field
-              type="select"
-              label="Complaint Type"
-              name="complaintType"
-              value={form.complaintType}
-              onChange={handleChange}
-              error={fieldErrors.complaintType}
-              options={COMPLAINT_TYPES}
-              required
-            />
-            <Field
-              type="number"
-              label="Qty No"
-              name="qtyNo"
-              value={form.qtyNo}
-              onChange={handleChange}
-            />
-            <Field
-              label="Complaint Ref No."
-              name="complaintRefNo"
-              value={form.complaintRefNo}
-              onChange={handleChange}
-              error={fieldErrors.complaintRefNo}
-              required
-            />
-            <Field
               type="date"
-              label="Ref. Date"
+              label="Ref Date"
               name="refDate"
               value={form.refDate}
               onChange={handleChange}
             />
             <Field
+              type="select"
               label="Customer ID"
               name="customerId"
               value={form.customerId}
               onChange={handleChange}
               error={fieldErrors.customerId}
+              options={customerOptions}
               required
             />
             <Field
@@ -490,17 +652,35 @@ const CustomerComplaintForm = ({ data, onBack }) => {
               name="customerName"
               value={form.customerName}
               onChange={handleChange}
-              error={fieldErrors.customerName}
-              required
+            />
+          </div>
+        </div>
+
+        {/* ---------------- Complaint Details Section ---------------- */}
+        <div>
+          <SectionHeader>Complaint Details</SectionHeader>
+          <div className={fieldGrid}>
+            <Field
+              label="Customer Part No"
+              name="customerPartNo"
+              value={form.customerPartNo}
+              onChange={handleChange}
+            />
+            <Field
+              type="number"
+              label="Qty No"
+              name="qtyNo"
+              value={form.qtyNo}
+              onChange={handleChange}
             />
             <Field
               type="select"
               label="Item Code"
-              name="itemCode"
-              value={form.itemCode}
+              name="item"
+              value={form.item}
               onChange={handleChange}
-              error={fieldErrors.itemCode}
-              options={ITEM_CODES}
+              error={fieldErrors.item}
+              options={itemOptions}
               required
             />
             <Field
@@ -508,16 +688,10 @@ const CustomerComplaintForm = ({ data, onBack }) => {
               name="itemDescription"
               value={form.itemDescription}
               onChange={handleChange}
-              className="col-span-2"
+              error={fieldErrors.itemDescription}
+              disabled
+              required
             />
-
-            <ImageUploadField
-              label="Image"
-              value={form.image}
-              onChange={handleImageChange}
-              error={fieldErrors.image}
-            />
-
             <Field
               type="textarea"
               label="Details of Complaint"
@@ -526,7 +700,7 @@ const CustomerComplaintForm = ({ data, onBack }) => {
               onChange={handleChange}
               error={fieldErrors.detailsOfComplaint}
               required
-              className="col-span-2 xl:col-span-3"
+              className="sm:col-span-2"
             />
             <Field
               type="textarea"
@@ -534,8 +708,15 @@ const CustomerComplaintForm = ({ data, onBack }) => {
               name="remarks"
               value={form.remarks}
               onChange={handleChange}
-              className="col-span-2 xl:col-span-3"
+              className="sm:col-span-2"
             />
+            <div className="sm:col-span-2">
+              <ImageUploadField
+                images={form.images}
+                onChange={handleImagesChange}
+                error={fieldErrors.images}
+              />
+            </div>
           </div>
         </div>
 
@@ -550,21 +731,12 @@ const CustomerComplaintForm = ({ data, onBack }) => {
           </button>
 
           <button
-            onClick={handleSave}
-            disabled={isSubmitting}
-            className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400 bg-white dark:bg-gray-800 hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-          >
-            <Save className="h-3 w-3" />
-            {isSubmitting ? "Saving..." : "Save"}
-          </button>
-
-          <button
-            onClick={handleSubmit}
+            onClick={persist}
             disabled={isSubmitting}
             className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
           >
-            <CheckCircle2 className="h-3 w-3" />
-            {isSubmitting ? "Submitting..." : "Submit"}
+            <Save className="h-3 w-3" />
+            {isSubmitting ? "Saving..." : data ? "Update" : "Save"}
           </button>
         </div>
       </div>

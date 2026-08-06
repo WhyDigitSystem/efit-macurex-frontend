@@ -50,39 +50,39 @@ const CustomerComplaintList = ({
       type: "text",
     },
     {
-      key: "plantId",
+      key: "branch",
       label: "Plant ID",
-      accessor: "plantId",
+      accessor: (row) => row.branch || row.plantId,
       type: "text",
     },
     {
       key: "department",
       label: "Department",
-      accessor: "department",
+      accessor: (row) => row.department,
       type: "text",
     },
     {
       key: "customerName",
       label: "Customer Name",
-      accessor: "customerName",
+      accessor: (row) => row.customerName,
       type: "text",
     },
     {
-      key: "customerPartNo",
-      label: "Customer Part No",
-      accessor: "customerPartNo",
+      key: "customerRefNo",
+      label: "Customer Ref No",
+      accessor: (row) => row.customerRefNo || row.complaintRefNo,
       type: "text",
     },
     {
       key: "complaintType",
       label: "Complaint Type",
-      accessor: "complaintType",
+      accessor: (row) => row.complaintType,
       type: "text",
     },
     {
-      key: "itemCode",
-      label: "Item Code",
-      accessor: "itemCode",
+      key: "item",
+      label: "Item",
+      accessor: (row) => row.item || row.itemCode,
       type: "text",
     },
     {
@@ -114,11 +114,14 @@ const CustomerComplaintList = ({
 
   const searchFields = [
     "complaintNo",
+    "branch",
     "plantId",
     "department",
     "customerName",
-    "customerPartNo",
+    "customerRefNo",
+    "complaintRefNo",
     "complaintType",
+    "item",
     "itemCode",
   ];
 
