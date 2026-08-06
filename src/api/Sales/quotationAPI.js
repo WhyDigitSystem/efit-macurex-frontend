@@ -1,7 +1,7 @@
 // src/api/Sales/quotationAPI.js
 import apiClient from "../apiClient";
 
-const API_BASE_URL = process.env.REACT_APP_API_URL;
+const API_BASE_URL =  import.meta.env.VITE_API_URL;
 
 const quotationAPI = {
     // Create or update quotation with FormData

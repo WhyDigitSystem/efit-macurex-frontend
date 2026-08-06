@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import CommentSection from './HelperComponent/CommentSection';
 import TicketInfo from './HelperComponent/TicketInfo';
-import { getStatusChip } from '../SupportCenter/index';
+import { getStatusChip } from './index';
 import apiClient from '../../../api/apiClient';
 import { useSelector } from 'react-redux';
 

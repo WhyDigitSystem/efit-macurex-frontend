@@ -795,10 +795,10 @@ const QuotationForm = ({ data, onBack }) => {
     const getFileUrl = (attachment) => {
         if (!attachment) return null;
         if (typeof attachment === 'string') {
-            return `${process.env.REACT_APP_API_URL}/api/files/download?path=${encodeURIComponent(attachment)}`;
+            return `${ import.meta.env.VITE_API_URL}/api/files/download?path=${encodeURIComponent(attachment)}`;
         }
         if (attachment.filePath) {
-            return `${process.env.REACT_APP_API_URL}/api/files/download?path=${encodeURIComponent(attachment.filePath)}`;
+            return `${ import.meta.env.VITE_API_URL}/api/files/download?path=${encodeURIComponent(attachment.filePath)}`;
         }
         return null;
     };
