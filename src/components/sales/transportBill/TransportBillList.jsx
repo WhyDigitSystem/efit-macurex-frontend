@@ -11,8 +11,8 @@ const normalizeActive = (value) => {
 const TransportBillList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
-  const ORG_ID = Number(localStorage.getItem("orgId")) || 0;
-  const BRANCH = Number(localStorage.getItem("branchId")) || 1000000001;
+  const ORG_ID = Number(localStorage.getItem("orgId"));
+  const BRANCH = Number(localStorage.getItem("branchId"));
   const prevRefreshRef = useRef(refreshTrigger);
 
   const loadData = useCallback(async () => {
@@ -20,7 +20,27 @@ const TransportBillList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     setLoading(true);
     try {
       const res = await transportBillAPI.getAll(ORG_ID, BRANCH);
-      const sorted = (res || []).sort((a, b) => (b.id || 0) - (a.id || 0));
+      // Transform data to handle nested objects
+      const transformedData = (res || []).map((item) => ({
+        ...item,
+        // If transportName is an object, extract the name
+        transportName: typeof item.transportName === 'object'
+          ? item.transportName?.transportName || item.transportName?.name || JSON.stringify(item.transportName)
+          : item.transportName || "",
+        // If receivedBy is an object, extract the name
+        receivedBy: typeof item.receivedBy === 'object'
+          ? item.receivedBy?.employeeName || item.receivedBy?.name || JSON.stringify(item.receivedBy)
+          : item.receivedBy || "",
+        // If accReceivedBy is an object, extract the name
+        accReceivedBy: typeof item.accReceivedBy === 'object'
+          ? item.accReceivedBy?.employeeName || item.accReceivedBy?.name || JSON.stringify(item.accReceivedBy)
+          : item.accReceivedBy || "",
+        // If plantId is an object, extract the name
+        plantId: typeof item.plantId === 'object'
+          ? item.plantId?.branchName || item.plantId?.name || JSON.stringify(item.plantId)
+          : item.plantId || "",
+      }));
+      const sorted = (transformedData || []).sort((a, b) => (b.id || 0) - (a.id || 0));
       setData(sorted);
     } catch (error) {
       console.error("Failed to load Transport Bill records:", error);
@@ -45,7 +65,13 @@ const TransportBillList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   const columns = [
     { key: "docNo", label: "Doc No", accessor: "docNo", type: "text", noWrap: true },
     { key: "docDate", label: "Doc Date", accessor: "docDate", type: "text", noWrap: true },
-    { key: "transportName", label: "Transport Name", accessor: "transportName", type: "text" },
+    {
+      key: "transportName",
+      label: "Transport Name",
+      accessor: "transportName",
+      type: "text",
+      noWrap: true
+    },
     { key: "billNo", label: "Bill No", accessor: "billNo", type: "text", noWrap: true },
     { key: "billDate", label: "Bill Date", accessor: "billDate", type: "text", noWrap: true },
     { key: "totalAmount", label: "Total Amount", accessor: "totalAmount", type: "text", noWrap: true },
@@ -54,11 +80,10 @@ const TransportBillList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
       render: (value) => {
         const isActive = normalizeActive(value);
         return (
-          <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
-            isActive
+          <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${isActive
               ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
               : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300"
-          }`}>
+            }`}>
             {isActive ? "Active" : "Inactive"}
           </span>
         );

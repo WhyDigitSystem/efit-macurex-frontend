@@ -3,7 +3,7 @@ import apiClient from "../apiClient";
 const transportBillAPI = {
   getAll: async (orgId, branch) => {
     try {
-      const res = await apiClient.get("/api/dev/getTransportBillByOrgId", {
+      const res = await apiClient.get("/api/transportbill/getTransportBillByOrgId", {
         params: { orgId, branch },
       });
       return res?.paramObjectsMap?.transportBillList || [];
@@ -15,7 +15,7 @@ const transportBillAPI = {
 
   getById: async (id) => {
     try {
-      const res = await apiClient.get("/api/dev/getTransportBillById", {
+      const res = await apiClient.get("/api/transportbill/getTransportBillById", {
         params: { id },
       });
       return res?.paramObjectsMap?.transportBillVO || null;
@@ -27,7 +27,7 @@ const transportBillAPI = {
 
   createUpdate: async (payload) => {
     try {
-      const res = await apiClient.post("/api/dev/createUpdateTransportBill", payload);
+      const res = await apiClient.put("/api/transportbill/createUpdateTransportBill", payload);
       return res;
     } catch (error) {
       console.error("Error saving Transport Bill:", error);
@@ -35,29 +35,6 @@ const transportBillAPI = {
     }
   },
 
-  getPlants: async (orgId) => {
-    try {
-      const res = await apiClient.get("/api/dev/getPlantMasterByOrgId", {
-        params: { orgId },
-      });
-      return res?.paramObjectsMap?.plantList || [];
-    } catch (error) {
-      console.error("Error fetching plants:", error);
-      throw error;
-    }
-  },
-
-  getTransportNames: async (orgId) => {
-    try {
-      const res = await apiClient.get("/api/dev/getTransportMasterByOrgId", {
-        params: { orgId },
-      });
-      return res?.paramObjectsMap?.transportList || [];
-    } catch (error) {
-      console.error("Error fetching transport names:", error);
-      throw error;
-    }
-  },
 };
 
 export default transportBillAPI;

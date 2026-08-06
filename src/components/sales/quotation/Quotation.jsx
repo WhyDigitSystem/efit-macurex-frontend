@@ -1,6 +1,6 @@
 import { useState } from "react";
 import QuotationList from "./QuotationList";
-import QuotationForm from "./Quotation.Form";
+import QuotationForm from "./QuotationForm";
 
 const Quotation = () => {
   const [screen, setScreen] = useState("list");

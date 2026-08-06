@@ -1,9 +1,17 @@
-import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import {
+  ArrowLeft,
+  Save,
+  X,
+  Plus,
+  Trash2,
+} from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { useForm, Controller, useFieldArray } from "react-hook-form";
-import dayjs from "dayjs";
+import branchAPI from "../../../api/branchAPI";
 import transportBillAPI from "../../../api/Sales/transportBillAPI";
 import { useToast } from "../../Toast/ToastContext";
+import transportAPI from "../../../api/transportAPI";
+import employeeAPI from "../../../api/employeeAPI";
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -11,38 +19,13 @@ const controlClasses =
   "text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 " +
   "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
   "dark:focus:ring-blue-400 dark:focus:border-blue-400 " +
-  "disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed";
+  "[color-scheme:light] dark:[color-scheme:dark]";
 
-const labelClasses = "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
-
-const fieldGrid = "grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-x-4 gap-y-3 items-start";
-
-const SectionHeader = ({ children }) => (
-  <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">{children}</h3>
-);
-
-const InputField = ({ label, required, error, children }) => (
-  <div>
-    {label && <label className={labelClasses}>{label}{required && <span className="text-red-500"> *</span>}</label>}
-    {children}
-    {error && <p className="text-[10px] text-red-500 mt-0.5">{error}</p>}
-  </div>
-);
-
-const ToggleSwitch = ({ value, onChange }) => (
-  <button type="button" onClick={() => onChange(!value)}
-    className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${value ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"}`}>
-    <span className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${value ? "translate-x-6" : "translate-x-0.5"}`} />
-  </button>
-);
-
-const thClass = "px-1 py-0.5 text-left font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap text-[10px]";
-
-const TRANSPORT_OPTIONS = ["Truck India", "Blue Dart", "DHL Freight", "Transport Corp"];
-const RECEIVED_BY_OPTIONS = ["Driver", "Store In-charge", "Accounts", "Admin"];
+const labelClasses =
+  "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
 const getDefaultPaymentRow = () => ({
-  chequeNo: "",
+  chequeRtgsNo: "",
   chequeDate: "",
   totalAmount: "",
   paidAmount: "",
@@ -51,9 +34,9 @@ const getDefaultPaymentRow = () => ({
 
 const getDefaultValues = (data) => ({
   plantId: data?.plantId || "",
-  docNo: data?.docNo || `TB/${dayjs().format("DDD")}/${String(Date.now()).slice(-4)}`,
+  docNo: data?.docNo || "",
   transportName: data?.transportName || "",
-  docDate: data?.docDate || dayjs().format("YYYY-MM-DD"),
+  docDate: data?.docDate || "",
   billNo: data?.billNo || "",
   billDate: data?.billDate || "",
   totalAmount: data?.totalAmount ?? "",
@@ -65,43 +48,346 @@ const getDefaultValues = (data) => ({
   id: data?.id || 0,
   paymentDetails1: data?.paymentDetails1?.length
     ? data.paymentDetails1.map((r) => ({
-        chequeNo: r.chequeNo || "", chequeDate: r.chequeDate || "", totalAmount: r.totalAmount ?? "",
-        paidAmount: r.paidAmount ?? "", pendingAmount: r.pendingAmount ?? "",
-      }))
-    : [getDefaultPaymentRow()],
-  paymentDetails2: data?.paymentDetails2?.length
-    ? data.paymentDetails2.map((r) => ({
-        chequeNo: r.chequeNo || "", chequeDate: r.chequeDate || "", totalAmount: r.totalAmount ?? "",
-        paidAmount: r.paidAmount ?? "", pendingAmount: r.pendingAmount ?? "",
-      }))
+      chequeRtgsNo: r.chequeRtgsNo || r.chequeNo || "",
+      chequeDate: r.chequeDate || "",
+      totalAmount: r.totalAmount ?? "",
+      paidAmount: r.paidAmount ?? "",
+      pendingAmount: r.pendingAmount ?? "",
+    }))
     : [getDefaultPaymentRow()],
 });
 
+const SelectField = ({ control, name, label, options, required, errors, onChange, disabled }) => {
+  const getError = () => {
+    const parts = name.split(".");
+    let error = errors;
+    for (const part of parts) {
+      if (error && error[part]) {
+        error = error[part];
+      } else {
+        return null;
+      }
+    }
+    return error?.message;
+  };
+
+  const errorMessage = getError();
+
+  return (
+    <div>
+      <label className={labelClasses}>
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      <Controller
+        name={name}
+        control={control}
+        rules={required ? { required: `${label} is required` } : undefined}
+        render={({ field }) => (
+          <select
+            {...field}
+            className={`${controlClasses} ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
+            onChange={(e) => {
+              field.onChange(e);
+              if (onChange) {
+                onChange(e.target.value);
+              }
+            }}
+            disabled={disabled}
+          >
+            <option value="">Select an option</option>
+            {options.map((opt) => (
+              <option
+                key={typeof opt === "object" ? opt.value : opt}
+                value={typeof opt === "object" ? opt.value : opt}
+              >
+                {typeof opt === "object" ? opt.label : opt}
+              </option>
+            ))}
+          </select>
+        )}
+      />
+      {errorMessage && (
+        <p className="text-red-500 text-[11px]">{errorMessage}</p>
+      )}
+    </div>
+  );
+};
+
+// Input Field Component
+const InputField = ({
+  control,
+  name,
+  label,
+  type = "text",
+  required,
+  placeholder,
+  errors,
+  disabled,
+  step,
+}) => {
+  const getError = () => {
+    const parts = name.split(".");
+    let error = errors;
+    for (const part of parts) {
+      if (error && error[part]) {
+        error = error[part];
+      } else {
+        return null;
+      }
+    }
+    return error?.message;
+  };
+
+  const errorMessage = getError();
+
+  return (
+    <div>
+      <label className={labelClasses}>
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      <Controller
+        name={name}
+        control={control}
+        rules={{
+          ...(required && {
+            required: `${label} is required`,
+          }),
+        }}
+        render={({ field }) => (
+          <input
+            {...field}
+            type={type}
+            step={step}
+            className={`${controlClasses} ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
+            placeholder={placeholder}
+            disabled={disabled}
+          />
+        )}
+      />
+      {errorMessage && (
+        <p className="text-red-500 text-[11px]">{errorMessage}</p>
+      )}
+    </div>
+  );
+};
+
+// Table Cell Components
+const InputCell = ({
+  control,
+  name,
+  type = "text",
+  step,
+  placeholder,
+  required,
+  errors,
+  align = "left",
+  disabled,
+  onChange,
+  readOnly = false,
+}) => {
+  const getError = () => {
+    const parts = name.split(".");
+    let error = errors;
+    for (const part of parts) {
+      if (error && error[part]) {
+        error = error[part];
+      } else {
+        return null;
+      }
+    }
+    return error?.message;
+  };
+
+  const errorMessage = getError();
+
+  return (
+    <div className="p-0.5 align-top">
+      <Controller
+        name={name}
+        control={control}
+        rules={required ? { required: "This field is required" } : undefined}
+        render={({ field }) => (
+          <input
+            {...field}
+            type={type}
+            step={step}
+            className={`${controlClasses} h-7 text-[10px] ${align === "right" ? "text-right" : ""} ${errorMessage ? "border-red-500 focus:border-red-500" : ""
+              }`}
+            placeholder={placeholder}
+            disabled={disabled}
+            readOnly={readOnly}
+            onChange={(e) => {
+              field.onChange(e);
+              if (onChange) {
+                onChange(e);
+              }
+            }}
+          />
+        )}
+      />
+      {errorMessage && (
+        <div className="text-red-500 text-[9px] mt-0.5 whitespace-nowrap">
+          {errorMessage}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const ToggleSwitch = ({ value, onChange }) => (
+  <button
+    type="button"
+    onClick={() => onChange(!value)}
+    className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${value ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
+      }`}
+  >
+    <span
+      className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${value ? "translate-x-6" : "translate-x-0.5"
+        }`}
+    />
+  </button>
+);
+
+// Main Component
 const TransportBillForm = ({ data, onBack }) => {
   const { addToast } = useToast();
-  const orgId = Number(localStorage.getItem("orgId")) || 0;
-  const branch = Number(localStorage.getItem("branchId")) || 1000000001;
+  const orgId = Number(localStorage.getItem("orgId"));
+  const branchId = Number(localStorage.getItem("branchId"));
+
+  const [activeTab, setActiveTab] = useState("payment1");
+  const [plantData, setPlantData] = useState([]);
+  const [transporterData, setTransporterData] = useState([]);
+  const [receivedByData, setReceivedByData] = useState([]);
+  const [formErrs, setFormErrs] = useState({});
+  const [loading, setLoading] = useState(false);
 
   const {
-    control, handleSubmit, setValue, watch, register,
+    control,
+    handleSubmit,
+    setValue,
+    watch,
+    reset,
+    formState: { errors, isSubmitting },
   } = useForm({
     mode: "onTouched",
     defaultValues: getDefaultValues(data),
   });
 
-  const { fields: fields1, append: append1, remove: remove1 } = useFieldArray({
-    control, name: "paymentDetails1",
-  });
-
-  const { fields: fields2, append: append2, remove: remove2 } = useFieldArray({
-    control, name: "paymentDetails2",
+  const { fields: fields1, append: append1, remove: remove1, replace: replace1 } = useFieldArray({
+    control,
+    name: "paymentDetails1",
   });
 
   const watch1 = watch("paymentDetails1");
-  const watch2 = watch("paymentDetails2");
 
-  const [activeTab, setActiveTab] = useState("payment1");
-  const [formErrs, setFormErrs] = useState({});
+  // Load branches for Plant ID
+  useEffect(() => {
+    loadBranches();
+    loadTransporter();
+    loadReceivedBy();
+  }, []);
+
+  // Fetch data by ID when editing
+  useEffect(() => {
+    const fetchData = async () => {
+      if (data?.id) {
+        setLoading(true);
+        try {
+          const response = await transportBillAPI.getById(data.id);
+          if (response) {
+            // Map the response to form fields
+            const formData = {
+              id: response.id || 0,
+              plantId: response.branch?.id || "",
+              docNo: response.docNo || "",
+              docDate: response.docDate || "",
+              transportName: response.transportName?.id || "",
+              billNo: response.billNo || "",
+              billDate: response.billDate || "",
+              totalAmount: response.totalAmount || "",
+              billReceivedDate: response.billReceivedDate || "",
+              accReceivedDate: response.accReceivedDate || "",
+              receivedBy: response.receivedBy?.employeeId || "",
+              accReceivedBy: response.accReceivedBy?.employeeId || "",
+              active: response.active === true || response.active === "Active",
+              paymentDetails1: response.paymentDetails1?.length
+                ? response.paymentDetails1.map((item) => ({
+                  chequeRtgsNo: item.chequeRtgsNo || "",
+                  chequeDate: item.chequeDate || "",
+                  totalAmount: item.totalAmount || "",
+                  paidAmount: item.paidAmount || "",
+                  pendingAmount: item.pendingAmount || "",
+                }))
+                : [getDefaultPaymentRow()],
+            };
+
+            reset(getDefaultValues(formData));
+
+            // Update the field array with the fetched data
+            if (response.paymentDetails1?.length) {
+              const paymentRows = response.paymentDetails1.map((item) => ({
+                chequeRtgsNo: item.chequeRtgsNo || "",
+                chequeDate: item.chequeDate || "",
+                totalAmount: item.totalAmount || "",
+                paidAmount: item.paidAmount || "",
+                pendingAmount: item.pendingAmount || "",
+              }));
+              replace1(paymentRows);
+            }
+          }
+        } catch (error) {
+          console.error("Error fetching transport bill data:", error);
+          addToast("Failed to load transport bill data", "error");
+        } finally {
+          setLoading(false);
+        }
+      }
+    };
+
+    fetchData();
+  }, [data?.id]);
+
+  const loadBranches = useCallback(async () => {
+    try {
+      const response = await branchAPI.getBranchByOrgId(orgId);
+      const options = (response || []).map((branch) => ({
+        value: branch.id,
+        label: branch.branchName || branch.branch,
+      }));
+      setPlantData(options);
+    } catch (error) {
+      console.error("Failed to load branches:", error);
+      setPlantData([]);
+    }
+  }, [orgId]);
+
+  const loadTransporter = useCallback(async () => {
+    try {
+      const response = await transportAPI.getTransportByOrgId(branchId, orgId);
+      const options = (response || []).map((transport) => ({
+        value: transport.id,
+        label: transport.transportName,
+      }));
+      setTransporterData(options);
+    } catch (error) {
+      console.error("Failed to load transporters:", error);
+      setTransporterData([]);
+    }
+  }, [branchId, orgId]);
+
+  const loadReceivedBy = useCallback(async () => {
+    try {
+      const response = await employeeAPI.getEmployeeByOrgId(orgId);
+      const options = (response || []).map((employee) => ({
+        value: employee.id || employee.employeeId,
+        label: employee.employeeName,
+      }));
+      setReceivedByData(options);
+    } catch (error) {
+      console.error("Failed to load received by options:", error);
+      setReceivedByData([]);
+    }
+  }, [orgId]);
 
   const handlePaymentChange = (setName, idx, field, value, row) => {
     const base = `${setName}.${idx}.`;
@@ -134,174 +420,82 @@ const TransportBillForm = ({ data, onBack }) => {
       addToast("Please fill all mandatory fields", "error");
       return;
     }
+
+    // Build payment details array
+    const paymentDetails = (formData.paymentDetails1 || []).map((item) => ({
+      chequeRtgsNo: item.chequeRtgsNo || "",
+      chequeDate: item.chequeDate || "",
+      totalAmount: parseFloat(item.totalAmount) || 0,
+      paidAmount: parseFloat(item.paidAmount) || 0,
+      pendingAmount: parseFloat(item.pendingAmount) || 0,
+    }));
+
+    // Base payload without id
     const payload = {
-      ...(formData.id ? { id: formData.id } : {}),
-      orgId, branch,
-      ...formData,
-      createdBy: localStorage.getItem("userName") || "SYSTEM",
+      orgId: orgId,
+      branch: formData.plantId || branchId,
+      docNo: formData.docNo || "",
+      docDate: formData.docDate || "",
+      transportName: Number(formData.transportName) || 0,
+      billNo: formData.billNo || "",
+      billDate: formData.billDate || "",
+      totalAmount: parseFloat(formData.totalAmount) || 0,
+      billReceivedDate: formData.billReceivedDate || "",
+      accReceivedDate: formData.accReceivedDate || "",
+      receivedBy: Number(formData.receivedBy) || 0,
+      accReceivedBy: Number(formData.accReceivedBy) || 0,
+      active: formData.active === true || formData.active === "Active",
+      createdBy: Number(localStorage.getItem("userId")) || 0,
       cancelRemarks: "",
+      documentType: 0,
+      paymentDetails1: paymentDetails,
     };
+
+    // Only add id if it exists (for update)
+    if (formData.id && formData.id !== 0) {
+      payload.id = formData.id;
+    }
+
+    console.log("Saving payload:", payload);
+
     try {
-      await transportBillAPI.createUpdate(payload);
-      addToast(data ? "Transport Bill Updated!" : "Transport Bill Saved!", "success");
-      onBack();
+      const response = await transportBillAPI.createUpdate(payload);
+      if (response?.status === true || response?.status === "Ok") {
+        addToast(data ? "Transport Bill Updated!" : "Transport Bill Saved!", "success");
+        onBack();
+      } else {
+        addToast(response?.message || "Failed to save Transport Bill.", "error");
+      }
     } catch (error) {
       console.error("Save error:", error);
-      addToast("Failed to save Transport Bill.", "error");
+      addToast(error?.response?.data?.message || "Failed to save Transport Bill.", "error");
     }
   };
 
-  const renderHeader = (errMap) => (
-    <div className={fieldGrid}>
-      <InputField label="Plant ID" required error={errMap.plantId}>
-        <Controller control={control} name="plantId" render={({ field }) => (
-          <select {...field} className={`${controlClasses} ${errMap.plantId ? "border-red-500" : ""}`}>
-            <option value="">Select</option>
-            {["Plant 1", "Plant 2", "Plant 3"].map((o) => <option key={o} value={o}>{o}</option>)}
-          </select>
-        )} />
-      </InputField>
-      <InputField label="Doc No">
-        <input {...register("docNo")} disabled className={`${controlClasses} bg-gray-50 dark:bg-gray-800`} />
-      </InputField>
-      <InputField label="Transport Name" required error={errMap.transportName}>
-        <Controller control={control} name="transportName" render={({ field }) => (
-          <select {...field} className={`${controlClasses} ${errMap.transportName ? "border-red-500" : ""}`}>
-            <option value="">Select</option>
-            {TRANSPORT_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
-          </select>
-        )} />
-      </InputField>
-      <InputField label="Doc Date">
-        <input type="date" {...register("docDate")} className={controlClasses} />
-      </InputField>
-      <InputField label="Bill No" required error={errMap.billNo}>
-        <input {...register("billNo")} className={`${controlClasses} ${errMap.billNo ? "border-red-500" : ""}`} />
-      </InputField>
-      <InputField label="Bill Date" required error={errMap.billDate}>
-        <input type="date" {...register("billDate")} className={`${controlClasses} ${errMap.billDate ? "border-red-500" : ""}`} />
-      </InputField>
-      <InputField label="Total Amount" required error={errMap.totalAmount}>
-        <input type="number" step="0.01" {...register("totalAmount")} className={`${controlClasses} ${errMap.totalAmount ? "border-red-500" : ""}`} />
-      </InputField>
-      <InputField label="Bill Received Date">
-        <input type="date" {...register("billReceivedDate")} className={controlClasses} />
-      </InputField>
-      <InputField label="Acc Received Date">
-        <input type="date" {...register("accReceivedDate")} className={controlClasses} />
-      </InputField>
-      <InputField label="Received By">
-        <Controller control={control} name="receivedBy" render={({ field }) => (
-          <select {...field} className={controlClasses}>
-            <option value="">Select</option>
-            {RECEIVED_BY_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
-          </select>
-        )} />
-      </InputField>
-      <InputField label="Acc Received By">
-        <Controller control={control} name="accReceivedBy" render={({ field }) => (
-          <select {...field} className={controlClasses}>
-            <option value="">Select</option>
-            {RECEIVED_BY_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
-          </select>
-        )} />
-      </InputField>
-    </div>
-  );
-
-  const paymentColumns = [
-    { key: "chequeNo", label: "Cheque/RTGS No", width: "130px" },
-    { key: "chequeDate", label: "Cheque Date", width: "110px" },
-    { key: "totalAmount", label: "Total Amount", width: "100px" },
-    { key: "paidAmount", label: "Paid Amount", width: "100px" },
-    { key: "pendingAmount", label: "Pending Amount", width: "110px" },
-  ];
-
-  const renderPaymentCell = (setName, col, row, idx) => {
-    const cls = `${controlClasses} w-[${col.width}]`;
-
-    if (col.key === "pendingAmount") {
-      return <input value={row?.[col.key] ?? ""} readOnly className={`${cls} bg-gray-50 dark:bg-gray-800`} />;
-    }
-    if (col.key === "chequeDate") {
-      return (
-        <input type="date" defaultValue={row?.[col.key] ?? ""}
-          onChange={(e) => handlePaymentChange(setName, idx, col.key, e.target.value, row)} className={cls} />
-      );
-    }
-    if (col.key === "chequeNo") {
-      return (
-        <input type="text" defaultValue={row?.[col.key] ?? ""}
-          onChange={(e) => handlePaymentChange(setName, idx, col.key, e.target.value, row)} className={cls} />
-      );
-    }
+  if (loading) {
     return (
-      <input
-        type="number"
-        step="0.01"
-        defaultValue={row?.[col.key] ?? ""}
-        onChange={(e) => handlePaymentChange(setName, idx, col.key, e.target.value, row)}
-        className={cls}
-      />
+      <div className="flex justify-center items-center h-64">
+        <div className="text-gray-500 dark:text-gray-400">Loading...</div>
+      </div>
     );
-  };
-
-  const renderPaymentTab = (tabLabel, setName, fields, addRow, removeRow, rows) => (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <SectionHeader>{tabLabel}</SectionHeader>
-        <button type="button" onClick={addRow}
-          className="flex items-center gap-1 px-2 py-1 rounded text-[11px] bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50 transition-colors">
-          <Plus className="h-3 w-3" /> Add Row
-        </button>
-      </div>
-      <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
-        <table className="w-full text-xs">
-          <thead className="bg-gray-100 dark:bg-gray-700">
-            <tr>
-              <th className={thClass}>#</th>
-              {paymentColumns.map((c) => (
-                <th key={c.key} className={thClass} style={{ minWidth: c.width }}>{c.label}</th>
-              ))}
-              <th className={`${thClass} text-center`} style={{ minWidth: "50px" }}>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {fields.map((row, idx) => (
-              <tr key={row.id} className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-                <td className="px-1.5 py-1 text-gray-500 dark:text-gray-400 text-[10px] w-[25px]">{idx + 1}</td>
-                {paymentColumns.map((col) => (
-                  <td key={col.key} className="px-1.5 py-1" style={{ minWidth: col.width }}>
-                    {renderPaymentCell(setName, col, rows?.[idx], idx)}
-                  </td>
-                ))}
-                <td className="px-1.5 py-1 text-center whitespace-nowrap w-[50px]">
-                  <button type="button" onClick={() => removeRow(idx)} disabled={fields.length <= 1}
-                    className="p-0.5 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-30">
-                    <Trash2 className="h-3 w-3" />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
+  }
 
   const tabs = [
     { key: "payment1", label: "Payment Details 1" },
-    { key: "payment2", label: "Payment Details 2" },
   ];
 
   return (
-    <div className="animate-fadeIn px-3 py-3 max-w-7xl mx-auto">
+    <div className="p-2 max-w-7xl relative">
+      {/* Header */}
       <div className="flex items-center gap-2 mb-3">
-        <button type="button" onClick={onBack} className="p-1 rounded-md text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+        <button
+          onClick={onBack}
+          className="p-1 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+        >
           <ArrowLeft className="h-4 w-4" />
         </button>
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-          {data ? "Edit Transport Bill" : "New Transport Bill"}
+          {data ? "Edit Transport Bill" : "Add Transport Bill"}
         </h2>
         <div className="ml-auto flex items-center gap-2">
           <label className={labelClasses}>Active</label>
@@ -311,36 +505,250 @@ const TransportBillForm = ({ data, onBack }) => {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-4">
-        <SectionHeader>Transport Bill Header</SectionHeader>
-        {renderHeader(formErrs)}
+      {/* Main Card */}
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-3">
+        {/* Header Fields */}
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3">
+          <SelectField
+            control={control}
+            name="plantId"
+            label="Plant ID"
+            options={plantData}
+            required
+            errors={formErrs}
+          />
+          <InputField
+            control={control}
+            name="docNo"
+            label="Doc No"
+            errors={errors}
+          />
+          <SelectField
+            control={control}
+            name="transportName"
+            label="Transport Name"
+            options={transporterData}
+            required
+            errors={formErrs}
+          />
+          <InputField
+            control={control}
+            type="date"
+            name="docDate"
+            label="Doc Date"
+            errors={errors}
+          />
+          <InputField
+            control={control}
+            name="billNo"
+            label="Bill No"
+            required
+            placeholder="Enter Bill No"
+            errors={formErrs}
+          />
+          <InputField
+            control={control}
+            type="date"
+            name="billDate"
+            label="Bill Date"
+            required
+            errors={formErrs}
+          />
+          <InputField
+            control={control}
+            name="totalAmount"
+            label="Total Amount"
+            type="number"
+            step="0.01"
+            required
+            placeholder="0.00"
+            errors={formErrs}
+          />
+          <InputField
+            control={control}
+            type="date"
+            name="billReceivedDate"
+            label="Bill Received Date"
+            errors={errors}
+          />
+          <InputField
+            control={control}
+            type="date"
+            name="accReceivedDate"
+            label="Acc Received Date"
+            errors={errors}
+          />
+          <SelectField
+            control={control}
+            name="receivedBy"
+            label="Received By"
+            options={receivedByData}
+            errors={errors}
+          />
+          <SelectField
+            control={control}
+            name="accReceivedBy"
+            label="Acc Received By"
+            options={receivedByData}
+            errors={errors}
+          />
+        </div>
 
-        <div className="border-b border-gray-200 dark:border-gray-700">
-          <div className="flex">
+        {/* Tabs Section */}
+        <section className="mt-0 bg-white dark:bg-gray-800">
+          <div className="flex items-center border-b border-gray-200 dark:border-gray-700 mb-2">
             {tabs.map((tab) => (
-              <button key={tab.key} type="button" onClick={() => setActiveTab(tab.key)}
-                className={`px-4 py-1.5 text-xs font-semibold rounded-t transition-colors ${
-                  activeTab === tab.key
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveTab(tab.key)}
+                className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${activeTab === tab.key
                     ? "bg-blue-600 text-white"
                     : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                }`}>
+                  }`}
+              >
                 {tab.label}
               </button>
             ))}
           </div>
-        </div>
 
-        {activeTab === "payment1" && renderPaymentTab("Payment Details 1", "paymentDetails1", fields1, () => append1(getDefaultPaymentRow()), remove1, watch1)}
-        {activeTab === "payment2" && renderPaymentTab("Payment Details 2", "paymentDetails2", fields2, () => append2(getDefaultPaymentRow()), remove2, watch2)}
+          {/* Tab 1: Payment Details 1 */}
+          {activeTab === "payment1" && (
+            <div className="space-y-1">
+              <div className="flex items-center justify-end mb-2">
+                <button
+                  type="button"
+                  onClick={() => append1(getDefaultPaymentRow())}
+                  className="h-6 w-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-colors"
+                >
+                  <Plus size={12} />
+                </button>
+              </div>
 
+              <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
+                <table className="w-full text-xs min-w-[600px]">
+                  <thead className="bg-gray-100 dark:bg-gray-700">
+                    <tr>
+                      <th className="p-1.5 text-center dark:text-white whitespace-nowrap text-[10px] font-medium sticky left-0 bg-gray-100 dark:bg-gray-700 z-10">S.No</th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[130px]">Cheque/RTGS No</th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[110px]">Cheque Date</th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]">Total Amount</th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]">Paid Amount</th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[110px]">Pending Amount</th>
+                      <th className="p-1.5 text-center dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[60px] sticky right-0 bg-gray-100 dark:bg-gray-700 z-10">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {fields1.map((field, index) => (
+                      <tr key={field.id} className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
+                        <td className="p-1 text-center font-medium dark:text-white text-[10px] sticky left-0 bg-white dark:bg-gray-800 z-10">
+                          {index + 1}
+                        </td>
+                        <td className="p-0.5 align-top min-w-[130px]">
+                          <InputCell
+                            control={control}
+                            name={`paymentDetails1.${index}.chequeRtgsNo`}
+                            placeholder="Enter"
+                            errors={errors}
+                          />
+                        </td>
+                        <td className="p-0.5 align-top min-w-[110px]">
+                          <InputCell
+                            control={control}
+                            name={`paymentDetails1.${index}.chequeDate`}
+                            type="date"
+                            errors={errors}
+                          />
+                        </td>
+                        <td className="p-0.5 align-top min-w-[100px]">
+                          <InputCell
+                            control={control}
+                            name={`paymentDetails1.${index}.totalAmount`}
+                            type="number"
+                            step="0.01"
+                            placeholder="0.00"
+                            align="right"
+                            errors={errors}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const row = watch1?.[index];
+                              handlePaymentChange("paymentDetails1", index, "totalAmount", val, row);
+                            }}
+                          />
+                        </td>
+                        <td className="p-0.5 align-top min-w-[100px]">
+                          <InputCell
+                            control={control}
+                            name={`paymentDetails1.${index}.paidAmount`}
+                            type="number"
+                            step="0.01"
+                            placeholder="0.00"
+                            align="right"
+                            errors={errors}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const row = watch1?.[index];
+                              handlePaymentChange("paymentDetails1", index, "paidAmount", val, row);
+                            }}
+                          />
+                        </td>
+                        <td className="p-0.5 align-top min-w-[110px]">
+                          <InputCell
+                            control={control}
+                            name={`paymentDetails1.${index}.pendingAmount`}
+                            type="number"
+                            step="0.01"
+                            placeholder="0.00"
+                            align="right"
+                            errors={errors}
+                            readOnly
+                          />
+                        </td>
+                        <td className="p-1 text-center sticky right-0 bg-white dark:bg-gray-800 z-10">
+                          <button
+                            type="button"
+                            onClick={() => remove1(index)}
+                            disabled={fields1.length <= 1}
+                            className={`h-5 w-5 rounded text-white flex items-center justify-center ${fields1.length <= 1
+                                ? "bg-gray-400 cursor-not-allowed"
+                                : "bg-red-600 hover:bg-red-700"
+                              }`}
+                          >
+                            <Trash2 size={10} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {fields1.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="p-4 text-center text-gray-500 dark:text-gray-400 text-xs">
+                          No records found
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* Buttons */}
         <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
-          <button type="button" onClick={onBack}
-            className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+          <button
+            onClick={onBack}
+            disabled={isSubmitting}
+            className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+          >
             <X className="h-3 w-3" /> Cancel
           </button>
-          <button type="button" onClick={handleSubmit(onSubmit)}
-            className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 transition-colors">
-            <Save className="h-3 w-3" /> Save
+          <button
+            onClick={handleSubmit(onSubmit)}
+            disabled={isSubmitting}
+            className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+          >
+            <Save className="h-3 w-3" />{" "}
+            {isSubmitting ? "Saving..." : data ? "Update" : "Save"}
           </button>
         </div>
       </div>

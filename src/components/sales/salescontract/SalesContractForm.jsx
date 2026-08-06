@@ -10,8 +10,11 @@ import {
   ClipboardPaste,
   TableProperties,
 } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useForm, Controller, useFieldArray } from "react-hook-form";
+import branchAPI from "../../../api/branchAPI";
+import salesContractAPI from "../../../api/Sales/salesContract";
+import listOfValuesAPI from "../../../api/listOfValuesAPI";
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -47,7 +50,8 @@ const getDefaultValues = () => ({
   postRate: "",
   taxCode: "",
   customerType: "",
- 
+  oldQuotationNo: "",
+  recId: "",
 
   // Sales Contract Details Table
   salesContractDetails: [
@@ -87,7 +91,7 @@ const getDefaultValues = () => ({
     },
   ],
 
-  // Charges Summary (NEW for 3rd Tab)
+  // Charges Summary
   chargesSummary: {
     totalAmount: 100.0,
     amountInWords: "Rupees One Hundred Only",
@@ -108,30 +112,20 @@ const getDefaultValues = () => ({
 });
 
 const SELECT_OPTIONS = {
-  plantId: ["Plant A", "Plant B", "Plant C"],
-  contactType: ["Primary", "Secondary", "Billing", "Shipping"],
+  belongsTo: ["Appliances", "Bosch"],
+  contactType: ["Direct", "Flow"],
   withQuotation: ["Yes", "No"],
-  invoiceType: ["Tax Invoice", "Proforma Invoice", "Commercial Invoice"],
-  customerId: ["CUST001", "CUST002", "CUST003"],
+  invoiceType: ["Export", "InterState", "Local"],
   isESTApplicable: ["Yes", "No"],
   postRate: ["Yes", "No"],
-  taxCode: ["TC001", "TC002", "TC003"],
-  customerType: ["Individual", "Business", "Government", "International"],
   unit: ["Pcs", "Kg", "Meter", "Liter", "Box", "NOS"],
-  taxType: ["CGST+SGST", "IGST", "UTGST", "GST"],
-  particulars: [
-    "Freight",
-    "Insurance",
-    "Packing Charges",
-    "Handling Charges",
-    "Other",
-  ],
+  taxType: ["SGST", "IGST"],
   modeOfTransport: ["Road", "Rail", "Air", "Sea", "Courier"],
   yesNo: ["Yes", "No"],
 };
 
 // Helper Components
-const SelectField = ({ control, name, label, options, required, errors }) => {
+const SelectField = ({ control, name, label, options, required, errors, onChange, disabled }) => {
   const getError = () => {
     const parts = name.split(".");
     let error = errors;
@@ -160,11 +154,21 @@ const SelectField = ({ control, name, label, options, required, errors }) => {
           <select
             {...field}
             className={`${controlClasses} ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
+            onChange={(e) => {
+              field.onChange(e);
+              if (onChange) {
+                onChange(e.target.value);
+              }
+            }}
+            disabled={disabled}
           >
             <option value="">Select an option</option>
             {options.map((opt) => (
-              <option key={opt} value={opt}>
-                {opt}
+              <option
+                key={typeof opt === "object" ? opt.value : opt}
+                value={typeof opt === "object" ? opt.value : opt}
+              >
+                {typeof opt === "object" ? opt.label : opt}
               </option>
             ))}
           </select>
@@ -234,55 +238,6 @@ const InputField = ({
   );
 };
 
-const TextAreaField = ({
-  control,
-  name,
-  label,
-  required,
-  placeholder,
-  errors,
-  rows = 3,
-}) => {
-  const getError = () => {
-    const parts = name.split(".");
-    let error = errors;
-    for (const part of parts) {
-      if (error && error[part]) {
-        error = error[part];
-      } else {
-        return null;
-      }
-    }
-    return error?.message;
-  };
-
-  const errorMessage = getError();
-
-  return (
-    <div>
-      <label className={labelClasses}>
-        {label} {required && <span className="text-red-500">*</span>}
-      </label>
-      <Controller
-        name={name}
-        control={control}
-        rules={required ? { required: `${label} is required` } : undefined}
-        render={({ field }) => (
-          <textarea
-            {...field}
-            rows={rows}
-            className={`${controlClasses} h-auto min-h-[60px] resize-y ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
-            placeholder={placeholder}
-          />
-        )}
-      />
-      {errorMessage && (
-        <p className="text-red-500 text-[11px]">{errorMessage}</p>
-      )}
-    </div>
-  );
-};
-
 const TableWrapper = ({ children }) => (
   <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
     <table className="w-full text-xs">{children}</table>
@@ -295,7 +250,7 @@ const TableHead = ({ headers }) => (
       {headers.map((h, i) => (
         <th
           key={i}
-          className={`p-1 ${i === 0 ? "w-8 text-center" : "text-left"} dark:text-white whitespace-nowrap`}
+          className={`p-1 ${i === 0 ? "w-8 text-center" : "text-left"} dark:text-white whitespace-nowrap text-[10px]`}
         >
           {h}
         </th>
@@ -312,7 +267,7 @@ const TableRow = ({
   showDelete = true,
 }) => (
   <tr className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-    <td className="p-1 text-center font-medium dark:text-white">{index + 1}</td>
+    <td className="p-1 text-center font-medium dark:text-white text-[10px]">{index + 1}</td>
     {children}
     {showDelete && (
       <td className="p-1 text-center">
@@ -320,11 +275,10 @@ const TableRow = ({
           type="button"
           onClick={onRemove}
           disabled={disabled}
-          className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-            disabled
-              ? "bg-gray-400 cursor-not-allowed"
-              : "bg-red-600 hover:bg-red-700"
-          }`}
+          className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
+            ? "bg-gray-400 cursor-not-allowed"
+            : "bg-red-600 hover:bg-red-700"
+            }`}
         >
           <Trash2 size={10} />
         </button>
@@ -333,7 +287,7 @@ const TableRow = ({
   </tr>
 );
 
-const SelectCell = ({ control, name, options, required, errors }) => {
+const SelectCell = ({ control, name, options, required, errors, onChange, disabled }) => {
   const getError = () => {
     const parts = name.split(".");
     let error = errors;
@@ -350,7 +304,7 @@ const SelectCell = ({ control, name, options, required, errors }) => {
   const errorMessage = getError();
 
   return (
-    <td className="p-1 align-top">
+    <div className="p-0.5 align-top">
       <Controller
         name={name}
         control={control}
@@ -358,23 +312,30 @@ const SelectCell = ({ control, name, options, required, errors }) => {
         render={({ field }) => (
           <select
             {...field}
-            className={`${controlClasses} h-8 text-xs ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
+            className={`${controlClasses} h-7 text-[10px] ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
+            onChange={(e) => {
+              field.onChange(e);
+              if (onChange) {
+                onChange(e.target.value);
+              }
+            }}
+            disabled={disabled}
           >
             <option value="">Select</option>
             {options.map((opt) => (
-              <option key={opt} value={opt}>
-                {opt}
+              <option key={typeof opt === "object" ? opt.value : opt} value={typeof opt === "object" ? opt.value : opt}>
+                {typeof opt === "object" ? opt.label : opt}
               </option>
             ))}
           </select>
         )}
       />
       {errorMessage && (
-        <div className="text-red-500 text-[10px] mt-0.5 whitespace-nowrap">
+        <div className="text-red-500 text-[9px] mt-0.5 whitespace-nowrap">
           {errorMessage}
         </div>
       )}
-    </td>
+    </div>
   );
 };
 
@@ -387,6 +348,8 @@ const InputCell = ({
   required,
   errors,
   align = "left",
+  disabled,
+  onChange,
 }) => {
   const getError = () => {
     const parts = name.split(".");
@@ -404,7 +367,7 @@ const InputCell = ({
   const errorMessage = getError();
 
   return (
-    <td className="p-1 align-top">
+    <div className="p-0.5 align-top">
       <Controller
         name={name}
         control={control}
@@ -414,17 +377,24 @@ const InputCell = ({
             {...field}
             type={type}
             step={step}
-            className={`${controlClasses} h-8 text-xs ${align === "right" ? "text-right" : ""} ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
+            className={`${controlClasses} h-7 text-[10px] ${align === "right" ? "text-right" : ""} ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
             placeholder={placeholder}
+            disabled={disabled}
+            onChange={(e) => {
+              field.onChange(e);
+              if (onChange) {
+                onChange(e);
+              }
+            }}
           />
         )}
       />
       {errorMessage && (
-        <div className="text-red-500 text-[10px] mt-0.5 whitespace-nowrap">
+        <div className="text-red-500 text-[9px] mt-0.5 whitespace-nowrap">
           {errorMessage}
         </div>
       )}
-    </td>
+    </div>
   );
 };
 
@@ -453,11 +423,10 @@ const FileUploadCell = ({ control, name, errors }) => {
         render={({ field: { onChange, value } }) => (
           <div className="relative">
             <div
-              className={`border-2 border-dashed rounded-md p-2 text-center cursor-pointer transition-colors ${
-                errorMessage
-                  ? "border-red-500 bg-red-50 dark:bg-red-900/20"
-                  : "border-gray-300 dark:border-gray-600 hover:border-blue-500 dark:hover:border-blue-400"
-              }`}
+              className={`border-2 border-dashed rounded-md p-2 text-center cursor-pointer transition-colors ${errorMessage
+                ? "border-red-500 bg-red-50 dark:bg-red-900/20"
+                : "border-gray-300 dark:border-gray-600 hover:border-blue-500 dark:hover:border-blue-400"
+                }`}
               onDragOver={(e) => {
                 e.preventDefault();
                 e.currentTarget.classList.add(
@@ -534,13 +503,30 @@ const FileUploadCell = ({ control, name, errors }) => {
 };
 
 // Main Component
-const SalesContractForm = ({ data, onBack }) => {
+const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
   const [orgId] = useState(localStorage.getItem("orgId"));
+  const [branchId] = useState(localStorage.getItem("branchId"));
   const [activeTab, setActiveTab] = useState("salesContract");
+  const [plantData, setPlantData] = useState([]);
+  const [customerOptions, setCustomerOptions] = useState([]);
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [loadingCustomer, setLoadingCustomer] = useState(false);
+  const [quotationOptions, setQuotationOptions] = useState([]);
+  const [loadingQuotation, setLoadingQuotation] = useState(false);
+  const [itemOptions, setItemOptions] = useState([]);
+  const [loadingItems, setLoadingItems] = useState(false);
+  const [listOfValuesData, setListOfValuesData] = useState([]);
+
+  const LIST_OF_VALUES_GROUPS = {
+    PARTICULARS: "Particulars",
+  };
 
   const {
     control,
     handleSubmit,
+    setValue,
+    getValues,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm({
     mode: "onTouched",
@@ -556,6 +542,379 @@ const SalesContractForm = ({ data, onBack }) => {
     control,
     name: "attachedPOCopy",
   });
+
+  // Watch for changes
+  const customerId = watch("customerId");
+  const contactType = watch("contactType");
+  const quotNo = watch("quotNo");
+  const withQuotation = watch("withQuotation");
+  const isIGSTApplicable = watch("isESTApplicable");
+  const salesContractDetails = watch("salesContractDetails");
+
+  // Check if contact type is "Direct"
+  const isDirectContact = contactType === "Direct";
+
+  const loadListOfValuesData = async () => {
+    try {
+      const result = {};
+
+      await Promise.all(
+        Object.entries(LIST_OF_VALUES_GROUPS).map(async ([key, group]) => {
+          try {
+            const response = await listOfValuesAPI.getListValuesGroup(group, orgId);
+
+            result[key] = Array.isArray(response)
+              ? response.map(item => ({
+                value: item.id,
+                label: item.valuesDescription,
+                ...item,
+              }))
+              : [];
+          } catch (err) {
+            console.error(`${group} failed`, err);
+            result[key] = [];
+          }
+        })
+      );
+
+      setListOfValuesData(result);
+    } catch (err) {
+      console.error("Error loading ListOfValues:", err);
+    }
+  };
+
+  useEffect(() => {
+    loadBranches();
+    if (isEditMode && data) {
+      loadQuotations();
+    }
+    loadListOfValuesData();
+  }, []);
+
+  // Load customers when orgId changes or contactType changes
+  useEffect(() => {
+    if (orgId && contactType) {
+      loadCustomers(contactType);
+    }
+  }, [orgId, contactType]);
+
+  // Load quotations when customerId or contactType changes
+  useEffect(() => {
+    if (orgId && branchId && customerId && contactType) {
+      if (!isDirectContact) {
+        loadQuotations();
+      } else {
+        setQuotationOptions([]);
+        setValue("quotNo", "");
+        setValue("quotDate", "");
+      }
+    }
+  }, [customerId, contactType, orgId, branchId, isDirectContact]);
+
+  // Load items when quotNo or withQuotation changes
+  useEffect(() => {
+    if (orgId && branchId) {
+      if (withQuotation === "Yes" && quotNo) {
+        loadQuotationItems(quotNo);
+      } else if (withQuotation === "No") {
+        loadFinishedGoodsItems();
+      } else {
+        setItemOptions([]);
+      }
+    }
+  }, [quotNo, withQuotation, orgId, branchId]);
+
+  // Auto-fill customer details when customerId changes
+  useEffect(() => {
+    if (customerId && customerOptions.length > 0) {
+      const customer = customerOptions.find(
+        (c) => String(c.customerId) === String(customerId)
+      );
+      if (customer) {
+        setSelectedCustomer(customer);
+        setValue("customerName", customer.customerName || "");
+        setValue("address", customer.address || "");
+        setValue("gstNo", customer.gstNo || "");
+        setValue("isESTApplicable", customer.igstApplicable ? "Yes" : "No");
+        if (customer.gstType) {
+          setValue("customerType", customer.gstType);
+        }
+      }
+    } else {
+      setSelectedCustomer(null);
+    }
+  }, [customerId, customerOptions, setValue]);
+
+  // Auto-fill quotation date when quotNo changes
+  useEffect(() => {
+    if (quotNo && quotationOptions.length > 0 && !isDirectContact) {
+      const selectedQuotation = quotationOptions.find(
+        (q) => String(q.quotationNo) === String(quotNo)
+      );
+      if (selectedQuotation) {
+        setValue("quotDate", selectedQuotation.quotationDate || "");
+      }
+    }
+  }, [quotNo, quotationOptions, setValue, isDirectContact]);
+
+  // Set tax type based on IGST applicability
+  useEffect(() => {
+    const taxType = isIGSTApplicable === "Yes" ? "IGST" : "SGST";
+
+    salesContractArray.fields.forEach((_, index) => {
+      setValue(`salesContractDetails.${index}.taxType`, taxType);
+    });
+  }, [isIGSTApplicable, salesContractArray.fields.length, setValue]);
+
+  // Calculate discount amount, amount, and tax amounts for each row
+  useEffect(() => {
+    if (!salesContractDetails) return;
+
+    salesContractDetails.forEach((item, index) => {
+      const qty = Number(item.qty) || 0;
+      const orderRate = Number(item.orderRate) || 0;
+      const discountPercent = Number(item.discountPercent) || 0;
+
+      // Calculate amount before discount
+      const amountBeforeDiscount = qty * orderRate;
+
+      // Calculate discount amount
+      const discountAmount = (amountBeforeDiscount * discountPercent) / 100;
+
+      // Calculate final amount
+      const amount = amountBeforeDiscount - discountAmount;
+
+      // Get tax rates from the item data
+      const selectedItem = itemOptions.find(i => i.itemCode === item.itemCode);
+      const sgstRate = selectedItem?.sgst || 0;
+      const cgstRate = selectedItem?.cgst || 0;
+      const igstRate = selectedItem?.igst || 0;
+
+      // Calculate tax amounts based on tax type
+      const taxType = isIGSTApplicable === "Yes" ? "IGST" : "SGST";
+
+      let sgstAmount = 0;
+      let cgstAmount = 0;
+      let igstAmount = 0;
+
+      if (taxType === "IGST") {
+        igstAmount = (amount * igstRate) / 100;
+        sgstAmount = 0;
+        cgstAmount = 0;
+      } else {
+        sgstAmount = (amount * sgstRate) / 100;
+        cgstAmount = (amount * cgstRate) / 100;
+        igstAmount = 0;
+      }
+
+      // Update only if values have changed to avoid infinite loops
+      const currentDiscountAmount = Number(item.discountAmount) || 0;
+      const currentAmount = Number(item.amount) || 0;
+      const currentSgstAmount = Number(item.sgstAmount) || 0;
+      const currentCgstAmount = Number(item.cgstAmount) || 0;
+      const currentIgstAmount = Number(item.igstAmount) || 0;
+
+      if (Math.abs(currentDiscountAmount - discountAmount) > 0.001) {
+        setValue(`salesContractDetails.${index}.discountAmount`, discountAmount);
+      }
+
+      if (Math.abs(currentAmount - amount) > 0.001) {
+        setValue(`salesContractDetails.${index}.amount`, amount);
+      }
+
+      if (Math.abs(currentSgstAmount - sgstAmount) > 0.001) {
+        setValue(`salesContractDetails.${index}.sgstAmount`, sgstAmount);
+      }
+
+      if (Math.abs(currentCgstAmount - cgstAmount) > 0.001) {
+        setValue(`salesContractDetails.${index}.cgstAmount`, cgstAmount);
+      }
+
+      if (Math.abs(currentIgstAmount - igstAmount) > 0.001) {
+        setValue(`salesContractDetails.${index}.igstAmount`, igstAmount);
+      }
+    });
+  }, [salesContractDetails, itemOptions, isIGSTApplicable, setValue]);
+
+  const loadBranches = useCallback(async () => {
+    try {
+      const response = await branchAPI.getBranchByOrgId(orgId);
+      const options = (response || []).map(branch => ({
+        value: branch.id,
+        label: branch.branchName,
+      }));
+      setPlantData(options);
+    } catch (error) {
+      console.error("Failed to load branches:", error);
+      setPlantData([]);
+    }
+  }, [orgId]);
+
+  const loadCustomers = useCallback(async (contactTypeParam) => {
+    const effectiveContactType = contactTypeParam || contactType;
+
+    if (!orgId || !branchId || !effectiveContactType) {
+      console.log("Cannot load customers - missing params:", {
+        orgId,
+        branchId,
+        effectiveContactType
+      });
+      return;
+    }
+
+    setLoadingCustomer(true);
+
+    try {
+      const response = await salesContractAPI.getCustomerDropdown(
+        orgId,
+        branchId,
+        effectiveContactType
+      );
+
+      if (response?.status && response?.paramObjectsMap?.customers) {
+        setCustomerOptions(response.paramObjectsMap.customers);
+      } else {
+        setCustomerOptions([]);
+      }
+    } catch (error) {
+      console.error("Error loading customers:", error);
+      setCustomerOptions([]);
+    } finally {
+      setLoadingCustomer(false);
+    }
+  }, [orgId, branchId, contactType]);
+
+  const loadQuotations = useCallback(async () => {
+    if (!orgId || !branchId || !customerId || !contactType) {
+      return;
+    }
+
+    setLoadingQuotation(true);
+
+    try {
+      const customer = customerOptions.find(
+        (c) => String(c.customerId) === String(customerId)
+      );
+
+      const customerCode = customer?.customerCode || "";
+      const recId = isEditMode && data?.recId ? data.recId : 0;
+      const oldQuotationNo = isEditMode && data?.oldQuotationNo ? data.oldQuotationNo : "";
+
+      const response = await salesContractAPI.getQuotationDropdown(
+        orgId,
+        branchId,
+        contactType,
+        customerCode,
+        recId,
+        oldQuotationNo
+      );
+
+      if (response?.status && response?.paramObjectsMap?.quotations) {
+        setQuotationOptions(response.paramObjectsMap.quotations);
+      } else {
+        setQuotationOptions([]);
+      }
+    } catch (error) {
+      console.error("Error loading quotations:", error);
+      setQuotationOptions([]);
+    } finally {
+      setLoadingQuotation(false);
+    }
+  }, [orgId, branchId, customerId, contactType, customerOptions, isEditMode, data]);
+
+  const loadQuotationItems = useCallback(async (quotationNo) => {
+    if (!orgId || !branchId || !quotationNo) {
+      return;
+    }
+
+    setLoadingItems(true);
+
+    try {
+      const response = await salesContractAPI.getQuotationItems(
+        orgId,
+        branchId,
+        quotationNo
+      );
+
+      if (response?.status && response?.paramObjectsMap?.items) {
+        const items = response.paramObjectsMap.items;
+        setItemOptions(items);
+
+        if (items.length > 0 && salesContractArray.fields.length === 1) {
+          const firstItem = items[0];
+          setValue("salesContractDetails.0.itemCode", firstItem.itemCode || "");
+          setValue("salesContractDetails.0.itemDescription", firstItem.itemDescription || "");
+          setValue("salesContractDetails.0.hsCode", firstItem.hsnCode || "");
+          setValue("salesContractDetails.0.customerPartNo", firstItem.customerPartNo || "");
+          setValue("salesContractDetails.0.unit", firstItem.unitId || "");
+          // Set tax rates from API
+          setValue("salesContractDetails.0.sgstRate", firstItem.sgst || 0);
+          setValue("salesContractDetails.0.cgstRate", firstItem.cgst || 0);
+          setValue("salesContractDetails.0.igstRate", firstItem.igst || 0);
+          // Set order rate from API
+          setValue("salesContractDetails.0.orderRate", firstItem.rate || 0);
+        }
+      } else {
+        setItemOptions([]);
+      }
+    } catch (error) {
+      console.error("Error loading quotation items:", error);
+      setItemOptions([]);
+    } finally {
+      setLoadingItems(false);
+    }
+  }, [orgId, branchId, salesContractArray.fields.length, setValue]);
+
+  const loadFinishedGoodsItems = useCallback(async () => {
+    if (!orgId || !branchId) {
+      return;
+    }
+
+    setLoadingItems(true);
+
+    try {
+      const response = await salesContractAPI.getFinishedGoodsItems(
+        orgId,
+        branchId
+      );
+
+      if (response?.status && response?.paramObjectsMap?.items) {
+        const items = response.paramObjectsMap.items;
+        setItemOptions(items);
+      } else {
+        setItemOptions([]);
+      }
+    } catch (error) {
+      console.error("Error loading finished goods items:", error);
+      setItemOptions([]);
+    } finally {
+      setLoadingItems(false);
+    }
+  }, [orgId, branchId]);
+
+  const handleItemSelect = useCallback((index, itemCode) => {
+    const selectedItem = itemOptions.find(
+      item => String(item.itemCode) === String(itemCode)
+    );
+
+    if (selectedItem) {
+      setValue(`salesContractDetails.${index}.itemCode`, selectedItem.itemCode || "");
+      setValue(`salesContractDetails.${index}.itemDescription`, selectedItem.itemDescription || "");
+      setValue(`salesContractDetails.${index}.hsCode`, selectedItem.hsnCode || "");
+      setValue(`salesContractDetails.${index}.customerPartNo`, selectedItem.customerPartNo || "");
+
+      // Set the actual unit value
+      setValue(
+        `salesContractDetails.${index}.unit`,
+        selectedItem.unit || selectedItem.unitName || ""
+      );
+
+      setValue(`salesContractDetails.${index}.sgstRate`, selectedItem.sgst || 0);
+      setValue(`salesContractDetails.${index}.cgstRate`, selectedItem.cgst || 0);
+      setValue(`salesContractDetails.${index}.igstRate`, selectedItem.igst || 0);
+      setValue(`salesContractDetails.${index}.orderRate`, selectedItem.rate || 0);
+    }
+  }, [itemOptions, setValue]);
 
   const handleAddItem = (arrayName) => {
     const defaultValues = getDefaultValues();
@@ -589,7 +948,12 @@ const SalesContractForm = ({ data, onBack }) => {
 
   const onSubmit = async (formData) => {
     try {
-      console.log("Sales Contract Data:", formData, "Org Id:", orgId);
+      const submitData = {
+        ...formData,
+        customerDetails: selectedCustomer,
+        isEditMode,
+      };
+      console.log("Sales Contract Data:", submitData, "Org Id:", orgId);
       alert("Sales contract saved successfully!");
     } catch (error) {
       console.error("Error saving sales contract:", error);
@@ -620,7 +984,7 @@ const SalesContractForm = ({ data, onBack }) => {
             control={control}
             name="plantId"
             label="Plant ID"
-            options={SELECT_OPTIONS.plantId}
+            options={plantData}
             required
             errors={errors}
           />
@@ -636,7 +1000,7 @@ const SalesContractForm = ({ data, onBack }) => {
             control={control}
             name="belongsTo"
             label="Belongs To"
-            options={SELECT_OPTIONS.contactType}
+            options={SELECT_OPTIONS.belongsTo}
             errors={errors}
           />
           <InputField
@@ -654,6 +1018,18 @@ const SalesContractForm = ({ data, onBack }) => {
             options={SELECT_OPTIONS.contactType}
             required
             errors={errors}
+            onChange={(value) => {
+              setValue("contactType", value);
+              if (value === "Direct") {
+                setValue("withQuotation", "No");
+                setQuotationOptions([]);
+                setValue("quotNo", "");
+                setValue("quotDate", "");
+              } else if (value === "Flow") {
+                setValue("withQuotation", "Yes");
+              }
+              loadCustomers(value);
+            }}
           />
           <SelectField
             control={control}
@@ -662,6 +1038,13 @@ const SalesContractForm = ({ data, onBack }) => {
             options={SELECT_OPTIONS.withQuotation}
             required
             errors={errors}
+            onChange={(value) => {
+              setValue("withQuotation", value);
+              if (value === "No") {
+                setValue("quotNo", "");
+                setValue("quotDate", "");
+              }
+            }}
           />
           <SelectField
             control={control}
@@ -670,19 +1053,35 @@ const SalesContractForm = ({ data, onBack }) => {
             options={SELECT_OPTIONS.invoiceType}
             errors={errors}
           />
-          <InputField
-            control={control}
-            name="customerName"
-            label="Customer Name"
-            placeholder="Enter customer name"
-            errors={errors}
-          />
           <SelectField
             control={control}
             name="customerId"
             label="Customer ID"
-            options={SELECT_OPTIONS.customerId}
+            options={customerOptions.map(c => ({
+              value: c.customerId,
+              label: `${c.customerCode} - ${c.customerName}`
+            }))}
+            required
             errors={errors}
+          />
+          <InputField
+            control={control}
+            name="customerName"
+            label="Customer Name"
+            placeholder="Auto-filled from selection"
+            errors={errors}
+            disabled={!!selectedCustomer}
+          />
+          <SelectField
+            control={control}
+            name="quotNo"
+            label="Quot. No."
+            options={quotationOptions.map(q => ({
+              value: q.quotationNo,
+              label: `${q.quotationNo} - ${q.quotationDate}`
+            }))}
+            errors={errors}
+            disabled={isDirectContact || !customerId || loadingQuotation || withQuotation === "No"}
           />
           <InputField
             control={control}
@@ -690,20 +1089,15 @@ const SalesContractForm = ({ data, onBack }) => {
             name="quotDate"
             label="Quot. Date"
             errors={errors}
-          />
-          <SelectField
-            control={control}
-            name="quotNo"
-            label="Quot. No."
-            options={SELECT_OPTIONS.contactType}
-            errors={errors}
+            disabled={isDirectContact || !customerId || withQuotation === "No"}
           />
           <InputField
             control={control}
             name="address"
             label="Address"
-            placeholder="Enter address"
+            placeholder="Auto-filled from selection"
             errors={errors}
+            disabled={!!selectedCustomer || isDirectContact}
           />
           <InputField
             control={control}
@@ -727,12 +1121,12 @@ const SalesContractForm = ({ data, onBack }) => {
             label="Effective From"
             errors={errors}
           />
-          <SelectField
+          <InputField
             control={control}
             name="isESTApplicable"
             label="Is IGST Applicable"
-            options={SELECT_OPTIONS.isESTApplicable}
             required
+            disabled
             errors={errors}
           />
           <InputField
@@ -746,7 +1140,9 @@ const SalesContractForm = ({ data, onBack }) => {
             control={control}
             name="gstNo"
             label="GSTN No."
+            disabled
             errors={errors}
+            disabled={!!selectedCustomer || isDirectContact}
           />
           <SelectField
             control={control}
@@ -756,22 +1152,13 @@ const SalesContractForm = ({ data, onBack }) => {
             required
             errors={errors}
           />
-          <SelectField
+          <InputField
             control={control}
             name="customerType"
             label="Customer Type"
-            options={SELECT_OPTIONS.customerType}
             errors={errors}
+            disabled={isDirectContact}
           />
-          <SelectField
-            control={control}
-            name="taxCode"
-            label="Tax Code"
-            options={SELECT_OPTIONS.taxCode}
-            required
-            errors={errors}
-          />
-        
         </div>
 
         {/* Tabs Section */}
@@ -780,44 +1167,40 @@ const SalesContractForm = ({ data, onBack }) => {
             <button
               type="button"
               onClick={() => setActiveTab("salesContract")}
-              className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${
-                activeTab === "salesContract"
-                  ? "bg-blue-600 text-white"
-                  : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-              }`}
+              className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${activeTab === "salesContract"
+                ? "bg-blue-600 text-white"
+                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                }`}
             >
               Contract Detail
             </button>
             <button
               type="button"
               onClick={() => setActiveTab("taxDetails")}
-              className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${
-                activeTab === "taxDetails"
-                  ? "bg-blue-600 text-white"
-                  : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-              }`}
+              className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${activeTab === "taxDetails"
+                ? "bg-blue-600 text-white"
+                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                }`}
             >
               Tax Details
             </button>
             <button
               type="button"
               onClick={() => setActiveTab("chargesSummary")}
-              className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${
-                activeTab === "chargesSummary"
-                  ? "bg-blue-600 text-white"
-                  : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-              }`}
+              className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${activeTab === "chargesSummary"
+                ? "bg-blue-600 text-white"
+                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                }`}
             >
               Charges Summary
             </button>
             <button
               type="button"
               onClick={() => setActiveTab("attachedPOCopy")}
-              className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${
-                activeTab === "attachedPOCopy"
-                  ? "bg-blue-600 text-white"
-                  : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-              }`}
+              className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${activeTab === "attachedPOCopy"
+                ? "bg-blue-600 text-white"
+                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                }`}
             >
               Attached PO Copy
             </button>
@@ -836,228 +1219,351 @@ const SalesContractForm = ({ data, onBack }) => {
                 </button>
               </div>
 
+              <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
+                <table className="w-full text-xs min-w-max">
+                  <thead className="bg-gray-100 dark:bg-gray-700">
+                    <tr>
+                      <th className="p-1.5 text-center dark:text-white whitespace-nowrap text-[10px] font-medium sticky left-0 bg-gray-100 dark:bg-gray-700 z-10">S.No</th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]">Item Code *</th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[120px]">Customer Part No</th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[120px]">Item Description</th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[110px]">HSN/SAC Code *</th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]">Tax Type *</th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[80px]">Tax (%)</th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[80px]">Unit *</th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[80px]">Qty</th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[90px]">Quot. Rate</th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[90px]">Order Rate *</th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[90px]">Discount %</th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[110px]">Effective From</th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]">Effective To</th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[120px]">Discount Amount</th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]">Amount</th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[90px]">SGST Rate</th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]">SGST Amount</th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[90px]">CGST Rate</th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]">CGST Amount</th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[90px]">IGST Rate</th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]">IGST Amount</th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]">Currency Name</th>
+                      <th className="p-1.5 text-center dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[60px] sticky right-0 bg-gray-100 dark:bg-gray-700 z-10">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {salesContractArray.fields.map((field, index) => (
+                      <tr key={field.id} className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
+                        <td className="p-1 text-center font-medium dark:text-white text-[10px] sticky left-0 bg-white dark:bg-gray-800 z-10">
+                          {index + 1}
+                        </td>
+                        <td className="p-0.5 align-top min-w-[100px]">
+                          <SelectCell
+                            control={control}
+                            name={`salesContractDetails.${index}.itemCode`}
+                            options={itemOptions.map(item => ({
+                              value: item.itemCode,
+                              label: `${item.itemCode} - ${item.itemDescription}`
+                            }))}
+                            required
+                            errors={errors}
+                            onChange={(value) => handleItemSelect(index, value)}
+                            disabled={loadingItems}
+                          />
+                        </td>
+                        <td className="p-0.5 align-top min-w-[120px]">
+                          <InputCell
+                            control={control}
+                            name={`salesContractDetails.${index}.customerPartNo`}
+                            placeholder="Part No"
+                            errors={errors}
+                          />
+                        </td>
+                        <td className="p-0.5 align-top min-w-[120px]">
+                          <InputCell
+                            control={control}
+                            name={`salesContractDetails.${index}.itemDescription`}
+                            placeholder="Description"
+                            required
+                            errors={errors}
+                            disabled
+                          />
+                        </td>
+                        <td className="p-0.5 align-top min-w-[110px]">
+                          <InputCell
+                            control={control}
+                            name={`salesContractDetails.${index}.hsCode`}
+                            placeholder="HS Code"
+                            required
+                            errors={errors}
+                            disabled
+                          />
+                        </td>
+                        <td className="p-0.5 align-top min-w-[100px]">
+                          <SelectCell
+                            control={control}
+                            name={`salesContractDetails.${index}.taxType`}
+                            options={
+                              isIGSTApplicable === "Yes"
+                                ? ["IGST"]
+                                : ["SGST"]
+                            }
+                            required
+                            errors={errors}
+                            disabled
+                          />
+                        </td>
+                        <td className="p-0.5 align-top min-w-[80px]">
+                          <InputCell
+                            control={control}
+                            name={`salesContractDetails.${index}.taxRs`}
+                            type="number"
+                            step="0.01"
+                            placeholder="0.00"
+                            errors={errors}
+                          />
+                        </td>
+                        <td className="p-0.5 align-top min-w-[80px]">
+                          <InputCell
+                            control={control}
+                            name={`salesContractDetails.${index}.unit`}
+                            placeholder="Unit"
+                            required
+                            errors={errors}
+                            disabled
+                          />
+                        </td>
+                        <td className="p-0.5 align-top min-w-[80px]">
+                          <InputCell
+                            control={control}
+                            name={`salesContractDetails.${index}.qty`}
+                            type="number"
+                            step="0.001"
+                            placeholder="0.000"
+                            required
+                            errors={errors}
+                          />
+                        </td>
+                        <td className="p-0.5 align-top min-w-[90px]">
+                          <InputCell
+                            control={control}
+                            name={`salesContractDetails.${index}.quotRate`}
+                            type="number"
+                            step="0.01"
+                            placeholder="0.00"
+                            errors={errors}
+                          />
+                        </td>
+                        <td className="p-0.5 align-top min-w-[90px]">
+                          <InputCell
+                            control={control}
+                            name={`salesContractDetails.${index}.orderRate`}
+                            type="number"
+                            step="0.001"
+                            placeholder="0.000"
+                            required
+                            errors={errors}
+                          />
+                        </td>
+                        <td className="p-0.5 align-top min-w-[90px]">
+                          <InputCell
+                            control={control}
+                            name={`salesContractDetails.${index}.discountPercent`}
+                            type="number"
+                            step="0.01"
+                            placeholder="0.00"
+                            errors={errors}
+                          />
+                        </td>
+                        <td className="p-0.5 align-top min-w-[110px]">
+                          <InputCell
+                            control={control}
+                            name={`salesContractDetails.${index}.effectiveFrom`}
+                            type="date"
+                            errors={errors}
+                          />
+                        </td>
+                        <td className="p-0.5 align-top min-w-[100px]">
+                          <InputCell
+                            control={control}
+                            name={`salesContractDetails.${index}.effectiveTo`}
+                            type="date"
+                            errors={errors}
+                          />
+                        </td>
+                        <td className="p-0.5 align-top min-w-[120px]">
+                          <InputCell
+                            control={control}
+                            name={`salesContractDetails.${index}.discountAmount`}
+                            type="number"
+                            step="0.001"
+                            placeholder="0.000"
+                            errors={errors}
+                            disabled
+                          />
+                        </td>
+                        <td className="p-0.5 align-top min-w-[100px]">
+                          <InputCell
+                            control={control}
+                            name={`salesContractDetails.${index}.amount`}
+                            type="number"
+                            step="0.001"
+                            placeholder="0.000"
+                            required
+                            errors={errors}
+                            disabled
+                          />
+                        </td>
+                        <td className="p-0.5 align-top min-w-[90px]">
+                          <InputCell
+                            control={control}
+                            name={`salesContractDetails.${index}.sgstRate`}
+                            type="number"
+                            step="0.0001"
+                            placeholder="0.0000"
+                            errors={errors}
+                            disabled
+                          />
+                        </td>
+                        <td className="p-0.5 align-top min-w-[100px]">
+                          <InputCell
+                            control={control}
+                            name={`salesContractDetails.${index}.sgstAmount`}
+                            type="number"
+                            step="0.01"
+                            placeholder="0.00"
+                            errors={errors}
+                            disabled
+                          />
+                        </td>
+                        <td className="p-0.5 align-top min-w-[90px]">
+                          <InputCell
+                            control={control}
+                            name={`salesContractDetails.${index}.cgstRate`}
+                            type="number"
+                            step="0.0001"
+                            placeholder="0.0000"
+                            errors={errors}
+                            disabled
+                          />
+                        </td>
+                        <td className="p-0.5 align-top min-w-[100px]">
+                          <InputCell
+                            control={control}
+                            name={`salesContractDetails.${index}.cgstAmount`}
+                            type="number"
+                            step="0.01"
+                            placeholder="0.00"
+                            errors={errors}
+                            disabled
+                          />
+                        </td>
+                        <td className="p-0.5 align-top min-w-[90px]">
+                          <InputCell
+                            control={control}
+                            name={`salesContractDetails.${index}.igstRate`}
+                            type="number"
+                            step="0.0001"
+                            placeholder="0.0000"
+                            errors={errors}
+                            disabled
+                          />
+                        </td>
+                        <td className="p-0.5 align-top min-w-[100px]">
+                          <InputCell
+                            control={control}
+                            name={`salesContractDetails.${index}.igstAmount`}
+                            type="number"
+                            step="0.01"
+                            placeholder="0.00"
+                            errors={errors}
+                            disabled
+                          />
+                        </td>
+                        <td className="p-0.5 align-top min-w-[100px]">
+                          <InputCell
+                            control={control}
+                            name={`salesContractDetails.${index}.currencyName`}
+                            placeholder="Currency"
+                            errors={errors}
+                          />
+                        </td>
+                        <td className="p-1 text-center sticky right-0 bg-white dark:bg-gray-800 z-10">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveItem("salesContract", index)}
+                            disabled={salesContractArray.fields.length <= 1}
+                            className={`h-5 w-5 rounded text-white flex items-center justify-center ${salesContractArray.fields.length <= 1
+                              ? "bg-gray-400 cursor-not-allowed"
+                              : "bg-red-600 hover:bg-red-700"
+                              }`}
+                          >
+                            <Trash2 size={10} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Tab 2: Tax Details */}
+          {activeTab === "taxDetails" && (
+            <div className="space-y-1">
+              <div className="flex items-center justify-end mb-2">
+                <button
+                  type="button"
+                  onClick={() => handleAddItem("taxDetails")}
+                  className="h-6 w-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-colors"
+                >
+                  <Plus size={12} />
+                </button>
+              </div>
+
               <TableWrapper>
-                <TableHead
-                  headers={[
-                    "S.No",
-                    <>
-                    Item Code
-                      <span className="text-red-500">*</span>
-                    </> ,                 
-                    "Customer Part No",
-                    "Item Description",
-                    
-                     <>
-                     HSN/SAC Code
-                      <span className="text-red-500">*</span>
-                    </> ,
-                     <>
-                     Tax Type
-                      <span className="text-red-500">*</span>
-                    </> ,
-                    "Tax (%)",
-                     <>
-                      Unit
-                      <span className="text-red-500">*</span>
-                    </> ,
-                   
-                    "Qty",
-                    "Quot. Rate",
-                      <>
-                      Order Rate,
-                      <span className="text-red-500">*</span>
-                    </> ,
-                    "Discount %",
-                    "Effective From",
-                    "Effective To",
-                    "Discount Amount",
-                    "Amount",
-                    "SGST Rate",
-                    "SGST Amount",
-                    "CGST Rate",
-                    "CGST Amount",
-                    "IGST Rate",
-                    "IGST Amount",
-                    "Currency Name",
-                    "Action",
-                  ]}
-                />
+                <TableHead headers={["S.No", "Particulars", "Amount", "Action"]} />
                 <tbody>
-                  {salesContractArray.fields.map((field, index) => (
+                  {taxDetailsArray.fields.map((field, index) => (
                     <TableRow
                       key={field.id}
                       index={index}
-                      onRemove={() => handleRemoveItem("salesContract", index)}
-                      disabled={salesContractArray.fields.length <= 1}
+                      onRemove={() => handleRemoveItem("taxDetails", index)}
+                      disabled={taxDetailsArray.fields.length <= 1}
                     >
-                      <SelectCell
-                        control={control}
-                        name={`salesContractDetails.${index}.itemCode`}
-                        options={SELECT_OPTIONS.contactType}
-                        required
-                        errors={errors}
-                      />
-                      <InputCell
-                        control={control}
-                        name={`salesContractDetails.${index}.customerPartNo`}
-                        placeholder="Part No"
-                        required
-                        errors={errors}
-                      />
-                      <InputCell
-                        control={control}
-                        name={`salesContractDetails.${index}.itemDescription`}
-                        placeholder="Description"
-                        required
-                        errors={errors}
-                      />
-                      <InputCell
-                        control={control}
-                        name={`salesContractDetails.${index}.hsCode`}
-                        placeholder="HS Code"
-                        required
-                        errors={errors}
-                      />
-                      <SelectCell
-                        control={control}
-                        name={`salesContractDetails.${index}.taxType`}
-                        options={SELECT_OPTIONS.taxType}
-                        errors={errors}
-                        required
-                        
-                      />
-                      <InputCell
-                        control={control}
-                        name={`salesContractDetails.${index}.taxRs`}
-                        type="number"
-                        step="0.01"
-                        placeholder="0.00"
-                        errors={errors}
-                      />
-                      <SelectCell
-                        control={control}
-                        name={`salesContractDetails.${index}.unit`}
-                        options={SELECT_OPTIONS.unit}
-                        required
-                        errors={errors}
-                      />
-                      <InputCell
-                        control={control}
-                        name={`salesContractDetails.${index}.qty`}
-                        type="number"
-                        step="0.001"
-                        placeholder="0.000"
-                        required
-                        errors={errors}
-                      />
-                      <InputCell
-                        control={control}
-                        name={`salesContractDetails.${index}.quotRate`}
-                        type="number"
-                        step="0.01"
-                        placeholder="0.00"
-                        errors={errors}
-                      />
-                      <InputCell
-                        control={control}
-                        name={`salesContractDetails.${index}.orderRate`}
-                        type="number"
-                        step="0.001"
-                        placeholder="0.000"
-                        required
-                        errors={errors}
-                      />
-                      <InputCell
-                        control={control}
-                        name={`salesContractDetails.${index}.discountPercent`}
-                        type="number"
-                        step="0.01"
-                        placeholder="0.00"
-                        errors={errors}
-                      />
-                      <InputCell
-                        control={control}
-                        name={`salesContractDetails.${index}.effectiveFrom`}
-                        type="date"
-                        errors={errors}
-                      />
-                      <InputCell
-                        control={control}
-                        name={`salesContractDetails.${index}.effectiveTo`}
-                        type="date"
-                        errors={errors}
-                      />
-                      <InputCell
-                        control={control}
-                        name={`salesContractDetails.${index}.discountAmount`}
-                        type="number"
-                        step="0.001"
-                        placeholder="0.000"
-                        errors={errors}
-                      />
-                      <InputCell
-                        control={control}
-                        name={`salesContractDetails.${index}.amount`}
-                        type="number"
-                        step="0.001"
-                        placeholder="0.000"
-                        required
-                        errors={errors}
-                      />
-                      <InputCell
-                        control={control}
-                        name={`salesContractDetails.${index}.sgstRate`}
-                        type="number"
-                        step="0.0001"
-                        placeholder="0.0000"
-                        errors={errors}
-                      />
-                      <InputCell
-                        control={control}
-                        name={`salesContractDetails.${index}.sgstAmount`}
-                        type="number"
-                        step="0.01"
-                        placeholder="0.00"
-                        errors={errors}
-                      />
-                      <InputCell
-                        control={control}
-                        name={`salesContractDetails.${index}.cgstRate`}
-                        type="number"
-                        step="0.0001"
-                        placeholder="0.0000"
-                        errors={errors}
-                      />
-                      <InputCell
-                        control={control}
-                        name={`salesContractDetails.${index}.cgstAmount`}
-                        type="number"
-                        step="0.01"
-                        placeholder="0.00"
-                        errors={errors}
-                      />
-                      <InputCell
-                        control={control}
-                        name={`salesContractDetails.${index}.igstRate`}
-                        type="number"
-                        step="0.0001"
-                        placeholder="0.0000"
-                        errors={errors}
-                      />
-                      <InputCell
-                        control={control}
-                        name={`salesContractDetails.${index}.igstAmount`}
-                        type="number"
-                        step="0.01"
-                        placeholder="0.00"
-                        errors={errors}
-                      />
-                      <InputCell
-                        control={control}
-                        name={`salesContractDetails.${index}.currencyName`}
-                        placeholder="Currency"
-                        errors={errors}
-                      />
+                      <td className="p-1 align-top">
+                        <Controller
+                          name={`taxDetails.${index}.particulars`}
+                          control={control}
+                          render={({ field }) => (
+                            <select
+                              {...field}
+                              className={`${controlClasses} h-8 text-xs`}
+                            >
+                              <option value="">Select Particulars</option>
+                              {(listOfValuesData.PARTICULARS || []).map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        />
+                      </td>
+                      <td className="p-1 align-top">
+                        <Controller
+                          name={`taxDetails.${index}.amount`}
+                          control={control}
+                          render={({ field }) => (
+                            <input
+                              {...field}
+                              type="number"
+                              step="0.01"
+                              placeholder="0.00"
+                              className={`${controlClasses} h-8 text-xs text-right`}
+                            />
+                          )}
+                        />
+                      </td>
                     </TableRow>
                   ))}
                 </tbody>
@@ -1065,55 +1571,9 @@ const SalesContractForm = ({ data, onBack }) => {
             </div>
           )}
 
-          {/* Tab 2: Tax Details */}
-          {activeTab === "taxDetails" && (
-            <div className="space-y-1">
-              <TableWrapper>
-                <TableHead headers={["S.No", "Particulars", "Amount"]} />
-                <tbody>
-                  <tr className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-                    <td className="p-1 text-center font-medium dark:text-white">
-                      1
-                    </td>
-                    <td className="p-1 align-top">
-                      <Controller
-                        name="taxDetails.0.particulars"
-                        control={control}
-                        render={({ field }) => (
-                          <input
-                            {...field}
-                            className={`${controlClasses} h-8 text-xs`}
-                            placeholder="Enter particulars"
-                          />
-                        )}
-                      />
-                    </td>
-                    <td className="p-1 align-top">
-                      <Controller
-                        name="taxDetails.0.amount"
-                        control={control}
-                        render={({ field }) => (
-                          <input
-                            {...field}
-                            type="number"
-                            step="0.01"
-                            placeholder="0.00"
-                            className={`${controlClasses} h-8 text-xs text-right`}
-                          />
-                        )}
-                      />
-                    </td>
-                  </tr>
-                </tbody>
-              </TableWrapper>
-            </div>
-          )}
-
-          {/* Tab 3: Charges Summary (NEW) */}
-          {/* Tab 3: Charges Summary - CORRECT 1 ROW 5 COL DESIGN */}
+          {/* Tab 3: Charges Summary */}
           {activeTab === "chargesSummary" && (
             <div className="p-2 grid grid-cols-5 gap-x-6 gap-y-4">
-              {/* 1. Total Amount */}
               <div className="col-span-1">
                 <label className={labelClasses}>Total Amount</label>
                 <Controller
@@ -1130,7 +1590,6 @@ const SalesContractForm = ({ data, onBack }) => {
                 />
               </div>
 
-              {/* 2. Amount In Words (Span remaining columns to align with full width like image) */}
               <div className="col-span-4">
                 <label className={labelClasses}>Amount In Words</label>
                 <Controller
@@ -1146,7 +1605,6 @@ const SalesContractForm = ({ data, onBack }) => {
                 />
               </div>
 
-              {/* 3. Payment Terms */}
               <div className="col-span-1">
                 <label className={labelClasses}>
                   Payment Terms <span className="text-red-500">*</span>
@@ -1170,7 +1628,6 @@ const SalesContractForm = ({ data, onBack }) => {
                 )}
               </div>
 
-              {/* 4. Price Terms (Span 2 cols to match the wide input in your image) */}
               <div className="col-span-2">
                 <label className={labelClasses}>Price Terms</label>
                 <Controller
@@ -1186,7 +1643,6 @@ const SalesContractForm = ({ data, onBack }) => {
                 />
               </div>
 
-              {/* 5. Terms (Grey Background) (Span 2 cols to match the wide input in your image) */}
               <div className="col-span-2">
                 <label className={labelClasses}>Terms</label>
                 <Controller
@@ -1202,7 +1658,6 @@ const SalesContractForm = ({ data, onBack }) => {
                 />
               </div>
 
-              {/* 6. Note (Spans full width of the next row) */}
               <div className="col-span-5 mt-2">
                 <label className={labelClasses}>Note</label>
                 <Controller
