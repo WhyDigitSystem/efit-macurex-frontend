@@ -10,11 +10,12 @@ import {
   ClipboardPaste,
   TableProperties,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { useForm, Controller, useFieldArray } from "react-hook-form";
 import branchAPI from "../../../api/branchAPI";
 import salesContractAPI from "../../../api/Sales/salesContract";
 import listOfValuesAPI from "../../../api/listOfValuesAPI";
+import currencyAPI from "../../../api/currencyAPI";
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -88,6 +89,7 @@ const getDefaultValues = () => ({
       id: 1,
       particulars: "",
       amount: 0.0,
+      isSystemRow: false,
     },
   ],
 
@@ -516,6 +518,8 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
   const [itemOptions, setItemOptions] = useState([]);
   const [loadingItems, setLoadingItems] = useState(false);
   const [listOfValuesData, setListOfValuesData] = useState([]);
+  const [currencyData, setCurrencyData] = useState([]);
+  const isUpdatingRef = useRef(false);
 
   const LIST_OF_VALUES_GROUPS = {
     PARTICULARS: "Particulars",
@@ -554,6 +558,101 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
   // Check if contact type is "Direct"
   const isDirectContact = contactType === "Direct";
 
+  // Helper function to check if tax field should be disabled
+  const isTaxFieldDisabled = useCallback((rowIndex, fieldName) => {
+    const rowTaxType = getValues(`salesContractDetails.${rowIndex}.taxType`) ||
+      (isIGSTApplicable === "Yes" ? "IGST" : "SGST");
+
+    if (rowTaxType === "IGST") {
+      return fieldName.includes('sgst') || fieldName.includes('cgst');
+    } else if (rowTaxType === "SGST") {
+      return fieldName.includes('igst');
+    }
+    return false;
+  }, [getValues, isIGSTApplicable]);
+
+  // Helper function to check if a column should be visible
+  const shouldShowColumn = useCallback((rowIndex, columnType) => {
+    const rowTaxType = getValues(`salesContractDetails.${rowIndex}.taxType`) ||
+      (isIGSTApplicable === "Yes" ? "IGST" : "SGST");
+
+    if (columnType === 'igst') {
+      return rowTaxType === "IGST";
+    } else if (columnType === 'sgst' || columnType === 'cgst') {
+      return rowTaxType === "SGST";
+    }
+    return true;
+  }, [getValues, isIGSTApplicable]);
+
+  // Function to calculate tax details
+  const calculateTaxDetails = useCallback(() => {
+    // Get all contract details
+    const contractDetails = getValues('salesContractDetails') || [];
+
+    // Calculate total amount (sum of all amounts in contract details)
+    const totalAmount = contractDetails.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+
+    // Determine tax type
+    const taxType = isIGSTApplicable === "Yes" ? "IGST" : "SGST";
+
+    // Calculate tax amounts
+    let sgstTotal = 0, cgstTotal = 0, igstTotal = 0;
+
+    contractDetails.forEach(item => {
+      sgstTotal += Number(item.sgstAmount) || 0;
+      cgstTotal += Number(item.cgstAmount) || 0;
+      igstTotal += Number(item.igstAmount) || 0;
+    });
+
+    // Get existing tax details to preserve user-added rows
+    const existingTaxDetails = getValues('taxDetails') || [];
+    const userAddedRows = existingTaxDetails.filter(item => !item.isSystemRow);
+
+    // Prepare tax details entries - system calculated rows
+    const systemRows = [];
+
+    // Always add Gross Amount
+    systemRows.push({
+      particulars: "Gross Amount",
+      amount: totalAmount,
+      isSystemRow: true
+    });
+
+    // Add appropriate tax based on tax type
+    if (taxType === "IGST") {
+      systemRows.push({
+        particulars: "IGST",
+        amount: igstTotal,
+        isSystemRow: true
+      });
+    } else {
+      systemRows.push({
+        particulars: "SGST",
+        amount: sgstTotal,
+        isSystemRow: true
+      });
+      systemRows.push({
+        particulars: "CGST",
+        amount: cgstTotal,
+        isSystemRow: true
+      });
+    }
+
+    // Combine system rows with user-added rows
+    const allTaxEntries = [...systemRows, ...userAddedRows];
+
+    // Replace all tax details with the combined list
+    taxDetailsArray.replace(allTaxEntries);
+
+    // Update Charges Summary Total Amount with Gross Amount
+    setValue('chargesSummary.totalAmount', totalAmount);
+
+    // Update Amount In Words
+    const amountInWords = formatCurrencyInWords(totalAmount);
+    setValue('chargesSummary.amountInWords', amountInWords);
+
+  }, [getValues, isIGSTApplicable, taxDetailsArray, setValue]);
+
   const loadListOfValuesData = async () => {
     try {
       const result = {};
@@ -563,13 +662,19 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
           try {
             const response = await listOfValuesAPI.getListValuesGroup(group, orgId);
 
-            result[key] = Array.isArray(response)
-              ? response.map(item => ({
-                value: item.id,
-                label: item.valuesDescription,
-                ...item,
-              }))
-              : [];
+            // Check if response has the expected structure
+            let items = [];
+            if (response?.paramObjectsMap?.listValues) {
+              items = response.paramObjectsMap.listValues;
+            } else if (Array.isArray(response)) {
+              items = response;
+            }
+
+            result[key] = items.map(item => ({
+              value: item.id,
+              label: item.valuesDescription,
+              ...item,
+            }));
           } catch (err) {
             console.error(`${group} failed`, err);
             result[key] = [];
@@ -578,20 +683,208 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
       );
 
       setListOfValuesData(result);
+
+      // After loading list of values, calculate tax details
+      if (salesContractArray.fields.length > 0) {
+        setTimeout(() => {
+          calculateTaxDetails();
+        }, 200);
+      }
     } catch (err) {
       console.error("Error loading ListOfValues:", err);
     }
   };
+
+  // Add this helper function at the top of your file, after the imports
+  const numberToWords = (num) => {
+    if (num === 0) return 'Zero';
+
+    const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
+      'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+    const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+    const thousands = ['', 'Thousand', 'Million', 'Billion', 'Trillion'];
+
+    const convertHundreds = (num) => {
+      let word = '';
+      if (num >= 100) {
+        word += ones[Math.floor(num / 100)] + ' Hundred ';
+        num %= 100;
+      }
+      if (num >= 20) {
+        word += tens[Math.floor(num / 10)] + ' ';
+        num %= 10;
+      }
+      if (num > 0) {
+        word += ones[num] + ' ';
+      }
+      return word.trim();
+    };
+
+    const convertNumber = (num) => {
+      if (num === 0) return '';
+
+      let word = '';
+      let index = 0;
+
+      while (num > 0) {
+        if (num % 1000 !== 0) {
+          word = convertHundreds(num % 1000) + ' ' + thousands[index] + ' ' + word;
+        }
+        num = Math.floor(num / 1000);
+        index++;
+      }
+      return word.trim();
+    };
+
+    // Handle decimal part
+    const parts = String(num).split('.');
+    const wholeNumber = parseInt(parts[0]);
+    const decimalPart = parts[1] ? parseInt(parts[1].padEnd(2, '0')) : 0;
+
+    let result = convertNumber(wholeNumber);
+
+    if (decimalPart > 0) {
+      result += ' and ' + convertNumber(decimalPart) + ' Paise';
+    }
+
+    return result || 'Zero';
+  };
+
+  // Function to format currency in words with proper capitalization
+  const formatCurrencyInWords = (amount) => {
+    if (!amount || amount === 0) return 'Zero';
+
+    const roundedAmount = Math.round(amount * 100) / 100;
+    const words = numberToWords(roundedAmount);
+
+    // Capitalize first letter of each word
+    return words.split(' ').map(word =>
+      word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+    ).join(' ');
+  };
+
+  // Real-time calculation effect
+  useEffect(() => {
+    const subscription = watch((value, { name, type }) => {
+      if (!name || isUpdatingRef.current) return;
+
+      // Check if the changed field is in salesContractDetails
+      if (name.startsWith('salesContractDetails.')) {
+        const parts = name.split('.');
+        const index = parseInt(parts[1]);
+        const field = parts[2];
+
+        // Only recalculate if the changed field is one that affects calculations
+        const calculationFields = ['qty', 'orderRate', 'discountPercent', 'itemCode', 'taxType'];
+        if (!calculationFields.includes(field) && !field.includes('Rate') && !field.includes('Amount')) {
+          return;
+        }
+
+        // Get all values for this row
+        const qty = Number(getValues(`salesContractDetails.${index}.qty`)) || 0;
+        const orderRate = Number(getValues(`salesContractDetails.${index}.orderRate`)) || 0;
+        const discountPercent = Number(getValues(`salesContractDetails.${index}.discountPercent`)) || 0;
+        const itemCode = getValues(`salesContractDetails.${index}.itemCode`);
+        const taxType = getValues(`salesContractDetails.${index}.taxType`) || (isIGSTApplicable === "Yes" ? "IGST" : "SGST");
+
+        // Calculate discount amount
+        const amountBeforeDiscount = qty * orderRate;
+        const discountAmount = (amountBeforeDiscount * discountPercent) / 100;
+        const amount = amountBeforeDiscount - discountAmount;
+
+        // Get tax rates from the selected item
+        let sgstRate = 0, cgstRate = 0, igstRate = 0;
+        if (itemCode) {
+          const selectedItem = itemOptions.find(i => String(i.itemCode) === String(itemCode));
+          if (selectedItem) {
+            sgstRate = Number(selectedItem.sgst) || 0;
+            cgstRate = Number(selectedItem.cgst) || 0;
+            igstRate = Number(selectedItem.igst) || 0;
+          }
+        }
+
+        // Calculate tax amounts based on tax type
+        let sgstAmount = 0, cgstAmount = 0, igstAmount = 0;
+        const finalAmount = amount;
+
+        if (taxType === "IGST") {
+          igstAmount = (finalAmount * igstRate) / 100;
+          sgstAmount = 0;
+          cgstAmount = 0;
+        } else if (taxType === "SGST") {
+          sgstAmount = (finalAmount * sgstRate) / 100;
+          cgstAmount = (finalAmount * cgstRate) / 100;
+          igstAmount = 0;
+        }
+
+        // Check current values to avoid unnecessary updates
+        const currentDiscountAmount = Number(getValues(`salesContractDetails.${index}.discountAmount`)) || 0;
+        const currentAmount = Number(getValues(`salesContractDetails.${index}.amount`)) || 0;
+        const currentSgstAmount = Number(getValues(`salesContractDetails.${index}.sgstAmount`)) || 0;
+        const currentCgstAmount = Number(getValues(`salesContractDetails.${index}.cgstAmount`)) || 0;
+        const currentIgstAmount = Number(getValues(`salesContractDetails.${index}.igstAmount`)) || 0;
+        const currentSgstRate = Number(getValues(`salesContractDetails.${index}.sgstRate`)) || 0;
+        const currentCgstRate = Number(getValues(`salesContractDetails.${index}.cgstRate`)) || 0;
+        const currentIgstRate = Number(getValues(`salesContractDetails.${index}.igstRate`)) || 0;
+
+        isUpdatingRef.current = true;
+
+        // Update only if values have changed
+        if (Math.abs(currentDiscountAmount - discountAmount) > 0.001) {
+          setValue(`salesContractDetails.${index}.discountAmount`, discountAmount);
+        }
+
+        if (Math.abs(currentAmount - finalAmount) > 0.001) {
+          setValue(`salesContractDetails.${index}.amount`, finalAmount);
+        }
+
+        if (Math.abs(currentSgstAmount - sgstAmount) > 0.001) {
+          setValue(`salesContractDetails.${index}.sgstAmount`, sgstAmount);
+        }
+
+        if (Math.abs(currentCgstAmount - cgstAmount) > 0.001) {
+          setValue(`salesContractDetails.${index}.cgstAmount`, cgstAmount);
+        }
+
+        if (Math.abs(currentIgstAmount - igstAmount) > 0.001) {
+          setValue(`salesContractDetails.${index}.igstAmount`, igstAmount);
+        }
+
+        if (Math.abs(currentSgstRate - sgstRate) > 0.001) {
+          setValue(`salesContractDetails.${index}.sgstRate`, sgstRate);
+        }
+
+        if (Math.abs(currentCgstRate - cgstRate) > 0.001) {
+          setValue(`salesContractDetails.${index}.cgstRate`, cgstRate);
+        }
+
+        if (Math.abs(currentIgstRate - igstRate) > 0.001) {
+          setValue(`salesContractDetails.${index}.igstRate`, igstRate);
+        }
+
+        // Update tax details after calculations
+        setTimeout(() => {
+          calculateTaxDetails();
+        }, 100);
+
+        setTimeout(() => {
+          isUpdatingRef.current = false;
+        }, 50);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [watch, setValue, getValues, itemOptions, isIGSTApplicable, calculateTaxDetails]);
 
   useEffect(() => {
     loadBranches();
     if (isEditMode && data) {
       loadQuotations();
     }
+    loadCurrencies();
     loadListOfValuesData();
   }, []);
 
-  // Load customers when orgId changes or contactType changes
   useEffect(() => {
     if (orgId && contactType) {
       loadCustomers(contactType);
@@ -657,84 +950,21 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
     }
   }, [quotNo, quotationOptions, setValue, isDirectContact]);
 
-  // Set tax type based on IGST applicability
+  // Set tax type based on IGST applicability and recalculate tax details
   useEffect(() => {
     const taxType = isIGSTApplicable === "Yes" ? "IGST" : "SGST";
 
     salesContractArray.fields.forEach((_, index) => {
       setValue(`salesContractDetails.${index}.taxType`, taxType);
     });
-  }, [isIGSTApplicable, salesContractArray.fields.length, setValue]);
 
-  // Calculate discount amount, amount, and tax amounts for each row
-  useEffect(() => {
-    if (!salesContractDetails) return;
-
-    salesContractDetails.forEach((item, index) => {
-      const qty = Number(item.qty) || 0;
-      const orderRate = Number(item.orderRate) || 0;
-      const discountPercent = Number(item.discountPercent) || 0;
-
-      // Calculate amount before discount
-      const amountBeforeDiscount = qty * orderRate;
-
-      // Calculate discount amount
-      const discountAmount = (amountBeforeDiscount * discountPercent) / 100;
-
-      // Calculate final amount
-      const amount = amountBeforeDiscount - discountAmount;
-
-      // Get tax rates from the item data
-      const selectedItem = itemOptions.find(i => i.itemCode === item.itemCode);
-      const sgstRate = selectedItem?.sgst || 0;
-      const cgstRate = selectedItem?.cgst || 0;
-      const igstRate = selectedItem?.igst || 0;
-
-      // Calculate tax amounts based on tax type
-      const taxType = isIGSTApplicable === "Yes" ? "IGST" : "SGST";
-
-      let sgstAmount = 0;
-      let cgstAmount = 0;
-      let igstAmount = 0;
-
-      if (taxType === "IGST") {
-        igstAmount = (amount * igstRate) / 100;
-        sgstAmount = 0;
-        cgstAmount = 0;
-      } else {
-        sgstAmount = (amount * sgstRate) / 100;
-        cgstAmount = (amount * cgstRate) / 100;
-        igstAmount = 0;
-      }
-
-      // Update only if values have changed to avoid infinite loops
-      const currentDiscountAmount = Number(item.discountAmount) || 0;
-      const currentAmount = Number(item.amount) || 0;
-      const currentSgstAmount = Number(item.sgstAmount) || 0;
-      const currentCgstAmount = Number(item.cgstAmount) || 0;
-      const currentIgstAmount = Number(item.igstAmount) || 0;
-
-      if (Math.abs(currentDiscountAmount - discountAmount) > 0.001) {
-        setValue(`salesContractDetails.${index}.discountAmount`, discountAmount);
-      }
-
-      if (Math.abs(currentAmount - amount) > 0.001) {
-        setValue(`salesContractDetails.${index}.amount`, amount);
-      }
-
-      if (Math.abs(currentSgstAmount - sgstAmount) > 0.001) {
-        setValue(`salesContractDetails.${index}.sgstAmount`, sgstAmount);
-      }
-
-      if (Math.abs(currentCgstAmount - cgstAmount) > 0.001) {
-        setValue(`salesContractDetails.${index}.cgstAmount`, cgstAmount);
-      }
-
-      if (Math.abs(currentIgstAmount - igstAmount) > 0.001) {
-        setValue(`salesContractDetails.${index}.igstAmount`, igstAmount);
-      }
-    });
-  }, [salesContractDetails, itemOptions, isIGSTApplicable, setValue]);
+    // Recalculate tax details when tax type changes
+    if (salesContractArray.fields.length > 0) {
+      setTimeout(() => {
+        calculateTaxDetails();
+      }, 100);
+    }
+  }, [isIGSTApplicable, salesContractArray.fields.length, setValue, calculateTaxDetails]);
 
   const loadBranches = useCallback(async () => {
     try {
@@ -747,6 +977,20 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
     } catch (error) {
       console.error("Failed to load branches:", error);
       setPlantData([]);
+    }
+  }, [orgId]);
+
+  const loadCurrencies = useCallback(async () => {
+    try {
+      const response = await currencyAPI.getCurrencies(orgId);
+      const options = (response || []).map(item => ({
+        value: item.id,
+        label: item.currency,
+      }));
+      setCurrencyData(options);
+    } catch (error) {
+      console.error("Failed to load currencies:", error);
+      setCurrencyData([]);
     }
   }, [orgId]);
 
@@ -842,17 +1086,28 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
 
         if (items.length > 0 && salesContractArray.fields.length === 1) {
           const firstItem = items[0];
+          const taxType = isIGSTApplicable === "Yes" ? "IGST" : "SGST";
+
+          isUpdatingRef.current = true;
+
           setValue("salesContractDetails.0.itemCode", firstItem.itemCode || "");
           setValue("salesContractDetails.0.itemDescription", firstItem.itemDescription || "");
           setValue("salesContractDetails.0.hsCode", firstItem.hsnCode || "");
           setValue("salesContractDetails.0.customerPartNo", firstItem.customerPartNo || "");
           setValue("salesContractDetails.0.unit", firstItem.unitId || "");
+          setValue("salesContractDetails.0.taxType", taxType);
+
           // Set tax rates from API
-          setValue("salesContractDetails.0.sgstRate", firstItem.sgst || 0);
-          setValue("salesContractDetails.0.cgstRate", firstItem.cgst || 0);
-          setValue("salesContractDetails.0.igstRate", firstItem.igst || 0);
-          // Set order rate from API
-          setValue("salesContractDetails.0.orderRate", firstItem.rate || 0);
+          setValue("salesContractDetails.0.sgstRate", Number(firstItem.sgst) || 0);
+          setValue("salesContractDetails.0.cgstRate", Number(firstItem.cgst) || 0);
+          setValue("salesContractDetails.0.igstRate", Number(firstItem.igst) || 0);
+
+          // Set Tax % from API rate field
+          setValue("salesContractDetails.0.taxRs", Number(firstItem.rate) || 0);
+
+          setTimeout(() => {
+            isUpdatingRef.current = false;
+          }, 50);
         }
       } else {
         setItemOptions([]);
@@ -863,7 +1118,7 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
     } finally {
       setLoadingItems(false);
     }
-  }, [orgId, branchId, salesContractArray.fields.length, setValue]);
+  }, [orgId, branchId, salesContractArray.fields.length, setValue, isIGSTApplicable]);
 
   const loadFinishedGoodsItems = useCallback(async () => {
     if (!orgId || !branchId) {
@@ -898,31 +1153,81 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
     );
 
     if (selectedItem) {
+      isUpdatingRef.current = true;
+
       setValue(`salesContractDetails.${index}.itemCode`, selectedItem.itemCode || "");
       setValue(`salesContractDetails.${index}.itemDescription`, selectedItem.itemDescription || "");
       setValue(`salesContractDetails.${index}.hsCode`, selectedItem.hsnCode || "");
       setValue(`salesContractDetails.${index}.customerPartNo`, selectedItem.customerPartNo || "");
+      setValue(`salesContractDetails.${index}.unit`, selectedItem.unit || selectedItem.unitName || "");
 
-      // Set the actual unit value
-      setValue(
-        `salesContractDetails.${index}.unit`,
-        selectedItem.unit || selectedItem.unitName || ""
-      );
+      // Set tax rates
+      const sgstRate = Number(selectedItem.sgst) || 0;
+      const cgstRate = Number(selectedItem.cgst) || 0;
+      const igstRate = Number(selectedItem.igst) || 0;
 
-      setValue(`salesContractDetails.${index}.sgstRate`, selectedItem.sgst || 0);
-      setValue(`salesContractDetails.${index}.cgstRate`, selectedItem.cgst || 0);
-      setValue(`salesContractDetails.${index}.igstRate`, selectedItem.igst || 0);
-      setValue(`salesContractDetails.${index}.orderRate`, selectedItem.rate || 0);
+      setValue(`salesContractDetails.${index}.sgstRate`, sgstRate);
+      setValue(`salesContractDetails.${index}.cgstRate`, cgstRate);
+      setValue(`salesContractDetails.${index}.igstRate`, igstRate);
+
+      // Set Tax % from API rate field
+      setValue(`salesContractDetails.${index}.taxRs`, Number(selectedItem.rate) || 0);
+
+      // Set tax type based on IGST applicability
+      const taxType = isIGSTApplicable === "Yes" ? "IGST" : "SGST";
+      setValue(`salesContractDetails.${index}.taxType`, taxType);
+
+      setTimeout(() => {
+        isUpdatingRef.current = false;
+        // Trigger calculation with existing order rate (if any)
+        const qty = Number(getValues(`salesContractDetails.${index}.qty`)) || 0;
+        const orderRate = Number(getValues(`salesContractDetails.${index}.orderRate`)) || 0;
+        const discountPercent = Number(getValues(`salesContractDetails.${index}.discountPercent`)) || 0;
+
+        const amountBeforeDiscount = qty * orderRate;
+        const discountAmount = (amountBeforeDiscount * discountPercent) / 100;
+        const amount = amountBeforeDiscount - discountAmount;
+
+        setValue(`salesContractDetails.${index}.discountAmount`, discountAmount);
+        setValue(`salesContractDetails.${index}.amount`, amount);
+
+        // Calculate tax amounts
+        let sgstAmount = 0, cgstAmount = 0, igstAmount = 0;
+        if (taxType === "IGST") {
+          igstAmount = (amount * igstRate) / 100;
+        } else {
+          sgstAmount = (amount * sgstRate) / 100;
+          cgstAmount = (amount * cgstRate) / 100;
+        }
+
+        setValue(`salesContractDetails.${index}.sgstAmount`, sgstAmount);
+        setValue(`salesContractDetails.${index}.cgstAmount`, cgstAmount);
+        setValue(`salesContractDetails.${index}.igstAmount`, igstAmount);
+
+        // Update tax details
+        setTimeout(() => {
+          calculateTaxDetails();
+        }, 100);
+      }, 100);
     }
-  }, [itemOptions, setValue]);
+  }, [itemOptions, setValue, getValues, isIGSTApplicable, calculateTaxDetails]);
 
   const handleAddItem = (arrayName) => {
     const defaultValues = getDefaultValues();
     if (arrayName === "salesContract") {
       const newItem = defaultValues.salesContractDetails[0] || {};
       salesContractArray.append(newItem);
+      // Recalculate tax details after adding new row
+      setTimeout(() => {
+        calculateTaxDetails();
+      }, 100);
     } else if (arrayName === "taxDetails") {
-      const newItem = defaultValues.taxDetails[0] || {};
+      // Add a new user row with empty particulars
+      const newItem = {
+        particulars: "",
+        amount: 0.0,
+        isSystemRow: false
+      };
       taxDetailsArray.append(newItem);
     } else if (arrayName === "attachedPOCopy") {
       const newItem = defaultValues.attachedPOCopy[0] || {};
@@ -934,17 +1239,81 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
     if (arrayName === "salesContract") {
       if (salesContractArray.fields.length > 1) {
         salesContractArray.remove(index);
+        // Recalculate tax details after removing row
+        setTimeout(() => {
+          calculateTaxDetails();
+        }, 100);
       }
     } else if (arrayName === "taxDetails") {
-      if (taxDetailsArray.fields.length > 1) {
-        taxDetailsArray.remove(index);
+      // Check if it's a system row
+      const isSystemRow = getValues(`taxDetails.${index}.isSystemRow`);
+      if (isSystemRow) {
+        // Prevent deletion of system rows
+        alert('Cannot delete system calculated rows');
+        return;
       }
+      // Allow deletion of user-added rows even if it's the only one
+      taxDetailsArray.remove(index);
+      // Recalculate tax details to update totals
+      setTimeout(() => {
+        calculateTaxDetails();
+      }, 100);
     } else if (arrayName === "attachedPOCopy") {
       if (attachedPOCopyArray.fields.length > 1) {
         attachedPOCopyArray.remove(index);
       }
     }
   };
+
+  const handleTaxTypeChange = useCallback((index, newTaxType) => {
+    isUpdatingRef.current = true;
+    setValue(`salesContractDetails.${index}.taxType`, newTaxType);
+
+    // Trigger recalculation
+    setTimeout(() => {
+      const qty = Number(getValues(`salesContractDetails.${index}.qty`)) || 0;
+      const orderRate = Number(getValues(`salesContractDetails.${index}.orderRate`)) || 0;
+      const discountPercent = Number(getValues(`salesContractDetails.${index}.discountPercent`)) || 0;
+      const itemCode = getValues(`salesContractDetails.${index}.itemCode`);
+
+      if (itemCode) {
+        const selectedItem = itemOptions.find(i => String(i.itemCode) === String(itemCode));
+        if (selectedItem) {
+          const sgstRate = Number(selectedItem.sgst) || 0;
+          const cgstRate = Number(selectedItem.cgst) || 0;
+          const igstRate = Number(selectedItem.igst) || 0;
+
+          const amountBeforeDiscount = qty * orderRate;
+          const discountAmount = (amountBeforeDiscount * discountPercent) / 100;
+          const amount = amountBeforeDiscount - discountAmount;
+
+          let sgstAmount = 0, cgstAmount = 0, igstAmount = 0;
+          if (newTaxType === "IGST") {
+            igstAmount = (amount * igstRate) / 100;
+            setValue(`salesContractDetails.${index}.sgstRate`, 0);
+            setValue(`salesContractDetails.${index}.cgstRate`, 0);
+          } else {
+            sgstAmount = (amount * sgstRate) / 100;
+            cgstAmount = (amount * cgstRate) / 100;
+            setValue(`salesContractDetails.${index}.igstRate`, 0);
+          }
+
+          setValue(`salesContractDetails.${index}.sgstAmount`, sgstAmount);
+          setValue(`salesContractDetails.${index}.cgstAmount`, cgstAmount);
+          setValue(`salesContractDetails.${index}.igstAmount`, igstAmount);
+
+          // Update tax details
+          setTimeout(() => {
+            calculateTaxDetails();
+          }, 100);
+        }
+      }
+
+      setTimeout(() => {
+        isUpdatingRef.current = false;
+      }, 50);
+    }, 100);
+  }, [setValue, getValues, itemOptions, calculateTaxDetails]);
 
   const onSubmit = async (formData) => {
     try {
@@ -1142,7 +1511,6 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
             label="GSTN No."
             disabled
             errors={errors}
-            disabled={!!selectedCustomer || isDirectContact}
           />
           <SelectField
             control={control}
@@ -1239,268 +1607,306 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
                       <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]">Effective To</th>
                       <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[120px]">Discount Amount</th>
                       <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]">Amount</th>
-                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[90px]">SGST Rate</th>
-                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]">SGST Amount</th>
-                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[90px]">CGST Rate</th>
-                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]">CGST Amount</th>
-                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[90px]">IGST Rate</th>
-                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]">IGST Amount</th>
+                      {/* Conditionally show/hide columns based on tax type */}
+                      {salesContractArray.fields.map((field, idx) => {
+                        const rowTaxType = getValues(`salesContractDetails.${idx}.taxType`) ||
+                          (isIGSTApplicable === "Yes" ? "IGST" : "SGST");
+                        if (rowTaxType === "SGST") {
+                          return (
+                            <>
+                              <th key={`sgst-rate-${idx}`} className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[90px]">SGST Rate</th>
+                              <th key={`sgst-amount-${idx}`} className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]">SGST Amount</th>
+                              <th key={`cgst-rate-${idx}`} className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[90px]">CGST Rate</th>
+                              <th key={`cgst-amount-${idx}`} className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]">CGST Amount</th>
+                            </>
+                          );
+                        } else if (rowTaxType === "IGST") {
+                          return (
+                            <>
+                              <th key={`igst-rate-${idx}`} className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[90px]">IGST Rate</th>
+                              <th key={`igst-amount-${idx}`} className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]">IGST Amount</th>
+                            </>
+                          );
+                        }
+                        return null;
+                      })}
                       <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]">Currency Name</th>
                       <th className="p-1.5 text-center dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[60px] sticky right-0 bg-gray-100 dark:bg-gray-700 z-10">Action</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {salesContractArray.fields.map((field, index) => (
-                      <tr key={field.id} className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-                        <td className="p-1 text-center font-medium dark:text-white text-[10px] sticky left-0 bg-white dark:bg-gray-800 z-10">
-                          {index + 1}
-                        </td>
-                        <td className="p-0.5 align-top min-w-[100px]">
-                          <SelectCell
-                            control={control}
-                            name={`salesContractDetails.${index}.itemCode`}
-                            options={itemOptions.map(item => ({
-                              value: item.itemCode,
-                              label: `${item.itemCode} - ${item.itemDescription}`
-                            }))}
-                            required
-                            errors={errors}
-                            onChange={(value) => handleItemSelect(index, value)}
-                            disabled={loadingItems}
-                          />
-                        </td>
-                        <td className="p-0.5 align-top min-w-[120px]">
-                          <InputCell
-                            control={control}
-                            name={`salesContractDetails.${index}.customerPartNo`}
-                            placeholder="Part No"
-                            errors={errors}
-                          />
-                        </td>
-                        <td className="p-0.5 align-top min-w-[120px]">
-                          <InputCell
-                            control={control}
-                            name={`salesContractDetails.${index}.itemDescription`}
-                            placeholder="Description"
-                            required
-                            errors={errors}
-                            disabled
-                          />
-                        </td>
-                        <td className="p-0.5 align-top min-w-[110px]">
-                          <InputCell
-                            control={control}
-                            name={`salesContractDetails.${index}.hsCode`}
-                            placeholder="HS Code"
-                            required
-                            errors={errors}
-                            disabled
-                          />
-                        </td>
-                        <td className="p-0.5 align-top min-w-[100px]">
-                          <SelectCell
-                            control={control}
-                            name={`salesContractDetails.${index}.taxType`}
-                            options={
-                              isIGSTApplicable === "Yes"
-                                ? ["IGST"]
-                                : ["SGST"]
-                            }
-                            required
-                            errors={errors}
-                            disabled
-                          />
-                        </td>
-                        <td className="p-0.5 align-top min-w-[80px]">
-                          <InputCell
-                            control={control}
-                            name={`salesContractDetails.${index}.taxRs`}
-                            type="number"
-                            step="0.01"
-                            placeholder="0.00"
-                            errors={errors}
-                          />
-                        </td>
-                        <td className="p-0.5 align-top min-w-[80px]">
-                          <InputCell
-                            control={control}
-                            name={`salesContractDetails.${index}.unit`}
-                            placeholder="Unit"
-                            required
-                            errors={errors}
-                            disabled
-                          />
-                        </td>
-                        <td className="p-0.5 align-top min-w-[80px]">
-                          <InputCell
-                            control={control}
-                            name={`salesContractDetails.${index}.qty`}
-                            type="number"
-                            step="0.001"
-                            placeholder="0.000"
-                            required
-                            errors={errors}
-                          />
-                        </td>
-                        <td className="p-0.5 align-top min-w-[90px]">
-                          <InputCell
-                            control={control}
-                            name={`salesContractDetails.${index}.quotRate`}
-                            type="number"
-                            step="0.01"
-                            placeholder="0.00"
-                            errors={errors}
-                          />
-                        </td>
-                        <td className="p-0.5 align-top min-w-[90px]">
-                          <InputCell
-                            control={control}
-                            name={`salesContractDetails.${index}.orderRate`}
-                            type="number"
-                            step="0.001"
-                            placeholder="0.000"
-                            required
-                            errors={errors}
-                          />
-                        </td>
-                        <td className="p-0.5 align-top min-w-[90px]">
-                          <InputCell
-                            control={control}
-                            name={`salesContractDetails.${index}.discountPercent`}
-                            type="number"
-                            step="0.01"
-                            placeholder="0.00"
-                            errors={errors}
-                          />
-                        </td>
-                        <td className="p-0.5 align-top min-w-[110px]">
-                          <InputCell
-                            control={control}
-                            name={`salesContractDetails.${index}.effectiveFrom`}
-                            type="date"
-                            errors={errors}
-                          />
-                        </td>
-                        <td className="p-0.5 align-top min-w-[100px]">
-                          <InputCell
-                            control={control}
-                            name={`salesContractDetails.${index}.effectiveTo`}
-                            type="date"
-                            errors={errors}
-                          />
-                        </td>
-                        <td className="p-0.5 align-top min-w-[120px]">
-                          <InputCell
-                            control={control}
-                            name={`salesContractDetails.${index}.discountAmount`}
-                            type="number"
-                            step="0.001"
-                            placeholder="0.000"
-                            errors={errors}
-                            disabled
-                          />
-                        </td>
-                        <td className="p-0.5 align-top min-w-[100px]">
-                          <InputCell
-                            control={control}
-                            name={`salesContractDetails.${index}.amount`}
-                            type="number"
-                            step="0.001"
-                            placeholder="0.000"
-                            required
-                            errors={errors}
-                            disabled
-                          />
-                        </td>
-                        <td className="p-0.5 align-top min-w-[90px]">
-                          <InputCell
-                            control={control}
-                            name={`salesContractDetails.${index}.sgstRate`}
-                            type="number"
-                            step="0.0001"
-                            placeholder="0.0000"
-                            errors={errors}
-                            disabled
-                          />
-                        </td>
-                        <td className="p-0.5 align-top min-w-[100px]">
-                          <InputCell
-                            control={control}
-                            name={`salesContractDetails.${index}.sgstAmount`}
-                            type="number"
-                            step="0.01"
-                            placeholder="0.00"
-                            errors={errors}
-                            disabled
-                          />
-                        </td>
-                        <td className="p-0.5 align-top min-w-[90px]">
-                          <InputCell
-                            control={control}
-                            name={`salesContractDetails.${index}.cgstRate`}
-                            type="number"
-                            step="0.0001"
-                            placeholder="0.0000"
-                            errors={errors}
-                            disabled
-                          />
-                        </td>
-                        <td className="p-0.5 align-top min-w-[100px]">
-                          <InputCell
-                            control={control}
-                            name={`salesContractDetails.${index}.cgstAmount`}
-                            type="number"
-                            step="0.01"
-                            placeholder="0.00"
-                            errors={errors}
-                            disabled
-                          />
-                        </td>
-                        <td className="p-0.5 align-top min-w-[90px]">
-                          <InputCell
-                            control={control}
-                            name={`salesContractDetails.${index}.igstRate`}
-                            type="number"
-                            step="0.0001"
-                            placeholder="0.0000"
-                            errors={errors}
-                            disabled
-                          />
-                        </td>
-                        <td className="p-0.5 align-top min-w-[100px]">
-                          <InputCell
-                            control={control}
-                            name={`salesContractDetails.${index}.igstAmount`}
-                            type="number"
-                            step="0.01"
-                            placeholder="0.00"
-                            errors={errors}
-                            disabled
-                          />
-                        </td>
-                        <td className="p-0.5 align-top min-w-[100px]">
-                          <InputCell
-                            control={control}
-                            name={`salesContractDetails.${index}.currencyName`}
-                            placeholder="Currency"
-                            errors={errors}
-                          />
-                        </td>
-                        <td className="p-1 text-center sticky right-0 bg-white dark:bg-gray-800 z-10">
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveItem("salesContract", index)}
-                            disabled={salesContractArray.fields.length <= 1}
-                            className={`h-5 w-5 rounded text-white flex items-center justify-center ${salesContractArray.fields.length <= 1
-                              ? "bg-gray-400 cursor-not-allowed"
-                              : "bg-red-600 hover:bg-red-700"
-                              }`}
-                          >
-                            <Trash2 size={10} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {salesContractArray.fields.map((field, index) => {
+                      const rowTaxType = getValues(`salesContractDetails.${index}.taxType`) ||
+                        (isIGSTApplicable === "Yes" ? "IGST" : "SGST");
+
+                      return (
+                        <tr key={field.id} className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
+                          <td className="p-1 text-center font-medium dark:text-white text-[10px] sticky left-0 bg-white dark:bg-gray-800 z-10">
+                            {index + 1}
+                          </td>
+                          <td className="p-0.5 align-top min-w-[100px]">
+                            <SelectCell
+                              control={control}
+                              name={`salesContractDetails.${index}.itemCode`}
+                              options={itemOptions.map(item => ({
+                                value: item.itemCode,
+                                label: `${item.itemCode} - ${item.itemDescription}`
+                              }))}
+                              required
+                              errors={errors}
+                              onChange={(value) => handleItemSelect(index, value)}
+                              disabled={loadingItems}
+                            />
+                          </td>
+                          <td className="p-0.5 align-top min-w-[120px]">
+                            <InputCell
+                              control={control}
+                              name={`salesContractDetails.${index}.customerPartNo`}
+                              placeholder="Part No"
+                              errors={errors}
+                            />
+                          </td>
+                          <td className="p-0.5 align-top min-w-[120px]">
+                            <InputCell
+                              control={control}
+                              name={`salesContractDetails.${index}.itemDescription`}
+                              placeholder="Description"
+                              required
+                              errors={errors}
+                              disabled
+                            />
+                          </td>
+                          <td className="p-0.5 align-top min-w-[110px]">
+                            <InputCell
+                              control={control}
+                              name={`salesContractDetails.${index}.hsCode`}
+                              placeholder="HS Code"
+                              required
+                              errors={errors}
+                              disabled
+                            />
+                          </td>
+                          <td className="p-0.5 align-top min-w-[100px]">
+                            <Controller
+                              name={`salesContractDetails.${index}.taxType`}
+                              control={control}
+                              render={({ field }) => (
+                                <select
+                                  {...field}
+                                  className={`${controlClasses} h-7 text-[10px]`}
+                                  onChange={(e) => {
+                                    const newTaxType = e.target.value;
+                                    field.onChange(newTaxType);
+                                    handleTaxTypeChange(index, newTaxType);
+                                  }}
+                                  disabled={isDirectContact}
+                                >
+                                  <option value="SGST">SGST</option>
+                                  <option value="IGST">IGST</option>
+                                </select>
+                              )}
+                            />
+                          </td>
+                          <td className="p-0.5 align-top min-w-[80px]">
+                            <InputCell
+                              control={control}
+                              name={`salesContractDetails.${index}.taxRs`}
+                              type="number"
+                              step="0.01"
+                              placeholder="0.00"
+                              errors={errors}
+                            />
+                          </td>
+                          <td className="p-0.5 align-top min-w-[80px]">
+                            <InputCell
+                              control={control}
+                              name={`salesContractDetails.${index}.unit`}
+                              placeholder="Unit"
+                              required
+                              errors={errors}
+                              disabled
+                            />
+                          </td>
+                          <td className="p-0.5 align-top min-w-[80px]">
+                            <InputCell
+                              control={control}
+                              name={`salesContractDetails.${index}.qty`}
+                              type="number"
+                              step="0.001"
+                              placeholder="0.000"
+                              required
+                              errors={errors}
+                            />
+                          </td>
+                          <td className="p-0.5 align-top min-w-[90px]">
+                            <InputCell
+                              control={control}
+                              name={`salesContractDetails.${index}.quotRate`}
+                              type="number"
+                              step="0.01"
+                              placeholder="0.00"
+                              errors={errors}
+                            />
+                          </td>
+                          <td className="p-0.5 align-top min-w-[90px]">
+                            <InputCell
+                              control={control}
+                              name={`salesContractDetails.${index}.orderRate`}
+                              type="number"
+                              step="0.001"
+                              placeholder="0.000"
+                              required
+                              errors={errors}
+                            />
+                          </td>
+                          <td className="p-0.5 align-top min-w-[90px]">
+                            <InputCell
+                              control={control}
+                              name={`salesContractDetails.${index}.discountPercent`}
+                              type="number"
+                              step="0.01"
+                              placeholder="0.00"
+                              errors={errors}
+                            />
+                          </td>
+                          <td className="p-0.5 align-top min-w-[110px]">
+                            <InputCell
+                              control={control}
+                              name={`salesContractDetails.${index}.effectiveFrom`}
+                              type="date"
+                              errors={errors}
+                            />
+                          </td>
+                          <td className="p-0.5 align-top min-w-[100px]">
+                            <InputCell
+                              control={control}
+                              name={`salesContractDetails.${index}.effectiveTo`}
+                              type="date"
+                              errors={errors}
+                            />
+                          </td>
+                          <td className="p-0.5 align-top min-w-[120px]">
+                            <InputCell
+                              control={control}
+                              name={`salesContractDetails.${index}.discountAmount`}
+                              type="number"
+                              step="0.001"
+                              placeholder="0.000"
+                              errors={errors}
+                              disabled
+                            />
+                          </td>
+                          <td className="p-0.5 align-top min-w-[100px]">
+                            <InputCell
+                              control={control}
+                              name={`salesContractDetails.${index}.amount`}
+                              type="number"
+                              step="0.001"
+                              placeholder="0.000"
+                              required
+                              errors={errors}
+                              disabled
+                            />
+                          </td>
+                          {/* Conditionally render tax columns based on tax type */}
+                          {rowTaxType === "SGST" ? (
+                            <>
+                              <td className="p-0.5 align-top min-w-[90px]">
+                                <InputCell
+                                  control={control}
+                                  name={`salesContractDetails.${index}.sgstRate`}
+                                  type="number"
+                                  step="0.0001"
+                                  placeholder="0.0000"
+                                  errors={errors}
+                                  disabled
+                                />
+                              </td>
+                              <td className="p-0.5 align-top min-w-[100px]">
+                                <InputCell
+                                  control={control}
+                                  name={`salesContractDetails.${index}.sgstAmount`}
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="0.00"
+                                  errors={errors}
+                                  disabled
+                                />
+                              </td>
+                              <td className="p-0.5 align-top min-w-[90px]">
+                                <InputCell
+                                  control={control}
+                                  name={`salesContractDetails.${index}.cgstRate`}
+                                  type="number"
+                                  step="0.0001"
+                                  placeholder="0.0000"
+                                  errors={errors}
+                                  disabled
+                                />
+                              </td>
+                              <td className="p-0.5 align-top min-w-[100px]">
+                                <InputCell
+                                  control={control}
+                                  name={`salesContractDetails.${index}.cgstAmount`}
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="0.00"
+                                  errors={errors}
+                                  disabled
+                                />
+                              </td>
+                            </>
+                          ) : rowTaxType === "IGST" ? (
+                            <>
+                              <td className="p-0.5 align-top min-w-[90px]">
+                                <InputCell
+                                  control={control}
+                                  name={`salesContractDetails.${index}.igstRate`}
+                                  type="number"
+                                  step="0.0001"
+                                  placeholder="0.0000"
+                                  errors={errors}
+                                  disabled
+                                />
+                              </td>
+                              <td className="p-0.5 align-top min-w-[100px]">
+                                <InputCell
+                                  control={control}
+                                  name={`salesContractDetails.${index}.igstAmount`}
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="0.00"
+                                  errors={errors}
+                                  disabled
+                                />
+                              </td>
+                            </>
+                          ) : null}
+                          <td className="p-0.5 align-top min-w-[100px]">
+                            <SelectCell
+                              control={control}
+                              name={`salesContractDetails.${index}.currencyName`}
+                              options={currencyData}
+                              placeholder="Currency"
+                              errors={errors}
+                            />
+                          </td>
+                          <td className="p-1 text-center sticky right-0 bg-white dark:bg-gray-800 z-10">
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveItem("salesContract", index)}
+                              disabled={salesContractArray.fields.length <= 1}
+                              className={`h-5 w-5 rounded text-white flex items-center justify-center ${salesContractArray.fields.length <= 1
+                                ? "bg-gray-400 cursor-not-allowed"
+                                : "bg-red-600 hover:bg-red-700"
+                                }`}
+                            >
+                              <Trash2 size={10} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -1523,49 +1929,87 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
               <TableWrapper>
                 <TableHead headers={["S.No", "Particulars", "Amount", "Action"]} />
                 <tbody>
-                  {taxDetailsArray.fields.map((field, index) => (
-                    <TableRow
-                      key={field.id}
-                      index={index}
-                      onRemove={() => handleRemoveItem("taxDetails", index)}
-                      disabled={taxDetailsArray.fields.length <= 1}
-                    >
-                      <td className="p-1 align-top">
-                        <Controller
-                          name={`taxDetails.${index}.particulars`}
-                          control={control}
-                          render={({ field }) => (
-                            <select
-                              {...field}
-                              className={`${controlClasses} h-8 text-xs`}
-                            >
-                              <option value="">Select Particulars</option>
-                              {(listOfValuesData.PARTICULARS || []).map((option) => (
-                                <option key={option.value} value={option.value}>
-                                  {option.label}
-                                </option>
-                              ))}
-                            </select>
-                          )}
-                        />
-                      </td>
-                      <td className="p-1 align-top">
-                        <Controller
-                          name={`taxDetails.${index}.amount`}
-                          control={control}
-                          render={({ field }) => (
-                            <input
-                              {...field}
-                              type="number"
-                              step="0.01"
-                              placeholder="0.00"
-                              className={`${controlClasses} h-8 text-xs text-right`}
-                            />
-                          )}
-                        />
-                      </td>
-                    </TableRow>
-                  ))}
+                  {taxDetailsArray.fields.map((field, index) => {
+                    // Check if this is a system calculated field (should be read-only)
+                    const isSystemRow = getValues(`taxDetails.${index}.isSystemRow`);
+                    const particulars = getValues(`taxDetails.${index}.particulars`);
+                    const isReadOnly = isSystemRow || ['Gross Amount', 'IGST', 'CGST', 'SGST'].includes(particulars);
+
+                    return (
+                      <tr key={field.id} className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
+                        <td className="p-1 text-center font-medium dark:text-white text-[10px]">
+                          {index + 1}
+                        </td>
+                        <td className="p-1 align-top">
+                          <Controller
+                            name={`taxDetails.${index}.particulars`}
+                            control={control}
+                            render={({ field }) => {
+                              // Get all available options from listOfValuesData
+                              const allOptions = listOfValuesData.PARTICULARS || [];
+
+                              // Filter options based on row type
+                              let availableOptions = [];
+                              if (isSystemRow) {
+                                // For system rows, only show their specific value
+                                availableOptions = [{ label: particulars, value: particulars }];
+                              } else {
+                                // For user-added rows, show all options
+                                availableOptions = allOptions;
+                              }
+
+                              return (
+                                <select
+                                  {...field}
+                                  className={`${controlClasses} h-8 text-xs ${isReadOnly ? 'bg-gray-100 dark:bg-gray-700 cursor-not-allowed' : ''}`}
+                                  disabled={isReadOnly}
+                                  onChange={(e) => {
+                                    field.onChange(e);
+                                  }}
+                                >
+                                  <option value="">Select Particulars</option>
+                                  {availableOptions.map((option) => (
+                                    <option key={option.value || option.label} value={option.label}>
+                                      {option.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              );
+                            }}
+                          />
+                        </td>
+                        <td className="p-1 align-top">
+                          <Controller
+                            name={`taxDetails.${index}.amount`}
+                            control={control}
+                            render={({ field }) => (
+                              <input
+                                {...field}
+                                type="number"
+                                step="0.01"
+                                placeholder="0.00"
+                                className={`${controlClasses} h-8 text-xs text-right ${isReadOnly ? 'bg-gray-100 dark:bg-gray-700 cursor-not-allowed' : ''}`}
+                                disabled={isReadOnly}
+                              />
+                            )}
+                          />
+                        </td>
+                        <td className="p-1 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveItem("taxDetails", index)}
+                            disabled={isSystemRow}
+                            className={`h-5 w-5 rounded text-white flex items-center justify-center ${isSystemRow
+                              ? "bg-gray-400 cursor-not-allowed"
+                              : "bg-red-600 hover:bg-red-700"
+                              }`}
+                          >
+                            <Trash2 size={10} />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </TableWrapper>
             </div>
@@ -1584,7 +2028,8 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
                       {...field}
                       type="number"
                       step="0.01"
-                      className={`${controlClasses} text-right`}
+                      className={`${controlClasses} text-right bg-gray-100 dark:bg-gray-700 cursor-not-allowed`}
+                      disabled
                     />
                   )}
                 />
@@ -1598,8 +2043,9 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
                   render={({ field }) => (
                     <input
                       {...field}
-                      className={`${controlClasses}`}
-                      placeholder="Enter amount in words"
+                      className={`${controlClasses} bg-gray-100 dark:bg-gray-700 cursor-not-allowed`}
+                      disabled
+                      placeholder="Auto-calculated from total amount"
                     />
                   )}
                 />
