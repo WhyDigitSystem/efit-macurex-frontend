@@ -15,7 +15,7 @@ import { encryptPassword } from "./encPassword";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
-const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8091";
+const API_URL =  import.meta.env.VITE_API_URL || "http://localhost:8091";
 
 const ResetPasswordPopup = () => {
   const [open, setOpen] = useState(false);

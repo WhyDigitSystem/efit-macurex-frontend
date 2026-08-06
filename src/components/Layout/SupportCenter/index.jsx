@@ -190,7 +190,7 @@ const SupportTickets = () => {
           const formData = new FormData();
           formData.append('file', ticket.image);
 
-          const uploadUrl = `${process.env.REACT_APP_API_URL}/api/ticketcontroller/uploadTicketScreenShotInBloob?id=${ticketId}`;
+          const uploadUrl = `${ import.meta.env.VITE_API_URL}/api/ticketcontroller/uploadTicketScreenShotInBloob?id=${ticketId}`;
 
           const uploadResponse = await axios.post(uploadUrl, formData, {
             headers: {

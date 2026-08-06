@@ -17,7 +17,7 @@ import React, { useEffect, useState } from "react";
 import { getAllActiveUsers } from "../services/api"; // Assuming the function fetches the active users
 import { encryptPassword } from "./encPassword";
 
-const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8091";
+const API_URL =  import.meta.env.VITE_API_URL || "http://localhost:8091";
 
 const ChangePasswordPopup = () => {
   const [open, setOpen] = useState(false);

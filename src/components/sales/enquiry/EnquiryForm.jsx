@@ -600,10 +600,10 @@ const EnquiryForm = ({ data, onBack, onSave }) => {
     if (typeof attachment === 'string') {
       // If it's a file path, we need to serve it through the backend
       // You might need to adjust this URL based on your backend configuration
-      return `${process.env.REACT_APP_API_URL}/api/files/download?path=${encodeURIComponent(attachment)}`;
+      return `${ import.meta.env.VITE_API_URL}/api/files/download?path=${encodeURIComponent(attachment)}`;
     }
     if (attachment.filePath) {
-      return `${process.env.REACT_APP_API_URL}/api/files/download?path=${encodeURIComponent(attachment.filePath)}`;
+      return `${ import.meta.env.VITE_API_URL}/api/files/download?path=${encodeURIComponent(attachment.filePath)}`;
     }
     return null;
   };
