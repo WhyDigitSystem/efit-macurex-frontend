@@ -1,9 +1,18 @@
-import { ArrowLeft, Save, X, Plus, Trash2, Upload, FileText } from "lucide-react";
+import {
+  ArrowLeft,
+  Save,
+  X,
+  Plus,
+  Trash2,
+  UploadCloud,
+} from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import dayjs from "dayjs";
 import { useToast } from "../../Toast/ToastContext";
-import { engineeringChangeRecordAPI } from "../../../api/TDC/engineeringChangeRecordAPI";
+import engineeringChangeRecordAPI from "../../../api/TDC/engineeringChangeRecordAPI";
 import branchAPI from "../../../api/branchAPI";
-import departmentAPI from "../../../api/departmentAPI";
+import locationMasterAPI from "../../../api/locationMasterAPI";
+import { departmentAPI } from "../../../api/departmentAPI";
 import itemAPI from "../../../api/itemAPI";
 
 /* ---------------------------------------------------------------------------- */
@@ -36,14 +45,14 @@ const cellReadOnlyClasses =
   "bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 " +
   "text-gray-500 dark:text-gray-400";
 
-const labelClasses =
-  "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
+const labelClasses = "block text-[11px] text-gray-500 dark:text-gray-400 mb-1";
 
 const fieldGrid =
-  "grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-x-6 gap-y-4 items-start";
+  "grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-x-6 gap-y-4 items-start";
 
+// Spacious grid used inside the child tabs so fields breathe more.
 const subTabFieldGrid =
-  "grid grid-cols-[repeat(auto-fit,minmax(230px,1fr))] gap-x-8 gap-y-6 items-start";
+  "grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-x-8 gap-y-6 items-start";
 
 /* ---------------------------------------------------------------------------- */
 /* Shared building blocks                                                      */
@@ -75,7 +84,7 @@ const Field = ({
           disabled={disabled}
           className={`${controlClasses} ${error ? controlErrClasses : ""}`}
         >
-          <option value="">-- Select --</option>
+          <option value="">Select {label}</option>
           {(options || []).map((opt) => (
             <option key={opt.value ?? opt} value={opt.value ?? opt}>
               {opt.label ?? opt}
@@ -189,7 +198,7 @@ const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
     <button
       onClick={onCancel}
       disabled={isSubmitting}
-      className="flex items-center gap-1 px-3 py-1.5 rounded text-xs whitespace-nowrap border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+      className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
     >
       <X className="h-3 w-3" />
       Cancel
@@ -198,7 +207,7 @@ const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
     <button
       onClick={onSave}
       disabled={isSubmitting}
-      className="flex items-center gap-1 px-3 py-1.5 rounded text-xs whitespace-nowrap text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+      className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
     >
       <Save className="h-3 w-3" />
       {isSubmitting ? "Saving..." : saveLabel}
@@ -245,16 +254,65 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
         type="button"
         onClick={onRemove}
         disabled={disabled}
-        className={`h-6 w-6 rounded text-white flex items-center justify-center ${
+        className={`h-5 w-5 rounded text-white flex items-center justify-center ${
           disabled
             ? "bg-gray-400 cursor-not-allowed"
             : "bg-red-600 hover:bg-red-700"
         }`}
       >
-        <Trash2 size={12} />
+        <Trash2 size={10} />
       </button>
     </td>
   </tr>
+);
+
+/* Generic dynamic table. Supports text / select / readonly columns.
+   Options may be plain strings or { value, label } objects. */
+const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
+  <TableWrapper>
+    <TableHead headers={["#", ...columns.map((c) => c.label), "Action"]} />
+    <tbody>
+      {rows.map((row, idx) => (
+        <TableRow
+          key={idx}
+          index={idx}
+          onRemove={() => onRemoveRow(idx)}
+          disabled={rows.length <= 1}
+        >
+          {columns.map((col) =>
+            col.type === "select" ? (
+              <td className="p-2 align-top" key={col.key}>
+                <select
+                  value={row[col.key]}
+                  onChange={(e) => onCellChange(idx, col.key, e.target.value)}
+                  className={cellInputClasses}
+                >
+                  <option value="">Select {col.label}</option>
+                  {(col.options || []).map((opt) => (
+                    <option key={opt.value ?? opt} value={opt.value ?? opt}>
+                      {opt.label ?? opt}
+                    </option>
+                  ))}
+                </select>
+              </td>
+            ) : (
+              <td className="p-2 align-top" key={col.key}>
+                <input
+                  type={col.type === "date" ? "date" : "text"}
+                  value={row[col.key]}
+                  readOnly={col.readOnly}
+                  onChange={(e) => onCellChange(idx, col.key, e.target.value)}
+                  className={
+                    col.readOnly ? cellReadOnlyClasses : cellInputClasses
+                  }
+                />
+              </td>
+            ),
+          )}
+        </TableRow>
+      ))}
+    </tbody>
+  </TableWrapper>
 );
 
 /* File upload cell: drag-and-drop or click-to-upload. Displays the chosen
@@ -289,7 +347,7 @@ const UploadCell = ({ file, onFileChange, error }) => {
               : "border-gray-300 dark:border-gray-600 hover:border-blue-400"
         }`}
       >
-        <Upload className="h-3.5 w-3.5 text-gray-400 dark:text-gray-500 shrink-0" />
+        <UploadCloud className="h-3.5 w-3.5 text-gray-400 dark:text-gray-500 shrink-0" />
         <span className="text-[11px] text-gray-500 dark:text-gray-400 truncate">
           {displayName}
         </span>
@@ -345,21 +403,26 @@ const emptyPdfRow = () => ({
   attachDrawingCopy: null,
 });
 
-const todayStr = () => {
-  const d = new Date();
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-};
+const fmtDate = (value) => (value ? dayjs(value).format("YYYY-MM-DD") : "");
 
-const autoEcrNo = () =>
-  `ECR-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, "0")}${String(new Date().getDate()).padStart(2, "0")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
+const generateEcrNo = () =>
+  `ECR-${dayjs().format("YYYYMMDD")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
 
 /* ---------------------------------------------------------------------------- */
 
 const EcrForm = ({ data, onBack }) => {
-  const [orgId] = useState(Number(localStorage.getItem("orgId")) || 0);
-  const [branch] = useState(Number(localStorage.getItem("branchId")) || 0);
   const { addToast } = useToast();
+  const orgId = Number(localStorage.getItem("orgId")) || 0;
+  const branch = Number(localStorage.getItem("branchId")) || 0;
+  const usersId = localStorage.getItem("usersId");
+
+  const userData = JSON.parse(localStorage.getItem("userData") || "{}");
+  const orgName = (
+    userData?.companyVO?.companyName ||
+    userData?.orgName ||
+    ""
+  ).trim();
+  const isMacurex = ["mecurex", "macurex"].includes(orgName.toLowerCase());
 
   const [activeChildTab, setActiveChildTab] = useState("productNo");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -372,22 +435,26 @@ const EcrForm = ({ data, onBack }) => {
   const [partOptions, setPartOptions] = useState([]);
   const [partMap, setPartMap] = useState({});
 
-  const [header, setHeader] = useState(() => ({
-    plantId: data?.plantId?.id ?? data?.plantId ?? "",
-    ecrNo: data?.ecrNo || (data ? "" : autoEcrNo()),
-    ecrDate: data?.ecrDate || todayStr(),
-    fromDepartment: data?.fromDepartment?.id ?? data?.fromDepartment ?? "",
-    customerName: data?.customerName || "",
-    requestedBy: data?.requestedBy || "",
-    reasonForChange: data?.reasonForChange || "",
-    productDescription: data?.productDescription || "",
-    engineeringDrawingChange: data?.engineeringDrawingChange || "",
-    bomChange: data?.bomChange || "",
-    customerApproval: data?.customerApproval || "",
-    drawingWhichRequiredChange: data?.drawingWhichRequiredChange || "",
-    documentsWhichRequireChange: data?.documentsWhichRequireChange || "",
-    active: data?.active !== false,
-  }));
+  const [header, setHeader] = useState(() => {
+    const base = {
+      plantId: data?.plantId?.id ?? data?.plantId ?? "",
+      ecrNo: data?.ecrNo || (data ? "" : generateEcrNo()),
+      ecrDate: data?.ecrDate || dayjs().format("YYYY-MM-DD"),
+      fromDepartment: data?.fromDepartment?.id ?? data?.fromDepartment ?? "",
+      customerName: data?.customerName || "",
+      requestedBy: data?.requestedBy || "",
+      reasonForChange: data?.reasonForChange || "",
+      productDescription: data?.productDescription || "",
+      engineeringDrawingChange: data?.engineeringDrawingChange || "",
+      bomChange: data?.bomChange || "",
+      customerApproval: data?.customerApproval || "",
+      drawingWhichRequiredChange: data?.drawingWhichRequiredChange || "",
+      documentsWhichRequireChange: data?.documentsWhichRequireChange || "",
+      active: data?.active !== false,
+    };
+    base.ecrDate = fmtDate(base.ecrDate);
+    return base;
+  });
 
   const [productNo, setProductNo] = useState(data?.productNo || "");
 
@@ -420,18 +487,28 @@ const EcrForm = ({ data, onBack }) => {
 
   const loadPlants = useCallback(async () => {
     try {
-      const res = await branchAPI.getBranchByOrgId(orgId);
-      setPlantOptions(
-        (res || []).map((b) => ({
-          value: b.id,
-          label: b.branchName || b.branchCode || b.id,
-        })),
-      );
+      if (isMacurex) {
+        const res = await locationMasterAPI.getPlants(orgId);
+        setPlantOptions(
+          (res || []).map((p) => ({
+            value: p.id,
+            label: p.plantName || p.plantId || p.id,
+          })),
+        );
+      } else {
+        const res = await branchAPI.getBranchByOrgId(orgId);
+        setPlantOptions(
+          (res || []).map((b) => ({
+            value: b.id,
+            label: b.branchName || b.branchCode || b.id,
+          })),
+        );
+      }
     } catch (error) {
       console.error("Failed to load plant options:", error);
       setPlantOptions([]);
     }
-  }, [orgId]);
+  }, [orgId, isMacurex]);
 
   const loadDepartments = useCallback(async () => {
     try {
@@ -450,32 +527,35 @@ const EcrForm = ({ data, onBack }) => {
     }
   }, [orgId, branch]);
 
-  const loadProducts = useCallback(async () => {
+  const loadItems = useCallback(async () => {
     try {
       const res = await itemAPI.getItems(orgId, branch);
       const map = {};
-      const opts = (res || []).map((it) => {
+      const options = (res || []).map((it) => {
         map[it.id] = it;
         return { value: it.id, label: it.itemCode || it.id };
       });
-      setProductOptions(opts);
+      setProductOptions(options);
       setProductMap(map);
-      setPartOptions(opts);
+      setPartOptions(options);
       setPartMap(map);
     } catch (error) {
-      console.error("Failed to load product options:", error);
+      console.error("Failed to load product/part options:", error);
       setProductOptions([]);
       setPartOptions([]);
     }
   }, [orgId, branch]);
 
   useEffect(() => {
-    if (orgId) {
-      loadPlants();
+    if (orgId) loadPlants();
+  }, [orgId, loadPlants]);
+
+  useEffect(() => {
+    if (orgId && branch) {
       loadDepartments();
-      loadProducts();
+      loadItems();
     }
-  }, [orgId, loadPlants, loadDepartments, loadProducts]);
+  }, [orgId, branch, loadDepartments, loadItems]);
 
   /* ---------------- Handlers ---------------- */
 
@@ -497,6 +577,20 @@ const EcrForm = ({ data, onBack }) => {
 
   const handleRemarksToggle = (name, value) => {
     setRemarks((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleProductChange = (e) => {
+    const value = e.target.value;
+    if (fieldErrors.productNo)
+      setFieldErrors((prev) => ({ ...prev, productNo: "" }));
+    setProductNo(value);
+    const item = productMap[value];
+    if (item?.itemDescription) {
+      setHeader((prev) => ({
+        ...prev,
+        productDescription: item.itemDescription,
+      }));
+    }
   };
 
   const handlePartCellChange = (idx, key, value) => {
@@ -573,6 +667,9 @@ const EcrForm = ({ data, onBack }) => {
 
     const isUpdate = Boolean(data?.id);
 
+    // Single-transaction payload: header + product/part details + TDC
+    // department notes + remarks + PDF attachments. The backend keeps the
+    // complete change history with approval tracking (server-side validation).
     const payload = {
       ...(isUpdate ? { id: data.id } : {}),
       orgId,
@@ -590,8 +687,8 @@ const EcrForm = ({ data, onBack }) => {
               ? r.attachDrawingCopy.name
               : r.attachDrawingCopy,
         })),
-      createdBy: localStorage.getItem("usersId"),
-      ...(isUpdate ? { updatedBy: localStorage.getItem("usersId") } : {}),
+      createdBy: isUpdate ? data?.createdBy || usersId : usersId,
+      ...(isUpdate ? { updatedBy: usersId } : {}),
     };
 
     try {
@@ -610,6 +707,7 @@ const EcrForm = ({ data, onBack }) => {
           response?.errors?.[0]?.shortMessage ||
             response?.errors?.[0]?.longMessage ||
             response?.message ||
+            response?.paramObjectsMap?.message ||
             "Failed to save Engineering Change Record.",
         );
       }
@@ -631,11 +729,9 @@ const EcrForm = ({ data, onBack }) => {
   };
 
   const activeTabMeta = CHILD_TABS.find((t) => t.key === activeChildTab);
-  const isTableTab =
-    activeChildTab === "partDetail" || activeChildTab === "pdfAttachment";
 
   return (
-    <div className="w-full p-2">
+    <div className="p-2 max-w-[1400px]">
       {/* Header */}
       <div className="flex items-center gap-2 mb-3">
         <button
@@ -685,6 +781,7 @@ const EcrForm = ({ data, onBack }) => {
               onChange={handleHeaderChange}
               error={fieldErrors.ecrDate}
               required
+              disabled
             />
             <Field
               type="select"
@@ -720,7 +817,6 @@ const EcrForm = ({ data, onBack }) => {
               onChange={handleHeaderChange}
               error={fieldErrors.reasonForChange}
               required
-              className="sm:col-span-2"
             />
             <Field
               label="Product Description"
@@ -792,7 +888,7 @@ const EcrForm = ({ data, onBack }) => {
               ))}
             </div>
 
-            {isTableTab && (
+            {activeTabMeta.kind === "table" && (
               <button
                 type="button"
                 onClick={
@@ -809,25 +905,14 @@ const EcrForm = ({ data, onBack }) => {
 
           {/* Product No tab */}
           {activeChildTab === "productNo" && (
-            <div className="pt-4">
+            <div className="pt-3">
               <div className={subTabFieldGrid}>
                 <Field
                   type="select"
                   label="Product No"
                   name="productNo"
                   value={productNo}
-                  onChange={(e) => {
-                    if (fieldErrors.productNo)
-                      setFieldErrors((prev) => ({ ...prev, productNo: "" }));
-                    setProductNo(e.target.value);
-                    const item = productMap[e.target.value];
-                    if (item?.itemDescription) {
-                      setHeader((prev) => ({
-                        ...prev,
-                        productDescription: item.itemDescription,
-                      }));
-                    }
-                  }}
+                  onChange={handleProductChange}
                   error={fieldErrors.productNo}
                   options={productOptions}
                   required
@@ -839,44 +924,24 @@ const EcrForm = ({ data, onBack }) => {
           {/* Part Detail tab */}
           {activeChildTab === "partDetail" && (
             <div className="pt-3">
-              <TableWrapper>
-                <TableHead headers={["#", "Part No", "Part Description", "Action"]} />
-                <tbody>
-                  {partRows.map((row, idx) => (
-                    <TableRow
-                      key={idx}
-                      index={idx}
-                      onRemove={handleRemovePartRow}
-                      disabled={partRows.length <= 1}
-                    >
-                      <td className="p-2 align-top">
-                        <select
-                          value={row.partNo}
-                          onChange={(e) =>
-                            handlePartCellChange(idx, "partNo", e.target.value)
-                          }
-                          className={cellInputClasses}
-                        >
-                          <option value="">-- Select --</option>
-                          {partOptions.map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="p-2 align-top">
-                        <input
-                          type="text"
-                          value={row.partDescription}
-                          readOnly
-                          className={cellReadOnlyClasses}
-                        />
-                      </td>
-                    </TableRow>
-                  ))}
-                </tbody>
-              </TableWrapper>
+              <DynamicTable
+                columns={[
+                  {
+                    key: "partNo",
+                    label: "Part No",
+                    type: "select",
+                    options: partOptions,
+                  },
+                  {
+                    key: "partDescription",
+                    label: "Part Description",
+                    readOnly: true,
+                  },
+                ]}
+                rows={partRows}
+                onCellChange={handlePartCellChange}
+                onRemoveRow={handleRemovePartRow}
+              />
               {fieldErrors.partDetails && (
                 <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
                   {fieldErrors.partDetails}
@@ -887,7 +952,7 @@ const EcrForm = ({ data, onBack }) => {
 
           {/* For TDC Department tab */}
           {activeChildTab === "tdcDepartment" && (
-            <div className="pt-4">
+            <div className="pt-3">
               <div className={subTabFieldGrid}>
                 <Field
                   type="textarea"
@@ -910,7 +975,7 @@ const EcrForm = ({ data, onBack }) => {
 
           {/* Remarks tab */}
           {activeChildTab === "remarks" && (
-            <div className="pt-4">
+            <div className="pt-3">
               <div className={subTabFieldGrid}>
                 <Field
                   type="select"
@@ -951,7 +1016,6 @@ const EcrForm = ({ data, onBack }) => {
                   name="remarks"
                   value={remarks.remarks}
                   onChange={handleRemarksFieldChange}
-                  className="sm:col-span-2"
                 />
               </div>
             </div>

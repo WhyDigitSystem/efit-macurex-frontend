@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
-import engineeringChangeRecordAPI from "../../../api/TDC/engineeringChangeRecordAPI";
+import engineeringChangeNoteAPI from "../../../api/TDC/engineeringChangeNoteAPI";
 import { toast } from "../../../utils/toast";
 
-const EcrList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
+const EcnList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -13,16 +13,16 @@ const EcrList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   const loadRecords = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await engineeringChangeRecordAPI.getEcrByOrgId(
+      const data = await engineeringChangeNoteAPI.getEcnByOrgId(
         ORG_ID,
         BRANCH_ID,
       );
       data.sort((a, b) => (b.id || 0) - (a.id || 0));
       setRecords(data);
     } catch (error) {
-      console.error("Failed to load engineering change records:", error);
+      console.error("Failed to load engineering change notes:", error);
       setRecords([]);
-      toast.error("Failed to fetch Engineering Change Records");
+      toast.error("Failed to fetch Engineering Change Notes");
     } finally {
       setLoading(false);
     }
@@ -34,16 +34,16 @@ const EcrList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
 
   const columns = [
     {
-      key: "ecrNo",
-      label: "ECR No",
-      accessor: (row) => row.ecrNo,
+      key: "ecnNo",
+      label: "ECN No",
+      accessor: (row) => row.ecnNo,
       type: "text",
       noWrap: true,
     },
     {
-      key: "ecrDate",
+      key: "ecnDate",
       label: "Date",
-      accessor: (row) => row.ecrDate,
+      accessor: (row) => row.ecnDate,
       type: "text",
     },
     {
@@ -65,45 +65,27 @@ const EcrList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
       type: "text",
     },
     {
+      key: "productName",
+      label: "Product Name",
+      accessor: (row) => row.productName,
+      type: "text",
+    },
+    {
       key: "customerName",
       label: "Customer Name",
       accessor: (row) => row.customerName,
       type: "text",
     },
     {
-      key: "requestedBy",
-      label: "Requested By",
-      accessor: (row) => row.requestedBy,
+      key: "productNo",
+      label: "Product No",
+      accessor: (row) => row.productNo,
       type: "text",
     },
     {
-      key: "reasonForChange",
-      label: "Reason For Change",
-      accessor: (row) => row.reasonForChange,
-      type: "text",
-    },
-    {
-      key: "productDescription",
-      label: "Product Description",
-      accessor: (row) => row.productDescription,
-      type: "text",
-    },
-    {
-      key: "engineeringDrawingChange",
-      label: "Engg. Drawing Change",
-      accessor: (row) => row.engineeringDrawingChange,
-      type: "text",
-    },
-    {
-      key: "bomChange",
-      label: "BOM Change",
-      accessor: (row) => row.bomChange,
-      type: "text",
-    },
-    {
-      key: "customerApproval",
-      label: "Customer Approval",
-      accessor: (row) => row.customerApproval,
+      key: "customerPartNo",
+      label: "Customer Part No",
+      accessor: (row) => row.customerPartNo,
       type: "text",
     },
     {
@@ -134,20 +116,17 @@ const EcrList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   ];
 
   const searchFields = [
-    "ecrNo",
-    "ecrDate",
+    "ecnNo",
+    "ecnDate",
     "plantId",
     "plantId.branchName",
     "plantName",
     "fromDepartment",
     "fromDepartment.departmentName",
+    "productName",
     "customerName",
-    "requestedBy",
-    "reasonForChange",
-    "productDescription",
-    "engineeringDrawingChange",
-    "bomChange",
-    "customerApproval",
+    "productNo",
+    "customerPartNo",
   ];
 
   const filterOptions = [
@@ -170,7 +149,7 @@ const EcrList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
 
   return (
     <CommonListViewTable
-      title="Engineering Change Record (ECR)"
+      title="Engineering Change Note (ECN)"
       data={records}
       loading={loading}
       columns={columns}
@@ -184,14 +163,14 @@ const EcrList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
       showSerialNumber={true}
       itemsPerPageOptions={[5, 10, 20, 50, 100]}
       defaultItemsPerPage={10}
-      emptyMessage="No Engineering Change Records found"
-      loadingMessage="Loading Engineering Change Records..."
+      emptyMessage="No Engineering Change Notes found"
+      loadingMessage="Loading Engineering Change Notes..."
       enableRefresh={true}
       onRefresh={loadRecords}
       enableExport={true}
-      exportFileName="EngineeringChangeRecords"
+      exportFileName="EngineeringChangeNotes"
     />
   );
 };
 
-export default EcrList;
+export default EcnList;

@@ -65,6 +65,7 @@ import BomCorrectionRequestMaster from "../components/PPC/bomCorrectionRequest/B
 import DrawingAttachmentMaster from "../components/PPC/drawingAttachment/DrawingAttachmentMaster";
 import TdcList from "../components/TDC/TdcList";
 import EcrMaster from "../components/TDC/engineeringChangeRecord/EcrMaster";
+import EcnMaster from "../components/TDC/engineeringChangeNote/EcnMaster";
 import ProductionList from "../components/Production/ProductionList";
 import PlantMaintenanceList from "../components/plantMaintenance/PlantMaintenanceList";
 import QualityList from "../components/quality/QualityList";
@@ -211,6 +212,11 @@ export const routesConfig = [
     path: "/engineeringchangerecord",
     label: "Engineering Change Record (ECR)",
     element: <EcrMaster />,
+  },
+  {
+    path: "/engineeringchangenote",
+    label: "Engineering Change Note (ECN)",
+    element: <EcnMaster />,
   },
   { path: "/production", label: "Production", element: <ProductionList /> },
   {

@@ -1,11 +1,11 @@
 import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import EcrList from "./EcrList";
-import EcrForm from "./EcrForm";
-import engineeringChangeRecordAPI from "../../../api/TDC/engineeringChangeRecordAPI";
+import EcnList from "./EcnList";
+import EcnForm from "./EcnForm";
+import engineeringChangeNoteAPI from "../../../api/TDC/engineeringChangeNoteAPI";
 import { toast } from "../../../utils/toast";
 
-const EcrMaster = () => {
+const EcnMaster = () => {
   const navigate = useNavigate();
   const [view, setView] = useState("list"); // "list" | "form"
   const [editData, setEditData] = useState(null);
@@ -23,7 +23,7 @@ const EcrMaster = () => {
   const handleEdit = useCallback(
     async (row) => {
       try {
-        const records = await engineeringChangeRecordAPI.getEcrByOrgId(
+        const records = await engineeringChangeNoteAPI.getEcnByOrgId(
           ORG_ID,
           BRANCH_ID,
         );
@@ -31,8 +31,8 @@ const EcrMaster = () => {
         setEditData(fresh);
         setView("form");
       } catch (error) {
-        console.error("Failed to fetch ECR for edit:", error);
-        toast.error("Failed to load Engineering Change Record details");
+        console.error("Failed to fetch ECN for edit:", error);
+        toast.error("Failed to load Engineering Change Note details");
       }
     },
     [ORG_ID, BRANCH_ID],
@@ -51,11 +51,11 @@ const EcrMaster = () => {
   };
 
   if (view === "form") {
-    return <EcrForm data={editData} onBack={handleBack} />;
+    return <EcnForm data={editData} onBack={handleBack} />;
   }
 
   return (
-    <EcrList
+    <EcnList
       onAddNew={handleAddNew}
       onEdit={handleEdit}
       onBack={handleNavigateHome}
@@ -64,4 +64,4 @@ const EcrMaster = () => {
   );
 };
 
-export default EcrMaster;
+export default EcnMaster;
