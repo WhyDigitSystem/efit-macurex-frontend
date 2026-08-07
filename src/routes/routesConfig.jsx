@@ -210,12 +210,12 @@ export const routesConfig = [
   { path: "/TDC", label: "TDC", element: <TdcList /> },
   {
     path: "/engineeringchangerecord",
-    label: "Engineering Change Record (ECR)",
+    label: "Engineering Change Record",
     element: <EcrMaster />,
   },
   {
     path: "/engineeringchangenote",
-    label: "Engineering Change Note (ECN)",
+    label: "Engineering Change Note",
     element: <EcnMaster />,
   },
   { path: "/production", label: "Production", element: <ProductionList /> },

@@ -16,13 +16,13 @@ const SECTIONS = [
   {
     items: [
       {
-        name: "Engineering Change Record (ECR)",
+        name: "Engineering Change Record",
         icon: FileEdit,
         path: "/engineeringchangerecord",
         screenCode: "ENGINEERING_CHANGE_RECORD",
       },
       {
-        name: "Engineering Change Note (ECN)",
+        name: "Engineering Change Note",
         icon: FileText,
         path: "/engineeringchangenote",
         screenCode: "ENGINEERING_CHANGE_NOTE",

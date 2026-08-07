@@ -45,14 +45,14 @@ const cellReadOnlyClasses =
   "bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 " +
   "text-gray-500 dark:text-gray-400";
 
-const labelClasses = "block text-[11px] text-gray-500 dark:text-gray-400 mb-1";
+const labelClasses = "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
 const fieldGrid =
-  "grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-x-6 gap-y-4 items-start";
+  "grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-x-4 gap-y-3 items-start";
 
 // Spacious grid used inside the child tabs so fields breathe more.
 const subTabFieldGrid =
-  "grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-x-8 gap-y-6 items-start";
+  "grid grid-cols-[repeat(auto-fit,minmax(210px,1fr))] gap-x-5 gap-y-4 items-start";
 
 /* ---------------------------------------------------------------------------- */
 /* Shared building blocks                                                      */
@@ -84,7 +84,7 @@ const Field = ({
           disabled={disabled}
           className={`${controlClasses} ${error ? controlErrClasses : ""}`}
         >
-          <option value="">Select {label}</option>
+          <option value="">-- Select --</option>
           {(options || []).map((opt) => (
             <option key={opt.value ?? opt} value={opt.value ?? opt}>
               {opt.label ?? opt}
@@ -287,7 +287,7 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
                   onChange={(e) => onCellChange(idx, col.key, e.target.value)}
                   className={cellInputClasses}
                 >
-                  <option value="">Select {col.label}</option>
+                  <option value="">-- Select --</option>
                   {(col.options || []).map((opt) => (
                     <option key={opt.value ?? opt} value={opt.value ?? opt}>
                       {opt.label ?? opt}
@@ -731,7 +731,7 @@ const EcrForm = ({ data, onBack }) => {
   const activeTabMeta = CHILD_TABS.find((t) => t.key === activeChildTab);
 
   return (
-    <div className="p-2 max-w-[1400px]">
+    <div className="w-full p-2">
       {/* Header */}
       <div className="flex items-center gap-2 mb-3">
         <button

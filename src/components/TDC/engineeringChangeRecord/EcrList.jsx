@@ -170,7 +170,7 @@ const EcrList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
 
   return (
     <CommonListViewTable
-      title="Engineering Change Record (ECR)"
+      title="Engineering Change Record"
       data={records}
       loading={loading}
       columns={columns}

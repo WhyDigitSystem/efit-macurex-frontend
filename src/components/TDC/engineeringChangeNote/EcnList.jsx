@@ -149,7 +149,7 @@ const EcnList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
 
   return (
     <CommonListViewTable
-      title="Engineering Change Note (ECN)"
+      title="Engineering Change Note"
       data={records}
       loading={loading}
       columns={columns}
