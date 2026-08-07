@@ -68,6 +68,7 @@ import EcrMaster from "../components/TDC/engineeringChangeRecord/EcrMaster";
 import EcnMaster from "../components/TDC/engineeringChangeNote/EcnMaster";
 import EngineeringDeviationRequestMaster from "../components/TDC/engineeringDeviationRequest/EngineeringDeviationRequestMaster";
 import SupplierChangeRequestMaster from "../components/TDC/supplierChangeRequest/SupplierChangeRequestMaster";
+import InspectionRequisitionNoteMaster from "../components/TDC/inspectionRequisitionNote/InspectionRequisitionNoteMaster";
 import ProductionList from "../components/Production/ProductionList";
 import PlantMaintenanceList from "../components/plantMaintenance/PlantMaintenanceList";
 import QualityList from "../components/quality/QualityList";
@@ -229,6 +230,11 @@ export const routesConfig = [
     path: "/supplierchangerequest",
     label: "Supplier Change Request",
     element: <SupplierChangeRequestMaster />,
+  },
+  {
+    path: "/inspectionrequisitionnote",
+    label: "Inspection Requisition Note",
+    element: <InspectionRequisitionNoteMaster />,
   },
   { path: "/production", label: "Production", element: <ProductionList /> },
   {
