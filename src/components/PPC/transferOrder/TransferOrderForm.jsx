@@ -623,7 +623,7 @@ const TransferOrderForm = ({ data, onBack }) => {
   ];
 
   return (
-    <div className="p-2 max-w-[1700px]">
+    <div className="w-full p-2">
       {/* Header */}
       <div className="flex items-center gap-2 mb-3">
         <button
