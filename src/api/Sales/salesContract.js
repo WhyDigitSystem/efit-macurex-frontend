@@ -2,7 +2,7 @@
 
 import apiClient from "../apiClient";
 
-const API_BASE_URL =  import.meta.env.VITE_API_URL;
+const API_BASE_URL = import.meta.env.VITE_API_URL;
 
 const salesContractAPI = {
     getCustomerDropdown: async (orgId, branchId, ctype) => {
@@ -65,7 +65,7 @@ const salesContractAPI = {
     createUpdateSalesContract: async (formData) => {
         try {
             const response = await apiClient.post(
-                `${API_BASE_URL}/api/salescontractservice/createUpdateSalesContract`,
+                `${API_BASE_URL}/api/dhinesh/createUpdateSalesContract`,
                 formData,
                 {
                     headers: {
@@ -84,7 +84,7 @@ const salesContractAPI = {
     getSalesContractById: async (salesContractId) => {
         try {
             const response = await apiClient.get(
-                `/api/salescontractservice/getSalesContractById?id=${salesContractId}`
+                `/api/dhinesh/getSalesContractById?id=${salesContractId}`
             );
             return response;
         } catch (error) {
@@ -97,7 +97,7 @@ const salesContractAPI = {
     getSalesContracts: async (orgId, branchId) => {
         try {
             const response = await apiClient.get(
-                `/api/salescontractservice/getSalesContracts?orgId=${orgId}&branchId=${branchId}`
+                `/api/dhinesh/getSalesContractByOrgIdAndBranch?orgId=${orgId}&branch=${branchId}`
             );
             return response;
         } catch (error) {

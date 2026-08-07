@@ -1,6 +1,9 @@
-import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { ArrowLeft, Save, X, Plus, Trash2, Eye } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { useForm, Controller, useFieldArray } from "react-hook-form";
+import branchAPI from "../../../api/branchAPI";
+import listOfValuesAPI from "../../../api/listOfValuesAPI";
+import salesDeliveryAPI from "../../../api/Sales/salesDelivery";
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -14,7 +17,7 @@ const labelClasses =
   "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
 const getDefaultValues = () => ({
-  divNo: "Auto",
+  divNo: "",
   divDate: new Date().toISOString().split("T")[0],
   plantId: "",
   belongsTo: "",
@@ -47,8 +50,6 @@ const getDefaultValues = () => ({
 });
 
 const SELECT_OPTIONS = {
-  plantId: ["Plant A", "Plant B", "Plant C"],
-  belongsTo: ["Option 1", "Option 2", "Option 3"],
   monthOfSchedule: [
     "January",
     "February",
@@ -63,9 +64,39 @@ const SELECT_OPTIONS = {
     "November",
     "December",
   ],
-  customerId: ["CUST-001", "CUST-002", "CUST-003"],
-  invoiceType: ["Tax Invoice", "Commercial Invoice", "Proforma Invoice"],
-  unit: ["Nos", "Box", "Kg", "Meter", "Litre", "Pcs"],
+  dayNo: [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9",
+    "10",
+    "11",
+    "12",
+    "13",
+    "14",
+    "15",
+    "16",
+    "17",
+    "18",
+    "19",
+    "20",
+    "21",
+    "22",
+    "23",
+    "24",
+    "25",
+    "26",
+    "27",
+    "28",
+    "29",
+    "30",
+    "31",
+  ],
   day: [
     "Monday",
     "Tuesday",
@@ -77,8 +108,24 @@ const SELECT_OPTIONS = {
   ],
 };
 
+// Helper function to get week number
+const getWeekNumber = (date) => {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
+  const week1 = new Date(d.getFullYear(), 0, 4);
+  return 1 + Math.round(((d - week1) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+};
+
+// Helper function to get day name
+const getDayName = (date) => {
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const d = new Date(date);
+  return days[d.getDay()];
+};
+
 // Helper Components
-const SelectField = ({ control, name, label, options, required, errors }) => {
+const SelectField = ({ control, name, label, options, required, errors, onChange, disabled }) => {
   const getError = () => {
     const parts = name.split(".");
     let error = errors;
@@ -107,13 +154,29 @@ const SelectField = ({ control, name, label, options, required, errors }) => {
           <select
             {...field}
             className={`${controlClasses} ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
+            onChange={(e) => {
+              field.onChange(e);
+              if (onChange) {
+                onChange(e.target.value);
+              }
+            }}
+            disabled={disabled}
           >
             <option value="">Select an option</option>
-            {options.map((opt) => (
-              <option key={opt} value={opt}>
-                {opt}
-              </option>
-            ))}
+            {options.map((opt) => {
+              if (typeof opt === 'object' && opt !== null) {
+                return (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                );
+              }
+              return (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              );
+            })}
           </select>
         )}
       />
@@ -220,11 +283,10 @@ const TableRow = ({
           type="button"
           onClick={onRemove}
           disabled={disabled}
-          className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-            disabled
-              ? "bg-gray-400 cursor-not-allowed"
-              : "bg-red-600 hover:bg-red-700"
-          }`}
+          className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
+            ? "bg-gray-400 cursor-not-allowed"
+            : "bg-red-600 hover:bg-red-700"
+            }`}
         >
           <Trash2 size={10} />
         </button>
@@ -233,7 +295,7 @@ const TableRow = ({
   </tr>
 );
 
-const SelectCell = ({ control, name, options, required, errors }) => {
+const SelectCell = ({ control, name, options, required, errors, onChange, disabled }) => {
   const getError = () => {
     const parts = name.split(".");
     let error = errors;
@@ -259,13 +321,29 @@ const SelectCell = ({ control, name, options, required, errors }) => {
           <select
             {...field}
             className={`${controlClasses} h-8 text-xs ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
+            onChange={(e) => {
+              field.onChange(e);
+              if (onChange) {
+                onChange(e.target.value);
+              }
+            }}
+            disabled={disabled}
           >
             <option value="">Select an option</option>
-            {options.map((opt) => (
-              <option key={opt} value={opt}>
-                {opt}
-              </option>
-            ))}
+            {options.map((opt) => {
+              if (typeof opt === 'object' && opt !== null) {
+                return (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                );
+              }
+              return (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              );
+            })}
           </select>
         )}
       />
@@ -278,15 +356,19 @@ const SelectCell = ({ control, name, options, required, errors }) => {
   );
 };
 
+// Updated InputCell with date handling
 const InputCell = ({
   control,
   name,
   type = "text",
   step,
   placeholder,
+  disabled,
   required,
   errors,
   value,
+  onViewClick,
+  onChange,
 }) => {
   const getError = () => {
     const parts = name.split(".");
@@ -305,21 +387,42 @@ const InputCell = ({
 
   return (
     <td className="p-1 align-top">
-      <Controller
-        name={name}
-        control={control}
-        rules={required ? { required: "This field is required" } : undefined}
-        render={({ field }) => (
-          <input
-            {...field}
-            type={type}
-            step={step}
-            value={value || field.value}
-            className={`${controlClasses} h-8 text-xs ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
-            placeholder={placeholder}
+      <div className="flex items-center gap-1">
+        <div className="flex-1">
+          <Controller
+            name={name}
+            control={control}
+            rules={required ? { required: "This field is required" } : undefined}
+            render={({ field }) => (
+              <input
+                {...field}
+                type={type}
+                step={step}
+                value={value || field.value}
+                className={`${controlClasses} h-8 text-xs ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
+                placeholder={placeholder}
+                disabled={disabled}
+                onChange={(e) => {
+                  field.onChange(e);
+                  if (onChange) {
+                    onChange(e);
+                  }
+                }}
+              />
+            )}
           />
+        </div>
+        {onViewClick && (
+          <button
+            type="button"
+            onClick={onViewClick}
+            className="h-8 w-8 flex-shrink-0 rounded bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-colors"
+            title="View Delivery Schedule"
+          >
+            <Eye size={14} />
+          </button>
         )}
-      />
+      </div>
       {errorMessage && (
         <div className="text-red-500 text-[10px] mt-0.5 whitespace-nowrap">
           {errorMessage}
@@ -329,15 +432,147 @@ const InputCell = ({
   );
 };
 
+// Delivery Schedule Popup Component with auto-fill functionality
+const DeliverySchedulePopup = ({ isOpen, onClose, control, errors, deliveryScheduleArray, setValue }) => {
+  if (!isOpen) return null;
+
+  // Handle date change to auto-fill week number and day
+  const handleDateChange = (e, index) => {
+    const dateValue = e.target.value;
+    if (dateValue) {
+      const weekNo = getWeekNumber(dateValue);
+      const dayName = getDayName(dateValue);
+
+      // Set the week number and day automatically
+      setValue(`deliverySchedule.${index}.weekNo`, weekNo);
+      setValue(`deliverySchedule.${index}.day`, dayName);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col">
+        {/* Popup Header */}
+        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+          <h3 className="text-base font-semibold text-gray-900 dark:text-white">
+            Delivery Schedule Details
+          </h3>
+          <button
+            onClick={onClose}
+            className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          >
+            <X size={20} className="text-gray-500 dark:text-gray-400" />
+          </button>
+        </div>
+
+        {/* Popup Content */}
+        <div className="p-4 overflow-y-auto flex-1">
+          <TableWrapper>
+            <TableHead
+              headers={[
+                "S.No",
+                "Day No.",
+                "Delivery Date",
+                "Week No.",
+                "Day",
+                "Delivery Qty.",
+                "Action",
+              ]}
+            />
+            <tbody>
+              {deliveryScheduleArray.fields.map((field, index) => (
+                <TableRow
+                  key={field.id}
+                  index={index}
+                  onRemove={() => deliveryScheduleArray.remove(index)}
+                  disabled={deliveryScheduleArray.fields.length <= 1}
+                >
+                  <SelectCell
+                    control={control}
+                    name={`deliverySchedule.${index}.dayNo`}
+                    options={SELECT_OPTIONS.dayNo}
+                    errors={errors}
+                  />
+                  <InputCell
+                    control={control}
+                    name={`deliverySchedule.${index}.deliveryDate`}
+                    type="date"
+                    placeholder="Delivery Date"
+                    errors={errors}
+                    onChange={(e) => handleDateChange(e, index)}
+                  />
+                  <InputCell
+                    control={control}
+                    name={`deliverySchedule.${index}.weekNo`}
+                    type="number"
+                    placeholder="Week No."
+                    errors={errors}
+                    disabled={true} // Make it read-only since it's auto-filled
+                  />
+                  <InputCell
+                    control={control}
+                    name={`deliverySchedule.${index}.day`}
+                    errors={errors}
+                    disabled={true} // Make it read-only since it's auto-filled
+                  />
+                  <InputCell
+                    control={control}
+                    name={`deliverySchedule.${index}.deliveryQty`}
+                    type="number"
+                    step="0.01"
+                    placeholder="0"
+                    errors={errors}
+                  />
+                </TableRow>
+              ))}
+            </tbody>
+          </TableWrapper>
+
+          {/* Add Button in Popup */}
+          <button
+            type="button"
+            onClick={() => {
+              const defaultValues = getDefaultValues();
+              const newItem = defaultValues.deliverySchedule?.[0] || {};
+              deliveryScheduleArray.append(newItem);
+            }}
+            className="mt-3 h-8 px-3 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs flex items-center gap-1 transition-colors"
+          >
+            <Plus size={12} /> Add Row
+          </button>
+        </div>
+
+        {/* Popup Footer */}
+        <div className="flex justify-end p-4 border-t border-gray-200 dark:border-gray-700">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Main Component
 const SalesDeliveryForm = ({ data, onBack }) => {
   const [orgId] = useState(localStorage.getItem("orgId"));
+  const [branchId] = useState(localStorage.getItem("branchId"));
   const [activeChildTab, setActiveChildTab] = useState("scheduleDetails");
+  const [plantData, setPlantData] = useState([]);
+  const [belongToData, setBelongsToData] = useState([]);
+  const [customerData, setCustomerData] = useState([]);
+  const [contractData, setContractData] = useState([]);
+  const [showPopup, setShowPopup] = useState(false);
+  const [selectedRowIndex, setSelectedRowIndex] = useState(null);
 
   const {
     control,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm({
     mode: "onTouched",
@@ -375,6 +610,116 @@ const SalesDeliveryForm = ({ data, onBack }) => {
     if (fields.length > 1) remove(index);
   };
 
+  const handleViewDeliverySchedule = (index) => {
+    setSelectedRowIndex(index);
+    setShowPopup(true);
+  };
+
+  const handleCustomerChange = (customerId) => {
+    console.log("Selected Customer ID:", customerId);
+    console.log("Customer Data:", customerData);
+
+    const selectedCustomer = customerData.find(
+      c => String(c.value) === String(customerId)
+    );
+
+    console.log("Selected Customer:", selectedCustomer);
+
+    if (selectedCustomer) {
+      setValue("customerName", selectedCustomer.customerName || "");
+    } else {
+      setValue("customerName", "");
+    }
+  };
+
+  const handleContractChange = (contractNo, index) => {
+    const selectedContract = contractData.find(
+      (c) => String(c.value) === String(contractNo)
+    );
+
+    if (selectedContract) {
+      setValue(
+        `scheduleDetails.${index}.invoiceType`,
+        selectedContract.invoiceType || ""
+      );
+    } else {
+      setValue(`scheduleDetails.${index}.invoiceType`, "");
+    }
+  };
+
+  useEffect(() => {
+    loadBranches();
+    loadBelongsTo();
+    loadCustomerDetails();
+    loadContractNoDetails();
+  }, []);
+
+  const loadBranches = useCallback(async () => {
+    try {
+      const response = await branchAPI.getBranchByOrgId(orgId);
+      const options = (response || []).map(branch => ({
+        value: branch.id,
+        label: branch.branchName,
+      }));
+      setPlantData(options);
+    } catch (error) {
+      console.error("Failed to load branches:", error);
+      setPlantData([]);
+    }
+  }, [orgId]);
+
+  const loadBelongsTo = useCallback(async () => {
+    try {
+      const response = await listOfValuesAPI.getListValuesGroup("SDS BELONGS TO", orgId);
+      const options = (response || []).map(branch => ({
+        value: branch.id,
+        label: branch.valuesDescription,
+      }));
+      setBelongsToData(options);
+    } catch (error) {
+      console.error("Failed to load belongs to options:", error);
+      setBelongsToData([]);
+    }
+  }, [orgId]);
+
+  const loadCustomerDetails = useCallback(async () => {
+    try {
+      const response = await salesDeliveryAPI.getCustomerDropdown(orgId, branchId);
+      const res = response?.paramObjectsMap?.customerDetails;
+      const options = (res || []).map(customer => ({
+        value: customer.customerId,
+        label: customer.customerCode,
+        customerName: customer.customerName,
+      }));
+      setCustomerData(options);
+    } catch (error) {
+      console.error("Failed to load customers:", error);
+      setCustomerData([]);
+    }
+  }, [orgId, branchId]);
+
+  const loadContractNoDetails = useCallback(async () => {
+    try {
+      const response = await salesDeliveryAPI.getContractNoDetails(
+        orgId,
+        branchId
+      );
+
+      const res = response?.paramObjectsMap?.contractList || [];
+
+      const options = res.map((contract) => ({
+        value: contract.contractNo,
+        label: contract.contractNo,
+        invoiceType: contract.invoiceType,
+      }));
+
+      setContractData(options);
+    } catch (error) {
+      console.error("Failed to load contract numbers:", error);
+      setContractData([]);
+    }
+  }, [branchId, orgId]);
+
   const onSubmit = async (formData) => {
     try {
       console.log("Form Data:", formData, "Org Id:", orgId);
@@ -403,15 +748,12 @@ const SalesDeliveryForm = ({ data, onBack }) => {
 
       {/* Main Card */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-3">
-        {/* Header Fields - Updated as per images */}
+        {/* Header Fields */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-          {/* Row 1 */}
           <InputField
             control={control}
             name="divNo"
             label="Div. No."
-            value="Auto"
-            disabled
             errors={errors}
           />
           <InputField
@@ -426,7 +768,7 @@ const SalesDeliveryForm = ({ data, onBack }) => {
             control={control}
             name="plantId"
             label="Plant ID"
-            options={SELECT_OPTIONS.plantId}
+            options={plantData}
             required
             errors={errors}
           />
@@ -434,11 +776,9 @@ const SalesDeliveryForm = ({ data, onBack }) => {
             control={control}
             name="belongsTo"
             label="Belongs To"
-            options={SELECT_OPTIONS.belongsTo}
+            options={belongToData}
             errors={errors}
           />
-
-          {/* Row 2 */}
           <SelectField
             control={control}
             name="monthOfSchedule"
@@ -458,9 +798,10 @@ const SalesDeliveryForm = ({ data, onBack }) => {
             control={control}
             name="customerId"
             label="Customer ID"
-            options={SELECT_OPTIONS.customerId}
+            options={customerData}
             required
             errors={errors}
+            onChange={handleCustomerChange}
           />
           <InputField
             control={control}
@@ -476,22 +817,19 @@ const SalesDeliveryForm = ({ data, onBack }) => {
           {/* Tabs - Updated as per images */}
           <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 mb-0">
             <div className="flex">
-              {["scheduleDetails", "deliverySchedule", "summary"].map((tab) => (
+              {["scheduleDetails", "summary"].map((tab) => (
                 <button
                   key={tab}
                   type="button"
                   onClick={() => setActiveChildTab(tab)}
-                  className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${
-                    activeChildTab === tab
-                      ? "bg-blue-600 text-white"
-                      : "text-gray-600 dark:text-gray-300"
-                  }`}
+                  className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${activeChildTab === tab
+                    ? "bg-blue-600 text-white"
+                    : "text-gray-600 dark:text-gray-300"
+                    }`}
                 >
                   {tab === "scheduleDetails"
                     ? "Schedule Details"
-                    : tab === "deliverySchedule"
-                      ? "Delivery Schedule"
-                      : "Summary"}
+                    : "Summary"}
                 </button>
               ))}
             </div>
@@ -509,31 +847,30 @@ const SalesDeliveryForm = ({ data, onBack }) => {
           {/* Tab Content - Schedule Details */}
           {activeChildTab === "scheduleDetails" && (
             <TableWrapper>
-             
               <TableHead
-  headers={[
-    "S.No",
-    <>
-      S.O. No. Contract No. <span className="text-red-500">*</span>
-    </>,
-    "Invoice Type",
-    <>
-      Item Code <span className="text-red-500">*</span>
-    </>,
-    <>
-      Item Description <span className="text-red-500">*</span>
-    </>,
-    <>
-      Unit <span className="text-red-500">*</span>
-    </>,
-    "Order Qty",
-    "Pending Qty",
-    <>
-      Actual Planned Qty <span className="text-red-500">*</span>
-    </>,
-    "Action",
-  ]}
-/>
+                headers={[
+                  "S.No",
+                  <>
+                    S.O.No.Contract No <span className="text-red-500">*</span>
+                  </>,
+                  "Invoice Type",
+                  <>
+                    Item Code <span className="text-red-500">*</span>
+                  </>,
+                  <>
+                    Item Description <span className="text-red-500">*</span>
+                  </>,
+                  <>
+                    Unit <span className="text-red-500">*</span>
+                  </>,
+                  "Order Qty",
+                  "Pending Qty",
+                  <>
+                    Actual Planned Qty <span className="text-red-500">*</span>
+                  </>,
+                  "Action",
+                ]}
+              />
               <tbody>
                 {scheduleDetailsArray.fields.map((field, index) => (
                   <TableRow
@@ -542,45 +879,48 @@ const SalesDeliveryForm = ({ data, onBack }) => {
                     onRemove={() => handleRemove("scheduleDetails", index)}
                     disabled={scheduleDetailsArray.fields.length <= 1}
                   >
-                    <InputCell
+                    <SelectCell
                       control={control}
                       name={`scheduleDetails.${index}.soNo`}
-                      placeholder="S.O. No."
                       required
+                      options={contractData}
+                      errors={errors}
+                      onChange={(value) => handleContractChange(value, index)}
+                    />
+                    <InputCell
+                      control={control}
+                      name={`scheduleDetails.${index}.invoiceType`}
+                      placeholder="Invoice Type"
+                      disabled
                       errors={errors}
                     />
                     <SelectCell
                       control={control}
-                      name={`scheduleDetails.${index}.invoiceType`}
-                      options={SELECT_OPTIONS.invoiceType}
-                      errors={errors}
-                    />
-                    <InputCell
-                      control={control}
                       name={`scheduleDetails.${index}.itemCode`}
-                      placeholder="Item Code"
+                      options={contractData}
                       required
                       errors={errors}
                     />
                     <InputCell
                       control={control}
                       required
+                      disabled
                       name={`scheduleDetails.${index}.itemDescription`}
                       placeholder="Item Description"
                       errors={errors}
                     />
-                    <SelectCell
+                    <InputCell
                       control={control}
                       required
+                      disabled
                       name={`scheduleDetails.${index}.unit`}
-                      options={SELECT_OPTIONS.unit}
                       errors={errors}
                     />
                     <InputCell
                       control={control}
                       name={`scheduleDetails.${index}.orderQty`}
                       type="number"
-                      //   step="0.01"
+                      disabled
                       placeholder="0"
                       errors={errors}
                     />
@@ -588,7 +928,7 @@ const SalesDeliveryForm = ({ data, onBack }) => {
                       control={control}
                       name={`scheduleDetails.${index}.pendingQty`}
                       type="number"
-                      //   step="0.01"
+                      disabled
                       placeholder="0"
                       errors={errors}
                     />
@@ -596,73 +936,10 @@ const SalesDeliveryForm = ({ data, onBack }) => {
                       control={control}
                       name={`scheduleDetails.${index}.actualPlannedQty`}
                       type="number"
-                      //   step="0.01"
                       required
                       placeholder="0"
                       errors={errors}
-                    />
-                  </TableRow>
-                ))}
-              </tbody>
-            </TableWrapper>
-          )}
-
-          {/* Tab Content - Delivery Schedule */}
-          {activeChildTab === "deliverySchedule" && (
-            <TableWrapper>
-              <TableHead
-                headers={[
-                  "S.No",
-                  "Day No.",
-                  "Delivery Date",
-                  "Week No.",
-                  "Day",
-                  "Delivery Qty.",
-                  "Action",
-                ]}
-              />
-              <tbody>
-                {deliveryScheduleArray.fields.map((field, index) => (
-                  <TableRow
-                    key={field.id}
-                    index={index}
-                    onRemove={() => handleRemove("deliverySchedule", index)}
-                    disabled={deliveryScheduleArray.fields.length <= 1}
-                  >
-                    <InputCell
-                      control={control}
-                      name={`deliverySchedule.${index}.dayNo`}
-                      type="number"
-                      placeholder="Day No."
-                      errors={errors}
-                    />
-                    <InputCell
-                      control={control}
-                      name={`deliverySchedule.${index}.deliveryDate`}
-                      type="date"
-                      placeholder="Delivery Date"
-                      errors={errors}
-                    />
-                    <InputCell
-                      control={control}
-                      name={`deliverySchedule.${index}.weekNo`}
-                      type="number"
-                      placeholder="Week No."
-                      errors={errors}
-                    />
-                    <SelectCell
-                      control={control}
-                      name={`deliverySchedule.${index}.day`}
-                      options={SELECT_OPTIONS.day}
-                      errors={errors}
-                    />
-                    <InputCell
-                      control={control}
-                      name={`deliverySchedule.${index}.deliveryQty`}
-                      type="number"
-                      step="0.01"
-                      placeholder="0"
-                      errors={errors}
+                      onViewClick={() => handleViewDeliverySchedule(index)}
                     />
                   </TableRow>
                 ))}
@@ -703,6 +980,16 @@ const SalesDeliveryForm = ({ data, onBack }) => {
           </button>
         </div>
       </div>
+
+      {/* Delivery Schedule Popup */}
+      <DeliverySchedulePopup
+        isOpen={showPopup}
+        onClose={() => setShowPopup(false)}
+        control={control}
+        errors={errors}
+        deliveryScheduleArray={deliveryScheduleArray}
+        setValue={setValue}
+      />
     </div>
   );
 };

@@ -16,6 +16,7 @@ import branchAPI from "../../../api/branchAPI";
 import salesContractAPI from "../../../api/Sales/salesContract";
 import listOfValuesAPI from "../../../api/listOfValuesAPI";
 import currencyAPI from "../../../api/currencyAPI";
+import { useToast } from "../../Toast/ToastContext";
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -29,7 +30,6 @@ const labelClasses =
   "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
 const getDefaultValues = () => ({
-  // Header Fields
   plantId: "",
   custContactNo: "",
   belongsTo: "",
@@ -54,7 +54,6 @@ const getDefaultValues = () => ({
   oldQuotationNo: "",
   recId: "",
 
-  // Sales Contract Details Table
   salesContractDetails: [
     {
       sno: 1,
@@ -80,10 +79,13 @@ const getDefaultValues = () => ({
       igstRate: 0,
       igstAmount: 0,
       currencyName: "",
+      // Hidden fields for IDs
+      _itemId: "",
+      _unitMasterId: "",
+      _gstRateMasterId: "",
     },
   ],
 
-  // Tax Details Table
   taxDetails: [
     {
       id: 1,
@@ -93,7 +95,6 @@ const getDefaultValues = () => ({
     },
   ],
 
-  // Charges Summary
   chargesSummary: {
     totalAmount: 100.0,
     amountInWords: "Rupees One Hundred Only",
@@ -103,7 +104,6 @@ const getDefaultValues = () => ({
     note: "",
   },
 
-  // Attached PO Copy
   attachedPOCopy: [
     {
       sno: "",
@@ -126,7 +126,6 @@ const SELECT_OPTIONS = {
   yesNo: ["Yes", "No"],
 };
 
-// Helper Components
 const SelectField = ({ control, name, label, options, required, errors, onChange, disabled }) => {
   const getError = () => {
     const parts = name.split(".");
@@ -519,7 +518,11 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
   const [loadingItems, setLoadingItems] = useState(false);
   const [listOfValuesData, setListOfValuesData] = useState([]);
   const [currencyData, setCurrencyData] = useState([]);
+  const [loading, setLoading] = useState(false);
   const isUpdatingRef = useRef(false);
+  const [saving, setSaving] = useState(false);
+  const dataLoadedRef = useRef(false);
+  const { addToast } = useToast();
 
   const LIST_OF_VALUES_GROUPS = {
     PARTICULARS: "Particulars",
@@ -531,6 +534,7 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
     setValue,
     getValues,
     watch,
+    reset,
     formState: { errors, isSubmitting },
   } = useForm({
     mode: "onTouched",
@@ -558,7 +562,6 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
   // Check if contact type is "Direct"
   const isDirectContact = contactType === "Direct";
 
-  // Helper function to check if tax field should be disabled
   const isTaxFieldDisabled = useCallback((rowIndex, fieldName) => {
     const rowTaxType = getValues(`salesContractDetails.${rowIndex}.taxType`) ||
       (isIGSTApplicable === "Yes" ? "IGST" : "SGST");
@@ -571,7 +574,6 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
     return false;
   }, [getValues, isIGSTApplicable]);
 
-  // Helper function to check if a column should be visible
   const shouldShowColumn = useCallback((rowIndex, columnType) => {
     const rowTaxType = getValues(`salesContractDetails.${rowIndex}.taxType`) ||
       (isIGSTApplicable === "Yes" ? "IGST" : "SGST");
@@ -584,18 +586,14 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
     return true;
   }, [getValues, isIGSTApplicable]);
 
-  // Function to calculate tax details
   const calculateTaxDetails = useCallback(() => {
-    // Get all contract details
+    console.log("calculateTaxDetails called");
     const contractDetails = getValues('salesContractDetails') || [];
 
-    // Calculate total amount (sum of all amounts in contract details)
     const totalAmount = contractDetails.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
 
-    // Determine tax type
     const taxType = isIGSTApplicable === "Yes" ? "IGST" : "SGST";
 
-    // Calculate tax amounts
     let sgstTotal = 0, cgstTotal = 0, igstTotal = 0;
 
     contractDetails.forEach(item => {
@@ -604,21 +602,17 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
       igstTotal += Number(item.igstAmount) || 0;
     });
 
-    // Get existing tax details to preserve user-added rows
     const existingTaxDetails = getValues('taxDetails') || [];
     const userAddedRows = existingTaxDetails.filter(item => !item.isSystemRow);
 
-    // Prepare tax details entries - system calculated rows
     const systemRows = [];
 
-    // Always add Gross Amount
     systemRows.push({
       particulars: "Gross Amount",
       amount: totalAmount,
       isSystemRow: true
     });
 
-    // Add appropriate tax based on tax type
     if (taxType === "IGST") {
       systemRows.push({
         particulars: "IGST",
@@ -638,20 +632,241 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
       });
     }
 
-    // Combine system rows with user-added rows
     const allTaxEntries = [...systemRows, ...userAddedRows];
 
-    // Replace all tax details with the combined list
-    taxDetailsArray.replace(allTaxEntries);
+    const currentRows = getValues("taxDetails") || [];
 
-    // Update Charges Summary Total Amount with Gross Amount
-    setValue('chargesSummary.totalAmount', totalAmount);
+    const hasChanged =
+      JSON.stringify(currentRows) !== JSON.stringify(allTaxEntries);
 
-    // Update Amount In Words
+    if (hasChanged) {
+      taxDetailsArray.replace(allTaxEntries);
+    }
+
+    if (getValues("chargesSummary.totalAmount") !== totalAmount) {
+      setValue("chargesSummary.totalAmount", totalAmount);
+    }
+
     const amountInWords = formatCurrencyInWords(totalAmount);
-    setValue('chargesSummary.amountInWords', amountInWords);
+
+    if (getValues("chargesSummary.amountInWords") !== amountInWords) {
+      setValue("chargesSummary.amountInWords", amountInWords);
+    }
 
   }, [getValues, isIGSTApplicable, taxDetailsArray, setValue]);
+
+  const calculateRowCalculation = useCallback((index) => {
+    if (isUpdatingRef.current) return;
+
+    isUpdatingRef.current = true;
+
+    try {
+      const qty = Number(getValues(`salesContractDetails.${index}.qty`)) || 0;
+      const orderRate = Number(getValues(`salesContractDetails.${index}.orderRate`)) || 0;
+      const discountPercent =
+        Number(getValues(`salesContractDetails.${index}.discountPercent`)) || 0;
+
+      const itemCode = getValues(`salesContractDetails.${index}.itemCode`);
+      const taxType =
+        getValues(`salesContractDetails.${index}.taxType`) ||
+        (isIGSTApplicable === "Yes" ? "IGST" : "SGST");
+
+      const amountBeforeDiscount = qty * orderRate;
+      const discountAmount = (amountBeforeDiscount * discountPercent) / 100;
+      const amount = amountBeforeDiscount - discountAmount;
+
+      let sgstRate = 0,
+        cgstRate = 0,
+        igstRate = 0;
+
+      if (itemCode) {
+        const selectedItem = itemOptions.find(
+          (i) => String(i.itemCode) === String(itemCode)
+        );
+
+        if (selectedItem) {
+          sgstRate = Number(selectedItem.sgst) || 0;
+          cgstRate = Number(selectedItem.cgst) || 0;
+          igstRate = Number(selectedItem.igst) || 0;
+        }
+      }
+
+      let sgstAmount = 0,
+        cgstAmount = 0,
+        igstAmount = 0;
+
+      if (taxType === "IGST") {
+        igstAmount = (amount * igstRate) / 100;
+      } else {
+        sgstAmount = (amount * sgstRate) / 100;
+        cgstAmount = (amount * cgstRate) / 100;
+      }
+
+      const updateField = (name, value) => {
+        if (getValues(name) !== value) {
+          setValue(name, value, {
+            shouldDirty: false,
+            shouldValidate: false,
+            shouldTouch: false,
+          });
+        }
+      };
+
+      updateField(
+        `salesContractDetails.${index}.discountAmount`,
+        discountAmount
+      );
+      updateField(`salesContractDetails.${index}.amount`, amount);
+
+      updateField(
+        `salesContractDetails.${index}.sgstRate`,
+        sgstRate
+      );
+      updateField(
+        `salesContractDetails.${index}.cgstRate`,
+        cgstRate
+      );
+      updateField(
+        `salesContractDetails.${index}.igstRate`,
+        igstRate
+      );
+
+      updateField(
+        `salesContractDetails.${index}.sgstAmount`,
+        sgstAmount
+      );
+      updateField(
+        `salesContractDetails.${index}.cgstAmount`,
+        cgstAmount
+      );
+      updateField(
+        `salesContractDetails.${index}.igstAmount`,
+        igstAmount
+      );
+
+      calculateTaxDetails();
+    } finally {
+      isUpdatingRef.current = false;
+    }
+  }, [
+    getValues,
+    setValue,
+    itemOptions,
+    isIGSTApplicable,
+    calculateTaxDetails,
+  ]);
+
+  const populateFormData = useCallback((contractData) => {
+    console.log("Populating form from raw data:", contractData);
+    if (!contractData) return;
+
+    try {
+      setValue("plantId", contractData.branch?.id || "");
+      setValue("custContactNo", contractData.customerContractNo || "");
+      setValue("belongsTo", contractData.belongsTo || "");
+      setValue("date", contractData.contractDate || "");
+      setValue("contactType", contractData.contractType || "");
+      setValue("withQuotation", contractData.withQuotation || "");
+      setValue("invoiceType", contractData.invoiceType || "");
+      setValue("customerName", contractData.customer?.customerName || "");
+      setValue("customerId", contractData.customer?.customerId || "");
+      setValue("quotDate", contractData.quotationDate || "");
+      setValue("quotNo", contractData.quotationNo || "");
+      setValue("customerPONo", contractData.customerPoNo || "");
+      setValue("customerPODate", contractData.customerPoDate || "");
+      setValue("effectiveFrom", contractData.effectiveFrom || "");
+      setValue("effectiveTo", contractData.effectiveTo || "");
+      setValue("postRate", contractData.postRate || "");
+      setValue("isESTApplicable", contractData.customer?.igstApplicable ? "Yes" : "No");
+      setValue("gstNo", contractData.customer?.gstnNo || "");
+      setValue("customerType", contractData.customer?.customerType || "");
+
+      setValue("chargesSummary.totalAmount", contractData.totalAmount || 0);
+      setValue("chargesSummary.amountInWords", contractData.amountInWords || "");
+      setValue("chargesSummary.paymentTerms", contractData.paymentTerms || "");
+      setValue("chargesSummary.priceTerms", contractData.priceTerms || "");
+      setValue("chargesSummary.terms", contractData.terms || "");
+      setValue("chargesSummary.note", contractData.notes || "");
+
+      if (contractData.details && contractData.details.length > 0) {
+        const details = contractData.details.map(item => ({
+          itemCode: item.item?.itemCode || "",
+          _itemId: item.item?.id || "",
+          customerPartNo: item.item?.customerPoNo || "",
+          itemDescription: item.item?.itemDescription || "",
+          hsCode: item.item?.hsnCode || "",
+          taxType: item.taxType || "",
+          taxRs: item.taxPercentage?.taxPercentage || 0,
+          _gstRateMasterId: item.taxPercentage?.id || "",
+          unit: item.unit?.unitId || "",
+          _unitMasterId: item.unit?.id || "",
+          qty: item.quantity || 0,
+          quotRate: item.quotationRate || 0,
+          orderRate: item.orderRate || 0,
+          discountPercent: item.discountPercentage || 0,
+          effectiveFrom: item.effectiveFrom || "",
+          effectiveTo: item.effectiveTo || "",
+          discountAmount: item.discountAmount || 0,
+          amount: item.amount || 0,
+          sgstRate: item.sgstRate || 0,
+          sgstAmount: item.sgstAmount || 0,
+          cgstRate: item.cgstRate || 0,
+          cgstAmount: item.cgstAmount || 0,
+          igstRate: item.igstRate || 0,
+          igstAmount: item.igstAmount || 0,
+          currencyName: item.currency || "",
+        }));
+        salesContractArray.replace(details);
+      }
+
+      if (contractData.salesContractTaxDetailsDTO && contractData.salesContractTaxDetailsDTO.length > 0) {
+        const taxDetails = contractData.salesContractTaxDetailsDTO.map(item => ({
+          particulars: item.particulars?.description || "",
+          amount: item.amount || 0,
+          isSystemRow: ['Gross Amount', 'IGST', 'CGST', 'SGST'].includes(item.particulars?.description || ""),
+        }));
+        taxDetailsArray.replace(taxDetails);
+      }
+
+      if (contractData.attachments && contractData.attachments.length > 0) {
+        const attachments = contractData.attachments.map(item => ({
+          pdfAttached: {
+            filePath: item.pdfAttached,
+            fileName: item.pdfAttached?.split('\\').pop() || item.pdfAttached?.split('/').pop() || "Attachment",
+            id: item.id,
+          },
+        }));
+        attachedPOCopyArray.replace(attachments);
+      }
+
+      dataLoadedRef.current = true;
+    } catch (error) {
+      console.error("Error populating form data:", error);
+    }
+  }, [setValue, salesContractArray, taxDetailsArray, attachedPOCopyArray]);
+
+  const loadSalesContractData = useCallback(async (contractId) => {
+    if (!contractId) return;
+
+    setLoading(true);
+    try {
+      const response = await salesContractAPI.getSalesContractById(contractId);
+      console.log("Sales Contract Data:", response);
+
+      if (response?.status && response?.paramObjectsMap?.salesContract) {
+        const contract = response.paramObjectsMap.salesContract;
+        populateFormData(contract);
+        addToast("Sales contract loaded successfully", "success");
+      } else {
+        addToast("Failed to load sales contract data", "error");
+      }
+    } catch (error) {
+      console.error("Error loading sales contract:", error);
+      addToast("Failed to load sales contract data", "error");
+    } finally {
+      setLoading(false);
+    }
+  }, [populateFormData, addToast]);
 
   const loadListOfValuesData = async () => {
     try {
@@ -662,19 +877,23 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
           try {
             const response = await listOfValuesAPI.getListValuesGroup(group, orgId);
 
-            // Check if response has the expected structure
             let items = [];
             if (response?.paramObjectsMap?.listValues) {
               items = response.paramObjectsMap.listValues;
+            } else if (response?.data?.paramObjectsMap?.listValues) {
+              items = response.data.paramObjectsMap.listValues;
             } else if (Array.isArray(response)) {
               items = response;
+            } else if (response?.listValues) {
+              items = response.listValues;
             }
 
             result[key] = items.map(item => ({
-              value: item.id,
-              label: item.valuesDescription,
+              value: item.id || item.value,
+              label: item.valuesDescription || item.label || item.name,
               ...item,
             }));
+
           } catch (err) {
             console.error(`${group} failed`, err);
             result[key] = [];
@@ -684,7 +903,6 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
 
       setListOfValuesData(result);
 
-      // After loading list of values, calculate tax details
       if (salesContractArray.fields.length > 0) {
         setTimeout(() => {
           calculateTaxDetails();
@@ -695,7 +913,6 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
     }
   };
 
-  // Add this helper function at the top of your file, after the imports
   const numberToWords = (num) => {
     if (num === 0) return 'Zero';
 
@@ -736,7 +953,6 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
       return word.trim();
     };
 
-    // Handle decimal part
     const parts = String(num).split('.');
     const wholeNumber = parseInt(parts[0]);
     const decimalPart = parts[1] ? parseInt(parts[1].padEnd(2, '0')) : 0;
@@ -750,140 +966,64 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
     return result || 'Zero';
   };
 
-  // Function to format currency in words with proper capitalization
   const formatCurrencyInWords = (amount) => {
     if (!amount || amount === 0) return 'Zero';
 
     const roundedAmount = Math.round(amount * 100) / 100;
     const words = numberToWords(roundedAmount);
 
-    // Capitalize first letter of each word
     return words.split(' ').map(word =>
       word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
     ).join(' ');
   };
 
-  // Real-time calculation effect
   useEffect(() => {
-    const subscription = watch((value, { name, type }) => {
+    const subscription = watch((value, { name }) => {
       if (!name || isUpdatingRef.current) return;
 
-      // Check if the changed field is in salesContractDetails
-      if (name.startsWith('salesContractDetails.')) {
-        const parts = name.split('.');
-        const index = parseInt(parts[1]);
-        const field = parts[2];
+      if (!name.startsWith("salesContractDetails.")) return;
 
-        // Only recalculate if the changed field is one that affects calculations
-        const calculationFields = ['qty', 'orderRate', 'discountPercent', 'itemCode', 'taxType'];
-        if (!calculationFields.includes(field) && !field.includes('Rate') && !field.includes('Amount')) {
-          return;
-        }
+      const parts = name.split(".");
+      const index = Number(parts[1]);
+      const field = parts[2];
 
-        // Get all values for this row
-        const qty = Number(getValues(`salesContractDetails.${index}.qty`)) || 0;
-        const orderRate = Number(getValues(`salesContractDetails.${index}.orderRate`)) || 0;
-        const discountPercent = Number(getValues(`salesContractDetails.${index}.discountPercent`)) || 0;
-        const itemCode = getValues(`salesContractDetails.${index}.itemCode`);
-        const taxType = getValues(`salesContractDetails.${index}.taxType`) || (isIGSTApplicable === "Yes" ? "IGST" : "SGST");
+      const triggerFields = [
+        "qty",
+        "orderRate",
+        "discountPercent",
+        "itemCode",
+        "taxType",
+      ];
 
-        // Calculate discount amount
-        const amountBeforeDiscount = qty * orderRate;
-        const discountAmount = (amountBeforeDiscount * discountPercent) / 100;
-        const amount = amountBeforeDiscount - discountAmount;
+      if (!triggerFields.includes(field)) return;
 
-        // Get tax rates from the selected item
-        let sgstRate = 0, cgstRate = 0, igstRate = 0;
-        if (itemCode) {
-          const selectedItem = itemOptions.find(i => String(i.itemCode) === String(itemCode));
-          if (selectedItem) {
-            sgstRate = Number(selectedItem.sgst) || 0;
-            cgstRate = Number(selectedItem.cgst) || 0;
-            igstRate = Number(selectedItem.igst) || 0;
-          }
-        }
-
-        // Calculate tax amounts based on tax type
-        let sgstAmount = 0, cgstAmount = 0, igstAmount = 0;
-        const finalAmount = amount;
-
-        if (taxType === "IGST") {
-          igstAmount = (finalAmount * igstRate) / 100;
-          sgstAmount = 0;
-          cgstAmount = 0;
-        } else if (taxType === "SGST") {
-          sgstAmount = (finalAmount * sgstRate) / 100;
-          cgstAmount = (finalAmount * cgstRate) / 100;
-          igstAmount = 0;
-        }
-
-        // Check current values to avoid unnecessary updates
-        const currentDiscountAmount = Number(getValues(`salesContractDetails.${index}.discountAmount`)) || 0;
-        const currentAmount = Number(getValues(`salesContractDetails.${index}.amount`)) || 0;
-        const currentSgstAmount = Number(getValues(`salesContractDetails.${index}.sgstAmount`)) || 0;
-        const currentCgstAmount = Number(getValues(`salesContractDetails.${index}.cgstAmount`)) || 0;
-        const currentIgstAmount = Number(getValues(`salesContractDetails.${index}.igstAmount`)) || 0;
-        const currentSgstRate = Number(getValues(`salesContractDetails.${index}.sgstRate`)) || 0;
-        const currentCgstRate = Number(getValues(`salesContractDetails.${index}.cgstRate`)) || 0;
-        const currentIgstRate = Number(getValues(`salesContractDetails.${index}.igstRate`)) || 0;
-
-        isUpdatingRef.current = true;
-
-        // Update only if values have changed
-        if (Math.abs(currentDiscountAmount - discountAmount) > 0.001) {
-          setValue(`salesContractDetails.${index}.discountAmount`, discountAmount);
-        }
-
-        if (Math.abs(currentAmount - finalAmount) > 0.001) {
-          setValue(`salesContractDetails.${index}.amount`, finalAmount);
-        }
-
-        if (Math.abs(currentSgstAmount - sgstAmount) > 0.001) {
-          setValue(`salesContractDetails.${index}.sgstAmount`, sgstAmount);
-        }
-
-        if (Math.abs(currentCgstAmount - cgstAmount) > 0.001) {
-          setValue(`salesContractDetails.${index}.cgstAmount`, cgstAmount);
-        }
-
-        if (Math.abs(currentIgstAmount - igstAmount) > 0.001) {
-          setValue(`salesContractDetails.${index}.igstAmount`, igstAmount);
-        }
-
-        if (Math.abs(currentSgstRate - sgstRate) > 0.001) {
-          setValue(`salesContractDetails.${index}.sgstRate`, sgstRate);
-        }
-
-        if (Math.abs(currentCgstRate - cgstRate) > 0.001) {
-          setValue(`salesContractDetails.${index}.cgstRate`, cgstRate);
-        }
-
-        if (Math.abs(currentIgstRate - igstRate) > 0.001) {
-          setValue(`salesContractDetails.${index}.igstRate`, igstRate);
-        }
-
-        // Update tax details after calculations
-        setTimeout(() => {
-          calculateTaxDetails();
-        }, 100);
-
-        setTimeout(() => {
-          isUpdatingRef.current = false;
-        }, 50);
-      }
+      calculateRowCalculation(index);
     });
 
     return () => subscription.unsubscribe();
-  }, [watch, setValue, getValues, itemOptions, isIGSTApplicable, calculateTaxDetails]);
+  }, [watch, calculateRowCalculation]);
 
   useEffect(() => {
+    if (dataLoadedRef.current) return;
+
     loadBranches();
-    if (isEditMode && data) {
-      loadQuotations();
-    }
     loadCurrencies();
     loadListOfValuesData();
-  }, []);
+
+    if (isEditMode && data) {
+      if (data.id) {
+        console.log("Loading sales contract by ID:", data.id);
+        loadSalesContractData(data.id);
+      } else {
+        console.log("Populating form from raw data:", data);
+        populateFormData(data);
+      }
+    }
+
+    return () => {
+      dataLoadedRef.current = false;
+    };
+  }, [isEditMode]);
 
   useEffect(() => {
     if (orgId && contactType) {
@@ -891,7 +1031,6 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
     }
   }, [orgId, contactType]);
 
-  // Load quotations when customerId or contactType changes
   useEffect(() => {
     if (orgId && branchId && customerId && contactType) {
       if (!isDirectContact) {
@@ -904,7 +1043,6 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
     }
   }, [customerId, contactType, orgId, branchId, isDirectContact]);
 
-  // Load items when quotNo or withQuotation changes
   useEffect(() => {
     if (orgId && branchId) {
       if (withQuotation === "Yes" && quotNo) {
@@ -950,7 +1088,7 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
     }
   }, [quotNo, quotationOptions, setValue, isDirectContact]);
 
-  // Set tax type based on IGST applicability and recalculate tax details
+  // Set tax type based on IGST applicability
   useEffect(() => {
     const taxType = isIGSTApplicable === "Yes" ? "IGST" : "SGST";
 
@@ -958,7 +1096,6 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
       setValue(`salesContractDetails.${index}.taxType`, taxType);
     });
 
-    // Recalculate tax details when tax type changes
     if (salesContractArray.fields.length > 0) {
       setTimeout(() => {
         calculateTaxDetails();
@@ -1097,17 +1234,51 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
           setValue("salesContractDetails.0.unit", firstItem.unitId || "");
           setValue("salesContractDetails.0.taxType", taxType);
 
-          // Set tax rates from API
           setValue("salesContractDetails.0.sgstRate", Number(firstItem.sgst) || 0);
           setValue("salesContractDetails.0.cgstRate", Number(firstItem.cgst) || 0);
           setValue("salesContractDetails.0.igstRate", Number(firstItem.igst) || 0);
 
-          // Set Tax % from API rate field
           setValue("salesContractDetails.0.taxRs", Number(firstItem.rate) || 0);
+
+          setValue("salesContractDetails.0._itemId", firstItem.itemId || "");
+          setValue("salesContractDetails.0._unitMasterId", firstItem.unitMasterId || "");
+          setValue("salesContractDetails.0._gstRateMasterId", firstItem.gstRateMasterId || "");
+
+          setValue("salesContractDetails.0.quotRate", Number(firstItem.rate) || 0);
 
           setTimeout(() => {
             isUpdatingRef.current = false;
-          }, 50);
+            const qty = Number(getValues(`salesContractDetails.0.qty`)) || 0;
+            const orderRate = Number(getValues(`salesContractDetails.0.orderRate`)) || 0;
+            const discountPercent = Number(getValues(`salesContractDetails.0.discountPercent`)) || 0;
+
+            const amountBeforeDiscount = qty * orderRate;
+            const discountAmount = (amountBeforeDiscount * discountPercent) / 100;
+            const amount = amountBeforeDiscount - discountAmount;
+
+            setValue(`salesContractDetails.0.discountAmount`, discountAmount);
+            setValue(`salesContractDetails.0.amount`, amount);
+
+            const sgstRate = Number(firstItem.sgst) || 0;
+            const cgstRate = Number(firstItem.cgst) || 0;
+            const igstRate = Number(firstItem.igst) || 0;
+
+            let sgstAmount = 0, cgstAmount = 0, igstAmount = 0;
+            if (taxType === "IGST") {
+              igstAmount = (amount * igstRate) / 100;
+            } else {
+              sgstAmount = (amount * sgstRate) / 100;
+              cgstAmount = (amount * cgstRate) / 100;
+            }
+
+            setValue(`salesContractDetails.0.sgstAmount`, sgstAmount);
+            setValue(`salesContractDetails.0.cgstAmount`, cgstAmount);
+            setValue(`salesContractDetails.0.igstAmount`, igstAmount);
+
+            setTimeout(() => {
+              calculateTaxDetails();
+            }, 100);
+          }, 100);
         }
       } else {
         setItemOptions([]);
@@ -1118,7 +1289,7 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
     } finally {
       setLoadingItems(false);
     }
-  }, [orgId, branchId, salesContractArray.fields.length, setValue, isIGSTApplicable]);
+  }, [orgId, branchId, salesContractArray.fields.length, setValue, getValues, isIGSTApplicable, calculateTaxDetails]);
 
   const loadFinishedGoodsItems = useCallback(async () => {
     if (!orgId || !branchId) {
@@ -1159,9 +1330,8 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
       setValue(`salesContractDetails.${index}.itemDescription`, selectedItem.itemDescription || "");
       setValue(`salesContractDetails.${index}.hsCode`, selectedItem.hsnCode || "");
       setValue(`salesContractDetails.${index}.customerPartNo`, selectedItem.customerPartNo || "");
-      setValue(`salesContractDetails.${index}.unit`, selectedItem.unit || selectedItem.unitName || "");
+      setValue(`salesContractDetails.${index}.unit`, selectedItem.unitId || "");
 
-      // Set tax rates
       const sgstRate = Number(selectedItem.sgst) || 0;
       const cgstRate = Number(selectedItem.cgst) || 0;
       const igstRate = Number(selectedItem.igst) || 0;
@@ -1170,16 +1340,19 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
       setValue(`salesContractDetails.${index}.cgstRate`, cgstRate);
       setValue(`salesContractDetails.${index}.igstRate`, igstRate);
 
-      // Set Tax % from API rate field
       setValue(`salesContractDetails.${index}.taxRs`, Number(selectedItem.rate) || 0);
 
-      // Set tax type based on IGST applicability
+      setValue(`salesContractDetails.${index}._itemId`, selectedItem.itemId || "");
+      setValue(`salesContractDetails.${index}._unitMasterId`, selectedItem.unitMasterId || "");
+      setValue(`salesContractDetails.${index}._gstRateMasterId`, selectedItem.gstRateMasterId || "");
+
+      setValue(`salesContractDetails.${index}.quotRate`, Number(selectedItem.rate) || 0);
+
       const taxType = isIGSTApplicable === "Yes" ? "IGST" : "SGST";
       setValue(`salesContractDetails.${index}.taxType`, taxType);
 
       setTimeout(() => {
         isUpdatingRef.current = false;
-        // Trigger calculation with existing order rate (if any)
         const qty = Number(getValues(`salesContractDetails.${index}.qty`)) || 0;
         const orderRate = Number(getValues(`salesContractDetails.${index}.orderRate`)) || 0;
         const discountPercent = Number(getValues(`salesContractDetails.${index}.discountPercent`)) || 0;
@@ -1191,7 +1364,6 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
         setValue(`salesContractDetails.${index}.discountAmount`, discountAmount);
         setValue(`salesContractDetails.${index}.amount`, amount);
 
-        // Calculate tax amounts
         let sgstAmount = 0, cgstAmount = 0, igstAmount = 0;
         if (taxType === "IGST") {
           igstAmount = (amount * igstRate) / 100;
@@ -1204,7 +1376,6 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
         setValue(`salesContractDetails.${index}.cgstAmount`, cgstAmount);
         setValue(`salesContractDetails.${index}.igstAmount`, igstAmount);
 
-        // Update tax details
         setTimeout(() => {
           calculateTaxDetails();
         }, 100);
@@ -1217,12 +1388,10 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
     if (arrayName === "salesContract") {
       const newItem = defaultValues.salesContractDetails[0] || {};
       salesContractArray.append(newItem);
-      // Recalculate tax details after adding new row
       setTimeout(() => {
         calculateTaxDetails();
       }, 100);
     } else if (arrayName === "taxDetails") {
-      // Add a new user row with empty particulars
       const newItem = {
         particulars: "",
         amount: 0.0,
@@ -1239,22 +1408,21 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
     if (arrayName === "salesContract") {
       if (salesContractArray.fields.length > 1) {
         salesContractArray.remove(index);
-        // Recalculate tax details after removing row
         setTimeout(() => {
           calculateTaxDetails();
         }, 100);
       }
     } else if (arrayName === "taxDetails") {
-      // Check if it's a system row
-      const isSystemRow = getValues(`taxDetails.${index}.isSystemRow`);
+      const currentTaxDetails = getValues('taxDetails') || [];
+      const isSystemRow = currentTaxDetails[index]?.isSystemRow;
+
       if (isSystemRow) {
-        // Prevent deletion of system rows
         alert('Cannot delete system calculated rows');
         return;
       }
-      // Allow deletion of user-added rows even if it's the only one
+
       taxDetailsArray.remove(index);
-      // Recalculate tax details to update totals
+
       setTimeout(() => {
         calculateTaxDetails();
       }, 100);
@@ -1269,7 +1437,6 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
     isUpdatingRef.current = true;
     setValue(`salesContractDetails.${index}.taxType`, newTaxType);
 
-    // Trigger recalculation
     setTimeout(() => {
       const qty = Number(getValues(`salesContractDetails.${index}.qty`)) || 0;
       const orderRate = Number(getValues(`salesContractDetails.${index}.orderRate`)) || 0;
@@ -1302,7 +1469,6 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
           setValue(`salesContractDetails.${index}.cgstAmount`, cgstAmount);
           setValue(`salesContractDetails.${index}.igstAmount`, igstAmount);
 
-          // Update tax details
           setTimeout(() => {
             calculateTaxDetails();
           }, 100);
@@ -1316,19 +1482,159 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
   }, [setValue, getValues, itemOptions, calculateTaxDetails]);
 
   const onSubmit = async (formData) => {
+    setSaving(true);
     try {
-      const submitData = {
-        ...formData,
-        customerDetails: selectedCustomer,
-        isEditMode,
+      const formatDateForAPI = (dateString) => {
+        if (!dateString) return null;
+        try {
+          const date = new Date(dateString);
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, "0");
+          const day = String(date.getDate()).padStart(2, "0");
+          return `${year}-${month}-${day}`;
+        } catch (e) {
+          return null;
+        }
       };
-      console.log("Sales Contract Data:", submitData, "Org Id:", orgId);
-      alert("Sales contract saved successfully!");
+
+      const getParticularId = (label) => {
+        if (!label) return "";
+        const allOptions = listOfValuesData.PARTICULARS || [];
+        const found = allOptions.find(option => option.label === label);
+        return found ? found.value : label;
+      };
+
+      const salesContractData = {
+        active: true,
+        amountInWords: formData.chargesSummary?.amountInWords || "",
+        belongsTo: formData.belongsTo || "",
+        branch: parseInt(branchId),
+        cancelRemarks: "",
+        contractDate: formatDateForAPI(formData.date) || new Date().toISOString().split('T')[0],
+        contractType: formData.contactType || "",
+        createdBy: localStorage.getItem("userId") || "admin",
+        customer: parseInt(formData.customerId) || 0,
+        customerContractNo: formData.custContactNo || "",
+        customerPoDate: formatDateForAPI(formData.customerPODate) || "",
+        customerPoNo: formData.customerPONo || "",
+        details: (formData.salesContractDetails || []).map(item => ({
+          currency: item.currencyName || "",
+          discountPercentage: parseFloat(item.discountPercent) || 0,
+          effectiveFrom: formatDateForAPI(item.effectiveFrom) || "",
+          effectiveTo: formatDateForAPI(item.effectiveTo) || "",
+          item: parseInt(item._itemId) || 0,
+          orderRate: parseFloat(item.orderRate) || 0,
+          quantity: parseFloat(item.qty) || 0,
+          quotationRate: parseFloat(item.quotRate) || 0,
+          taxPercentage: parseInt(item._gstRateMasterId) || 0,
+          taxType: item.taxType || "",
+          unit: parseInt(item._unitMasterId) || 0,
+        })),
+        effectiveFrom: formatDateForAPI(formData.effectiveFrom) || "",
+        effectiveTo: formatDateForAPI(formData.effectiveTo) || "",
+        financialYear: new Date().getFullYear().toString(),
+        invoiceType: formData.invoiceType || "",
+        isIgstApplicable: formData.isESTApplicable || "No",
+        notes: formData.chargesSummary?.note || "",
+        orgId: parseInt(orgId),
+        paymentTerms: formData.chargesSummary?.paymentTerms || "",
+        postRate: formData.postRate || "",
+        priceTerms: formData.chargesSummary?.priceTerms || "",
+        quotationDate: formatDateForAPI(formData.quotDate) || "",
+        quotationNo: formData.quotNo || "",
+        salesContractTaxDetailsDTO: (formData.taxDetails || [])
+          .filter(item => item.particulars && item.particulars.trim() !== "")
+          .map(item => ({
+            amount: parseFloat(item.amount) || 0,
+            particulars: parseInt(getParticularId(item.particulars)) || 0,
+          })),
+        terms: formData.chargesSummary?.terms || "",
+        totalAmount: parseFloat(formData.chargesSummary?.totalAmount) || 0,
+        withQuotation: formData.withQuotation || "No",
+      };
+
+      if (isEditMode && data?.id) {
+        salesContractData.id = parseInt(data.id);
+      }
+
+      const formDataToSend = new FormData();
+
+      const salesContractDataJSON = JSON.stringify(salesContractData);
+      const salesContractDataBlob = new Blob([salesContractDataJSON], {
+        type: "application/json",
+      });
+
+      formDataToSend.append("salesContract", salesContractDataBlob, "salesContractDTO.json");
+
+      const pdfAttachments = watch("attachedPOCopy");
+      if (pdfAttachments && pdfAttachments.length > 0) {
+        for (let i = 0; i < pdfAttachments.length; i++) {
+          const attachment = pdfAttachments[i]?.pdfAttached;
+
+          if (
+            attachment &&
+            typeof attachment === "object" &&
+            "name" in attachment &&
+            "size" in attachment
+          ) {
+            formDataToSend.append("files", attachment, attachment.name);
+          } else if (attachment && typeof attachment === 'object' && attachment.filePath) {
+            console.log('Existing file:', attachment.filePath);
+          } else if (attachment && typeof attachment === 'string') {
+            console.log('Existing file path:', attachment);
+          }
+        }
+      }
+
+      console.log("Sending sales contract data:", salesContractData);
+
+      const response = await salesContractAPI.createUpdateSalesContract(formDataToSend);
+
+      console.log("Full API Response:", response);
+
+      const isSuccess = response?.status === true ||
+        response?.success === true ||
+        response?.status === "SUCCESS" ||
+        response?.status === 200 ||
+        response?.statusCode === 200;
+
+      if (isSuccess) {
+        addToast(
+          isEditMode
+            ? "Sales contract updated successfully"
+            : "Sales contract created successfully",
+          "success"
+        );
+        onBack();
+      } else {
+        const errorMessage = response?.message ||
+          response?.paramObjectsMap?.message ||
+          response?.errorMessage ||
+          response?.error ||
+          "Something went wrong";
+        addToast(errorMessage, "error");
+      }
+
     } catch (error) {
       console.error("Error saving sales contract:", error);
-      alert("Error saving sales contract");
+      const errorMessage = error?.response?.data?.message ||
+        error?.message ||
+        "Failed to save sales contract. Please try again.";
+      addToast(errorMessage, "error");
+    } finally {
+      setSaving(false);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-500 dark:text-gray-400">Loading sales contract data...</div>
+      </div>
+    );
+  }
+
+  console.log("SalesContractForm Render");
 
   return (
     <div className="p-2 max-w-7xl relative">
@@ -1649,7 +1955,7 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
                               control={control}
                               name={`salesContractDetails.${index}.itemCode`}
                               options={itemOptions.map(item => ({
-                                value: item.itemCode,
+                                value: item.itemCode,  // Use itemCode as the value for display
                                 label: `${item.itemCode} - ${item.itemDescription}`
                               }))}
                               required
@@ -1930,10 +2236,24 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
                 <TableHead headers={["S.No", "Particulars", "Amount", "Action"]} />
                 <tbody>
                   {taxDetailsArray.fields.map((field, index) => {
-                    // Check if this is a system calculated field (should be read-only)
                     const isSystemRow = getValues(`taxDetails.${index}.isSystemRow`);
                     const particulars = getValues(`taxDetails.${index}.particulars`);
                     const isReadOnly = isSystemRow || ['Gross Amount', 'IGST', 'CGST', 'SGST'].includes(particulars);
+
+                    // Get all available options from listOfValuesData
+                    const allOptions = listOfValuesData.PARTICULARS || [];
+
+                    // For system rows, only show their specific value
+                    // For user rows, show all options except system ones
+                    let availableOptions = [];
+                    if (isSystemRow) {
+                      availableOptions = [{ label: particulars, value: particulars }];
+                    } else {
+                      // Filter out system options for user rows
+                      availableOptions = allOptions.filter(option =>
+                        !['Gross Amount', 'IGST', 'CGST', 'SGST'].includes(option.label)
+                      );
+                    }
 
                     return (
                       <tr key={field.id} className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
@@ -1945,18 +2265,9 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
                             name={`taxDetails.${index}.particulars`}
                             control={control}
                             render={({ field }) => {
-                              // Get all available options from listOfValuesData
-                              const allOptions = listOfValuesData.PARTICULARS || [];
-
-                              // Filter options based on row type
-                              let availableOptions = [];
-                              if (isSystemRow) {
-                                // For system rows, only show their specific value
-                                availableOptions = [{ label: particulars, value: particulars }];
-                              } else {
-                                // For user-added rows, show all options
-                                availableOptions = allOptions;
-                              }
+                              // Log current value for debugging
+                              console.log(`Row ${index} - Current value:`, field.value);
+                              console.log(`Row ${index} - Available options:`, availableOptions);
 
                               return (
                                 <select
@@ -1964,8 +2275,9 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
                                   className={`${controlClasses} h-8 text-xs ${isReadOnly ? 'bg-gray-100 dark:bg-gray-700 cursor-not-allowed' : ''}`}
                                   disabled={isReadOnly}
                                   onChange={(e) => {
-                                    field.onChange(e);
+                                    field.onChange(e.target.value);
                                   }}
+                                  value={field.value || ""}
                                 >
                                   <option value="">Select Particulars</option>
                                   {availableOptions.map((option) => (
@@ -1990,6 +2302,10 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
                                 placeholder="0.00"
                                 className={`${controlClasses} h-8 text-xs text-right ${isReadOnly ? 'bg-gray-100 dark:bg-gray-700 cursor-not-allowed' : ''}`}
                                 disabled={isReadOnly}
+                                value={field.value || 0}
+                                onChange={(e) => {
+                                  field.onChange(parseFloat(e.target.value) || 0);
+                                }}
                               />
                             )}
                           />
@@ -1997,7 +2313,9 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
                         <td className="p-1 text-center">
                           <button
                             type="button"
-                            onClick={() => handleRemoveItem("taxDetails", index)}
+                            onClick={() => {
+                              handleRemoveItem("taxDetails", index);
+                            }}
                             disabled={isSystemRow}
                             className={`h-5 w-5 rounded text-white flex items-center justify-center ${isSystemRow
                               ? "bg-gray-400 cursor-not-allowed"
@@ -2169,11 +2487,11 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
           </button>
           <button
             onClick={handleSubmit(onSubmit)}
-            disabled={isSubmitting}
+            disabled={saving || isSubmitting}
             className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
           >
             <Save className="h-3 w-3" />{" "}
-            {isSubmitting ? "Saving..." : data ? "Update" : "Save"}
+            {saving || isSubmitting ? "Saving..." : data ? "Update" : "Save"}
           </button>
         </div>
       </div>

@@ -1,311 +1,215 @@
 import React, { useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
+import salesContractAPI from "../../../api/Sales/salesContract";
 
-
-const SalesContractList = ({ onAddNew, onEdit,onBack }) => {
+const SalesContractList = ({ onAddNew, onEdit, onBack }) => {
   const [itemData, setItemData] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [orgId] = useState(localStorage.getItem("orgId"));
+  const [branchId] = useState(localStorage.getItem("branchId"));
 
   const loadItems = async () => {
+    if (!orgId || !branchId) {
+      console.log("Missing orgId or branchId");
+      setItemData([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
+    try {
+      const response = await salesContractAPI.getSalesContracts(orgId, branchId);
+      console.log("Sales Contract List Response:", response);
 
-    // Dummy Data
-    const data = [
-  {
-    id: 8,
-    itemCode: "ITM008",
-    itemType: "Finished Goods",
-    itemName: "Wireless Mouse",
-    itemDescription: "2.4GHz Wireless Optical Mouse",
-    needQCApproval: "No",
-    materialType: "Electronic",
-    materialGroup: "Computer Accessories",
-    materialSubGroup: "Mouse",
-    inspection: "No",
-    instrumentSeqCode: "INS008",
-    primaryUnit: "Nos",
-    hsnCode: "84716070",
-    importLocal: "Local",
-    minimumOrderQuantity: 20,
-    stockLocation: "Main Warehouse",
-    reorderLevel: 50,
-    active: true,
-  },
-  {
-    id: 7,
-    itemCode: "ITM007",
-    itemType: "Finished Goods",
-    itemName: "Mechanical Keyboard",
-    itemDescription: "RGB Mechanical Keyboard",
-    needQCApproval: "Yes",
-    materialType: "Electronic",
-    materialGroup: "Computer Accessories",
-    materialSubGroup: "Keyboard",
-    inspection: "Yes",
-    instrumentSeqCode: "INS007",
-    primaryUnit: "Nos",
-    hsnCode: "84716040",
-    importLocal: "Import",
-    minimumOrderQuantity: 10,
-    stockLocation: "Warehouse A",
-    reorderLevel: 25,
-    active: true,
-  },
-  {
-    id: 6,
-    itemCode: "ITM006",
-    itemType: "Raw Material",
-    itemName: "Steel Sheet",
-    itemDescription: "MS Steel Sheet 2mm",
-    needQCApproval: "Yes",
-    materialType: "Metal",
-    materialGroup: "Steel",
-    materialSubGroup: "MS Sheet",
-    inspection: "Yes",
-    instrumentSeqCode: "INS006",
-    primaryUnit: "Kg",
-    hsnCode: "72083990",
-    importLocal: "Local",
-    minimumOrderQuantity: 500,
-    stockLocation: "Raw Material Store",
-    reorderLevel: 1000,
-    active: true,
-  },
-  {
-    id: 5,
-    itemCode: "ITM005",
-    itemType: "Consumable",
-    itemName: "A4 Paper",
-    itemDescription: "A4 Copier Paper",
-    needQCApproval: "No",
-    materialType: "Paper",
-    materialGroup: "Stationery",
-    materialSubGroup: "Paper",
-    inspection: "No",
-    instrumentSeqCode: "INS005",
-    primaryUnit: "Pack",
-    hsnCode: "48025690",
-    importLocal: "Local",
-    minimumOrderQuantity: 50,
-    stockLocation: "Stationery Store",
-    reorderLevel: 100,
-    active: false,
-  },
-  {
-    id: 4,
-    itemCode: "ITM004",
-    itemType: "Finished Goods",
-    itemName: "Office Chair",
-    itemDescription: "High Back Office Chair",
-    needQCApproval: "No",
-    materialType: "Furniture",
-    materialGroup: "Office",
-    materialSubGroup: "Chair",
-    inspection: "No",
-    instrumentSeqCode: "INS004",
-    primaryUnit: "Nos",
-    hsnCode: "94013000",
-    importLocal: "Import",
-    minimumOrderQuantity: 5,
-    stockLocation: "Finished Goods Store",
-    reorderLevel: 10,
-    active: true,
-  },
-  {
-    id: 3,
-    itemCode: "ITM003",
-    itemType: "Raw Material",
-    itemName: "Copper Wire",
-    itemDescription: "Copper Wire 2.5mm",
-    needQCApproval: "Yes",
-    materialType: "Metal",
-    materialGroup: "Copper",
-    materialSubGroup: "Wire",
-    inspection: "Yes",
-    instrumentSeqCode: "INS003",
-    primaryUnit: "Meter",
-    hsnCode: "74081900",
-    importLocal: "Import",
-    minimumOrderQuantity: 100,
-    stockLocation: "Raw Material Store",
-    reorderLevel: 500,
-    active: true,
-  },
-  {
-    id: 2,
-    itemCode: "ITM002",
-    itemType: "Finished Goods",
-    itemName: "LED Monitor",
-    itemDescription: "24 Inch Full HD Monitor",
-    needQCApproval: "No",
-    materialType: "Electronic",
-    materialGroup: "Displays",
-    materialSubGroup: "Monitor",
-    inspection: "No",
-    instrumentSeqCode: "INS002",
-    primaryUnit: "Nos",
-    hsnCode: "85285200",
-    importLocal: "Import",
-    minimumOrderQuantity: 5,
-    stockLocation: "Warehouse B",
-    reorderLevel: 15,
-    active: false,
-  },
-  {
-    id: 1,
-    itemCode: "ITM001",
-    itemType: "Finished Goods",
-    itemName: "Laptop",
-    itemDescription: "Core i7 Business Laptop",
-    needQCApproval: "No",
-    materialType: "Electronic",
-    materialGroup: "Computers",
-    materialSubGroup: "Laptop",
-    inspection: "No",
-    instrumentSeqCode: "INS001",
-    primaryUnit: "Nos",
-    hsnCode: "84713010",
-    importLocal: "Import",
-    minimumOrderQuantity: 2,
-    stockLocation: "Main Warehouse",
-    reorderLevel: 8,
-    active: true,
-  },
-];
+      if (response?.status && response?.paramObjectsMap?.salesContract) {
+        const salesContracts = response.paramObjectsMap.salesContract;
 
-    data.sort((a, b) => b.id - a.id);
+        // Transform the data for display
+        const transformedData = salesContracts.map(item => ({
+          id: item.id,
+          contractNo: item.customerContractNo || "-",
+          contractDate: item.contractDate || "-",
+          branchName: item.branch?.branchName || "-",
+          belongsTo: item.belongsTo || "-",
+          contractType: item.contractType || "-",
+          withQuotation: item.withQuotation || "-",
+          invoiceType: item.invoiceType || "-",
+          customerName: item.customer?.customerName || "-",
+          quotationNo: item.quotationNo || "-",
+          quotationDate: item.quotationDate || "-",
+          customerPoNo: item.customerPoNo || "-",
+          customerPoDate: item.customerPoDate || "-",
+          effectiveFrom: item.effectiveFrom || "-",
+          effectiveTo: item.effectiveTo || "-",
+          postRate: item.postRate || "-",
+          totalAmount: item.totalAmount || 0,
+          amountInWords: item.amountInWords || "-",
+          paymentTerms: item.paymentTerms || "-",
+          priceTerms: item.priceTerms || "-",
+          terms: item.terms || "-",
+          notes: item.notes || "-",
+          status: item.active ? "Active" : "Inactive",
+          active: item.active,
+          // Store the full object for editing
+          _raw: item,
+        }));
 
-    setItemData(data);
-    setLoading(false);
+        // Sort by id descending (newest first)
+        transformedData.sort((a, b) => b.id - a.id);
+        setItemData(transformedData);
+      } else {
+        setItemData([]);
+      }
+    } catch (error) {
+      console.error("Error loading sales contracts:", error);
+      setItemData([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
     loadItems();
-  }, []);
+  }, [orgId, branchId]);
 
   const handleEdit = (item) => {
-    onEdit(item);
+    console.log("Edit item:", item);
+    // Pass the raw data for editing
+    onEdit(item._raw || item);
   };
 
   const columns = [
-  {
-    key: "itemCode",
-    label: "Item Code",
-    accessor: "itemCode",
-    type: "text",
-    noWrap: true,
-  },
-  {
-    key: "itemType",
-    label: "Item Type",
-    accessor: "itemType",
-    type: "text",
-  },
-  {
-    key: "itemName",
-    label: "Item Name",
-    accessor: "itemName",
-    type: "text",
-  },
-  {
-    key: "materialGroup",
-    label: "Material Group",
-    accessor: "materialGroup",
-    type: "text",
-  },
-  {
-    key: "materialSubGroup",
-    label: "Sub Group",
-    accessor: "materialSubGroup",
-    type: "text",
-  },
-  {
-    key: "primaryUnit",
-    label: "Primary Unit",
-    accessor: "primaryUnit",
-    type: "text",
-  },
-  {
-    key: "hsnCode",
-    label: "HSN Code",
-    accessor: "hsnCode",
-    type: "text",
-  },
-  {
-    key: "importLocal",
-    label: "Import/Local",
-    accessor: "importLocal",
-    type: "text",
-  },
-  {
-    key: "minimumOrderQuantity",
-    label: "Min Order Qty",
-    accessor: "minimumOrderQuantity",
-    type: "text",
-  },
-  {
-    key: "stockLocation",
-    label: "Stock Location",
-    accessor: "stockLocation",
-    type: "text",
-  },
-  {
-    key: "reorderLevel",
-    label: "Reorder Level",
-    accessor: "reorderLevel",
-    type: "text",
-  },
-  {
-    key: "needQCApproval",
-    label: "QC Approval",
-    accessor: "needQCApproval",
-    type: "text",
-  },
-  {
-    key: "inspection",
-    label: "Inspection",
-    accessor: "inspection",
-    type: "text",
-  },
-  {
-    key: "active",
-    label: "Status",
-    accessor: "active",
-    type: "status",
-    statusVariants: {
-      true: {
-        label: "Active",
-        className:
-          "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
-      },
-      false: {
-        label: "Inactive",
-        className:
-          "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+    {
+      key: "contractNo",
+      label: "Contract No",
+      accessor: "contractNo",
+      type: "text",
+      noWrap: true,
+    },
+    {
+      key: "contractDate",
+      label: "Contract Date",
+      accessor: "contractDate",
+      type: "text",
+    },
+    {
+      key: "branchName",
+      label: "Branch",
+      accessor: "branchName",
+      type: "text",
+    },
+    {
+      key: "customerName",
+      label: "Customer",
+      accessor: "customerName",
+      type: "text",
+    },
+    {
+      key: "belongsTo",
+      label: "Belongs To",
+      accessor: "belongsTo",
+      type: "text",
+    },
+    {
+      key: "contractType",
+      label: "Contract Type",
+      accessor: "contractType",
+      type: "text",
+    },
+    {
+      key: "withQuotation",
+      label: "With Quotation",
+      accessor: "withQuotation",
+      type: "text",
+    },
+    {
+      key: "invoiceType",
+      label: "Invoice Type",
+      accessor: "invoiceType",
+      type: "text",
+    },
+    {
+      key: "quotationNo",
+      label: "Quotation No",
+      accessor: "quotationNo",
+      type: "text",
+    },
+    {
+      key: "customerPoNo",
+      label: "Customer PO No",
+      accessor: "customerPoNo",
+      type: "text",
+    },
+    {
+      key: "effectiveFrom",
+      label: "Effective From",
+      accessor: "effectiveFrom",
+      type: "text",
+    },
+    {
+      key: "effectiveTo",
+      label: "Effective To",
+      accessor: "effectiveTo",
+      type: "text",
+    },
+    {
+      key: "totalAmount",
+      label: "Total Amount",
+      accessor: "totalAmount",
+      type: "currency",
+      format: (value) => {
+        if (!value) return "-";
+        return new Intl.NumberFormat('en-IN', {
+          style: 'currency',
+          currency: 'INR',
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0,
+        }).format(value);
       },
     },
-  },
-  {
-    key: "actions",
-    label: "Actions",
-    type: "actions",
-    align: "center",
-    width: "90px",
-  },
-];
+    {
+      key: "paymentTerms",
+      label: "Payment Terms",
+      accessor: "paymentTerms",
+      type: "text",
+    },
+    {
+      key: "status",
+      label: "Status",
+      accessor: "active",
+      type: "status",
+      statusVariants: {
+        true: {
+          label: "Active",
+          className:
+            "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+        },
+        false: {
+          label: "Inactive",
+          className:
+            "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+        },
+      },
+    },
+    {
+      key: "actions",
+      label: "Actions",
+      type: "actions",
+      align: "center",
+      width: "90px",
+    },
+  ];
 
   const searchFields = [
-  "itemCode",
-  "itemType",
-  "itemName",
-  "itemDescription",
-  "materialType",
-  "materialGroup",
-  "materialSubGroup",
-  "primaryUnit",
-  "hsnCode",
-  "stockLocation",
-];
+    "contractNo",
+    "customerName",
+    "belongsTo",
+    "contractType",
+    "quotationNo",
+    "customerPoNo",
+    "branchName",
+    "invoiceType",
+  ];
 
   const filterOptions = [
     {
@@ -345,12 +249,12 @@ const SalesContractList = ({ onAddNew, onEdit,onBack }) => {
       showSerialNumber={true}
       itemsPerPageOptions={[5, 10, 20, 50, 100]}
       defaultItemsPerPage={10}
-      emptyMessage="No Items found"
-      loadingMessage="Loading Items..."
+      emptyMessage="No Sales Contracts found"
+      loadingMessage="Loading Sales Contracts..."
       enableRefresh={true}
       onRefresh={loadItems}
       enableExport={true}
-      exportFileName="Items"
+      exportFileName="SalesContracts"
     />
   );
 };
