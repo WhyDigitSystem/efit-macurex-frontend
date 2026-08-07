@@ -66,6 +66,7 @@ import DrawingAttachmentMaster from "../components/PPC/drawingAttachment/Drawing
 import TdcList from "../components/TDC/TdcList";
 import EcrMaster from "../components/TDC/engineeringChangeRecord/EcrMaster";
 import EcnMaster from "../components/TDC/engineeringChangeNote/EcnMaster";
+import EngineeringDeviationRequestMaster from "../components/TDC/engineeringDeviationRequest/EngineeringDeviationRequestMaster";
 import ProductionList from "../components/Production/ProductionList";
 import PlantMaintenanceList from "../components/plantMaintenance/PlantMaintenanceList";
 import QualityList from "../components/quality/QualityList";
@@ -217,6 +218,11 @@ export const routesConfig = [
     path: "/engineeringchangenote",
     label: "Engineering Change Note",
     element: <EcnMaster />,
+  },
+  {
+    path: "/engineeringdeviationrequest",
+    label: "Engineering Deviation Request/Note",
+    element: <EngineeringDeviationRequestMaster />,
   },
   { path: "/production", label: "Production", element: <ProductionList /> },
   {
