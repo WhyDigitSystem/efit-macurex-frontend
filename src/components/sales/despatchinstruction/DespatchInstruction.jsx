@@ -1,39 +1,48 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import DispatchList from "./DispatchList";
 import DispatchForm from "./DispatchForm";
 
 const DespatchInstruction = () => {
-  const [screen, setScreen] = useState("list");
+  const navigate = useNavigate();
+  const [view, setView] = useState("list"); // "list" | "form"
   const [editData, setEditData] = useState(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  const addNew = () => {
-    console.log("Add button clicked");
+  const handleAddNew = () => {
     setEditData(null);
-    setScreen("form");
+    setView("form");
   };
 
-  const edit = (row) => {
+  // Pencil icon click -> open the form with the selected row's data
+  const handleEdit = useCallback((row) => {
     setEditData(row);
-    setScreen("form");
+    setView("form");
+  }, []);
+
+  const handleBack = () => {
+    setEditData(null);
+    setView("list");
+    // bump refreshTrigger so the list re-fetches after add/update
+    setRefreshTrigger((prev) => prev + 1);
   };
+
+  // List screen back button -> return to the Sales module home.
+  const handleNavigateHome = () => {
+    navigate("/Sales");
+  };
+
+  if (view === "form") {
+    return <DispatchForm data={editData} onBack={handleBack} />;
+  }
 
   return (
-    <>
-      {screen === "list" && (
-        <DispatchList
-          onAddNew={addNew}
-          onEdit={edit}
-          onBack={() => window.history.back()}
-        />
-      )}
-
-      {screen === "form" && (
-        <DispatchForm
-          data={editData}
-          onBack={() => setScreen("list")}
-        />
-      )}
-    </>
+    <DispatchList
+      onAddNew={handleAddNew}
+      onEdit={handleEdit}
+      onBack={handleNavigateHome}
+      refreshTrigger={refreshTrigger}
+    />
   );
 };
 
