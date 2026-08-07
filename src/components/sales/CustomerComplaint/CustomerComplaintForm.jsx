@@ -2,9 +2,7 @@ import { ArrowLeft, Save, ImagePlus, Trash2, Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import dayjs from "dayjs";
 import { customerComplaintAPI } from "../../../api/Sales/customerComplaintAPI";
-import { branchAPI } from "../../../api/branchAPI";
-import { itemAPI } from "../../../api/itemAPI";
-import listOfValuesAPI from "../../../api/listOfValuesAPI";
+import { departmentAPI } from "../../../api/departmentAPI";
 import { useToast } from "../../Toast/ToastContext";
 
 /* ---------------------------------------------------------------------------- */
@@ -28,7 +26,7 @@ const labelClasses = "block text-[11px] text-gray-500 dark:text-gray-400 mb-1";
 const fieldGrid =
   "grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-x-6 gap-y-4 items-start";
 
-const BELONGS_TO_GROUP = "CUSTOMER COMPLAINT ENTRY BELONGS TO";
+const BELONGS_TO = ["APPLIANCES", "BOSCH"];
 const COMPLAINT_TYPES = ["REGISTER", "VERBAL"];
 
 /* ---------------------------------------------------------------------------- */
@@ -261,21 +259,18 @@ const emptyForm = () => ({
   complaintDate: dayjs().format("YYYY-MM-DD"),
   complaintNo: "", // Auto — populated by backend on create
   complaintType: "",
-  customerId: "",
-  customerName: "",
+  customer: "",
   customerRefNo: "",
   department: "",
   detailsOfComplaint: "",
   financialYear: "",
   images: [],
   item: "",
-  itemDescription: "",
   prefix: "",
   preparedBy: "",
   qtyNo: "",
-  refDate: "",
+
   remarks: "",
-  customerPartNo: "",
   userCategory: "",
 });
 
@@ -283,6 +278,7 @@ const CustomerComplaintForm = ({ data, onBack }) => {
   const orgId = Number(localStorage.getItem("orgId"));
   const branch = Number(localStorage.getItem("branchId"));
   const usersId = localStorage.getItem("usersId");
+  const financialYear = localStorage.getItem("finYear");
   const { addToast } = useToast();
 
   const [form, setForm] = useState(() => {
@@ -290,9 +286,26 @@ const CustomerComplaintForm = ({ data, onBack }) => {
     base.complaintDate = data?.complaintDate
       ? dayjs(data.complaintDate).format("YYYY-MM-DD")
       : dayjs().format("YYYY-MM-DD");
-    base.refDate = data?.refDate ? dayjs(data.refDate).format("YYYY-MM-DD") : "";
     base.images =
       Array.isArray(data?.images) && data.images.length ? data.images : [];
+    if (data?.item && typeof data.item === "object") {
+      base.item = data.item.id;
+      base.itemCode = data.item.itemCode;
+      base.itemDescription = data.item.itemDescription;
+      base.customerPartNo = data.item.customerPartNo;
+    }
+    if (data?.branch && typeof data.branch === "object") {
+      base.branch = data.branch.id;
+      base.branchName = data.branch.branchName;
+    }
+    if (data?.department && typeof data.department === "object") {
+      base.department = data.department.id;
+      base.departmentName = data.department.departmentName;
+    }
+    if (data?.customer && typeof data.customer === "object") {
+      base.customer = data.customer.id;
+      base.customerName = data.customer.customerName;
+    }
     return base;
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -301,7 +314,9 @@ const CustomerComplaintForm = ({ data, onBack }) => {
   /* ---------------- Lookup options ---------------- */
   const [branchOptions, setBranchOptions] = useState([]);
   const [departmentOptions, setDepartmentOptions] = useState([]);
-  const [belongsToOptions, setBelongsToOptions] = useState([]);
+  const [belongsToOptions] = useState(() =>
+    BELONGS_TO.map((v) => ({ value: v, label: v })),
+  );
   const [customerOptions, setCustomerOptions] = useState([]);
   const [customerMap, setCustomerMap] = useState({});
   const [itemOptions, setItemOptions] = useState([]);
@@ -312,11 +327,11 @@ const CustomerComplaintForm = ({ data, onBack }) => {
 
     const loadBranches = async () => {
       try {
-        const res = await branchAPI.getBranchByOrgId(orgId);
+        const branches = await customerComplaintAPI.getBranchList(orgId);
         setBranchOptions(
-          (res || []).map((b) => ({
+          (branches || []).map((b) => ({
             value: b.id,
-            label: b.branchName || b.branchcode || b.id,
+            label: b.branchName || b.branchCode || b.id,
           })),
         );
       } catch {
@@ -326,41 +341,22 @@ const CustomerComplaintForm = ({ data, onBack }) => {
 
     const loadDepartments = async () => {
       try {
-        const departments =
-          await customerComplaintAPI.getDepartmentList();
+        const res = await departmentAPI.getAllDepartments(orgId, branch);
+        const departments = res?.paramObjectsMap?.departmentVO || [];
         setDepartmentOptions(
-          (departments || []).map((d) => ({
-            value: d.id,
-            label: d.departmentName,
-          })),
+          departments.map((d) => ({ value: d.id, label: d.departmentName })),
         );
       } catch {
         setDepartmentOptions([]);
       }
     };
 
-    const loadBelongsTo = async () => {
-      try {
-        const res = await listOfValuesAPI.getListValuesGroup(
-          BELONGS_TO_GROUP,
-          orgId,
-        );
-        if (Array.isArray(res) && res.length) {
-          setBelongsToOptions(
-            res.map((v) => ({
-              value: v.id,
-              label: v.valuesDescription || v.valueDescription || "",
-            })),
-          );
-        }
-      } catch {
-        setBelongsToOptions([]);
-      }
-    };
-
     const loadCustomers = async () => {
       try {
-        const customers = await customerComplaintAPI.getCustomerList();
+        const customers = await customerComplaintAPI.getCustomerList(
+          orgId,
+          branch,
+        );
         const map = {};
         const opts = (customers || []).map((c) => {
           const code = c.customerId || c.docId || c.customerCode;
@@ -377,12 +373,15 @@ const CustomerComplaintForm = ({ data, onBack }) => {
 
     const loadItems = async () => {
       try {
-        const res = await itemAPI.getItems(orgId, branch);
+        const items = await customerComplaintAPI.getItemList(orgId, branch);
         const map = {};
-        const opts = (res || []).map((it) => {
-          const code = it.itemCode || it.code || it.id?.toString() || "";
-          map[code] = it;
-          return { value: code, label: code };
+        const opts = (items || []).map((it) => {
+          const id = it.id;
+          map[id] = it;
+          return {
+            value: id,
+            label: it.itemCode || it.code || id?.toString() || "",
+          };
         });
         setItemOptions(opts);
         setItemMap(map);
@@ -395,7 +394,6 @@ const CustomerComplaintForm = ({ data, onBack }) => {
     Promise.all([
       loadBranches(),
       loadDepartments(),
-      loadBelongsTo(),
       loadCustomers(),
       loadItems(),
     ]);
@@ -408,11 +406,11 @@ const CustomerComplaintForm = ({ data, onBack }) => {
     if (fieldErrors[name]) setFieldErrors((prev) => ({ ...prev, [name]: "" }));
     setForm((prev) => ({ ...prev, [name]: value }));
 
-    if (name === "customerId") {
+    if (name === "customer") {
       const custName = customerMap[value];
       setForm((prev) => ({
         ...prev,
-        customerId: value,
+        customer: value,
         customerName: custName || prev.customerName,
       }));
     }
@@ -423,6 +421,7 @@ const CustomerComplaintForm = ({ data, onBack }) => {
         ...prev,
         item: value,
         itemDescription: it?.itemDescription || prev.itemDescription,
+        customerPartNo: it?.customerPartNo || prev.customerPartNo,
       }));
     }
   };
@@ -443,10 +442,8 @@ const CustomerComplaintForm = ({ data, onBack }) => {
     if (!form.complaintType) errors.complaintType = "Complaint Type is required";
     if (!form.complaintNo?.trim()) errors.complaintNo = "Complaint No is required";
     if (!form.complaintDate) errors.complaintDate = "Complaint Date is required";
-    if (!form.customerId?.trim()) errors.customerId = "Customer ID is required";
+    if (!form.customer?.trim()) errors.customer = "Customer is required";
     if (!form.item?.trim()) errors.item = "Item Code is required";
-    if (!form.itemDescription?.trim())
-      errors.itemDescription = "Item Description is required";
     if (!form.detailsOfComplaint?.trim())
       errors.detailsOfComplaint = "Details of Complaint is required";
     if (!form.images.length) errors.images = "At least one image is required";
@@ -464,8 +461,8 @@ const CustomerComplaintForm = ({ data, onBack }) => {
 
     const isUpdate = Boolean(data?.id);
 
-    // Existing images (urls/names) stay in the DTO; new Files get uploaded.
-    const dtoImages = form.images.filter((img) => !(img instanceof File));
+    // Images are NOT part of the DTO — only new Files go via the multipart
+    // "images" part. The DTO must match the expected backend model exactly.
     const newImages = form.images.filter((img) => img instanceof File);
 
     const dto = {
@@ -477,25 +474,19 @@ const CustomerComplaintForm = ({ data, onBack }) => {
       complaintNo: form.complaintNo,
       complaintType: form.complaintType,
       createdBy: isUpdate ? data?.createdBy || usersId : usersId,
-      customerId: Number(form.customerId) || 0,
-      customerName: form.customerName,
+      customer: Number(form.customer) || 0,
       customerRefNo: form.customerRefNo,
       department: Number(form.department) || 0,
       detailsOfComplaint: form.detailsOfComplaint,
-      financialYear: form.financialYear,
-      id: isUpdate ? data.id : 0,
-      images: dtoImages,
+      financialYear: form.financialYear || financialYear,
       item: Number(form.item) || 0,
       orgId,
       prefix: form.prefix,
       preparedBy: form.preparedBy,
       qtyNo: Number(form.qtyNo) || 0,
-      refDate: form.refDate,
-      remarks: form.remarks,
-      customerPartNo: form.customerPartNo,
-      itemDescription: form.itemDescription,
+      remarks: form.remarks || null,
       userCategory: form.userCategory,
-      ...(isUpdate ? { updatedBy: usersId } : {}),
+      ...(isUpdate ? { id: data.id } : {}),
     };
 
     try {
@@ -612,8 +603,8 @@ const CustomerComplaintForm = ({ data, onBack }) => {
               onChange={handleChange}
               error={fieldErrors.complaintNo}
               placeholder="Auto"
-              disabled
-              required
+              // disabled
+              // required
             />
             <Field
               type="date"
@@ -625,19 +616,12 @@ const CustomerComplaintForm = ({ data, onBack }) => {
               required
             />
             <Field
-              type="date"
-              label="Ref Date"
-              name="refDate"
-              value={form.refDate}
-              onChange={handleChange}
-            />
-            <Field
               type="select"
-              label="Customer ID"
-              name="customerId"
-              value={form.customerId}
+              label="Customer"
+              name="customer"
+              value={form.customer}
               onChange={handleChange}
-              error={fieldErrors.customerId}
+              error={fieldErrors.customer}
               options={customerOptions}
               required
             />
@@ -647,12 +631,6 @@ const CustomerComplaintForm = ({ data, onBack }) => {
               value={form.buyerName}
               onChange={handleChange}
             />
-            <Field
-              label="Customer Name"
-              name="customerName"
-              value={form.customerName}
-              onChange={handleChange}
-            />
           </div>
         </div>
 
@@ -660,12 +638,6 @@ const CustomerComplaintForm = ({ data, onBack }) => {
         <div>
           <SectionHeader>Complaint Details</SectionHeader>
           <div className={fieldGrid}>
-            <Field
-              label="Customer Part No"
-              name="customerPartNo"
-              value={form.customerPartNo}
-              onChange={handleChange}
-            />
             <Field
               type="number"
               label="Qty No"
@@ -681,15 +653,6 @@ const CustomerComplaintForm = ({ data, onBack }) => {
               onChange={handleChange}
               error={fieldErrors.item}
               options={itemOptions}
-              required
-            />
-            <Field
-              label="Item Description"
-              name="itemDescription"
-              value={form.itemDescription}
-              onChange={handleChange}
-              error={fieldErrors.itemDescription}
-              disabled
               required
             />
             <Field

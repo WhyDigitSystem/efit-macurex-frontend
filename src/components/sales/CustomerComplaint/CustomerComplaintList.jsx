@@ -13,12 +13,16 @@ const CustomerComplaintList = ({
   const [loading, setLoading] = useState(false);
 
   const ORG_ID = localStorage.getItem("orgId");
+  const BRANCH_ID = localStorage.getItem("branchId");
 
   const loadComplaints = useCallback(async () => {
     try {
       setLoading(true);
 
-      const complaints = await customerComplaintAPI.getComplaintByOrgId(ORG_ID);
+      const complaints = await customerComplaintAPI.getComplaintByOrgId(
+        ORG_ID,
+        BRANCH_ID,
+      );
 
       complaints.sort((a, b) => (b.id || 0) - (a.id || 0));
 
@@ -30,7 +34,7 @@ const CustomerComplaintList = ({
     } finally {
       setLoading(false);
     }
-  }, [ORG_ID]);
+  }, [ORG_ID, BRANCH_ID]);
 
   useEffect(() => {
     loadComplaints();
@@ -52,19 +56,28 @@ const CustomerComplaintList = ({
     {
       key: "branch",
       label: "Plant ID",
-      accessor: (row) => row.branch || row.plantId,
+      accessor: (row) =>
+        typeof row.branch === "object"
+          ? row.branch.branchName || row.branch.id
+          : row.branch || row.plantId,
       type: "text",
     },
     {
       key: "department",
       label: "Department",
-      accessor: (row) => row.department,
+      accessor: (row) =>
+        typeof row.department === "object"
+          ? row.department.departmentName || row.department.id
+          : row.department,
       type: "text",
     },
     {
       key: "customerName",
       label: "Customer Name",
-      accessor: (row) => row.customerName,
+      accessor: (row) =>
+        typeof row.customer === "object"
+          ? row.customer.customerName || row.customer.id
+          : row.customerName,
       type: "text",
     },
     {
@@ -82,26 +95,17 @@ const CustomerComplaintList = ({
     {
       key: "item",
       label: "Item",
-      accessor: (row) => row.item || row.itemCode,
+      accessor: (row) =>
+        typeof row.item === "object"
+          ? row.item.itemCode || row.item.id
+          : row.item || row.itemCode,
       type: "text",
     },
     {
       key: "status",
       label: "Status",
-      accessor: "status",
+      accessor: (row) => row.active,
       type: "status",
-      statusVariants: {
-        Draft: {
-          label: "Draft",
-          className:
-            "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300",
-        },
-        Submitted: {
-          label: "Submitted",
-          className:
-            "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
-        },
-      },
     },
     {
       key: "actions",
@@ -115,13 +119,17 @@ const CustomerComplaintList = ({
   const searchFields = [
     "complaintNo",
     "branch",
+    "branch.branchName",
     "plantId",
     "department",
+    "department.departmentName",
     "customerName",
+    "customer.customerName",
     "customerRefNo",
     "complaintRefNo",
     "complaintType",
     "item",
+    "item.itemCode",
     "itemCode",
   ];
 
@@ -132,18 +140,18 @@ const CustomerComplaintList = ({
       field: null,
     },
     {
-      value: "draft",
-      label: "Draft",
+      value: "active",
+      label: "Active",
       field: "status",
-      filterValue: "draft",
-      activeValue: "Draft",
+      filterValue: "active",
+      activeValue: true,
     },
     {
-      value: "submitted",
-      label: "Submitted",
+      value: "inactive",
+      label: "Inactive",
       field: "status",
-      filterValue: "submitted",
-      activeValue: "Submitted",
+      filterValue: "inactive",
+      activeValue: true,
     },
   ];
 

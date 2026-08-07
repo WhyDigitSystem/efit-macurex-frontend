@@ -10,37 +10,71 @@ import apiClient from "../apiClient";
    keeps the complete complaint history for audit purposes. */
 export const customerComplaintAPI = {
   // Get Customer Complaints by Organization ID
-  getComplaintByOrgId: async (orgId) => {
+  getComplaintByOrgId: async (orgId, branch) => {
     try {
       const res = await apiClient.get(
-        `/api/commonmaster/getCustomerComplaintByOrgId?orgId=${orgId}`,
+        `/api/dev/getCustomerComplaintByOrgId?branch=${branch}&orgId=${orgId}`,
       );
 
-      return res?.paramObjectsMap?.complaintList || [];
+      const list = res?.paramObjectsMap?.customerComplaintEntryVO;
+      return Array.isArray(list) ? list : list ? [list] : [];
     } catch (error) {
       console.error("Error fetching customer complaints:", error);
       throw error;
     }
   },
 
-  // Get Department list (used by the Department dropdown)
-  getDepartmentList: async () => {
+  // Get Customer Complaint by ID
+  getComplaintById: async (id) => {
     try {
-      const res = await apiClient.get(`/api/dev/getDepartment`);
-      return res?.paramObjectsMap?.departmentList || [];
+      const res = await apiClient.get(
+        `/api/dev/getCustomerComplaintById?id=${id}`,
+      );
+
+      return res?.paramObjectsMap?.customerComplaintEntryVO || null;
     } catch (error) {
-      console.error("Error fetching departments:", error);
+      console.error("Error fetching customer complaint by id:", error);
       throw error;
     }
   },
 
-  // Get Customer list (used by the Customer ID dropdown)
-  getCustomerList: async () => {
+  // Get Customer details (used by the Customer ID dropdown)
+  getCustomerList: async (orgId, branch) => {
     try {
-      const res = await apiClient.get(`/api/dev/getCustomer`);
-      return res?.paramObjectsMap?.customerList || [];
+      const res = await apiClient.get(
+        `/api/dev/getCustomerDetails?branch=${branch}&orgId=${orgId}`,
+      );
+      const details = res?.paramObjectsMap?.customerDetails;
+      return details ? [details] : [];
     } catch (error) {
       console.error("Error fetching customers:", error);
+      throw error;
+    }
+  },
+
+  // Get Item details (used by the Item Code dropdown)
+  getItemList: async (orgId, branch) => {
+    try {
+      const res = await apiClient.get(
+        `/api/dev/getCustomerComplaintItemDetails?branch=${branch}&orgId=${orgId}`,
+      );
+      return res?.paramObjectsMap?.itemDetails?.itemDetails || [];
+    } catch (error) {
+      console.error("Error fetching items:", error);
+      throw error;
+    }
+  },
+
+  // Get Branch list (used by the Plant ID dropdown)
+  getBranchList: async (orgId) => {
+    try {
+      const res = await apiClient.get(
+        `/api/commonmaster/getBranchByOrgId?orgId=${orgId}`,
+      );
+
+      return res?.paramObjectsMap?.branchList || [];
+    } catch (error) {
+      console.error("Error fetching branches:", error);
       throw error;
     }
   },
@@ -51,24 +85,30 @@ export const customerComplaintAPI = {
     try {
       const formData = new FormData();
 
+      const dto = { ...(payload.dto || {}) };
+      delete dto.images;
+
+      // Backend expects the part name "customerComplaint"
       formData.append(
-        "customerComplaintDTO",
-        JSON.stringify(payload.dto || {}),
+        "customerComplaint",
+        new Blob([JSON.stringify(dto)], { type: "application/json" }),
       );
 
       (payload.images || []).forEach((file) => {
-        if (file instanceof File) formData.append("images", file);
+        if (file instanceof File) {
+          formData.append("images", file);
+        }
       });
 
-      const res = await apiClient.put(
-        `/api/dev/updateCreateCustomerComplaint`,
+      // apiClient's default "Content-Type: application/json" would override
+      // the multipart boundary, so set multipart explicitly here.
+      const response = await apiClient.put(
+        "/api/dev/updateCreateCustomerComplaint",
         formData,
-        {
-          headers: { "Content-Type": "multipart/form-data" },
-        },
+        { headers: { "Content-Type": "multipart/form-data" } },
       );
 
-      return res;
+      return response;
     } catch (error) {
       console.error("Error saving customer complaint:", error);
       throw error;

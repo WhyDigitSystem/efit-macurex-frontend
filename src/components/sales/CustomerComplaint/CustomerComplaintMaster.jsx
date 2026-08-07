@@ -9,28 +9,24 @@ const CustomerComplaintMaster = () => {
   const [editData, setEditData] = useState(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  const ORG_ID = localStorage.getItem("orgId");
-
   const handleAddNew = () => {
     setEditData(null);
     setView("form");
   };
 
-  //  Pencil icon click -> fetch fresh data by orgId, find the matching complaint, open form
+  //  Pencil icon click -> fetch fresh data by id, open form
   const handleEdit = useCallback(
     async (row) => {
       try {
-        const complaints =
-          await customerComplaintAPI.getComplaintByOrgId(ORG_ID);
-        const fresh = complaints.find((c) => c.id === row.id) || row;
-        setEditData(fresh);
+        const fresh = await customerComplaintAPI.getComplaintById(row.id);
+        setEditData(fresh || row);
         setView("form");
       } catch (error) {
         console.error("Failed to fetch customer complaint for edit:", error);
         toast.error("Failed to load Customer Complaint details");
       }
     },
-    [ORG_ID],
+    [],
   );
 
   const handleBack = () => {
