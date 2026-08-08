@@ -72,6 +72,9 @@ import InspectionRequisitionNoteMaster from "../components/TDC/inspectionRequisi
 import ProductionList from "../components/Production/ProductionList";
 import PlantMaintenanceList from "../components/plantMaintenance/PlantMaintenanceList";
 import QualityList from "../components/quality/QualityList";
+import ParameterMaster from "../components/quality/parameterMaster/ParameterMaster";
+import InitialPlanning from "../components/quality/initialPlanning/InitialPlanning";
+import ControlPlan from "../components/quality/controlPlan/ControlPlan";
 import LabourChargesList from "../components/labourCharges/LabourChargesList";
 import PurchaseOrderAmendment from "../components/purchase/PurchaseOrderAmendment/PurchaseOrderAmendmentMaster";
 import PurchaseContractAmendment from "../components/purchase/PurchaseContractAmendment/PurchaseContractAmendmentMaster";
@@ -246,6 +249,24 @@ export const routesConfig = [
     path: "/quality",
     label: "Quality",
     element: <QualityList />,
+  },
+  {
+    path: "/parametermaster",
+    label: "Parameter Master",
+    keywords: ["parameter", "quality"],
+    element: <ParameterMaster />,
+  },
+  {
+    path: "/initialplanning",
+    label: "Initial Planning",
+    keywords: ["initial planning", "planning", "quality"],
+    element: <InitialPlanning />,
+  },
+  {
+    path: "/controlplan",
+    label: "Control Plan",
+    keywords: ["control plan", "quality"],
+    element: <ControlPlan />,
   },
   {
     path: "/labourcharges",
