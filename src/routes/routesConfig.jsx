@@ -75,6 +75,8 @@ import QualityList from "../components/quality/QualityList";
 import ParameterMaster from "../components/quality/parameterMaster/ParameterMaster";
 import InitialPlanning from "../components/quality/initialPlanning/InitialPlanning";
 import ControlPlan from "../components/quality/controlPlan/ControlPlan";
+import DeliveryChallanCumGatePassMaster from "../components/quality/deliveryChallanCumGatePass/DeliveryChallanCumGatePassMaster";
+import QualityScrapNoteMaster from "../components/quality/qualityScrapNote/QualityScrapNoteMaster";
 import LabourChargesList from "../components/labourCharges/LabourChargesList";
 import PurchaseOrderAmendment from "../components/purchase/PurchaseOrderAmendment/PurchaseOrderAmendmentMaster";
 import PurchaseContractAmendment from "../components/purchase/PurchaseContractAmendment/PurchaseContractAmendmentMaster";
@@ -267,6 +269,18 @@ export const routesConfig = [
     label: "Control Plan",
     keywords: ["control plan", "quality"],
     element: <ControlPlan />,
+  },
+  {
+    path: "/deliverychallancumgatepass",
+    label: "Delivery Challan Cum Gate Pass",
+    keywords: ["delivery challan", "gate pass", "quality"],
+    element: <DeliveryChallanCumGatePassMaster />,
+  },
+  {
+    path: "/qualityscrapnote",
+    label: "Quality Scrap Note",
+    keywords: ["quality scrap", "scrap note", "quality"],
+    element: <QualityScrapNoteMaster />,
   },
   {
     path: "/labourcharges",
