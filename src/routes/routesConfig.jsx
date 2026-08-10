@@ -78,6 +78,7 @@ import ControlPlan from "../components/quality/controlPlan/ControlPlan";
 import DeliveryChallanCumGatePassMaster from "../components/quality/deliveryChallanCumGatePass/DeliveryChallanCumGatePassMaster";
 import QualityScrapNoteMaster from "../components/quality/qualityScrapNote/QualityScrapNoteMaster";
 import PreDeliveryInspectionReportMaster from "../components/quality/preDeliveryInspectionReport/PreDeliveryInspectionReportMaster";
+import InwardInspectionMaster from "../components/quality/inwardInspection/InwardInspectionMaster";
 import LabourChargesList from "../components/labourCharges/LabourChargesList";
 import PurchaseOrderAmendment from "../components/purchase/PurchaseOrderAmendment/PurchaseOrderAmendmentMaster";
 import PurchaseContractAmendment from "../components/purchase/PurchaseContractAmendment/PurchaseContractAmendmentMaster";
@@ -288,6 +289,12 @@ export const routesConfig = [
     label: "Pre Delivery Inspection Report",
     keywords: ["pre delivery", "inspection", "quality"],
     element: <PreDeliveryInspectionReportMaster />,
+  },
+  {
+    path: "/inwardinspection",
+    label: "Inward Inspection",
+    keywords: ["inward", "inspection", "quality"],
+    element: <InwardInspectionMaster />,
   },
   {
     path: "/labourcharges",
