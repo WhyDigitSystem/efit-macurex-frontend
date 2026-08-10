@@ -19,15 +19,13 @@ const SalesOrderShortCloseMaster = () => {
     setView("form");
   };
 
-  // Pencil icon click -> fetch fresh data by orgId, find the matching record, open form
+  // Pencil icon click -> fetch the record by id, then open the form
   const handleEdit = useCallback(
     async (row) => {
       try {
-        const records = await salesOrderShortCloseAPI.getSalesOrderShortCloseByOrgId(
-          ORG_ID,
-          BRANCH_ID,
-        );
-        const fresh = records.find((r) => r.id === row.id) || row;
+        const fresh =
+          (await salesOrderShortCloseAPI.getSalesOrderShortCloseById(row.id)) ||
+          row;
         setEditData(fresh);
         setView("form");
       } catch (error) {
@@ -35,7 +33,7 @@ const SalesOrderShortCloseMaster = () => {
         toast.error("Failed to load Sales Order Short-Close details");
       }
     },
-    [ORG_ID, BRANCH_ID],
+    [],
   );
 
   const handleBack = () => {

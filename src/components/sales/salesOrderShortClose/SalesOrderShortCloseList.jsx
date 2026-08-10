@@ -39,16 +39,16 @@ const SalesOrderShortCloseList = ({
 
   const columns = [
     {
-      key: "shortCloseNo",
-      label: "Short Close No",
-      accessor: (row) => row.shortCloseNo,
+      key: "docId",
+      label: "Sales Agreement No",
+      accessor: (row) => row.docId,
       type: "text",
       noWrap: true,
     },
     {
-      key: "date",
+      key: "docDate",
       label: "Date",
-      accessor: (row) => row.date,
+      accessor: (row) => row.docDate,
       type: "text",
     },
     {
@@ -63,29 +63,32 @@ const SalesOrderShortCloseList = ({
       type: "text",
     },
     {
-      key: "salesAgreementNo",
-      label: "Sales Agreement No",
-      accessor: (row) => row.salesAgreementNo,
+      key: "branch",
+      label: "Branch",
+      accessor: (row) =>
+        typeof row.branch === "object"
+          ? row.branch.branchName || row.branch.branchCode || row.branch.id
+          : row.branch,
       type: "text",
     },
-    {
-      key: "active",
-      label: "Status",
-      accessor: "active",
-      type: "status",
-      statusVariants: {
-        Active: {
-          label: "Active",
-          className:
-            "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
-        },
-        Inactive: {
-          label: "Inactive",
-          className:
-            "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
-        },
-      },
-    },
+    // {
+    //   key: "active",
+    //   label: "Status",
+    //   accessor: "active",
+    //   type: "status",
+    //   statusVariants: {
+    //     Active: {
+    //       label: "Active",
+    //       className:
+    //         "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+    //     },
+    //     Inactive: {
+    //       label: "Inactive",
+    //       className:
+    //         "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+    //     },
+    //   },
+    // },
     {
       key: "actions",
       label: "Actions",
@@ -96,13 +99,16 @@ const SalesOrderShortCloseList = ({
   ];
 
   const searchFields = [
-    "shortCloseNo",
-    "date",
+    "docId",
+    "docDate",
     "customerId",
     "customerId.customerName",
     "customerId.customerCode",
     "customerName",
-    "salesAgreementNo",
+    "branch",
+    "branch.branchName",
+    "branch.branchCode",
+    "cancelRemarks",
   ];
 
   const filterOptions = [

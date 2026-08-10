@@ -3,8 +3,6 @@ import { useCallback, useEffect, useState } from "react";
 import dayjs from "dayjs";
 import { useToast } from "../../Toast/ToastContext";
 import salesOrderShortCloseAPI from "../../../api/Sales/salesOrderShortCloseAPI";
-import salesDeliveryAPI from "../../../api/Sales/salesDelivery";
-import salesContractAPI from "../../../api/Sales/salesContract";
 import itemAPI from "../../../api/itemAPI";
 
 /* ---------------------------------------------------------------------------- */
@@ -294,8 +292,10 @@ const CHILD_TABS = [
 ];
 
 const emptyDetailRow = () => ({
+  itemId: "",
   itemCode: "",
   itemDescription: "",
+  orderId: "",
   orderQty: "",
   suppliedQty: "",
   pendingQty: "0.00",
@@ -315,6 +315,7 @@ const SalesOrderShortCloseForm = ({ data, onBack }) => {
   const orgId = Number(localStorage.getItem("orgId")) || 0;
   const branch = Number(localStorage.getItem("branchId")) || 0;
   const usersId = localStorage.getItem("usersId");
+  const finYear = localStorage.getItem("finYear") || "";
 
   const [activeChildTab, setActiveChildTab] = useState("shortCloseDetails");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -328,14 +329,12 @@ const SalesOrderShortCloseForm = ({ data, onBack }) => {
   const [header, setHeader] = useState(() => {
     const base = {
       customerId: data?.customerId?.id ?? data?.customerId ?? "",
-      customerName: data?.customerName || "",
-      salesAgreementNo:
-        data?.salesAgreementNo?.contractNo ??
-        data?.salesAgreementNo ??
-        "",
+      customerName:
+        data?.customerId?.customerName ?? data?.customerName ?? "",
+      salesAgreementNo: data?.docId ?? data?.salesAgreementNo ?? "",
       shortCloseNo:
         data?.shortCloseNo || (data ? "" : generateShortCloseNo()),
-      date: data?.date || dayjs().format("YYYY-MM-DD"),
+      date: data?.docDate ?? data?.date ?? dayjs().format("YYYY-MM-DD"),
       active: data?.active !== false,
     };
     base.date = fmtDate(base.date);
@@ -343,21 +342,29 @@ const SalesOrderShortCloseForm = ({ data, onBack }) => {
   });
 
   const [detailRows, setDetailRows] = useState(
-    data?.shortCloseDetails?.length
-      ? data.shortCloseDetails
+    data?.salesOrderShortCloseDetailsResponseDTO?.length
+      ? data.salesOrderShortCloseDetailsResponseDTO.map((d) => ({
+          itemId: d.item?.id ?? "",
+          itemCode: d.item?.itemCode ?? "",
+          itemDescription: d.item?.itemDescription ?? "",
+          orderQty: d.orderQty ?? "",
+          suppliedQty: d.suppliedQty ?? "",
+          pendingQty: d.pendingQty ?? "0.00",
+          requiredQty: d.requiredQty ?? "",
+          shortCloseQty: d.shortCloseQty ?? "0.00",
+        }))
       : [emptyDetailRow()],
   );
 
   const [summary, setSummary] = useState({
-    referenceForSc: data?.shortCloseSummary?.referenceForSc || "",
+    referenceForSc: data?.cancelRemarks ?? data?.shortCloseSummary?.referenceForSc ?? "",
   });
 
   /* ---------------- Lookup loading ---------------- */
 
   const loadCustomers = useCallback(async () => {
     try {
-      const response = await salesDeliveryAPI.getCustomerDropdown(orgId, branch);
-      const res = response?.paramObjectsMap?.customerDetails;
+      const res = await salesOrderShortCloseAPI.getCustomerDetails(branch, orgId);
       setCustomerOptions(
         (res || []).map((c) => ({
           value: c.customerId,
@@ -372,22 +379,33 @@ const SalesOrderShortCloseForm = ({ data, onBack }) => {
     }
   }, [orgId, branch]);
 
-  const loadAgreements = useCallback(async () => {
-    try {
-      const response = await salesContractAPI.getSalesContracts(orgId, branch);
-      const res = response?.paramObjectsMap?.salesContract;
-      setAgreementOptions(
-        (res || []).map((ag) => ({
-          value: ag.customerContractNo,
-          label: ag.customerContractNo,
-          customerId: ag.customer?.customerId ?? ag.customerId,
-        })),
-      );
-    } catch (error) {
-      console.error("Failed to load sales agreement options:", error);
-      setAgreementOptions([]);
-    }
-  }, [orgId, branch]);
+  // Sales Agreement No dropdown is populated from Order Acceptance docs for
+  // the selected customer. Response items: [{ orderAccptanceId, docId, docDate }]
+  const loadAgreements = useCallback(
+    async (customer) => {
+      if (!customer) {
+        setAgreementOptions([]);
+        return;
+      }
+      try {
+        const items = await salesOrderShortCloseAPI.getOrderAcceptanceDocIdDetails(
+          customer,
+        );
+        setAgreementOptions(
+          (items || []).map((it) => ({
+            value: it.docId,
+            label: it.docId,
+            orderAcceptanceId: it.orderAccptanceId,
+            docDate: it.docDate,
+          })),
+        );
+      } catch (error) {
+        console.error("Failed to load sales agreement options:", error);
+        setAgreementOptions([]);
+      }
+    },
+    [],
+  );
 
   const loadItems = useCallback(async () => {
     try {
@@ -406,13 +424,58 @@ const SalesOrderShortCloseForm = ({ data, onBack }) => {
     }
   }, [orgId, branch]);
 
+  // Loads the short-close detail grid rows.
+  // - If a Sales Agreement No is selected, use its Order Acceptance items.
+  // - If none selected, fall back to all items via the item master.
+  const loadDetailItems = useCallback(
+    async (docId) => {
+      if (docId) {
+        try {
+          const items = await salesOrderShortCloseAPI.getOrderAcceptanceItemDetailsDetails(
+            docId,
+          );
+          setDetailRows(
+            (items || []).map((it) => ({
+              itemId: it.itemId || "",
+              itemCode: it.itemCode,
+              itemDescription: it.itemDescitpion || "",
+              orderId: it.orderId || "",
+              orderQty: it.quantity ?? "",
+              suppliedQty: "",
+              pendingQty: "0.00",
+              requiredQty: "",
+              shortCloseQty: "0.00",
+            })),
+          );
+        } catch (error) {
+          console.error("Failed to load agreement items:", error);
+          setDetailRows([emptyDetailRow()]);
+        }
+      } else {
+        const res = await itemAPI.getItems(orgId, branch);
+        setDetailRows(
+          (res || []).map((it) => ({
+            itemId: it.id || "",
+            itemCode: it.itemCode,
+            itemDescription: it.itemDescription || "",
+            orderQty: "",
+            suppliedQty: "",
+            pendingQty: "0.00",
+            requiredQty: "",
+            shortCloseQty: "0.00",
+          })),
+        );
+      }
+    },
+    [orgId, branch],
+  );
+
   useEffect(() => {
     if (orgId && branch) {
       loadCustomers();
-      loadAgreements();
       loadItems();
     }
-  }, [orgId, branch, loadCustomers, loadAgreements, loadItems]);
+  }, [orgId, branch, loadCustomers, loadItems]);
 
   /* ---------------- Handlers ---------------- */
 
@@ -426,6 +489,12 @@ const SalesOrderShortCloseForm = ({ data, onBack }) => {
           (c) => String(c.value) === String(value),
         );
         next.customerName = customer?.customerName || "";
+        next.salesAgreementNo = "";
+        loadAgreements(value);
+        loadDetailItems("");
+      }
+      if (name === "salesAgreementNo") {
+        loadDetailItems(value);
       }
       return next;
     });
@@ -449,6 +518,14 @@ const SalesOrderShortCloseForm = ({ data, onBack }) => {
           const suppliedQty = parseFloat(next.suppliedQty) || 0;
           const pendingQty = orderQty - suppliedQty;
           next.pendingQty = pendingQty ? pendingQty.toFixed(2) : "0.00";
+        }
+
+        // Short Close Qty = Pending Qty - Required Qty
+        if (["orderQty", "suppliedQty", "requiredQty"].includes(key)) {
+          const pendingQty = parseFloat(next.pendingQty) || 0;
+          const requiredQty = parseFloat(next.requiredQty) || 0;
+          const shortCloseQty = pendingQty - requiredQty;
+          next.shortCloseQty = shortCloseQty ? shortCloseQty.toFixed(2) : "0.00";
         }
 
         return next;
@@ -496,21 +573,35 @@ const SalesOrderShortCloseForm = ({ data, onBack }) => {
 
     const isUpdate = Boolean(data?.id);
 
-    // Single-transaction payload: header + short-close detail items + summary.
-    // The backend keeps the complete short-close history for audit purposes
-    // (server-side validation).
+    const saleOrderNo =
+      agreementOptions.find((ag) => ag.value === header.salesAgreementNo)
+        ?.orderAcceptanceId || 0;
+
+    // Single-transaction payload matching the backend DTO
+    // createUpdateSalesOrderShort. Header + details saved together; the backend
+    // maintains complete short-close history for audit purposes.
     const payload = {
-      ...(isUpdate ? { id: data.id } : {}),
-      orgId,
+      active: header.active !== false,
       branch,
-      ...header,
-      shortCloseDetails: detailRows.filter((r) => r.itemCode?.trim()),
-      shortCloseSummary: {
-        referenceForSc: summary.referenceForSc,
-      },
+      cancelRemarks: summary.referenceForSc || "",
       createdBy: isUpdate ? data?.createdBy || usersId : usersId,
-      ...(isUpdate ? { updatedBy: usersId } : {}),
+      customer: Number(header.customerId) || 0,
+      docId: header.salesAgreementNo || "",
+      financialYear: data?.financialYear || finYear,
+      orgId,
+      saleOrderNo,
+      salesOrderShortCloseDetailsDTO: detailRows
+        .filter((r) => r.itemCode?.trim())
+        .map((r) => ({
+          item: Number(r.itemId) || 0,
+          orderQty: Number(r.orderQty) || 0,
+          requiredQty: Number(r.requiredQty) || 0,
+          suppliedQty: Number(r.suppliedQty) || 0,
+        })),
     };
+
+    // Create -> no id; Update -> with id.
+    if (isUpdate) payload.id = data.id;
 
     try {
       const response =
@@ -610,7 +701,7 @@ const SalesOrderShortCloseForm = ({ data, onBack }) => {
               onChange={handleHeaderChange}
               error={fieldErrors.shortCloseNo}
               required
-              disabled={!data}
+              // disabled={!data}
             />
             <Field
               type="date"
@@ -683,7 +774,7 @@ const SalesOrderShortCloseForm = ({ data, onBack }) => {
                   {
                     key: "shortCloseQty",
                     label: "Short Close Qty",
-                    type: "number",
+                    readOnly: true,
                   },
                 ]}
                 rows={detailRows}
