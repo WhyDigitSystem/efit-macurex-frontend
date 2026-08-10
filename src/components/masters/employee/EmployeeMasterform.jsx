@@ -9,7 +9,7 @@ import { designationAPI } from "../../../api/designationAPI";
 import { useToast } from "../../Toast/ToastContext";
 import branchAPI from "../../../api/branchAPI";
 
-const UPPERCASE_FIELDS = ["employeeId"]; 
+const UPPERCASE_FIELDS = ["employeeId"];
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
