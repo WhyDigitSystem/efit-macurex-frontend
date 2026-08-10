@@ -93,6 +93,12 @@ const SECTIONS = [
         screenCode: "QUALITY_SCRAP_NOTE",
       },
       {
+        name: "Pre Delivery Inspection Report",
+        icon: SearchCheck,
+        path: "/predeliveryinspectionreport",
+        screenCode: "PRE_DELIVERY_INSPECTION_REPORT",
+      },
+      {
         name: "Rejection Note Cum Gate Pass",
         icon: FileX,
         path: "/rejectionnotecumgatepass",
