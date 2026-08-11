@@ -81,6 +81,7 @@ import PreDeliveryInspectionReportMaster from "../components/quality/preDelivery
 import InwardInspectionMaster from "../components/quality/inwardInspection/InwardInspectionMaster";
 import SetUpApprovalMaster from "../components/quality/setUpApproval/SetUpApprovalMaster";
 import EightDisciplineEntryMaster from "../components/quality/eightDisciplineEntry/EightDisciplineEntryMaster";
+import RootCauseAnalysisMaster from "../components/quality/rootCauseAnalysis/RootCauseAnalysisMaster";
 import LabourChargesList from "../components/labourCharges/LabourChargesList";
 import PurchaseOrderAmendment from "../components/purchase/PurchaseOrderAmendment/PurchaseOrderAmendmentMaster";
 import PurchaseContractAmendment from "../components/purchase/PurchaseContractAmendment/PurchaseContractAmendmentMaster";
@@ -309,6 +310,12 @@ export const routesConfig = [
     label: "8-Discipline Entry",
     keywords: ["8 discipline", "8d", "quality"],
     element: <EightDisciplineEntryMaster />,
+  },
+  {
+    path: "/rootcauseanalysis",
+    label: "Root Cause Analysis",
+    keywords: ["root cause", "rca", "quality"],
+    element: <RootCauseAnalysisMaster />,
   },
   {
     path: "/labourcharges",
