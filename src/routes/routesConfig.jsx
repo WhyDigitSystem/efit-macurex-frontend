@@ -1,110 +1,111 @@
-import purchaseRoutes from "./purchaseRoutes";
-import CountryMaster from "../components/masters/country/CountryMaster";
-import MastersList from "../components/masters/MasterList";
-import Dashboard from "../pages/DashBoard";
-import StateMaster from "../components/masters/state/StateMaster";
-import CityMaster from "../components/masters/city/CityMaster";
-import DepartmentMaster from "../components/masters/Department/DepartmentMaster";
-import DesignationMaster from "../components/masters/Designation/DesignationMaster";
-import FinYear from "../components/masters/finyear/Finyear";
-import ScreenNames from "../components/masters/screens/ScreenNames";
-import ScreenAccess from "../components/masters/screenAccess/screenAccess";
-import CreateCompanyPage from "../components/masters/createCompany/companyMaster";
-import BranchMaster from "../components/masters/branch/BranchMaster";
-import RolesAndResponsibilitySetup from "../components/masters/rolesResponsibilities/RolesAndResponsibilitySetup";
-import LocationMaster from "../components/masters/location/LocationMaster";
-import PartyMaster from "../components/masters/party/PartyMaster";
-import ItemMaster from "../components/masters/item/ItemMaster";
-import EmployeeMaster from "../components/masters/employee/EmployeeMaster";
-import CompanyMaster from "../components/masters/company/CompanyMaster";
-import FinancialYearMaster from "../components/masters/financialYear/FinancialYearMaster";
-import UnitMaster from "../components/masters/unit/UnitMaster";
-import UnitConversionMaster from "../components/masters/unitConversion/UnitConversionMaster";
-import Profile from "../components/settings/Profile";
-import ListMaster from "../components/masters/listofvalues/ListMaster";
-import Currency from "../components/masters/currency/Currency";
-import GSTState from "../components/masters/gstState/GSTState";
-import GSTRate from "../components/masters/gstrate/GSTRate";
-import TransportMaster from "../components/masters/transport/TransportMaster";
-import DocTypeMaster from "../components/masters/docType/DocTypeMaster";
-import DocTypeMappingMaster from "../components/masters/DocTypeMapping/DocTypeMappingMaster";
-import DailyExchangeRateMaster from "../components/masters/DailyExchangeRate/DailyExchangeRateMaster";
-import HsnSacMaster from "../components/masters/hsnsac/HsnSacMaster";
-import CalendarMaster from "../components/masters/calendar/CalendarMaster";
-import HolidayMaster from "../components/masters/holiday/HolidayMaster";
-import ServicesAccountingMaster from "../components/masters/servicesAccounting/ServicesAccountingMaster";
-import PartyAccountMappingMaster from "../components/masters/partyAccountMapping/PartyAccountMappingMaster";
-import ExchangeRateMaster from "../components/masters/exchangeRate/ExchangeRateMaster";
-import ExchangeRateUpdateMaster from "../components/masters/exchangeRateUpdate/ExchangeRateUpdateMaster";
-import SalesZoneMaster from "../components/masters/salesZone/SalesZoneMaster";
-import LMEMaster from "../components/masters/LmeRate/LMEMaster";
-import BankMaster from "../components/masters/bankMaster/BankMaster";
-import TaxRateMaster from "../components/masters/taxRate/TaxRateMaster";
-import TaxDefinationMaster from "../components/masters/taxDefination/TaxDefinationMaster";
-import SalesList from "../components/sales/SalesList";
-import PurchaseList from "../components/purchase/purchaseList";
-import ItemGradeMaster from "../components/masters/itemGrade/ItemGradeMaster";
-import InventoryList from "../components/inventory/InventoryList";
-import SubContractList from "../components/subContract/SubContractList";
-import ScrapMaterialReturnMaster from "../components/subContract/scrapMaterialReturn/ScrapMaterialReturnMaster";
-import SupplierRateContractMaster from "../components/subContract/supplierRateContract/SupplierRateContractMaster";
-import JobOrderMaster from "../components/subContract/jobOrder/JobOrderMaster";
-import JobOrderAmendmentMaster from "../components/subContract/jobOrderAmendment/JobOrderAmendmentMaster";
-import SubContractingDcMaster from "../components/subContract/subContractingDc/SubContractingDcMaster";
-import ScBillMaster from "../components/subContract/scBill/ScBillMaster";
-import SubContractSupplyScheduleMaster from "../components/subContract/subContractSupplySchedule/SubContractSupplyScheduleMaster";
-import SupplierRateContractAmendmentMaster from "../components/subContract/supplierRateContractAmendment/SupplierRateContractAmendmentMaster";
-import SubContractReconciliationMaster from "../components/subContract/subContractReconciliation/SubContractReconciliationMaster";
-import JobOrderShortCloseMaster from "../components/subContract/jobOrderShortClose/JobOrderShortCloseMaster";
-import AdvEntryMaster from "../components/subContract/advEntry/AdvEntryMaster";
-import DcForCapitalItemsMaster from "../components/subContract/dcForCapitalItems/DcForCapitalItemsMaster";
 import PpcList from "../components/PPC/PpcList";
-import MaterialPlanningMaster from "../components/PPC/materialPlanning/MaterialPlanningMaster";
-import TransferOrderMaster from "../components/PPC/transferOrder/TransferOrderMaster";
 import BomCorrectionRequestMaster from "../components/PPC/bomCorrectionRequest/BomCorrectionRequestMaster";
 import DrawingAttachmentMaster from "../components/PPC/drawingAttachment/DrawingAttachmentMaster";
-import TdcList from "../components/TDC/TdcList";
-import EcrMaster from "../components/TDC/engineeringChangeRecord/EcrMaster";
-import EcnMaster from "../components/TDC/engineeringChangeNote/EcnMaster";
-import EngineeringDeviationRequestMaster from "../components/TDC/engineeringDeviationRequest/EngineeringDeviationRequestMaster";
-import SupplierChangeRequestMaster from "../components/TDC/supplierChangeRequest/SupplierChangeRequestMaster";
-import InspectionRequisitionNoteMaster from "../components/TDC/inspectionRequisitionNote/InspectionRequisitionNoteMaster";
+import MaterialPlanningMaster from "../components/PPC/materialPlanning/MaterialPlanningMaster";
+import TransferOrderMaster from "../components/PPC/transferOrder/TransferOrderMaster";
 import ProductionList from "../components/Production/ProductionList";
+import TdcList from "../components/TDC/TdcList";
+import EcnMaster from "../components/TDC/engineeringChangeNote/EcnMaster";
+import EcrMaster from "../components/TDC/engineeringChangeRecord/EcrMaster";
+import EngineeringDeviationRequestMaster from "../components/TDC/engineeringDeviationRequest/EngineeringDeviationRequestMaster";
+import InspectionRequisitionNoteMaster from "../components/TDC/inspectionRequisitionNote/InspectionRequisitionNoteMaster";
+import SupplierChangeRequestMaster from "../components/TDC/supplierChangeRequest/SupplierChangeRequestMaster";
+import ImportGRNMaster from "../components/inventory/ImportGRN/ImportGRNMaster";
+import InventoryList from "../components/inventory/InventoryList";
+import LabourChargesList from "../components/labourCharges/LabourChargesList";
+import DailyExchangeRateMaster from "../components/masters/DailyExchangeRate/DailyExchangeRateMaster";
+import DepartmentMaster from "../components/masters/Department/DepartmentMaster";
+import DesignationMaster from "../components/masters/Designation/DesignationMaster";
+import DocTypeMappingMaster from "../components/masters/DocTypeMapping/DocTypeMappingMaster";
+import LMEMaster from "../components/masters/LmeRate/LMEMaster";
+import MastersList from "../components/masters/MasterList";
+import BankMaster from "../components/masters/bankMaster/BankMaster";
+import BranchMaster from "../components/masters/branch/BranchMaster";
+import CalendarMaster from "../components/masters/calendar/CalendarMaster";
+import CityMaster from "../components/masters/city/CityMaster";
+import CompanyMaster from "../components/masters/company/CompanyMaster";
+import CountryMaster from "../components/masters/country/CountryMaster";
+import CreateCompanyPage from "../components/masters/createCompany/companyMaster";
+import Currency from "../components/masters/currency/Currency";
+import DocTypeMaster from "../components/masters/docType/DocTypeMaster";
+import EmployeeMaster from "../components/masters/employee/EmployeeMaster";
+import ExchangeRateMaster from "../components/masters/exchangeRate/ExchangeRateMaster";
+import ExchangeRateUpdateMaster from "../components/masters/exchangeRateUpdate/ExchangeRateUpdateMaster";
+import FinancialYearMaster from "../components/masters/financialYear/FinancialYearMaster";
+import FinYear from "../components/masters/finyear/Finyear";
+import GSTState from "../components/masters/gstState/GSTState";
+import GSTRate from "../components/masters/gstrate/GSTRate";
+import HolidayMaster from "../components/masters/holiday/HolidayMaster";
+import HsnSacMaster from "../components/masters/hsnsac/HsnSacMaster";
+import ItemMaster from "../components/masters/item/ItemMaster";
+import ItemGradeMaster from "../components/masters/itemGrade/ItemGradeMaster";
+import ListMaster from "../components/masters/listofvalues/ListMaster";
+import LocationMaster from "../components/masters/location/LocationMaster";
+import PartyMaster from "../components/masters/party/PartyMaster";
+import PartyAccountMappingMaster from "../components/masters/partyAccountMapping/PartyAccountMappingMaster";
+import RolesAndResponsibilitySetup from "../components/masters/rolesResponsibilities/RolesAndResponsibilitySetup";
+import SalesZoneMaster from "../components/masters/salesZone/SalesZoneMaster";
+import ScreenAccess from "../components/masters/screenAccess/screenAccess";
+import ScreenNames from "../components/masters/screens/ScreenNames";
+import ServicesAccountingMaster from "../components/masters/servicesAccounting/ServicesAccountingMaster";
+import StateMaster from "../components/masters/state/StateMaster";
+import TaxDefinationMaster from "../components/masters/taxDefination/TaxDefinationMaster";
+import TaxRateMaster from "../components/masters/taxRate/TaxRateMaster";
+import TransportMaster from "../components/masters/transport/TransportMaster";
+import UnitMaster from "../components/masters/unit/UnitMaster";
+import UnitConversionMaster from "../components/masters/unitConversion/UnitConversionMaster";
+import UserCreation from "../components/masters/userCreation/UserCreationMaster";
 import PlantMaintenanceList from "../components/plantMaintenance/PlantMaintenanceList";
+import PurchaseContractAmendment from "../components/purchase/PurchaseContractAmendment/PurchaseContractAmendmentMaster";
+import PurchaseOrderAmendment from "../components/purchase/PurchaseOrderAmendment/PurchaseOrderAmendmentMaster";
+import PurchaseList from "../components/purchase/purchaseList";
 import QualityList from "../components/quality/QualityList";
-import ParameterMaster from "../components/quality/parameterMaster/ParameterMaster";
-import InitialPlanning from "../components/quality/initialPlanning/InitialPlanning";
 import ControlPlan from "../components/quality/controlPlan/ControlPlan";
 import DeliveryChallanCumGatePassMaster from "../components/quality/deliveryChallanCumGatePass/DeliveryChallanCumGatePassMaster";
-import QualityScrapNoteMaster from "../components/quality/qualityScrapNote/QualityScrapNoteMaster";
-import PreDeliveryInspectionReportMaster from "../components/quality/preDeliveryInspectionReport/PreDeliveryInspectionReportMaster";
-import InwardInspectionMaster from "../components/quality/inwardInspection/InwardInspectionMaster";
-import SetUpApprovalMaster from "../components/quality/setUpApproval/SetUpApprovalMaster";
 import EightDisciplineEntryMaster from "../components/quality/eightDisciplineEntry/EightDisciplineEntryMaster";
+import InitialPlanning from "../components/quality/initialPlanning/InitialPlanning";
+import InwardInspectionMaster from "../components/quality/inwardInspection/InwardInspectionMaster";
+import ParameterMaster from "../components/quality/parameterMaster/ParameterMaster";
+import PreDeliveryInspectionReportMaster from "../components/quality/preDeliveryInspectionReport/PreDeliveryInspectionReportMaster";
+import QualityScrapNoteMaster from "../components/quality/qualityScrapNote/QualityScrapNoteMaster";
 import RootCauseAnalysisMaster from "../components/quality/rootCauseAnalysis/RootCauseAnalysisMaster";
+import SetUpApprovalMaster from "../components/quality/setUpApproval/SetUpApprovalMaster";
 import ZeroKmFailureMaster from "../components/quality/zeroKmFailure/ZeroKmFailureMaster";
-import LabourChargesList from "../components/labourCharges/LabourChargesList";
-import PurchaseOrderAmendment from "../components/purchase/PurchaseOrderAmendment/PurchaseOrderAmendmentMaster";
-import PurchaseContractAmendment from "../components/purchase/PurchaseContractAmendment/PurchaseContractAmendmentMaster";
-import ImportGRNMaster from "../components/inventory/ImportGRN/ImportGRNMaster";
 import SalesContractAmendment from "../components/sales/SalesContractAmendment/SalesContractAmendmentMaster";
+import SalesList from "../components/sales/SalesList";
 import SalesOrderAmendment from "../components/sales/SalesOrderAmendment/SalesOrderAmendmentMaster";
+import Profile from "../components/settings/Profile";
+import SubContractList from "../components/subContract/SubContractList";
+import AdvEntryMaster from "../components/subContract/advEntry/AdvEntryMaster";
+import DcForCapitalItemsMaster from "../components/subContract/dcForCapitalItems/DcForCapitalItemsMaster";
+import JobOrderMaster from "../components/subContract/jobOrder/JobOrderMaster";
+import JobOrderAmendmentMaster from "../components/subContract/jobOrderAmendment/JobOrderAmendmentMaster";
+import JobOrderShortCloseMaster from "../components/subContract/jobOrderShortClose/JobOrderShortCloseMaster";
+import ScBillMaster from "../components/subContract/scBill/ScBillMaster";
+import ScrapMaterialReturnMaster from "../components/subContract/scrapMaterialReturn/ScrapMaterialReturnMaster";
+import SubContractReconciliationMaster from "../components/subContract/subContractReconciliation/SubContractReconciliationMaster";
+import SubContractSupplyScheduleMaster from "../components/subContract/subContractSupplySchedule/SubContractSupplyScheduleMaster";
+import SubContractingDcMaster from "../components/subContract/subContractingDc/SubContractingDcMaster";
+import SupplierRateContractMaster from "../components/subContract/supplierRateContract/SupplierRateContractMaster";
+import SupplierRateContractAmendmentMaster from "../components/subContract/supplierRateContractAmendment/SupplierRateContractAmendmentMaster";
+import Dashboard from "../pages/DashBoard";
 import inventoryRoutes from "./inventoryRoutes";
-import UserCreation from "../components/masters/userCreation/UserCreationMaster";
+import purchaseRoutes from "./purchaseRoutes";
 // sales
-import Enquiry from '../components/sales/enquiry/Enquiry'
-import Quotation from '../components/sales/quotation/Quotation'
-import SalesDelivery from '../components/sales/salesdeliveryschedule/SalesDelivery'
-import DespatchInstruction from '../components/sales/despatchinstruction/DespatchInstruction'
-import OrderAcceptance from '../components/sales/orderacceptance/OrderAcceptance'
-import SalesContract from '../components/sales/salescontract/SalesContract'
-import ProformaInvoice from '../components/sales/proformainvoice/ProformaInvoice'
-import StockTransferChallanMaster from '../components/sales/stockTransferChallan/StockTransferChallanMaster'
-import TransportBillMaster from '../components/sales/transportBill/TransportBillMaster'
-import DocketInvoiceDetailsMaster from '../components/sales/docketInvoiceDetails/DocketInvoiceDetailsMaster'
 import ServiceAccounting from "../components/masters/servicesAccounting/ServiceAccounting";
-import salesRoutes from "./salesRoutes";
+import FlashNcReport from "../components/quality/flashNcReport/flashNcReport";
+import DespatchInstruction from "../components/sales/despatchinstruction/DespatchInstruction";
+import DocketInvoiceDetailsMaster from "../components/sales/docketInvoiceDetails/DocketInvoiceDetailsMaster";
+import Enquiry from "../components/sales/enquiry/Enquiry";
+import OrderAcceptance from "../components/sales/orderacceptance/OrderAcceptance";
 import OtherSalesInvoiceMasterScreen from "../components/sales/othersalesinvoice/OtherSalesInvoiceMasterScreen";
+import ProformaInvoice from "../components/sales/proformainvoice/ProformaInvoice";
+import Quotation from "../components/sales/quotation/Quotation";
+import SalesContract from "../components/sales/salescontract/SalesContract";
+import SalesDelivery from "../components/sales/salesdeliveryschedule/SalesDelivery";
+import StockTransferChallanMaster from "../components/sales/stockTransferChallan/StockTransferChallanMaster";
+import TransportBillMaster from "../components/sales/transportBill/TransportBillMaster";
+import salesRoutes from "./salesRoutes";
 export const routesConfig = [
   { path: "/", label: "Dashboard", element: <Dashboard /> },
 
@@ -275,6 +276,12 @@ export const routesConfig = [
     label: "Control Plan",
     keywords: ["control plan", "quality"],
     element: <ControlPlan />,
+  },
+  {
+    path: "/flashncreport",
+    label: "FlashNc Report",
+    keywords: ["flashNc Report", "quality"],
+    element: <FlashNcReport />,
   },
   {
     path: "/deliverychallancumgatepass",
@@ -526,24 +533,24 @@ export const routesConfig = [
     keywords: ["stocktransferchallan"],
     element: <StockTransferChallanMaster />,
   },
-     {
-      path: "/othersalesinvoice",
-      label: "Other Sales Invoice",
-      keywords: ["othersalesinvoice", "sales invoice"],
-      element: <OtherSalesInvoiceMasterScreen />,
-    },
-     {
-      path: "/transportbill",
-      label: "Transport Bill",
-      keywords: ["transportbill", "transport"],
-      element: <TransportBillMaster/>,
-    },
-     {
-      path: "/docketinvoicedetails",
-      label: "Docket/Invoice Details",
-      keywords: ["docketinvoicedetails", "docket"],
-      element: <DocketInvoiceDetailsMaster/>,
-    },
+  {
+    path: "/othersalesinvoice",
+    label: "Other Sales Invoice",
+    keywords: ["othersalesinvoice", "sales invoice"],
+    element: <OtherSalesInvoiceMasterScreen />,
+  },
+  {
+    path: "/transportbill",
+    label: "Transport Bill",
+    keywords: ["transportbill", "transport"],
+    element: <TransportBillMaster />,
+  },
+  {
+    path: "/docketinvoicedetails",
+    label: "Docket/Invoice Details",
+    keywords: ["docketinvoicedetails", "docket"],
+    element: <DocketInvoiceDetailsMaster />,
+  },
   ...purchaseRoutes,
   ...inventoryRoutes,
   ...salesRoutes,
