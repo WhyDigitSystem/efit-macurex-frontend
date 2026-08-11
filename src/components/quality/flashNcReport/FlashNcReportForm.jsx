@@ -1,4 +1,4 @@
-import { Save, Trash2, X } from "lucide-react";
+import { ArrowLeft, Save, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import flashNcReportAPI from "../../../api/quality/flashNcReportAPI";
@@ -172,7 +172,7 @@ const Field = ({
    FLASH NC REPORT FORM
 ========================================================= */
 
-const FlashNcReportForm = ({ onBack, onSave, editData, editId }) => {
+const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
   const { addToast } = useToast();
 
   const [form, setForm] = useState(initialForm);
@@ -713,6 +713,22 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId }) => {
     });
   };
 
+  const ToggleButton = ({ value, onChange }) => (
+    <button
+      type="button"
+      onClick={() => onChange(!value)}
+      className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${
+        value ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
+      }`}
+    >
+      <span
+        className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${
+          value ? "translate-x-6" : "translate-x-0.5"
+        }`}
+      />
+    </button>
+  );
+
   //  VALIDATION
   const validateForm = () => {
     const errors = {};
@@ -871,11 +887,62 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId }) => {
       setIsSubmitting(false);
     }
   };
+
+  const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
+    <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
+      <button
+        onClick={onCancel}
+        disabled={isSubmitting}
+        className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+      >
+        <X className="h-3 w-3" />
+        Cancel
+      </button>
+
+      <button
+        onClick={onSave}
+        disabled={isSubmitting}
+        className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+      >
+        <Save className="h-3 w-3" />
+        {isSubmitting ? "Saving..." : saveLabel}
+      </button>
+    </div>
+  );
   return (
     <div className="w-full">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-          {editData || editId ? "Edit Flash NC Report" : "Add Flash NC Report"}
+      {/* <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onBack}
+            className="p-1 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+
+          <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+            {data ? "Edit Flash NC Report" : "Add Flash NC Report"}
+          </h2>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <label className={labelClasses}>Active</label>
+          <ToggleButton
+            value={header.active}
+            onChange={(v) => setHeader((prev) => ({ ...prev, active: v }))}
+          />
+        </div>
+      </div> */}
+      <div className="flex items-center gap-2 mb-3">
+        <button
+          onClick={onBack}
+          className="p-1 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </button>
+
+        <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+          {data ? "Edit Flash NC Report" : "Add Flash NC Report"}
         </h2>
       </div>
 
@@ -1490,7 +1557,7 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId }) => {
         </div>
 
         {/* SAVE / CANCEL */}
-        <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
+        {/* <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
           <button
             onClick={onBack}
             disabled={isSubmitting}
@@ -1505,14 +1572,20 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId }) => {
             className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
           >
             <Save className="h-3 w-3" />{" "}
-            {/* {isSubmitting ? "Saving..." : data?.id ? "Update" : "Save"} */}
+           
             {isSubmitting
               ? "Saving..."
               : editData || editId
                 ? "Update"
                 : "Save"}
           </button>
-        </div>
+        </div> */}
+        <FormButtons
+          onCancel={onBack}
+          onSave={handleSave}
+          isSubmitting={isSubmitting}
+          saveLabel={data ? "Update" : "Save"}
+        />
       </div>
     </div>
   );
