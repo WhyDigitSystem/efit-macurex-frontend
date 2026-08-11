@@ -82,6 +82,7 @@ import InwardInspectionMaster from "../components/quality/inwardInspection/Inwar
 import SetUpApprovalMaster from "../components/quality/setUpApproval/SetUpApprovalMaster";
 import EightDisciplineEntryMaster from "../components/quality/eightDisciplineEntry/EightDisciplineEntryMaster";
 import RootCauseAnalysisMaster from "../components/quality/rootCauseAnalysis/RootCauseAnalysisMaster";
+import ZeroKmFailureMaster from "../components/quality/zeroKmFailure/ZeroKmFailureMaster";
 import LabourChargesList from "../components/labourCharges/LabourChargesList";
 import PurchaseOrderAmendment from "../components/purchase/PurchaseOrderAmendment/PurchaseOrderAmendmentMaster";
 import PurchaseContractAmendment from "../components/purchase/PurchaseContractAmendment/PurchaseContractAmendmentMaster";
@@ -316,6 +317,12 @@ export const routesConfig = [
     label: "Root Cause Analysis",
     keywords: ["root cause", "rca", "quality"],
     element: <RootCauseAnalysisMaster />,
+  },
+  {
+    path: "/zerokmfailureentry",
+    label: "Zero Km Failure Entry",
+    keywords: ["zero km", "failure", "quality"],
+    element: <ZeroKmFailureMaster />,
   },
   {
     path: "/labourcharges",
