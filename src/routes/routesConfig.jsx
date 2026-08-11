@@ -80,6 +80,7 @@ import QualityScrapNoteMaster from "../components/quality/qualityScrapNote/Quali
 import PreDeliveryInspectionReportMaster from "../components/quality/preDeliveryInspectionReport/PreDeliveryInspectionReportMaster";
 import InwardInspectionMaster from "../components/quality/inwardInspection/InwardInspectionMaster";
 import SetUpApprovalMaster from "../components/quality/setUpApproval/SetUpApprovalMaster";
+import EightDisciplineEntryMaster from "../components/quality/eightDisciplineEntry/EightDisciplineEntryMaster";
 import LabourChargesList from "../components/labourCharges/LabourChargesList";
 import PurchaseOrderAmendment from "../components/purchase/PurchaseOrderAmendment/PurchaseOrderAmendmentMaster";
 import PurchaseContractAmendment from "../components/purchase/PurchaseContractAmendment/PurchaseContractAmendmentMaster";
@@ -302,6 +303,12 @@ export const routesConfig = [
     label: "Set Up Approval",
     keywords: ["set up", "approval", "quality"],
     element: <SetUpApprovalMaster />,
+  },
+  {
+    path: "/8disciplineentry",
+    label: "8-Discipline Entry",
+    keywords: ["8 discipline", "8d", "quality"],
+    element: <EightDisciplineEntryMaster />,
   },
   {
     path: "/labourcharges",
