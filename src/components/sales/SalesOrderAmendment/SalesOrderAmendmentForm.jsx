@@ -1,9 +1,10 @@
 import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
-import { useForm, Controller } from "react-hook-form";
+import { useForm, Controller, useFieldArray } from "react-hook-form";
 import dayjs from "dayjs";
 import salesOrderAmendmentAPI from "../../../api/Sales/salesOrderAmendmentAPI";
 import { useToast } from "../../Toast/ToastContext";
+import branchAPI from "../../../api/branchAPI";
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -11,31 +12,10 @@ const controlClasses =
   "text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 " +
   "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
   "dark:focus:ring-blue-400 dark:focus:border-blue-400 " +
-  "disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed";
+  "[color-scheme:light] dark:[color-scheme:dark]";
 
-const labelClasses = "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
-
-const fieldGrid = "grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-x-3 gap-y-2 items-start";
-
-const SectionHeader = ({ children }) => (
-  <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">
-    {children}
-  </h3>
-);
-
-const ToggleButton = ({ value, onChange }) => (
-  <button
-    type="button"
-    onClick={() => onChange(!value)}
-    className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${
-      value ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
-    }`}
-  >
-    <span className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${
-      value ? "translate-x-6" : "translate-x-0.5"
-    }`} />
-  </button>
-);
+const labelClasses =
+  "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
 const getDefaultValues = () => ({
   plantId: "",
@@ -46,7 +26,7 @@ const getDefaultValues = () => ({
   soDate: "",
   partyPOAmdDate: "",
   poNo: "",
-  revisionNo: 1,
+  revisionNo: "",
   poDate: "",
   active: true,
   remarks: "",
@@ -64,11 +44,319 @@ const getDefaultValues = () => ({
   }],
 });
 
+const SelectField = ({ control, name, label, options, required, errors, onChange, disabled }) => {
+  const getError = () => {
+    const parts = name.split(".");
+    let error = errors;
+    for (const part of parts) {
+      if (error && error[part]) {
+        error = error[part];
+      } else {
+        return null;
+      }
+    }
+    return error?.message;
+  };
+
+  const errorMessage = getError();
+
+  return (
+    <div>
+      <label className={labelClasses}>
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      <Controller
+        name={name}
+        control={control}
+        rules={required ? { required: `${label} is required` } : undefined}
+        render={({ field }) => (
+          <select
+            {...field}
+            className={`${controlClasses} ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
+            onChange={(e) => {
+              field.onChange(e);
+              if (onChange) {
+                onChange(e.target.value);
+              }
+            }}
+            disabled={disabled}
+          >
+            <option value="">Select an option</option>
+            {options.map((opt) => {
+              if (typeof opt === 'object' && opt !== null) {
+                return (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                );
+              }
+              return (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              );
+            })}
+          </select>
+        )}
+      />
+      {errorMessage && (
+        <p className="text-red-500 text-[11px]">{errorMessage}</p>
+      )}
+    </div>
+  );
+};
+
+const InputField = ({
+  control,
+  name,
+  label,
+  type = "text",
+  required,
+  placeholder,
+  errors,
+  disabled,
+  step,
+  value,
+}) => {
+  const getError = () => {
+    const parts = name.split(".");
+    let error = errors;
+    for (const part of parts) {
+      if (error && error[part]) {
+        error = error[part];
+      } else {
+        return null;
+      }
+    }
+    return error?.message;
+  };
+
+  const errorMessage = getError();
+
+  return (
+    <div>
+      <label className={labelClasses}>
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      <Controller
+        name={name}
+        control={control}
+        rules={{
+          ...(required && {
+            required: `${label} is required`,
+          }),
+        }}
+        render={({ field }) => (
+          <input
+            {...field}
+            type={type}
+            step={step}
+            value={value || field.value}
+            className={`${controlClasses} ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
+            placeholder={placeholder}
+            disabled={disabled}
+          />
+        )}
+      />
+      {errorMessage && (
+        <p className="text-red-500 text-[11px]">{errorMessage}</p>
+      )}
+    </div>
+  );
+};
+
+const TableWrapper = ({ children }) => (
+  <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
+    <table className="w-full text-xs">{children}</table>
+  </div>
+);
+
+const TableHead = ({ headers }) => (
+  <thead className="bg-gray-100 dark:bg-gray-700">
+    <tr>
+      {headers.map((h, i) => (
+        <th
+          key={i}
+          className={`p-1 ${i === 0 ? "w-8 text-center" : i === headers.length - 1 ? "w-20 text-left" : "text-left"} dark:text-white`}
+        >
+          {h}
+        </th>
+      ))}
+    </tr>
+  </thead>
+);
+
+const TableRow = ({
+  children,
+  index,
+  onRemove,
+  disabled,
+  showDelete = true,
+}) => (
+  <tr className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
+    <td className="p-1 text-center font-medium dark:text-white">{index + 1}</td>
+    {children}
+    {showDelete && (
+      <td className="p-1 text-center">
+        <button
+          type="button"
+          onClick={onRemove}
+          disabled={disabled}
+          className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
+            ? "bg-gray-400 cursor-not-allowed"
+            : "bg-red-600 hover:bg-red-700"
+            }`}
+        >
+          <Trash2 size={10} />
+        </button>
+      </td>
+    )}
+  </tr>
+);
+
+const SelectCell = ({ control, name, options, required, errors, onChange, disabled }) => {
+  const getError = () => {
+    const parts = name.split(".");
+    let error = errors;
+    for (const part of parts) {
+      if (error && error[part]) {
+        error = error[part];
+      } else {
+        return null;
+      }
+    }
+    return error?.message;
+  };
+
+  const errorMessage = getError();
+
+  return (
+    <td className="p-1 align-top">
+      <Controller
+        name={name}
+        control={control}
+        rules={required ? { required: "This field is required" } : undefined}
+        render={({ field }) => (
+          <select
+            {...field}
+            className={`${controlClasses} h-8 text-xs ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
+            onChange={(e) => {
+              field.onChange(e);
+              if (onChange) {
+                onChange(e.target.value);
+              }
+            }}
+            disabled={disabled}
+          >
+            <option value="">Select an option</option>
+            {options.map((opt) => {
+              if (typeof opt === 'object' && opt !== null) {
+                return (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                );
+              }
+              return (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              );
+            })}
+          </select>
+        )}
+      />
+      {errorMessage && (
+        <div className="text-red-500 text-[10px] mt-0.5 whitespace-nowrap">
+          {errorMessage}
+        </div>
+      )}
+    </td>
+  );
+};
+
+const InputCell = ({
+  control,
+  name,
+  type = "text",
+  step,
+  placeholder,
+  disabled,
+  required,
+  errors,
+  value,
+  onChange,
+}) => {
+  const getError = () => {
+    const parts = name.split(".");
+    let error = errors;
+    for (const part of parts) {
+      if (error && error[part]) {
+        error = error[part];
+      } else {
+        return null;
+      }
+    }
+    return error?.message;
+  };
+
+  const errorMessage = getError();
+
+  return (
+    <td className="p-1 align-top">
+      <div className="flex items-center gap-1">
+        <div className="flex-1">
+          <Controller
+            name={name}
+            control={control}
+            rules={required ? { required: "This field is required" } : undefined}
+            render={({ field }) => (
+              <input
+                {...field}
+                type={type}
+                step={step}
+                value={value || field.value}
+                className={`${controlClasses} h-8 text-xs ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
+                placeholder={placeholder}
+                disabled={disabled}
+                onChange={(e) => {
+                  field.onChange(e);
+                  if (onChange) {
+                    onChange(e);
+                  }
+                }}
+              />
+            )}
+          />
+        </div>
+      </div>
+      {errorMessage && (
+        <div className="text-red-500 text-[10px] mt-0.5 whitespace-nowrap">
+          {errorMessage}
+        </div>
+      )}
+    </td>
+  );
+};
+
+const ToggleButton = ({ value, onChange }) => (
+  <button
+    type="button"
+    onClick={() => onChange(!value)}
+    className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${value ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
+      }`}
+  >
+    <span className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${value ? "translate-x-6" : "translate-x-0.5"
+      }`} />
+  </button>
+);
+
+// Main Component
 const SalesOrderAmendmentForm = ({ data, onBack }) => {
   const { addToast } = useToast();
-  const orgId = Number(localStorage.getItem("orgId")) || 0;
-  const branch = Number(localStorage.getItem("branchId")) || 1000000001;
-  const loginUserName = localStorage.getItem("userName") || "SYSTEM";
+  const [orgId] = useState(localStorage.getItem("orgId"));
+  const [branchId] = useState(localStorage.getItem("branchId"));
+  const loginUserName = localStorage.getItem("userName") || "";
 
   const [activeTab, setActiveTab] = useState("details");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -76,80 +364,557 @@ const SalesOrderAmendmentForm = ({ data, onBack }) => {
   const [detailError, setDetailError] = useState("");
   const [itemOptions, setItemOptions] = useState([]);
   const [rowErrors, setRowErrors] = useState({});
+  const [plantData, setPlantData] = useState([]);
+  const [soOptions, setSoOptions] = useState([]);
+  const [loadedItemData, setLoadedItemData] = useState([]);
+  const [loadingData, setLoadingData] = useState(false);
 
   const {
     control,
     handleSubmit,
-    register,
     setValue,
     getValues,
     watch,
     reset,
     formState: { errors },
-  } = useForm({ defaultValues: getDefaultValues() });
+  } = useForm({
+    mode: "onTouched",
+    defaultValues: getDefaultValues()
+  });
 
   const details = watch("details");
   const soNo = watch("soNo");
 
-  useEffect(() => {
-    if (data) {
-      const vals = { ...getDefaultValues(), ...data };
-      vals.date = vals.date ? dayjs(vals.date).format("YYYY-MM-DD") : dayjs().format("YYYY-MM-DD");
-      vals.soDate = vals.soDate ? dayjs(vals.soDate).format("YYYY-MM-DD") : "";
-      vals.partyPOAmdDate = vals.partyPOAmdDate ? dayjs(vals.partyPOAmdDate).format("YYYY-MM-DD") : "";
-      vals.poDate = vals.poDate ? dayjs(vals.poDate).format("YYYY-MM-DD") : "";
-      vals.details = vals.details || [];
-      reset(vals);
-    } else {
-      reset(getDefaultValues());
-    }
-  }, [data, reset]);
+  const loadBranches = useCallback(async () => {
+    try {
+      const response = await branchAPI.getBranchByOrgId(orgId);
 
-  useEffect(() => {
-    const loadItems = async () => {
-      try {
-        const items = await salesOrderAmendmentAPI.getItems(orgId);
-        setItemOptions(items);
-      } catch { /* ignore */ }
-    };
-    if (orgId) loadItems();
+      const options = (response || []).map((branch) => ({
+        value: branch.id,
+        label: branch.branchName,
+      }));
+
+      setPlantData(options);
+    } catch (error) {
+      console.error("Failed to load branches:", error);
+      setPlantData([]);
+    }
   }, [orgId]);
 
-  const loadOrderDetails = useCallback(async (soNum) => {
-    if (!soNum || !orgId) return;
-    setLoadingOrder(true);
+  // Load SO options
+  const loadSOOptions = useCallback(async () => {
     try {
-      const items = await salesOrderAmendmentAPI.getOrderDetails(soNum, orgId, branch);
-      if (items && items.length > 0) {
-        setValue("soDate", items[0].soDate ? dayjs(items[0].soDate).format("YYYY-MM-DD") : "");
-        const mapped = items.map((item, idx) => ({
-          id: item.id || Date.now() + idx,
-          slNo: idx + 1,
-          itemCode: item.itemCode || "",
-          itemName: item.itemName || "",
-          oldQty: item.quantity || item.qty || 0,
-          oldRate: item.rate || 0,
-          newQty: item.quantity || item.qty || 0,
-          newRate: item.rate || 0,
-          oldDlvyDate: item.deliveryDate || item.dlvyDate || "",
-          newDlvyDate: item.deliveryDate || item.dlvyDate || "",
-        }));
-        setValue("details", mapped);
-        setDetailError("");
-      }
+      const response = await salesOrderAmendmentAPI.getSalesOrderDetails(orgId, branchId);
+
+      const options = (response || []).map((item) => ({
+        value: item.docId,
+        label: item.docId,
+        docDate: item.docDate,
+        customerPurchaseOrderNo: item.customerPurchaseOrderNo,
+        customerPurchaseOrderDate: item.customerPurchaseOrderDate,
+        id: item.id,
+      }));
+
+      setSoOptions(options);
     } catch (error) {
-      console.error("Failed to load order details:", error);
-    } finally {
-      setLoadingOrder(false);
+      console.error("Failed to load SO options:", error);
+      setSoOptions([]);
     }
-  }, [orgId, branch, setValue]);
+  }, [orgId, branchId]);
 
   useEffect(() => {
-    if (soNo) {
-      const timer = setTimeout(() => loadOrderDetails(soNo), 500);
+    if (orgId) {
+      loadBranches();
+      loadSOOptions();
+    }
+  }, [orgId, loadBranches, loadSOOptions]);
+
+  const loadEditData = useCallback(async () => {
+    if (!data?.id) return;
+
+    setLoadingData(true);
+
+    try {
+      const response =
+        await salesOrderAmendmentAPI.getById(data.id);
+
+      console.log("Get By ID Response:", response);
+
+      // Handle both possible API response structures
+      const amendmentData =
+        response?.paramObjectsMap?.salesOrderAmendment ||
+        response?.salesOrderAmendment ||
+        response;
+
+      if (!amendmentData) {
+        console.error("Sales Order Amendment data not found");
+        return;
+      }
+
+      console.log("Amendment Data:", amendmentData);
+
+      const details =
+        (amendmentData.salesOrderAmendmentDetails || [])
+          .map((detail, index) => {
+
+            // API returns item as an OBJECT
+            const item = detail.item || {};
+
+            return {
+              id:
+                detail.id ||
+                Date.now() + index,
+
+              slNo: index + 1,
+
+              // IMPORTANT
+              itemId:
+                item.id || 0,
+
+              itemCode:
+                item.itemCode || "",
+
+              itemName:
+                item.itemDescription || "",
+
+              oldQty:
+                Number(detail.oldQty) || 0,
+
+              oldRate:
+                Number(detail.oldRate) || 0,
+
+              newQty:
+                Number(detail.newQty) || 0,
+
+              newRate:
+                Number(detail.newRate) || 0,
+
+              oldDlvyDate:
+                detail.oldDeliveryDate || "",
+
+              newDlvyDate:
+                detail.newDeliveryDate || "",
+            };
+          });
+
+      console.log(
+        "Mapped Edit Details:",
+        details
+      );
+
+      const editItemOptions = details
+        .filter((item) => item.itemCode)
+        .map((item) => ({
+          value: String(item.itemCode),
+          label: item.itemCode,
+        }))
+        .filter(
+          (item, index, array) =>
+            index ===
+            array.findIndex(
+              (x) =>
+                x.value === item.value
+            )
+        );
+
+      console.log(
+        "Edit Item Options:",
+        editItemOptions
+      );
+
+      setItemOptions(editItemOptions);
+
+      const editItemData = details.map((item) => ({
+        itemId: item.itemId,
+
+        itemCode: item.itemCode,
+
+        itemDescription: item.itemName,
+
+        orderQty: item.oldQty,
+
+        oldQty: item.oldQty,
+
+        oldRate: item.oldRate,
+
+        oldDeliveryDate:
+          item.oldDlvyDate,
+      }));
+
+      setLoadedItemData(editItemData);
+
+      console.log(
+        "Edit Loaded Item Data:",
+        editItemData
+      );
+
+      const formData = {
+        plantId:
+          amendmentData.branchId?.toString() || "",
+
+        soAmndNo:
+          amendmentData.docId ||
+          `SOA-${amendmentData.id}`,
+
+        soNo:
+          amendmentData.salesOrderNumber || "",
+
+        date:
+          amendmentData.docDate ||
+          amendmentData.salesOrderDate ||
+          dayjs().format("YYYY-MM-DD"),
+
+        partyPOAmdNo:
+          amendmentData.partyPoAmendmentNo || "",
+
+        soDate:
+          amendmentData.salesOrderDate || "",
+
+        partyPOAmdDate:
+          amendmentData.partyPoAmendmentDate || "",
+
+        poNo:
+          amendmentData.poNo || "",
+
+        revisionNo:
+          amendmentData.revisionNo || 1,
+
+        poDate:
+          amendmentData.poDate || "",
+
+        active:
+          amendmentData.active !== false,
+
+        remarks:
+          amendmentData.remarks || "",
+
+        details:
+          details.length > 0
+            ? details
+            : getDefaultValues().details,
+      };
+
+      console.log(
+        "Edit Form Data:",
+        formData
+      );
+
+      // Populate form
+      reset(formData);
+
+      setDetailError("");
+
+    } catch (error) {
+      console.error(
+        "Failed to load amendment data:",
+        error
+      );
+
+      addToast(
+        error?.message ||
+        "Failed to load amendment data",
+        "error"
+      );
+
+    } finally {
+      setLoadingData(false);
+    }
+  }, [data?.id, reset, addToast]);
+
+  // Load edit data when component mounts or data changes
+  useEffect(() => {
+    if (data?.id) {
+      loadEditData();
+    }
+  }, [data?.id, loadEditData]);
+
+  // Handle item selection
+  const handleItemSelect = async (index, itemCode) => {
+    try {
+      console.log("Selected Item Code:", itemCode);
+      console.log("Loaded Item Data:", loadedItemData);
+
+      const selectedItem = loadedItemData.find(
+        (item) =>
+          String(item.itemCode) === String(itemCode)
+      );
+
+      console.log("Selected Item:", selectedItem);
+
+      if (!selectedItem) {
+        console.error("Selected item not found");
+
+        setValue(`details.${index}.itemCode`, "");
+        setValue(`details.${index}.itemName`, "");
+        setValue(`details.${index}.oldQty`, 0);
+        setValue(`details.${index}.oldRate`, 0);
+        setValue(`details.${index}.newQty`, 0);
+        setValue(`details.${index}.newRate`, 0);
+        setValue(`details.${index}.oldDlvyDate`, "");
+        setValue(`details.${index}.newDlvyDate`, "");
+
+        return;
+      }
+
+      // Set selected item code
+      setValue(
+        `details.${index}.itemCode`,
+        selectedItem.itemCode || "",
+        { shouldValidate: true, shouldDirty: true }
+      );
+
+      // Item Description
+      setValue(
+        `details.${index}.itemName`,
+        selectedItem.itemDescription || selectedItem.itemName || "",
+        { shouldDirty: true }
+      );
+
+      // Order Qty from API
+      setValue(
+        `details.${index}.oldQty`,
+        Number(selectedItem.oldQty) || 0,
+        { shouldDirty: true }
+      );
+
+      // API does not provide rate
+      setValue(
+        `details.${index}.oldRate`,
+        Number(selectedItem.oldRate) || 0,
+        { shouldDirty: true }
+      );
+
+      // New Qty initially same as Order Qty
+      // setValue(
+      //   `details.${index}.newQty`,
+      //   Number(selectedItem.orderQty) || 0,
+      //   { shouldDirty: true }
+      // );
+
+      // Rate
+      // setValue(
+      //   `details.${index}.newRate`,
+      //   Number(selectedItem.oldRate) || 0,
+      //   { shouldDirty: true }
+      // );
+
+      // Delivery date
+      setValue(
+        `details.${index}.oldDlvyDate`,
+        selectedItem.oldDeliveryDate || "",
+        { shouldDirty: true }
+      );
+
+      setValue(
+        `details.${index}.newDlvyDate`,
+        selectedItem.oldDeliveryDate || "",
+        { shouldDirty: true }
+      );
+
+      // Store item ID for submit
+      setValue(
+        `details.${index}.itemId`,
+        selectedItem.itemId || selectedItem.item || 0,
+        { shouldDirty: true }
+      );
+
+      // Get revision number
+      try {
+        const revisionResponse =
+          await salesOrderAmendmentAPI.getRevisionNoDetails(
+            orgId,
+            branchId,
+            selectedItem.itemId || selectedItem.item || 0,
+            soNo
+          );
+
+        const revisionNo = revisionResponse || 1;
+
+        setValue("revisionNo", revisionNo, {
+          shouldDirty: true,
+        });
+
+      } catch (error) {
+        console.error(
+          "Failed to load revision number:",
+          error
+        );
+      }
+
+      // Clear row validation error
+      if (rowErrors[index]) {
+        const updated = { ...rowErrors };
+        delete updated[index];
+        setRowErrors(updated);
+      }
+
+    } catch (error) {
+      console.error("Error selecting item:", error);
+    }
+  };
+
+  const loadOrderDetails = useCallback(
+    async (selectedSoNo) => {
+      if (!selectedSoNo || !orgId) {
+        const defaultDetails =
+          getDefaultValues().details;
+
+        setValue("details", defaultDetails);
+        setLoadedItemData([]);
+        setItemOptions([]);
+        setDetailError("");
+
+        return;
+      }
+
+      setLoadingOrder(true);
+
+      try {
+        // Find selected SO
+        const selectedSO = soOptions.find(
+          (opt) =>
+            String(opt.value) ===
+            String(selectedSoNo)
+        );
+
+        // Fill SO related fields
+        if (selectedSO) {
+          setValue(
+            "soDate",
+            selectedSO.docDate || ""
+          );
+
+          setValue(
+            "poNo",
+            selectedSO.customerPurchaseOrderNo ||
+            ""
+          );
+
+          setValue(
+            "poDate",
+            selectedSO.customerPurchaseOrderDate ||
+            ""
+          );
+        }
+
+        // Call Item API
+        const items =
+          await salesOrderAmendmentAPI.getItems(
+            orgId,
+            branchId,
+            selectedSoNo
+          );
+
+        console.log(
+          "Item API Response:",
+          items
+        );
+
+        // Normalize API response
+        const normalizedItems = (
+          items || []
+        ).map((item) => ({
+          itemId:
+            item.itemId ||
+            item.item ||
+            0,
+
+          itemCode:
+            item.itemCode || "",
+
+          itemDescription:
+            item.itemDescription ||
+            item.itemName ||
+            "",
+
+          unit:
+            item.unit || "",
+
+          unitId:
+            item.unitId || 0,
+
+          orderQty:
+            Number(item.orderQty) || 0,
+
+          oldQty:
+            Number(
+              item.oldQty ??
+              item.orderQty
+            ) || 0,
+
+          oldRate:
+            Number(item.oldRate) || 0,
+
+          oldDeliveryDate:
+            item.oldDeliveryDate || "",
+        }));
+
+        console.log(
+          "Normalized Item Data:",
+          normalizedItems
+        );
+
+        // Store complete item data
+        setLoadedItemData(
+          normalizedItems
+        );
+
+        // Create dropdown options
+        const options =
+          normalizedItems.map(
+            (item) => ({
+              value: item.itemCode,
+              label: item.itemCode,
+            })
+          );
+
+        setItemOptions(options);
+
+        // Keep Item Code empty.
+        // User must select manually.
+        setValue(
+          "details",
+          getDefaultValues().details
+        );
+
+        setDetailError("");
+
+      } catch (error) {
+        console.error(
+          "Failed to load order details:",
+          error
+        );
+
+        setDetailError(
+          "Failed to load order details"
+        );
+
+        setValue(
+          "details",
+          getDefaultValues().details
+        );
+
+        setLoadedItemData([]);
+        setItemOptions([]);
+
+      } finally {
+        setLoadingOrder(false);
+      }
+    },
+    [
+      orgId,
+      branchId,
+      setValue,
+      soOptions,
+    ]
+  );
+
+  useEffect(() => {
+    if (soNo && !data?.id) {
+      const timer = setTimeout(() => loadOrderDetails(soNo), 300);
       return () => clearTimeout(timer);
     }
-  }, [soNo, loadOrderDetails]);
+  }, [soNo, loadOrderDetails, data?.id]);
 
   const validateDetails = () => {
     const errs = {};
@@ -166,57 +931,141 @@ const SalesOrderAmendmentForm = ({ data, onBack }) => {
   };
 
   const onSubmit = async (formData) => {
-    const headerValid = await handleSubmit(
-      () => true,
-      () => {
-        addToast("Please fill all mandatory header fields", "error");
-      }
-    )();
-    if (!headerValid) return;
-
-    if (!formData.details || formData.details.length === 0) {
-      setDetailError("At least one order detail item is required");
-      setActiveTab("details");
-      addToast("At least one order detail item is required", "error");
-      return;
-    }
-
-    if (!validateDetails()) {
-      setActiveTab("details");
-      addToast("Please fill all mandatory fields in detail rows", "error");
-      return;
-    }
-
-    setIsSubmitting(true);
     try {
+      // Validate header fields
+      if (!formData.plantId) {
+        addToast("Plant ID is required", "error");
+        return;
+      }
+
+      if (!formData.soNo) {
+        addToast("S.O.No is required", "error");
+        return;
+      }
+
+      if (!formData.date) {
+        addToast("Date is required", "error");
+        return;
+      }
+
+      if (!formData.partyPOAmdNo) {
+        addToast("Party P.O.Amnd No is required", "error");
+        return;
+      }
+
+      // Validate details
+      if (
+        !formData.details ||
+        formData.details.length === 0
+      ) {
+        setDetailError(
+          "At least one order detail item is required"
+        );
+        setActiveTab("details");
+        addToast(
+          "At least one order detail item is required",
+          "error"
+        );
+        return;
+      }
+
+      if (!validateDetails()) {
+        setActiveTab("details");
+        addToast(
+          "Please fill all mandatory fields in detail rows",
+          "error"
+        );
+        return;
+      }
+
+      setIsSubmitting(true);
+
+      // Common payload
       const payload = {
-        ...formData,
-        soAmndNo: formData.soAmndNo || `SOA${dayjs().format("YYYYMMDDHHmmss")}`,
-        revisionNo: data ? formData.revisionNo : 1,
-        orgId,
-        branch,
+        active: formData.active,
+        branch: parseInt(branchId),
+        cancelRemarks: "",
         createdBy: loginUserName,
+
         details: (formData.details || []).map((d) => ({
-          ...d,
+          item: d.itemId || 0,
+          newDeliveryDate: d.newDlvyDate || "",
           newQty: Number(d.newQty) || 0,
           newRate: Number(d.newRate) || 0,
+          oldDeliveryDate: d.oldDlvyDate || "",
+          oldQty: Number(d.oldQty) || 0,
+          oldRate: Number(d.oldRate) || 0,
         })),
+
+        orgId: parseInt(orgId),
+        partyPoAmendmentDate:
+          formData.partyPOAmdDate || "",
+        partyPoAmendmentNo:
+          formData.partyPOAmdNo || "",
+        poDate: formData.poDate || "",
+        poNo: formData.poNo || "",
+        remarks: formData.remarks || "",
+        revisionNo:
+          Number(formData.revisionNo) || 1,
+        salesOrderDate: formData.soDate || "",
+        salesOrderNumber: formData.soNo || "",
       };
-      const res = await salesOrderAmendmentAPI.createUpdate(payload);
-      if (res?.status) {
+
+      // ONLY SEND ID DURING UPDATE
+      if (data?.id) {
+        payload.id = data.id;
+      }
+
+      console.log(
+        data?.id
+          ? "UPDATE PAYLOAD:"
+          : "CREATE PAYLOAD:",
+        payload
+      );
+
+      const response =
+        await salesOrderAmendmentAPI.createUpdate(
+          payload
+        );
+
+      if (response?.status) {
         addToast(
-          data ? "Amendment updated successfully" : "Amendment created successfully",
+          data
+            ? "Amendment updated successfully"
+            : "Amendment created successfully",
           "success"
         );
-        onBack();
+
+        setTimeout(() => {
+          onBack();
+        }, 1500);
       } else {
-        addToast(res?.message || "Failed to save amendment", "error");
+        addToast(
+          response?.message ||
+          "Failed to save amendment",
+          "error"
+        );
       }
+
     } catch (error) {
-      addToast(error?.message || "Failed to save amendment", "error");
+      console.error(
+        "Error saving amendment:",
+        error
+      );
+
+      addToast(
+        error?.message ||
+        "Failed to save amendment",
+        "error"
+      );
+
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleSave = () => {
+    handleSubmit(onSubmit)();
   };
 
   const addDetailRow = () => {
@@ -256,297 +1105,375 @@ const SalesOrderAmendmentForm = ({ data, onBack }) => {
   };
 
   const updateDetail = (index, field, value) => {
-    const current = getValues("details") || [];
-    current[index] = { ...current[index], [field]: value };
-    if (field === "itemCode") {
-      const item = itemOptions.find(
-        (i) => (i.itemCode || i.code || i.id?.toString()) === value
-      );
-      if (item) {
-        current[index].itemName = item.itemName || item.description || "";
+    const current =
+      getValues("details") || [];
+
+    const updated = [...current];
+
+    updated[index] = {
+      ...updated[index],
+      [field]: value,
+    };
+
+    setValue(
+      "details",
+      updated,
+      {
+        shouldDirty: true,
+        shouldValidate: true,
       }
-    }
-    setValue("details", [...current]);
+    );
+
+    // Clear row validation error
     if (rowErrors[index]) {
-      const updated = { ...rowErrors };
-      delete updated[index];
-      setRowErrors(updated);
+      const updatedErrors = {
+        ...rowErrors,
+      };
+
+      delete updatedErrors[index];
+
+      setRowErrors(updatedErrors);
     }
   };
 
-  const handleCancel = () => {
-    if (!isSubmitting) onBack();
-  };
-
-  const renderField = (label, name, type = "text", options = {}) => {
-    const { required, disabled, placeholder, options: selectOptions, step } = options;
-    const error = errors[name]?.message;
+  if (loadingData) {
     return (
-      <div key={name}>
-        <label className={labelClasses}>
-          {label}
-          {required && <span className="text-red-500 ml-0.5">*</span>}
-        </label>
-        {type === "select" ? (
-          <select
-            {...register(name, { required: required ? `${label} is required` : false })}
-            disabled={disabled}
-            className={`${controlClasses} ${error ? "border-red-500 focus:border-red-500" : ""}`}
-          >
-            <option value="">Select</option>
-            {(selectOptions || []).map((opt) => {
-              const val = typeof opt === "object" ? opt.value || opt.id : opt;
-              const lbl = typeof opt === "object" ? opt.label || opt.name || opt.value || opt.id : opt;
-              return <option key={val} value={val}>{lbl}</option>;
-            })}
-          </select>
-        ) : type === "textarea" ? (
-          <textarea
-            {...register(name)}
-            disabled={disabled}
-            rows={2}
-            className={`${controlClasses} h-auto min-h-[30px] resize-none pt-1 ${error ? "border-red-500 focus:border-red-500" : ""}`}
-            placeholder={placeholder}
-          />
-        ) : (
-          <input
-            {...register(name)}
-            type={type}
-            step={step}
-            disabled={disabled}
-            className={`${controlClasses} ${error ? "border-red-500 focus:border-red-500" : ""}`}
-            placeholder={placeholder}
-          />
-        )}
-        {error && <div className="text-red-500 text-[10px] mt-0.5">{error}</div>}
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-500 dark:text-gray-400">Loading...</div>
       </div>
     );
-  };
-
-  const handleSave = () => {
-    handleSubmit(onSubmit)();
-  };
+  }
 
   return (
-    <div className="animate-fadeIn px-3 py-3 max-w-7xl mx-auto">
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-3">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleCancel}
-              className="flex items-center gap-1 px-2 py-1 rounded text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" /> Back
-            </button>
-            <h2 className="text-sm font-semibold text-gray-900 dark:text-white">
-              {data ? "Edit Sales Order Amendment" : "New Sales Order Amendment"}
-            </h2>
-          </div>
-          <div className="flex items-center gap-2">
-            <label className={labelClasses}>Active</label>
-            <Controller
-              name="active"
-              control={control}
-              render={({ field }) => <ToggleButton value={field.value} onChange={field.onChange} />}
-            />
-          </div>
+    <div className="p-2 max-w-7xl relative">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onBack}
+            className="p-1 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+          <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+            {data ? "Edit Sales Order Amendment" : "Add Sales Order Amendment"}
+          </h2>
         </div>
+        <div className="flex items-center gap-2">
+          <label className={labelClasses}>Active</label>
+          <Controller
+            name="active"
+            control={control}
+            render={({ field }) => <ToggleButton value={field.value} onChange={field.onChange} />}
+          />
+        </div>
+      </div>
 
+      {/* Main Card */}
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-3">
         {/* Header Fields */}
-        <div className={fieldGrid}>
-          {renderField("Plant Id *", "plantId", "select", { required: true, selectOptions: ["Plant 1", "Plant 2", "Plant 3"] })}
-          {renderField("S.O.Amnd No", "soAmndNo", "text", { disabled: true, placeholder: "Auto-generated" })}
-          {renderField("S.O.No *", "soNo", "select", { required: true, selectOptions: [] })}
-          {renderField("Date *", "date", "date", { required: true })}
-          {renderField("Party P.O.Amnd No *", "partyPOAmdNo", "text", { required: true })}
-          {renderField("S.O.Date", "soDate", "date")}
-          {renderField("Party P.O.Amnd Date", "partyPOAmdDate", "date")}
-          {renderField("P.O.No", "poNo", "text")}
-          {renderField("Revision No", "revisionNo", "number", { disabled: true })}
-          {renderField("P.O.Date", "poDate", "date")}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+          <SelectField
+            control={control}
+            name="plantId"
+            label="Plant ID"
+            options={plantData}
+            required
+            errors={errors}
+          />
+          <InputField
+            control={control}
+            name="soAmndNo"
+            label="S.O.Amnd No"
+            disabled
+            placeholder="Auto-generated"
+            errors={errors}
+          />
+          <InputField
+            control={control}
+            name="date"
+            label="Date"
+            type="date"
+            required
+            errors={errors}
+          />
+          <SelectField
+            control={control}
+            name="soNo"
+            label="S.O.No"
+            options={soOptions}
+            required
+            errors={errors}
+          />
+          <InputField
+            control={control}
+            name="partyPOAmdNo"
+            label="Party P.O.Amnd No"
+            required
+            errors={errors}
+          />
+          <InputField
+            control={control}
+            name="partyPOAmdDate"
+            label="Party P.O.Amnd Date"
+            type="date"
+            errors={errors}
+          />
+          <InputField
+            control={control}
+            name="soDate"
+            label="S.O.Date"
+            type="date"
+            errors={errors}
+          />
+          <InputField
+            control={control}
+            name="poNo"
+            label="P.O.No"
+            errors={errors}
+          />
+          <InputField
+            control={control}
+            name="revisionNo"
+            label="Revision No"
+            type="number"
+            disabled
+            errors={errors}
+          />
+          <InputField
+            control={control}
+            name="poDate"
+            label="P.O.Date"
+            type="date"
+            errors={errors}
+          />
         </div>
 
         {/* Tabs */}
-        <div className="border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 mb-0">
           <div className="flex">
-            {[
-              { key: "details", label: "Sales Order Details" },
-              { key: "summary", label: "Summary" },
-            ].map((tab) => (
+            {["details", "summary"].map((tab) => (
               <button
-                key={tab.key}
+                key={tab}
                 type="button"
-                onClick={() => setActiveTab(tab.key)}
-                className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${
-                  activeTab === tab.key
-                    ? "bg-blue-600 text-white"
-                    : "text-gray-600 dark:text-gray-300"
-                }`}
+                onClick={() => setActiveTab(tab)}
+                className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${activeTab === tab
+                  ? "bg-blue-600 text-white"
+                  : "text-gray-600 dark:text-gray-300"
+                  }`}
               >
-                {tab.label}
+                {tab === "details" ? "Sales Order Details" : "Summary"}
               </button>
             ))}
           </div>
+          {activeTab !== "summary" && (
+            <button
+              type="button"
+              onClick={addDetailRow}
+              className="h-6 w-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-colors"
+            >
+              <Plus size={12} />
+            </button>
+          )}
         </div>
 
-        {/* Tab Content */}
+        {/* Tab Content - Details */}
         {activeTab === "details" && (
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <SectionHeader>Sales Order Items</SectionHeader>
-              <div className="flex items-center gap-2">
-                {loadingOrder && <span className="text-xs text-gray-500">Loading order details...</span>}
-                <button
-                  type="button"
-                  onClick={addDetailRow}
-                  className="h-6 w-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-colors"
-                >
-                  <Plus size={12} />
-                </button>
-              </div>
-            </div>
+            {loadingOrder && (
+              <div className="text-xs text-gray-500">Loading order details...</div>
+            )}
             {detailError && (
               <div className="text-red-500 text-[10px]">{detailError}</div>
             )}
-            <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
-              <table className="w-full text-xs">
-                <thead className="bg-gray-100 dark:bg-gray-700">
-                  <tr>
-                    <th className="p-1 w-8 text-center dark:text-white">#</th>
-                    <th className="p-1 text-left dark:text-white">Item Code *</th>
-                    <th className="p-1 text-left dark:text-white">Item Description</th>
-                    <th className="p-1 text-left dark:text-white">Old Qty</th>
-                    <th className="p-1 text-left dark:text-white">Old Rate</th>
-                    <th className="p-1 text-left dark:text-white">New Qty *</th>
-                    <th className="p-1 text-left dark:text-white">New Rate</th>
-                    <th className="p-1 text-left dark:text-white">Old Dlvy Date</th>
-                    <th className="p-1 text-left dark:text-white">New Dlvy Date *</th>
-                    <th className="p-1 w-20 text-left dark:text-white">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(details || []).map((item, index) => {
-                    const rErr = rowErrors[index] || {};
-                    return (
-                      <tr key={item.id || index} className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-                        <td className="p-1 text-center font-medium dark:text-white">{index + 1}</td>
-                        <td className="p-1">
-                          <select
-                            value={item.itemCode || ""}
-                            onChange={(e) => updateDetail(index, "itemCode", e.target.value)}
-                            className={`${controlClasses} h-8 text-xs ${rErr.itemCode ? "border-red-500" : ""}`}
-                          >
-                            <option value="">Select</option>
-                            {itemOptions.map((opt) => {
-                              const val = opt.itemCode || opt.code || opt.id?.toString() || "";
-                              const lbl = opt.itemCode || opt.code || "";
-                              return <option key={val} value={val}>{lbl}</option>;
-                            })}
-                          </select>
-                          {rErr.itemCode && <div className="text-red-500 text-[10px] mt-0.5">Required</div>}
-                        </td>
-                        <td className="p-1">
-                          <input
-                            value={item.itemName || ""}
-                            disabled
-                            className={`${controlClasses} h-8 text-xs bg-gray-50 dark:bg-gray-800`}
-                          />
-                        </td>
-                        <td className="p-1">
-                          <input
-                            value={item.oldQty ?? 0}
-                            disabled
-                            className={`${controlClasses} h-8 text-xs bg-gray-50 dark:bg-gray-800 text-center`}
-                          />
-                        </td>
-                        <td className="p-1">
-                          <input
-                            value={item.oldRate ?? 0}
-                            disabled
-                            className={`${controlClasses} h-8 text-xs bg-gray-50 dark:bg-gray-800 text-center`}
-                          />
-                        </td>
-                        <td className="p-1">
-                          <input
-                            type="number"
-                            step="0.001"
-                            value={item.newQty ?? 0}
-                            onChange={(e) => updateDetail(index, "newQty", parseFloat(e.target.value) || 0)}
-                            className={`${controlClasses} h-8 text-xs text-center ${rErr.newQty ? "border-red-500" : ""}`}
-                          />
-                          {rErr.newQty && <div className="text-red-500 text-[10px] mt-0.5">Required</div>}
-                        </td>
-                        <td className="p-1">
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={item.newRate ?? 0}
-                            onChange={(e) => updateDetail(index, "newRate", parseFloat(e.target.value) || 0)}
-                            className={`${controlClasses} h-8 text-xs text-center`}
-                          />
-                        </td>
-                        <td className="p-1">
-                          <input
-                            value={item.oldDlvyDate || ""}
-                            disabled
-                            className={`${controlClasses} h-8 text-xs bg-gray-50 dark:bg-gray-800`}
-                          />
-                        </td>
-                        <td className="p-1">
-                          <input
-                            type="date"
-                            value={item.newDlvyDate || ""}
-                            onChange={(e) => updateDetail(index, "newDlvyDate", e.target.value)}
-                            className={`${controlClasses} h-8 text-xs ${rErr.newDlvyDate ? "border-red-500" : ""}`}
-                          />
-                          {rErr.newDlvyDate && <div className="text-red-500 text-[10px] mt-0.5">Required</div>}
-                        </td>
-                        <td className="p-1 text-center">
-                          <button
-                            type="button"
-                            onClick={() => removeDetailRow(index)}
-                            disabled={details.length <= 1}
-                            className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-                              details.length <= 1 ? "bg-gray-400 cursor-not-allowed" : "bg-red-600 hover:bg-red-700"
+            <TableWrapper>
+              <TableHead
+                headers={[
+                  "S.No",
+                  "Item Code *",
+                  "Item Description",
+                  "Old Qty",
+                  "Old Rate",
+                  "New Qty *",
+                  "New Rate",
+                  "Old Dlvy Date",
+                  "New Dlvy Date *",
+                  "Action",
+                ]}
+              />
+              <tbody>
+                {(details || []).map((item, index) => {
+                  const rErr = rowErrors[index] || {};
+                  const hasItems = itemOptions.length > 0;
+
+                  return (
+                    <TableRow
+                      key={item.id || index}
+                      index={index}
+                      onRemove={() => removeDetailRow(index)}
+                      disabled={details.length <= 1}
+                    >
+                      <td className="p-1 align-top">
+                        {/* {hasItems ? ( */}
+                        <select
+                          value={item.itemCode || ""}
+                          onChange={(e) =>
+                            handleItemSelect(
+                              index,
+                              e.target.value
+                            )
+                          }
+                          className={`${controlClasses} h-8 text-xs ${rErr.itemCode
+                            ? "border-red-500"
+                            : ""
                             }`}
-                          >
-                            <Trash2 size={10} />
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                        >
+                          <option value="">
+                            Select Item
+                          </option>
+
+                          {itemOptions.map((opt) => (
+                            <option
+                              key={opt.value}
+                              value={opt.value}
+                            >
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                        {/* ) : ( */}
+                        {/* <input
+                          value={item.itemCode || ""}
+                          disabled
+                          className={`${controlClasses} h-8 text-xs bg-gray-50 dark:bg-gray-800 ${rErr.itemCode
+                            ? "border-red-500"
+                            : ""
+                            }`}
+                        /> */}
+                        {/* )} */}
+                        {rErr.itemCode && <div className="text-red-500 text-[10px] mt-0.5">Required</div>}
+                      </td>
+                      <td className="p-1 align-top">
+                        <input
+                          value={item.itemName || ""}
+                          disabled
+                          className={`${controlClasses} h-8 text-xs bg-gray-50 dark:bg-gray-800`}
+                        />
+                      </td>
+                      <td className="p-1 align-top">
+                        <input
+                          type="number"
+                          step="0.001"
+                          value={item.oldQty ?? ""}
+                          onChange={(e) =>
+                            updateDetail(
+                              index,
+                              "oldQty",
+                              e.target.value === ""
+                                ? ""
+                                : parseFloat(e.target.value)
+                            )
+                          }
+                          className={`${controlClasses} h-8 text-xs text-center`}
+                        />
+                      </td>
+                      <td className="p-1 align-top">
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={item.oldRate ?? ""}
+                          onChange={(e) =>
+                            updateDetail(
+                              index,
+                              "oldRate",
+                              e.target.value === ""
+                                ? ""
+                                : parseFloat(e.target.value)
+                            )
+                          }
+                          className={`${controlClasses} h-8 text-xs text-center`}
+                        />
+                      </td>
+                      <td className="p-1 align-top">
+                        <input
+                          type="number"
+                          step="0.001"
+                          value={item.newQty ?? 0}
+                          onChange={(e) => updateDetail(index, "newQty", parseFloat(e.target.value) || 0)}
+                          className={`${controlClasses} h-8 text-xs text-center ${rErr.newQty ? "border-red-500" : ""}`}
+                        />
+                        {rErr.newQty && <div className="text-red-500 text-[10px] mt-0.5">Required</div>}
+                      </td>
+                      <td className="p-1 align-top">
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={item.newRate ?? 0}
+                          onChange={(e) => updateDetail(index, "newRate", parseFloat(e.target.value) || 0)}
+                          className={`${controlClasses} h-8 text-xs text-center`}
+                        />
+                      </td>
+                      {/* Old Delivery Date */}
+                      <td className="p-1 align-top">
+                        <input
+                          type="date"
+                          value={item.oldDlvyDate || ""}
+                          onChange={(e) =>
+                            updateDetail(
+                              index,
+                              "oldDlvyDate",
+                              e.target.value
+                            )
+                          }
+                          className={`${controlClasses} h-8 text-xs`}
+                        />
+                      </td>
+                      <td className="p-1 align-top">
+                        <input
+                          type="date"
+                          value={item.newDlvyDate || ""}
+                          onChange={(e) => updateDetail(index, "newDlvyDate", e.target.value)}
+                          className={`${controlClasses} h-8 text-xs ${rErr.newDlvyDate ? "border-red-500" : ""}`}
+                        />
+                        {rErr.newDlvyDate && <div className="text-red-500 text-[10px] mt-0.5">Required</div>}
+                      </td>
+                    </TableRow>
+                  );
+                })}
+              </tbody>
+            </TableWrapper>
           </div>
         )}
 
+        {/* Tab Content - Summary */}
         {activeTab === "summary" && (
-          <div className="max-w-2xl">
-            {renderField("Remarks", "remarks", "textarea")}
+          <div className="grid grid-cols-1 gap-3 p-3 max-w-2xl">
+            <InputField
+              control={control}
+              name="remarks"
+              label="Remarks"
+              placeholder="Enter remarks"
+              errors={errors}
+            />
           </div>
         )}
 
         {/* Buttons */}
         <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
           <button
-            type="button"
-            onClick={handleCancel}
+            onClick={onBack}
             disabled={isSubmitting}
             className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
           >
             <X className="h-3 w-3" /> Cancel
           </button>
           <button
-            type="button"
             onClick={handleSave}
             disabled={isSubmitting}
             className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
           >
-            <Save className="h-3 w-3" /> {isSubmitting ? "Saving..." : data ? "Update" : "Save"}
+            <Save className="h-3 w-3" />{" "}
+            {isSubmitting ? "Saving..." : data ? "Update" : "Save"}
           </button>
         </div>
       </div>

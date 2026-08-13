@@ -4,6 +4,7 @@ import { useForm, Controller, useFieldArray } from "react-hook-form";
 import branchAPI from "../../../api/branchAPI";
 import listOfValuesAPI from "../../../api/listOfValuesAPI";
 import salesDeliveryAPI from "../../../api/Sales/salesDelivery";
+import { useToast } from "../../Toast/ToastContext";
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -30,8 +31,10 @@ const getDefaultValues = () => ({
       soNo: "",
       invoiceType: "",
       itemCode: "",
+      itemId: 0,
       itemDescription: "",
       unit: "",
+      unitId: 0,
       orderQty: 0,
       pendingQty: 0,
       actualPlannedQty: 0,
@@ -356,7 +359,6 @@ const SelectCell = ({ control, name, options, required, errors, onChange, disabl
   );
 };
 
-// Updated InputCell with date handling
 const InputCell = ({
   control,
   name,
@@ -432,27 +434,40 @@ const InputCell = ({
   );
 };
 
-// Delivery Schedule Popup Component with auto-fill functionality
-const DeliverySchedulePopup = ({ isOpen, onClose, control, errors, deliveryScheduleArray, setValue }) => {
+const DeliverySchedulePopup = ({ isOpen, onClose, control, errors, deliveryScheduleArray, setValue, onSave }) => {
   if (!isOpen) return null;
 
-  // Handle date change to auto-fill week number and day
   const handleDateChange = (e, index) => {
     const dateValue = e.target.value;
     if (dateValue) {
       const weekNo = getWeekNumber(dateValue);
       const dayName = getDayName(dateValue);
-
-      // Set the week number and day automatically
       setValue(`deliverySchedule.${index}.weekNo`, weekNo);
       setValue(`deliverySchedule.${index}.day`, dayName);
     }
   };
 
+  const handleAddRow = () => {
+    const newItem = {
+      dayNo: "",
+      deliveryDate: "",
+      weekNo: "",
+      day: "",
+      deliveryQty: 0,
+    };
+    deliveryScheduleArray.append(newItem);
+  };
+
+  const handleSave = () => {
+    if (onSave) {
+      onSave();
+    }
+    onClose();
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col">
-        {/* Popup Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
           <h3 className="text-base font-semibold text-gray-900 dark:text-white">
             Delivery Schedule Details
@@ -465,7 +480,6 @@ const DeliverySchedulePopup = ({ isOpen, onClose, control, errors, deliverySched
           </button>
         </div>
 
-        {/* Popup Content */}
         <div className="p-4 overflow-y-auto flex-1">
           <TableWrapper>
             <TableHead
@@ -507,13 +521,13 @@ const DeliverySchedulePopup = ({ isOpen, onClose, control, errors, deliverySched
                     type="number"
                     placeholder="Week No."
                     errors={errors}
-                    disabled={true} // Make it read-only since it's auto-filled
+                    disabled={true}
                   />
                   <InputCell
                     control={control}
                     name={`deliverySchedule.${index}.day`}
                     errors={errors}
-                    disabled={true} // Make it read-only since it's auto-filled
+                    disabled={true}
                   />
                   <InputCell
                     control={control}
@@ -527,29 +541,30 @@ const DeliverySchedulePopup = ({ isOpen, onClose, control, errors, deliverySched
               ))}
             </tbody>
           </TableWrapper>
+        </div>
 
-          {/* Add Button in Popup */}
+        <div className="flex justify-between items-center p-4 border-t border-gray-200 dark:border-gray-700">
           <button
             type="button"
-            onClick={() => {
-              const defaultValues = getDefaultValues();
-              const newItem = defaultValues.deliverySchedule?.[0] || {};
-              deliveryScheduleArray.append(newItem);
-            }}
-            className="mt-3 h-8 px-3 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs flex items-center gap-1 transition-colors"
+            onClick={handleAddRow}
+            className="h-8 px-3 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs flex items-center gap-1 transition-colors"
           >
             <Plus size={12} /> Add Row
           </button>
-        </div>
-
-        {/* Popup Footer */}
-        <div className="flex justify-end p-4 border-t border-gray-200 dark:border-gray-700">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 transition-colors"
-          >
-            Close
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={handleSave}
+              className="px-4 py-2 rounded text-xs text-white bg-green-600 hover:bg-green-700 transition-colors flex items-center gap-1"
+            >
+              <Save size={14} /> Submit
+            </button>
+            <button
+              onClick={onClose}
+              className="px-4 py-2 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+            >
+              Close
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -565,14 +580,19 @@ const SalesDeliveryForm = ({ data, onBack }) => {
   const [belongToData, setBelongsToData] = useState([]);
   const [customerData, setCustomerData] = useState([]);
   const [contractData, setContractData] = useState([]);
+  const [itemData, setItemData] = useState([]);
   const [showPopup, setShowPopup] = useState(false);
   const [selectedRowIndex, setSelectedRowIndex] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [editData, setEditData] = useState(null);
+  const { addToast } = useToast();
 
   const {
     control,
     handleSubmit,
     watch,
     setValue,
+    reset,
     formState: { errors, isSubmitting },
   } = useForm({
     mode: "onTouched",
@@ -587,6 +607,86 @@ const SalesDeliveryForm = ({ data, onBack }) => {
     control,
     name: "deliverySchedule",
   });
+
+  // Function to transform API data to form data
+  const transformApiDataToForm = (apiData) => {
+    if (!apiData) return getDefaultValues();
+
+    // Get the first detail's delivery schedules
+    const firstDetail = apiData.details?.[0] || {};
+    const deliverySchedules = firstDetail.deliverySchedules || [];
+
+    return {
+      divNo: apiData.dlvNo || "",
+      divDate: apiData.dlvDate || new Date().toISOString().split("T")[0],
+      plantId: apiData.branch?.id?.toString() || "",
+      belongsTo: apiData.belongsTo || "",
+      monthOfSchedule: apiData.monthOfSchedule || "",
+      monthYear: apiData.monthYear || new Date().getFullYear().toString(),
+      customerId: apiData.customer?.customerId?.toString() || "",
+      customerName: apiData.customer?.customerName || "",
+      scheduleDetails: apiData.details?.map(detail => ({
+        soNo: detail.soNocontractNo || "",
+        invoiceType: detail.invoiceType || "",
+        itemCode: detail.item?.itemCode || "",
+        itemId: detail.item?.id || 0,
+        itemDescription: detail.item?.itemDescription || "",
+        unit: detail.item?.unit?.unitId || "",
+        unitId: detail.item?.unit?.id || 0,
+        orderQty: detail.orderQty || 0,
+        pendingQty: detail.pendingQty || 0,
+        actualPlannedQty: detail.actualPlannedQty || 0,
+      })) || [{
+        soNo: "",
+        invoiceType: "",
+        itemCode: "",
+        itemId: 0,
+        itemDescription: "",
+        unit: "",
+        unitId: 0,
+        orderQty: 0,
+        pendingQty: 0,
+        actualPlannedQty: 0,
+      }],
+      deliverySchedule: deliverySchedules.map(schedule => ({
+        dayNo: schedule.dayNo?.toString() || "",
+        deliveryDate: schedule.deliveryDate || "",
+        weekNo: schedule.weekNo?.toString() || "",
+        day: schedule.dayName || "",
+        deliveryQty: schedule.deliveryQty || 0,
+      })) || [{
+        dayNo: "",
+        deliveryDate: "",
+        weekNo: "",
+        day: "",
+        deliveryQty: 0,
+      }],
+      remarks: apiData.remarks || "",
+    };
+  };
+
+  // Load edit data if ID is provided
+  const loadEditData = useCallback(async () => {
+    if (!data?.id) return;
+
+    try {
+      setLoading(true);
+      const response = await salesDeliveryAPI.getSalesDeliveryById(data.id);
+      console.log("Get By ID Response:", response);
+
+      const salesData = response?.paramObjectsMap?.salesDeliverySchedule;
+      if (salesData) {
+        setEditData(salesData);
+        const formData = transformApiDataToForm(salesData);
+        reset(formData);
+      }
+    } catch (error) {
+      console.error("Failed to load sales delivery data:", error);
+      alert(error.message || "Failed to load sales delivery schedule data");
+    } finally {
+      setLoading(false);
+    }
+  }, [data?.id, reset]);
 
   const getFieldArray = (tab) => {
     switch (tab) {
@@ -616,14 +716,9 @@ const SalesDeliveryForm = ({ data, onBack }) => {
   };
 
   const handleCustomerChange = (customerId) => {
-    console.log("Selected Customer ID:", customerId);
-    console.log("Customer Data:", customerData);
-
     const selectedCustomer = customerData.find(
       c => String(c.value) === String(customerId)
     );
-
-    console.log("Selected Customer:", selectedCustomer);
 
     if (selectedCustomer) {
       setValue("customerName", selectedCustomer.customerName || "");
@@ -632,18 +727,93 @@ const SalesDeliveryForm = ({ data, onBack }) => {
     }
   };
 
-  const handleContractChange = (contractNo, index) => {
-    const selectedContract = contractData.find(
-      (c) => String(c.value) === String(contractNo)
-    );
+  const handleContractChange = async (contractNo, index) => {
+    try {
+      const selectedContract = contractData.find(
+        (c) => String(c.value) === String(contractNo)
+      );
 
-    if (selectedContract) {
       setValue(
         `scheduleDetails.${index}.invoiceType`,
-        selectedContract.invoiceType || ""
+        selectedContract?.invoiceType || ""
       );
+
+      setValue(`scheduleDetails.${index}.itemCode`, "");
+      setValue(`scheduleDetails.${index}.itemId`, 0);
+      setValue(`scheduleDetails.${index}.itemDescription`, "");
+      setValue(`scheduleDetails.${index}.unit`, "");
+      setValue(`scheduleDetails.${index}.unitId`, 0);
+      setValue(`scheduleDetails.${index}.orderQty`, 0);
+      setValue(`scheduleDetails.${index}.pendingQty`, 0);
+
+      if (!contractNo) {
+        setItemData([]);
+        return;
+      }
+
+      const response = await salesDeliveryAPI.getItemDetails(
+        orgId,
+        branchId,
+        contractNo
+      );
+
+      const items = response?.paramObjectsMap?.itemList || [];
+
+      const options = items.map((item) => ({
+        value: item.itemCode,
+        label: item.itemCode,
+        itemId: item.itemId,
+        itemDescription: item.itemDescription,
+        unit: item.unit,
+        unitId: item.unitId,
+        orderQty: item.orderQty,
+      }));
+
+      setItemData(options);
+
+    } catch (error) {
+      console.error("Failed to load item details:", error);
+      setItemData([]);
+    }
+  };
+
+  const handleItemChange = (itemCode, index) => {
+    const selectedItem = itemData.find(
+      (item) => String(item.value) === String(itemCode)
+    );
+
+    if (selectedItem) {
+      setValue(
+        `scheduleDetails.${index}.itemDescription`,
+        selectedItem.itemDescription || ""
+      );
+
+      setValue(
+        `scheduleDetails.${index}.unit`,
+        selectedItem.unit || ""
+      );
+
+      setValue(
+        `scheduleDetails.${index}.orderQty`,
+        selectedItem.orderQty || 0
+      );
+
+      setValue(
+        `scheduleDetails.${index}.itemId`,
+        selectedItem.itemId || 0
+      );
+
+      setValue(
+        `scheduleDetails.${index}.unitId`,
+        selectedItem.unitId || 0
+      );
+
     } else {
-      setValue(`scheduleDetails.${index}.invoiceType`, "");
+      setValue(`scheduleDetails.${index}.itemDescription`, "");
+      setValue(`scheduleDetails.${index}.unit`, "");
+      setValue(`scheduleDetails.${index}.orderQty`, 0);
+      setValue(`scheduleDetails.${index}.itemId`, 0);
+      setValue(`scheduleDetails.${index}.unitId`, 0);
     }
   };
 
@@ -652,6 +822,11 @@ const SalesDeliveryForm = ({ data, onBack }) => {
     loadBelongsTo();
     loadCustomerDetails();
     loadContractNoDetails();
+
+    // Load edit data if editing
+    if (data?.id) {
+      loadEditData();
+    }
   }, []);
 
   const loadBranches = useCallback(async () => {
@@ -720,14 +895,89 @@ const SalesDeliveryForm = ({ data, onBack }) => {
     }
   }, [branchId, orgId]);
 
+  const transformFormData = (formData, orgId, branchId, isEditMode) => {
+    const deliverySchedules = formData.deliverySchedule && formData.deliverySchedule.length > 0
+      ? formData.deliverySchedule.map(schedule => ({
+        dayName: schedule.day || "",
+        dayNo: parseInt(schedule.dayNo) || 0,
+        deliveryDate: schedule.deliveryDate || new Date().toISOString().split("T")[0],
+        deliveryQty: parseFloat(schedule.deliveryQty) || 0,
+        weekNo: parseInt(schedule.weekNo) || 0
+      }))
+      : [];
+
+    const payload = {
+      active: true,
+      belongsTo: formData.belongsTo || "",
+      branch: parseInt(branchId),
+      cancelRemarks: "",
+      createdBy: localStorage.getItem("userId") || "1",
+      customer: parseInt(formData.customerId) || 0,
+      details: formData.scheduleDetails.map(detail => {
+        const itemId = detail.itemId || parseInt(detail.itemCode) || 0;
+        const unitId = detail.unitId || 0;
+
+        return {
+          actualPlannedQty: parseFloat(detail.actualPlannedQty) || 0,
+          deliverySchedules: deliverySchedules,
+          invoiceType: detail.invoiceType || "",
+          item: itemId,
+          itemDescription: detail.itemDescription || "",
+          orderQty: parseFloat(detail.orderQty) || 0,
+          pendingQty: parseFloat(detail.pendingQty) || 0,
+          soNoContractNo: detail.soNo || "",
+          unit: unitId
+        };
+      }),
+      financialYear: new Date().getFullYear().toString(),
+      monthOfSchedule: formData.monthOfSchedule || "",
+      monthYear: formData.monthYear || new Date().getFullYear().toString(),
+      orgId: parseInt(orgId),
+      remarks: formData.remarks || ""
+    };
+
+    if (isEditMode && data?.id) {
+      payload.id = data.id;
+    }
+
+    return payload;
+  };
+
   const onSubmit = async (formData) => {
     try {
-      console.log("Form Data:", formData, "Org Id:", orgId);
-      // API call here
+      const isEditMode = !!data?.id;
+
+      const apiPayload = transformFormData(formData, orgId, branchId, isEditMode);
+
+      const response = await salesDeliveryAPI.createUpdateSalesDelivery(apiPayload);
+
+      if (response?.status === true) {
+        addToast(
+          isEditMode ? "Sales Delivery Schedule Updated Successfully!" : "Sales Delivery Schedule Saved Successfully!",
+          "success"
+        );
+
+        setTimeout(() => {
+          onBack();
+        }, 1500);
+      } else {
+        const errorMessage = response?.paramObjectsMap?.message || response?.message || "Failed to save sales delivery schedule";
+        addToast(errorMessage, "error");
+      }
     } catch (error) {
-      console.error(error);
+      console.error("Error saving sales delivery:", error);
+      const errorMessage = error.response?.data?.message || error.message || "Error saving sales delivery schedule";
+      addToast(errorMessage, "error");
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-500 dark:text-gray-400">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-2 max-w-7xl relative">
@@ -740,9 +990,7 @@ const SalesDeliveryForm = ({ data, onBack }) => {
           <ArrowLeft className="h-4 w-4" />
         </button>
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-          {data
-            ? "Edit Sales Delivery Schedule"
-            : "Add Sales Delivery Schedule"}
+          {data?.id ? "Edit Sales Delivery Schedule" : "Add Sales Delivery Schedule"}
         </h2>
       </div>
 
@@ -814,7 +1062,6 @@ const SalesDeliveryForm = ({ data, onBack }) => {
 
         {/* Child Tables */}
         <section className="mt-0 bg-white dark:bg-gray-800">
-          {/* Tabs - Updated as per images */}
           <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 mb-0">
             <div className="flex">
               {["scheduleDetails", "summary"].map((tab) => (
@@ -844,7 +1091,6 @@ const SalesDeliveryForm = ({ data, onBack }) => {
             )}
           </div>
 
-          {/* Tab Content - Schedule Details */}
           {activeChildTab === "scheduleDetails" && (
             <TableWrapper>
               <TableHead
@@ -897,9 +1143,10 @@ const SalesDeliveryForm = ({ data, onBack }) => {
                     <SelectCell
                       control={control}
                       name={`scheduleDetails.${index}.itemCode`}
-                      options={contractData}
+                      options={itemData}
                       required
                       errors={errors}
+                      onChange={(value) => handleItemChange(value, index)}
                     />
                     <InputCell
                       control={control}
@@ -928,7 +1175,6 @@ const SalesDeliveryForm = ({ data, onBack }) => {
                       control={control}
                       name={`scheduleDetails.${index}.pendingQty`}
                       type="number"
-                      disabled
                       placeholder="0"
                       errors={errors}
                     />
@@ -947,7 +1193,6 @@ const SalesDeliveryForm = ({ data, onBack }) => {
             </TableWrapper>
           )}
 
-          {/* Tab Content - Summary */}
           {activeChildTab === "summary" && (
             <div className="grid grid-cols-1 gap-3 p-3">
               <InputField
@@ -976,7 +1221,7 @@ const SalesDeliveryForm = ({ data, onBack }) => {
             className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
           >
             <Save className="h-3 w-3" />{" "}
-            {isSubmitting ? "Saving..." : data ? "Update" : "Save"}
+            {isSubmitting ? "Saving..." : data?.id ? "Update" : "Save"}
           </button>
         </div>
       </div>
@@ -989,6 +1234,9 @@ const SalesDeliveryForm = ({ data, onBack }) => {
         errors={errors}
         deliveryScheduleArray={deliveryScheduleArray}
         setValue={setValue}
+        onSave={() => {
+          console.log("Delivery schedule saved:", deliveryScheduleArray.fields);
+        }}
       />
     </div>
   );

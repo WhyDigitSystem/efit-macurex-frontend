@@ -29,17 +29,24 @@ const salesDeliveryAPI = {
         }
     },
 
+    getItemDetails: async (orgId, branchId, docId) => {
+        try {
+            const response = await apiClient.get(
+                `/api/transaction/getItemDropdownBySalesDeliverySchedule?orgId=${orgId}&branch=${branchId}&docId=${docId}`
+            );
+            return response;
+        } catch (error) {
+            console.error("Error fetching item details:", error);
+            throw error;
+        }
+    },
+
     // Create or update sales delivery with FormData
     createUpdateSalesDelivery: async (formData) => {
         try {
-            const response = await apiClient.post(
-                `${API_BASE_URL}/api/dhinesh/createUpdateSalesDelivery`,
+            const response = await apiClient.put(
+                `${API_BASE_URL}/api/transaction/createUpdateSalesDeliverySchedule`,
                 formData,
-                {
-                    headers: {
-                        'Content-Type': 'multipart/form-data',
-                    },
-                }
             );
             return response;
         } catch (error) {
@@ -49,10 +56,10 @@ const salesDeliveryAPI = {
     },
 
     // Get sales contract by ID
-    getSalesDeliveryById: async (salesContractId) => {
+    getSalesDeliveryById: async (salesDeliveryId) => {
         try {
             const response = await apiClient.get(
-                `/api/dhinesh/getSalesDeliveryById?id=${salesContractId}`
+                `/api/transaction/getSalesDeliveryScheduleById?id=${salesDeliveryId}`
             );
             return response;
         } catch (error) {
@@ -65,7 +72,7 @@ const salesDeliveryAPI = {
     getSalesDelivery: async (orgId, branchId) => {
         try {
             const response = await apiClient.get(
-                `/api/dhinesh/getSalesContractByOrgIdAndBranch?orgId=${orgId}&branch=${branchId}`
+                `/api/transaction/getSalesDeliveryScheduleByOrgId?orgId=${orgId}&branch=${branchId}`
             );
             return response;
         } catch (error) {
