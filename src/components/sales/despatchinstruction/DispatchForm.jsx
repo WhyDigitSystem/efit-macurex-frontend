@@ -204,13 +204,12 @@ const TableHead = ({ headers }) => (
       {headers.map((h, i) => (
         <th
           key={i}
-          className={`p-2 whitespace-nowrap ${
-            i === 0
-              ? "w-8 text-center"
-              : i === headers.length - 1
-                ? "w-20 text-left"
-                : "text-left"
-          } dark:text-white`}
+          className={`p-2 whitespace-nowrap ${i === 0
+            ? "w-8 text-center"
+            : i === headers.length - 1
+              ? "w-20 text-left"
+              : "text-left"
+            } dark:text-white`}
         >
           {h}
         </th>
@@ -228,11 +227,10 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
         type="button"
         onClick={onRemove}
         disabled={disabled}
-        className={`h-6 w-6 rounded text-white flex items-center justify-center ${
-          disabled
-            ? "bg-gray-400 cursor-not-allowed"
-            : "bg-red-600 hover:bg-red-700"
-        }`}
+        className={`h-6 w-6 rounded text-white flex items-center justify-center ${disabled
+          ? "bg-gray-400 cursor-not-allowed"
+          : "bg-red-600 hover:bg-red-700"
+          }`}
       >
         <Trash2 size={12} />
       </button>
@@ -398,10 +396,10 @@ const DispatchForm = ({ data, onBack }) => {
   const [dispatchItemRows, setDispatchItemRows] = useState(
     data?.despatchInstructionDetailsDTO?.length
       ? data.despatchInstructionDetailsDTO.map((d) => ({
-          ...emptyDispatchItemRow(),
-          ...d,
-          itemDescription: d.itemDescription || "",
-        }))
+        ...emptyDispatchItemRow(),
+        ...d,
+        itemDescription: d.itemDescription || "",
+      }))
       : [emptyDispatchItemRow()],
   );
   const [termsConditions, setTermsConditions] = useState({
@@ -557,10 +555,10 @@ const DispatchForm = ({ data, onBack }) => {
   const validate = () => {
     const errors = {};
 
-    if (!header.branch) errors.branch = "Plant Id is required";
-    if (!header.customer) errors.customer = "Party Id is required";
-    if (!header.schduleNo) errors.schduleNo = "Schedule No is required";
-    if (!header.schduleDate) errors.schduleDate = "Sch. Date is required";
+    if (!header.branch) errors.branch = "Plant is required";
+    if (!header.customer) errors.customer = "Party is required";
+    if (!header.schduleNo) errors.schduleNo = "Schedule Number is required";
+    if (!header.schduleDate) errors.schduleDate = "Schedule Date is required";
     if (!header.location) errors.location = "From Location is required";
     if (!header.modeOfTransport)
       errors.modeOfTransport = "Mode of Transport is required";
@@ -577,7 +575,7 @@ const DispatchForm = ({ data, onBack }) => {
     );
     if (!hasValidRow)
       errors.dispatchItems =
-        "Add at least one item with Order Accept Contract No, Date, Item Code, Schedule Month, Desc Qty and No of Package";
+        "Add at least one item with Order Acceptance Contract No, Date, Item Code, Schedule Month, Dispatch Quantity and Number of Packages";
 
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
@@ -637,17 +635,17 @@ const DispatchForm = ({ data, onBack }) => {
       if (response?.status) {
         addToast(
           response?.paramObjectsMap?.message ||
-            (isUpdate
-              ? "Dispatch Instruction updated successfully!"
-              : "Dispatch Instruction created successfully!"),
+          (isUpdate
+            ? "Dispatch Instruction updated successfully!"
+            : "Dispatch Instruction created successfully!"),
         );
         onBack?.();
       } else {
         addToast(
           response?.errors?.[0]?.shortMessage ||
-            response?.errors?.[0]?.longMessage ||
-            response?.message ||
-            "Failed to save Dispatch Instruction.",
+          response?.errors?.[0]?.longMessage ||
+          response?.message ||
+          "Failed to save Dispatch Instruction.",
         );
       }
     } catch (err) {
@@ -655,9 +653,9 @@ const DispatchForm = ({ data, onBack }) => {
       if (err.response?.data) {
         addToast(
           err.response.data.message ||
-            err.response.data.statusMessage ||
-            err.response.data.error ||
-            JSON.stringify(err.response.data),
+          err.response.data.statusMessage ||
+          err.response.data.error ||
+          JSON.stringify(err.response.data),
         );
       } else {
         addToast("Something went wrong.");
@@ -693,7 +691,7 @@ const DispatchForm = ({ data, onBack }) => {
           <div className={fieldGrid}>
             <Field
               type="select"
-              label="Plant Id"
+              label="Plant"
               name="branch"
               value={header.branch}
               onChange={handleHeaderChange}
@@ -702,7 +700,7 @@ const DispatchForm = ({ data, onBack }) => {
               required
             />
             <Field
-              label="DI No"
+              label="DI Number"
               name="diNo"
               value={header.diNo}
               onChange={handleHeaderChange}
@@ -710,8 +708,16 @@ const DispatchForm = ({ data, onBack }) => {
               disabled={!data}
             />
             <Field
+              type="date"
+              label="Document Date"
+              name="docDate"
+              value={header.docDate}
+              onChange={handleHeaderChange}
+              error={fieldErrors.docDate}
+            />
+            <Field
               type="select"
-              label="Party Id"
+              label="Party"
               name="customer"
               value={header.customer}
               onChange={handleHeaderChange}
@@ -727,7 +733,7 @@ const DispatchForm = ({ data, onBack }) => {
               disabled
             />
             <Field
-              label="Schedule No"
+              label="Schedule Number"
               name="schduleNo"
               value={header.schduleNo}
               onChange={handleHeaderChange}
@@ -736,7 +742,7 @@ const DispatchForm = ({ data, onBack }) => {
             />
             <Field
               type="date"
-              label="Sch. Date"
+              label="Schedule Date"
               name="schduleDate"
               value={header.schduleDate}
               onChange={handleHeaderChange}
@@ -755,42 +761,6 @@ const DispatchForm = ({ data, onBack }) => {
             />
             <Field
               type="select"
-              label="Mode of Transport"
-              name="modeOfTransport"
-              value={header.modeOfTransport}
-              onChange={handleHeaderChange}
-              error={fieldErrors.modeOfTransport}
-              options={MODE_OF_TRANSPORT}
-              required
-            />
-            <Field
-              type="number"
-              label="Net Weight"
-              name="netWeight"
-              value={header.netWeight}
-              onChange={handleHeaderChange}
-            />
-            <Field
-              type="number"
-              label="Gross Weight"
-              name="grossWeight"
-              value={header.grossWeight}
-              onChange={handleHeaderChange}
-            />
-            <Field
-              label="Consignee"
-              name="consignee"
-              value={header.consignee}
-              onChange={handleHeaderChange}
-            />
-            <Field
-              label="Payment Terms"
-              name="paymentTerms"
-              value={header.paymentTerms}
-              onChange={handleHeaderChange}
-            />
-            <Field
-              type="select"
               label="Invoice Type"
               name="invoiceType"
               value={header.invoiceType}
@@ -798,14 +768,6 @@ const DispatchForm = ({ data, onBack }) => {
               error={fieldErrors.invoiceType}
               options={INVOICE_TYPES}
               required
-            />
-            <Field
-              type="textarea"
-              label="Delivery Instructions"
-              name="deliveryInstructions"
-              value={header.deliveryInstructions}
-              onChange={handleHeaderChange}
-              className="sm:col-span-2"
             />
           </div>
         </div>
@@ -820,11 +782,10 @@ const DispatchForm = ({ data, onBack }) => {
                   key={tab.key}
                   type="button"
                   onClick={() => setActiveChildTab(tab.key)}
-                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${
-                    activeChildTab === tab.key
-                      ? "bg-blue-600 text-white"
-                      : "text-gray-600 dark:text-gray-300"
-                  }`}
+                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${activeChildTab === tab.key
+                    ? "bg-blue-600 text-white"
+                    : "text-gray-600 dark:text-gray-300"
+                    }`}
                 >
                   {tab.label}
                 </button>
@@ -849,7 +810,7 @@ const DispatchForm = ({ data, onBack }) => {
                 columns={[
                   {
                     key: "ordAccpContrNo",
-                    label: "Order Accept Contract No",
+                    label: "Order Acceptance Contract No",
                     required: true,
                   },
                   { key: "date", label: "Date", type: "date", required: true },
@@ -868,7 +829,7 @@ const DispatchForm = ({ data, onBack }) => {
                   { key: "pdiDate", label: "PDI Date", type: "date" },
                   {
                     key: "pdi",
-                    label: "PDI",
+                    label: "PDI Status",
                     type: "select",
                     options: PDI_STATUS,
                   },
@@ -880,28 +841,28 @@ const DispatchForm = ({ data, onBack }) => {
                   },
                   {
                     key: "pendingQty",
-                    label: "Pending Qty",
+                    label: "Pending Quantity",
                     type: "number",
                   },
                   {
                     key: "availableQty",
-                    label: "Available Qty",
+                    label: "Available Quantity",
                     type: "number",
                   },
                   {
                     key: "plannedQty",
-                    label: "Planned Qty",
+                    label: "Planned Quantity",
                     type: "number",
                   },
                   {
                     key: "descQty",
-                    label: "Desc Qty",
+                    label: "Dispatch Quantity",
                     type: "number",
                     required: true,
                   },
                   {
                     key: "noOfPackage",
-                    label: "No of Package",
+                    label: "Number of Packages",
                     type: "number",
                     required: true,
                   },
@@ -935,32 +896,47 @@ const DispatchForm = ({ data, onBack }) => {
             <div className="pt-3">
               <div className={subTabFieldGrid}>
                 <Field
-                  label="Term"
-                  name="term"
-                  value={termsConditions.term}
-                  onChange={handleTermsChange}
-                />
-                <Field
-                  type="textarea"
-                  label="Description"
-                  name="description"
-                  value={termsConditions.description}
-                  onChange={handleTermsChange}
+                  label="Payment Terms"
+                  name="paymentTerms"
+                  value={header.paymentTerms}
+                  onChange={handleHeaderChange}
                 />
                 <Field
                   type="select"
-                  label="Applicable"
-                  name="applicable"
-                  value={termsConditions.applicable}
-                  onChange={handleTermsChange}
-                  options={APPLICABLE}
+                  label="Mode of Transport"
+                  name="modeOfTransport"
+                  value={header.modeOfTransport}
+                  onChange={handleHeaderChange}
+                  error={fieldErrors.modeOfTransport}
+                  options={MODE_OF_TRANSPORT}
+                  required
+                />
+                <Field
+                  type="number"
+                  label="Net Weight"
+                  name="netWeight"
+                  value={header.netWeight}
+                  onChange={handleHeaderChange}
+                />
+                <Field
+                  type="number"
+                  label="Gross Weight"
+                  name="grossWeight"
+                  value={header.grossWeight}
+                  onChange={handleHeaderChange}
                 />
                 <Field
                   type="textarea"
-                  label="Remarks"
-                  name="remarks"
-                  value={termsConditions.remarks}
-                  onChange={handleTermsChange}
+                  label="Delivery Instructions"
+                  name="deliveryInstructions"
+                  value={header.deliveryInstructions}
+                  onChange={handleHeaderChange}
+                />
+                <Field
+                  label="Consignee"
+                  name="consignee"
+                  value={header.consignee}
+                  onChange={handleHeaderChange}
                 />
               </div>
             </div>

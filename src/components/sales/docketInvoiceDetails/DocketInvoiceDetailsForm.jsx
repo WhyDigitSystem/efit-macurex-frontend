@@ -1,11 +1,12 @@
 import { ArrowLeft, Save, X, Plus, Trash2, Copy } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useForm, Controller, useFieldArray } from "react-hook-form";
 import dayjs from "dayjs";
 import docketInvoiceDetailsAPI from "../../../api/Sales/docketInvoiceDetailsAPI";
 import branchAPI from "../../../api/branchAPI";
 import locationMasterAPI from "../../../api/locationMasterAPI";
 import { useToast } from "../../Toast/ToastContext";
+import transportAPI from "../../../api/transportAPI";
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -40,7 +41,6 @@ const ToggleSwitch = ({ value, onChange }) => (
 
 const thClass = "px-1 py-0.5 text-left font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap text-[10px]";
 
-const TRANSPORT_OPTIONS = ["Truck India", "Blue Dart", "DHL Freight", "Transport Corp"];
 const MODE_OPTIONS = ["Road", "Rail", "Air", "Sea"];
 
 const getDefaultDocketRow = () => ({
@@ -54,37 +54,51 @@ const getDefaultDocketRow = () => ({
   mode: "",
 });
 
-const getDefaultValues = (data) => ({
-  plantId: data?.plantId || "",
-  docNo: data?.docNo || `DK/${dayjs().format("DDD")}/${String(Date.now()).slice(-4)}`,
-  docDate: data?.docDate || dayjs().format("YYYY-MM-DD"),
-  transportName: data?.transportName || "",
-  billNo: data?.billNo || "",
-  billDate: data?.billDate || "",
-  totalAmount: data?.totalAmount ?? "",
-  active: data?.active === "Active" || data?.active !== false,
-  id: data?.id || 0,
-  docketDetails: data?.docketDetails?.length
-    ? data.docketDetails.map((r) => ({
-        docketNo: r.docketNo || "", docketDate: r.docketDate || "", invoiceNo: r.invoiceNo || "",
-        qtyBoxes: r.qtyBoxes ?? "", weightBoxes: r.weightBoxes ?? "", totalValue: r.totalValue ?? "",
-        cumulativeTotal: r.cumulativeTotal ?? "", mode: r.mode || "",
-      }))
-    : [getDefaultDocketRow()],
+const getDefaultValues = () => ({
+  id: 0,
+  plantId: "",
+  docNo: `DK/${dayjs().format("DDD")}/${String(Date.now()).slice(-4)}`,
+  docDate: dayjs().format("YYYY-MM-DD"),
+  transportId: "",
+  transportName: "",
+  billNo: "",
+  billDate: "",
+  totalAmount: "",
+  active: true,
+  docketDetails: [getDefaultDocketRow()],
 });
 
 const DocketInvoiceDetailsForm = ({ data, onBack }) => {
   const { addToast } = useToast();
   const orgId = Number(localStorage.getItem("orgId")) || 0;
   const branch = Number(localStorage.getItem("branchId")) || 1000000001;
+  const dataLoadedRef = useRef(false);
 
   const userData = JSON.parse(localStorage.getItem("userData") || "{}");
   const orgName = (userData?.companyVO?.companyName || userData?.orgName || "").trim();
   const isMacurex = ["mecurex", "macurex"].includes(orgName.toLowerCase());
 
   const [plantOptions, setPlantOptions] = useState([]);
+  const [transportOptions, setTransportOptions] = useState([]);
   const [lookupLoading, setLookupLoading] = useState(false);
+  const [transportLoading, setTransportLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
 
+  const {
+    control, handleSubmit, setValue, watch, register, reset,
+  } = useForm({
+    mode: "onTouched",
+    defaultValues: getDefaultValues(),
+  });
+
+  const { fields, append, remove } = useFieldArray({
+    control, name: "docketDetails",
+  });
+
+  const watchRows = watch("docketDetails");
+  const watchTransportId = watch("transportId");
+
+  // Load plant options
   useEffect(() => {
     const loadOptions = async () => {
       setLookupLoading(true);
@@ -106,18 +120,147 @@ const DocketInvoiceDetailsForm = ({ data, onBack }) => {
     if (orgId) loadOptions();
   }, [orgId, isMacurex]);
 
-  const {
-    control, handleSubmit, setValue, watch, register,
-  } = useForm({
-    mode: "onTouched",
-    defaultValues: getDefaultValues(data),
-  });
+  // Load transports
+  const loadTransports = useCallback(async () => {
+    if (!orgId || !branch) return;
 
-  const { fields, append, remove } = useFieldArray({
-    control, name: "docketDetails",
-  });
+    setTransportLoading(true);
+    try {
+      const response = await transportAPI.getTransportByOrgId(branch, orgId);
+      console.log("Transport API Response:", response);
 
-  const watchRows = watch("docketDetails");
+      let transportList = [];
+      if (response?.paramObjectsMap?.transportList) {
+        transportList = response.paramObjectsMap.transportList;
+      } else if (response?.data?.paramObjectsMap?.transportList) {
+        transportList = response.data.paramObjectsMap.transportList;
+      } else if (Array.isArray(response)) {
+        transportList = response;
+      }
+
+      const options = transportList.map((item) => ({
+        id: item.id,
+        label: item.transportName || item.name || "Unknown Transport",
+        address: item.address || "",
+        branch: item.branch?.branchName || "",
+        active: item.active === "Active" || item.active === true,
+      }));
+
+      setTransportOptions(options);
+      console.log("Transport options:", options);
+    } catch (error) {
+      console.error("Failed to load transports:", error);
+      setTransportOptions([]);
+      addToast("Failed to fetch transport list", "error");
+    } finally {
+      setTransportLoading(false);
+    }
+  }, [branch, orgId, addToast]);
+
+  // Load transports on component mount
+  useEffect(() => {
+    if (orgId && branch) {
+      loadTransports();
+    }
+  }, [orgId, branch, loadTransports]);
+
+  // Load data by ID when in edit mode
+  const loadDataById = useCallback(async (id) => {
+    if (!id) return;
+
+    setLoading(true);
+    try {
+      const response = await docketInvoiceDetailsAPI.getById(id);
+      console.log("Get By ID Response:", response);
+
+      if (response) {
+        // Map the response to form fields
+        const formData = {
+          id: response.id || 0,
+          plantId: response.branch?.id || "",
+          docNo: response.docNo || `DK/${response.id}`,
+          docDate: response.docDate || "",
+          transportId: response.transport?.id || "",
+          transportName: response.transport?.transportName || "",
+          billNo: response.billNo || "",
+          billDate: response.billDate || "",
+          totalAmount: response.totalAmount || "",
+          active: response.active === "Active" || response.active === true,
+          docketDetails: (response.docketInvoiceDetResponseDTO || []).map((d) => ({
+            docketNo: d.docketNo || "",
+            docketDate: d.docketDate || "",
+            invoiceNo: d.invoiceNo || "",
+            qtyBoxes: d.noOfQty || "",
+            weightBoxes: d.weight || "",
+            totalValue: d.totalValue || "",
+            cumulativeTotal: d.cumulativeValue || "",
+            mode: d.mode || "",
+          })),
+        };
+
+        // If no docket details, add one empty row
+        if (formData.docketDetails.length === 0) {
+          formData.docketDetails = [getDefaultDocketRow()];
+        }
+
+        reset(formData);
+        dataLoadedRef.current = true;
+      } else {
+        console.error("No data found for ID:", id);
+      }
+    } catch (error) {
+      console.error("Error loading data by ID:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [reset, addToast]);
+
+  // Load data when in edit mode
+  useEffect(() => {
+    if (data?.id && data.id > 0 && !dataLoadedRef.current) {
+      loadDataById(data.id);
+    } else if (data && !dataLoadedRef.current) {
+      // If data is passed directly (from list), populate form
+      const formData = {
+        id: data.id || 0,
+        plantId: data.plantId || data.branchId || "",
+        docNo: data.docNo || `DK/${data.id || Date.now()}`,
+        docDate: data.docDate || "",
+        transportId: data.transportId || "",
+        transportName: data.transportName || "",
+        billNo: data.billNo || "",
+        billDate: data.billDate || "",
+        totalAmount: data.totalAmount || "",
+        active: data.active !== false,
+        docketDetails: data.docketDetails?.length
+          ? data.docketDetails.map((d) => ({
+            docketNo: d.docketNo || "",
+            docketDate: d.docketDate || "",
+            invoiceNo: d.invoiceNo || "",
+            qtyBoxes: d.qtyBoxes || "",
+            weightBoxes: d.weightBoxes || "",
+            totalValue: d.totalValue || "",
+            cumulativeTotal: d.cumulativeTotal || "",
+            mode: d.mode || "",
+          }))
+          : [getDefaultDocketRow()],
+      };
+      reset(formData);
+      dataLoadedRef.current = true;
+    }
+  }, [data, loadDataById, reset]);
+
+  // Auto-fill transport name when transportId changes
+  useEffect(() => {
+    if (watchTransportId && transportOptions.length > 0) {
+      const selectedTransport = transportOptions.find(
+        (t) => String(t.id) === String(watchTransportId)
+      );
+      if (selectedTransport) {
+        setValue("transportName", selectedTransport.label, { shouldDirty: false });
+      }
+    }
+  }, [watchTransportId, transportOptions, setValue]);
 
   const [formErrs, setFormErrs] = useState({});
 
@@ -147,7 +290,7 @@ const DocketInvoiceDetailsForm = ({ data, onBack }) => {
     const errs = {};
     const vals = watch();
     if (!vals.plantId) errs.plantId = "Required";
-    if (!vals.transportName) errs.transportName = "Required";
+    if (!vals.transportId) errs.transportId = "Required";
     (watchRows || []).forEach((r, i) => {
       if (!r.docketNo) errs[`docketDetails.${i}.docketNo`] = "Required";
     });
@@ -162,22 +305,67 @@ const DocketInvoiceDetailsForm = ({ data, onBack }) => {
       return;
     }
     computeCumulative(watchRows);
+
+    // Get the form values
+    const values = watch();
+
+    // Build the payload according to the API specification
     const payload = {
-      ...(formData.id ? { id: formData.id } : {}),
-      orgId, branch,
-      ...formData,
-      createdBy: localStorage.getItem("userName") || "SYSTEM",
+      // Only include id if it exists and is > 0 (update mode)
+      ...(values.id && values.id > 0 ? { id: values.id } : {}),
+      orgId: orgId,
+      branch: parseInt(values.plantId) || branch,
+      transport: parseInt(values.transportId) || 0,
+      totalAmount: parseFloat(values.totalAmount) || 0,
+      billNo: values.billNo || "",
+      billDate: values.billDate || "",
+      active: true,
       cancelRemarks: "",
+      createdBy: localStorage.getItem("userName") || "SYSTEM",
+      docketInvoiceDetailsDTO: (values.docketDetails || [])
+        .filter(d => d.docketNo) // Only include rows with docket number
+        .map(d => ({
+          docketNo: d.docketNo || "",
+          docketDate: d.docketDate || "",
+          invoiceNo: d.invoiceNo || "",
+          noOfQty: parseFloat(d.qtyBoxes) || 0,
+          weight: parseFloat(d.weightBoxes) || 0,
+          totalValue: parseFloat(d.totalValue) || 0,
+          cumulativeValue: parseFloat(d.cumulativeTotal) || 0,
+          mode: d.mode || "",
+        })),
     };
+
+    console.log("Sending payload:", payload);
+
     try {
-      await docketInvoiceDetailsAPI.createUpdate(payload);
-      addToast(data ? "Docket/Invoice Details Updated!" : "Docket/Invoice Details Saved!", "success");
-      onBack();
+      const response = await docketInvoiceDetailsAPI.createUpdate(payload);
+      console.log("API Response:", response);
+
+      if (response?.status) {
+        addToast(
+          data?.id && data.id > 0
+            ? "Docket/Invoice Details Updated Successfully!"
+            : "Docket/Invoice Details Saved Successfully!",
+          "success"
+        );
+        onBack();
+      } else {
+        addToast(response?.message || "Failed to save Docket/Invoice Details.", "error");
+      }
     } catch (error) {
       console.error("Save error:", error);
-      addToast("Failed to save Docket/Invoice Details.", "error");
+      addToast(error?.response?.data?.message || "Failed to save Docket/Invoice Details.", "error");
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-500 dark:text-gray-400">Loading data...</div>
+      </div>
+    );
+  }
 
   const renderHeader = (errMap) => (
     <div className={fieldGrid}>
@@ -195,13 +383,24 @@ const DocketInvoiceDetailsForm = ({ data, onBack }) => {
       <InputField label="Doc Date">
         <input type="date" {...register("docDate")} className={controlClasses} />
       </InputField>
-      <InputField label="Transport Name" required error={errMap.transportName}>
-        <Controller control={control} name="transportName" render={({ field }) => (
-          <select {...field} className={`${controlClasses} ${errMap.transportName ? "border-red-500" : ""}`}>
-            <option value="">Select</option>
-            {TRANSPORT_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+      <InputField label="Transport" required error={errMap.transportId}>
+        <Controller control={control} name="transportId" render={({ field }) => (
+          <select
+            {...field}
+            disabled={transportLoading}
+            className={`${controlClasses} ${errMap.transportId ? "border-red-500" : ""}`}
+          >
+            <option value="">Select Transport</option>
+            {transportOptions.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.label} {o.address ? `- ${o.address}` : ""}
+              </option>
+            ))}
           </select>
         )} />
+        {transportLoading && (
+          <p className="text-[10px] text-gray-400 mt-0.5">Loading transports...</p>
+        )}
       </InputField>
       <InputField label="Bill No">
         <input {...register("billNo")} className={controlClasses} />
@@ -332,14 +531,8 @@ const DocketInvoiceDetailsForm = ({ data, onBack }) => {
           <ArrowLeft className="h-4 w-4" />
         </button>
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-          {data ? "Edit Docket/Invoice Details" : "New Docket/Invoice Details"}
+          {data?.id && data.id > 0 ? "Edit Docket/Invoice Details" : "New Docket/Invoice Details"}
         </h2>
-        <div className="ml-auto flex items-center gap-2">
-          <label className={labelClasses}>Active</label>
-          <Controller control={control} name="active" render={({ field }) => (
-            <ToggleSwitch value={field.value} onChange={field.onChange} />
-          )} />
-        </div>
       </div>
 
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-4">

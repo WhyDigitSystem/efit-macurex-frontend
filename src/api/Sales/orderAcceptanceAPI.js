@@ -4,7 +4,7 @@ import apiClient from "../apiClient";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL;
 
-const salesContractAPI = {
+const orderAcceptanceAPI = {
     getCustomerDropdown: async (orgId, branchId, ctype) => {
         try {
             const response = await apiClient.get(
@@ -62,10 +62,10 @@ const salesContractAPI = {
     },
 
     // Create or update sales contract with FormData
-    createUpdateSalesContract: async (formData) => {
+    createUpdateOrderAcceptance: async (formData) => {
         try {
-            const response = await apiClient.post(
-                `${API_BASE_URL}/api/dhinesh/createUpdateSalesContract`,
+            const response = await apiClient.put(
+                `${API_BASE_URL}/api/orderAcceptance/createUpdateOrderAcceptance`,
                 formData,
                 {
                     headers: {
@@ -75,36 +75,36 @@ const salesContractAPI = {
             );
             return response;
         } catch (error) {
-            console.error("Error creating/updating sales contract:", error);
+            console.error("Error creating/updating order acceptance:", error);
             throw error;
         }
     },
 
-    // Get sales contract by ID
-    getSalesContractById: async (salesContractId) => {
+    // Get order acceptance by ID
+    getOrderAcceptanceById: async (orderAcceptanceId) => {
         try {
             const response = await apiClient.get(
-                `/api/dhinesh/getSalesContractById?id=${salesContractId}`
+                `/api/orderAcceptance/getOrderAcceptanceById?id=${orderAcceptanceId}`
             );
             return response;
         } catch (error) {
-            console.error("Error fetching sales contract:", error);
+            console.error("Error fetching order acceptance:", error);
             throw error;
         }
     },
 
     // Get all sales contracts by OrgId and BranchId
-    getSalesContracts: async (orgId, branchId) => {
+    getOrderAcceptances: async (orgId, branchId) => {
         try {
             const response = await apiClient.get(
-                `/api/dhinesh/getSalesContractByOrgIdAndBranch?orgId=${orgId}&branch=${branchId}`
+                `/api/orderAcceptance/getOrderAcceptanceByOrgId?orgId=${orgId}&branch=${branchId}`
             );
             return response;
         } catch (error) {
-            console.error("Error fetching sales contracts:", error);
+            console.error("Error fetching order acceptances:", error);
             throw error;
         }
     },
 };
 
-export default salesContractAPI;
+export default orderAcceptanceAPI;

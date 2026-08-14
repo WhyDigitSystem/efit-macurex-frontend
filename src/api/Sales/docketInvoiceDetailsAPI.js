@@ -3,10 +3,10 @@ import apiClient from "../apiClient";
 const docketInvoiceDetailsAPI = {
   getAll: async (orgId, branch) => {
     try {
-      const res = await apiClient.get("/api/dev/getDocketInvoiceDetailsByOrgId", {
+      const res = await apiClient.get("/api/transaction/getDocketInvoiceByOrgId", {
         params: { orgId, branch },
       });
-      return res?.paramObjectsMap?.docketInvoiceDetailsList || [];
+      return res?.paramObjectsMap?.docketInvoiceResponseDTO || [];
     } catch (error) {
       console.error("Error fetching Docket/Invoice Details records:", error);
       throw error;
@@ -15,10 +15,10 @@ const docketInvoiceDetailsAPI = {
 
   getById: async (id) => {
     try {
-      const res = await apiClient.get("/api/dev/getDocketInvoiceDetailsById", {
+      const res = await apiClient.get("/api/transaction/getDocketInvoiceById", {
         params: { id },
       });
-      return res?.paramObjectsMap?.docketInvoiceDetailsVO || null;
+      return res?.paramObjectsMap?.docketInvoiceResponseDTO || null;
     } catch (error) {
       console.error("Error fetching Docket/Invoice Details by ID:", error);
       throw error;
@@ -27,34 +27,10 @@ const docketInvoiceDetailsAPI = {
 
   createUpdate: async (payload) => {
     try {
-      const res = await apiClient.post("/api/dev/createUpdateDocketInvoiceDetails", payload);
+      const res = await apiClient.put("/api/transaction/updateCreateDocketInvoice", payload);
       return res;
     } catch (error) {
       console.error("Error saving Docket/Invoice Details:", error);
-      throw error;
-    }
-  },
-
-  getPlants: async (orgId) => {
-    try {
-      const res = await apiClient.get("/api/dev/getPlantMasterByOrgId", {
-        params: { orgId },
-      });
-      return res?.paramObjectsMap?.plantList || [];
-    } catch (error) {
-      console.error("Error fetching plants:", error);
-      throw error;
-    }
-  },
-
-  getTransportNames: async (orgId) => {
-    try {
-      const res = await apiClient.get("/api/dev/getTransportMasterByOrgId", {
-        params: { orgId },
-      });
-      return res?.paramObjectsMap?.transportList || [];
-    } catch (error) {
-      console.error("Error fetching transport names:", error);
       throw error;
     }
   },

@@ -13,6 +13,7 @@ const OrderAcceptance = () => {
   };
 
   const edit = (row) => {
+    // Pass the full row data which includes the ID
     setEditData(row);
     setScreen("form");
   };
@@ -30,6 +31,7 @@ const OrderAcceptance = () => {
       {screen === "form" && (
         <OrderAcceptanceForm
           data={editData}
+          isEditMode={!!editData} // Pass isEditMode prop
           onBack={() => setScreen("list")}
         />
       )}
