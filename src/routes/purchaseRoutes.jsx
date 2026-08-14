@@ -7,6 +7,7 @@ import PurchaseBill from "../components/purchase/purchaseBill/PurchaseBill";
 import LocalPurchaseOrderMaster from "../components/purchase/localPurchaseOrder/LocalPurchaseOrderMaster";
 import ExcelPurchaseOrderMaster from "../components/purchase/excelPurchaseOrder/ExcelPurchaseOrderMaster";
 import ImportPurchaseOrderMaster from "../components/purchase/importPurchaseOrder/ImportPurchaseOrderMaster";
+import PurchaseOrderMaster from "../components/purchase/purchaseOrder/PurchaseOrderMaster";
 
 const purchaseRoutes = [
   {
@@ -49,7 +50,11 @@ const purchaseRoutes = [
     label: "Import Purchase Order",
     element: <ImportPurchaseOrderMaster />,
   },
-
+  {
+    path: "/purchaseorder",
+    label: "Purchase Order",
+    element: <PurchaseOrderMaster />,
+  },
 ];
 
 export default purchaseRoutes;

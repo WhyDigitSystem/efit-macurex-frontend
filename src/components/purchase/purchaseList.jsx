@@ -28,10 +28,10 @@ const SECTIONS = [
         screenCode: "PURCHASE_INDENT",
       },
       {
-        name: "Local Purchase Order",
+        name: "Purchase Order",
         icon: ShoppingCart,
-        path: "/localpurchaseorder",
-        screenCode: "LOCAL_PURCHASE_ORDER",
+        path: "/purchaseorder",
+        screenCode: "PURCHASE_ORDER",
       },
       {
         name: "Excel Purchase Order",
@@ -39,12 +39,7 @@ const SECTIONS = [
         path: "/excelpurchaseorder",
         screenCode: "EXCEL_PURCHASE_ORDER",
       },
-      {
-        name: "Import Purchase Order",
-        icon: Package,
-        path: "/importpurchaseorder",
-        screenCode: "IMPORT_PURCHASE_ORDER",
-      },
+
       {
         name: "Purchase Contract (Open)",
         icon: FileSignature,
