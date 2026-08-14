@@ -213,15 +213,6 @@ const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
 /* ---------------------------------------------------------------------------- */
 /* Company tab                                                                 */
 
-const COUNTRIES = [
-  "India",
-  "United States",
-  "United Kingdom",
-  "UAE",
-  "Singapore",
-];
-const STATES = ["Karnataka", "Maharashtra", "Tamil Nadu", "Delhi", "Gujarat"];
-
 const emptyCompanyForm = () => ({
   id: "",
   companyName: "",
@@ -270,8 +261,6 @@ const CompanyMasterForm = ({ data, companyId, onBack }) => {
   const fileInputRef = useRef(null);
   const { addToast } = useToast();
 
-  const userId = localStorage.getItem("usersId");
-
   const [form, setForm] = useState(emptyCompanyForm());
   const [logoFile, setLogoFile] = useState(null);
   const [logoPreview, setLogoPreview] = useState(null);
@@ -279,12 +268,12 @@ const CompanyMasterForm = ({ data, companyId, onBack }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
+
   useEffect(() => {
     const fetchCountries = async () => {
       try {
-        const data = await countryAPI.getCountries(orgId);
-
-        setCountries(data);
+        const countryData = await countryAPI.getCountries(orgId);
+        setCountries(countryData);
       } catch (error) {
         console.error("Country loading error", error);
       }
@@ -294,6 +283,7 @@ const CompanyMasterForm = ({ data, companyId, onBack }) => {
       fetchCountries();
     }
   }, [orgId]);
+
   const handleCountryChange = async (e) => {
     const countryId = e.target.value;
 
@@ -315,17 +305,18 @@ const CompanyMasterForm = ({ data, companyId, onBack }) => {
     }));
 
     setCities([]);
+    setStates([]);
 
     if (countryId) {
       try {
         const stateData = await stateAPI.getStatesByCountry(countryId, orgId);
-
         setStates(stateData);
       } catch (error) {
         console.error("State loading error", error);
       }
     }
   };
+
   const handleStateChange = async (e) => {
     const stateId = e.target.value;
 
@@ -341,16 +332,18 @@ const CompanyMasterForm = ({ data, companyId, onBack }) => {
       cityName: "",
     }));
 
+    setCities([]);
+
     if (stateId) {
       try {
         const cityData = await cityAPI.getCitiesByState(orgId, stateId);
-
         setCities(cityData);
       } catch (error) {
         console.error("City loading error", error);
       }
     }
   };
+
   const handleCityChange = (e) => {
     const cityId = e.target.value;
 
@@ -364,7 +357,10 @@ const CompanyMasterForm = ({ data, companyId, onBack }) => {
     }));
   };
 
-  const populateForm = (company) => {
+  // Populates the form from a company record, and pre-loads the State/City
+  // dropdown options that belong to the company's existing Country/State so
+  // the selects aren't stuck showing just one injected option.
+  const populateForm = async (company) => {
     if (!company) return;
 
     const countryRef = normalizeLocationRef(company.country, "countryName");
@@ -377,7 +373,7 @@ const CompanyMasterForm = ({ data, companyId, onBack }) => {
       companyName: company.companyName || "",
       companyCode: company.companyCode || "",
       companyEmail: company.email || "",
-      phoneNo: form.phoneNo || null,
+      phoneNo: company.phoneNo || "",
       ceo: company.ceo || "",
       companySize: company.companySize || "",
       industryType: company.industryType || "",
@@ -421,21 +417,54 @@ const CompanyMasterForm = ({ data, companyId, onBack }) => {
     } else {
       setLogoPreview(null);
     }
+
+    // Pre-load state/city option lists so the dropdowns are actually usable
+    // (not just showing the single injected "current value" option).
+    if (countryRef.id) {
+      try {
+        const stateData = await stateAPI.getStatesByCountry(
+          countryRef.id,
+          orgId,
+        );
+        setStates(stateData);
+      } catch (error) {
+        console.error("State loading error", error);
+      }
+    } else {
+      setStates([]);
+    }
+
+    if (stateRef.id) {
+      try {
+        const cityData = await cityAPI.getCitiesByState(orgId, stateRef.id);
+        setCities(cityData);
+      } catch (error) {
+        console.error("City loading error", error);
+      }
+    } else {
+      setCities([]);
+    }
   };
 
+  // Load the company to edit. Prefer the record already passed in from the
+  // list screen (`data`) — no need to re-fetch it. Only hit the API as a
+  // fallback, and always by the actual company id, never by the user id.
   useEffect(() => {
-    if (data) populateForm(data);
-  }, [data]);
-
-  useEffect(() => {
-    if (!userId) return;
     let cancelled = false;
 
-    const fetchCompany = async () => {
+    const load = async () => {
+      if (data) {
+        await populateForm(data);
+        return;
+      }
+
+      const idToFetch = companyId || orgId;
+      if (!idToFetch) return;
+
       setIsLoading(true);
       try {
-        const company = await companySetupAPI.getCompanyById(userId);
-        if (!cancelled) populateForm(company);
+        const company = await companySetupAPI.getCompanyById(idToFetch);
+        if (!cancelled) await populateForm(company);
       } catch (error) {
         console.error(error);
         if (!cancelled) addToast("Failed to load company details");
@@ -444,11 +473,12 @@ const CompanyMasterForm = ({ data, companyId, onBack }) => {
       }
     };
 
-    fetchCompany();
+    load();
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, companyId, orgId]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -500,11 +530,9 @@ const CompanyMasterForm = ({ data, companyId, onBack }) => {
     if (!String(form.country || "").trim())
       errors.country = "Country is required";
 
-    if (!String(form.state || "").trim())
-      errors.state = "State is required";
+    if (!String(form.state || "").trim()) errors.state = "State is required";
 
-    if (!String(form.city || "").trim())
-      errors.city = "City is required";
+    if (!String(form.city || "").trim()) errors.city = "City is required";
 
     if (!form.pincode.trim()) errors.pincode = "Pincode is required";
     else if (!PINCODE_REGEX.test(form.pincode.trim()))
@@ -592,15 +620,25 @@ const CompanyMasterForm = ({ data, companyId, onBack }) => {
     };
 
     try {
-      // If a new logo was picked, upload it first and fold the response into the payload
+      // If a new logo was picked, upload it first and fold the response into the payload.
+      // Use form.id (falls back to companyId prop) so the upload always targets the
+      // right company, even if the form was populated only from the `data` prop.
       if (logoFile) {
+        const logoTargetId = form.id || companyId || data?.id;
+
+        if (!logoTargetId) {
+          addToast("Could not determine which company to attach the logo to.");
+          setIsSubmitting(false);
+          return;
+        }
+
         try {
           const logoRes = await companySetupAPI.uploadCompanyLogo(
-            form.id,
+            logoTargetId,
             logoFile,
           );
 
-          // NOTE: confirm the actual response shape/key from uploadCompanyLogoInBloob
+          // NOTE: confirm the actual response shape/key from your upload endpoint
           const uploadedLogoUrl =
             logoRes?.paramObjectsMap?.logoUrl ||
             logoRes?.logoUrl ||
@@ -624,8 +662,6 @@ const CompanyMasterForm = ({ data, companyId, onBack }) => {
         }
       }
 
-      console.log("Update Payload:", payload);
-      console.log(JSON.stringify(payload, null, 2));
       const response = await companySetupAPI.updateCompany(payload);
 
       if (response?.status) {
@@ -673,7 +709,7 @@ const CompanyMasterForm = ({ data, companyId, onBack }) => {
           <ArrowLeft className="h-4 w-4" />
         </button>
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-          {data ? "Edit Company" : "Edit Company"}
+          Edit Company
         </h2>
       </div>
 
@@ -709,13 +745,13 @@ const CompanyMasterForm = ({ data, companyId, onBack }) => {
               error={fieldErrors.companyEmail}
             />
 
-            {/* <Field
-            label="Phone No"
-            name="phoneNo"
-            value={form.phoneNo}
-            onChange={handleChange}
-            error={fieldErrors.phoneNo}
-          /> */}
+            <Field
+              label="Phone No"
+              name="phoneNo"
+              value={form.phoneNo}
+              onChange={handleChange}
+              error={fieldErrors.phoneNo}
+            />
 
             <Field
               label="CEO"
@@ -759,7 +795,6 @@ const CompanyMasterForm = ({ data, companyId, onBack }) => {
               className="col-span-2"
             />
 
-            {/* Plain text fields now, not dropdowns — just show whatever value is present */}
             <Field
               type="select"
               label="Country"
@@ -770,7 +805,7 @@ const CompanyMasterForm = ({ data, companyId, onBack }) => {
               required
               options={[
                 ...(form.country &&
-                  !countries.some((c) => String(c.id) === String(form.country))
+                !countries.some((c) => String(c.id) === String(form.country))
                   ? [{ id: form.country, countryName: form.countryName }]
                   : []),
                 ...countries,
@@ -788,7 +823,7 @@ const CompanyMasterForm = ({ data, companyId, onBack }) => {
               disabled={!form.country}
               options={[
                 ...(form.state &&
-                  !states.some((s) => String(s.id) === String(form.state))
+                !states.some((s) => String(s.id) === String(form.state))
                   ? [{ id: form.state, stateName: form.stateName }]
                   : []),
                 ...states,
@@ -806,7 +841,7 @@ const CompanyMasterForm = ({ data, companyId, onBack }) => {
               disabled={!form.state}
               options={[
                 ...(form.city &&
-                  !cities.some((c) => String(c.id) === String(form.city))
+                !cities.some((c) => String(c.id) === String(form.city))
                   ? [{ id: form.city, cityName: form.cityName }]
                   : []),
                 ...cities,
