@@ -74,6 +74,7 @@ import ZeroKmFailureMaster from "../components/quality/zeroKmFailure/ZeroKmFailu
 import InitialStageInspectionMaster from "../components/quality/initialStageInspection/InitialStageInspectionMaster";
 import InitialSampleInspectionMaster from "../components/quality/initialSampleInspection/InitialSampleInspectionMaster";
 import ProblemSolvingEntryMaster from "../components/quality/problemSolvingEntry/ProblemSolvingEntryMaster";
+import InProcessInspectionMaster from "../components/quality/inProcessInspection/InProcessInspectionMaster";
 import SalesContractAmendment from "../components/sales/SalesContractAmendment/SalesContractAmendmentMaster";
 import SalesList from "../components/sales/SalesList";
 import SalesOrderAmendment from "../components/sales/SalesOrderAmendment/SalesOrderAmendmentMaster";
@@ -351,6 +352,12 @@ export const routesConfig = [
     label: "Problem Solving Entry",
     keywords: ["problem solving", "quality"],
     element: <ProblemSolvingEntryMaster />,
+  },
+  {
+    path: "/inprocessinspection",
+    label: "In-Process Inspection",
+    keywords: ["in process", "inspection", "quality"],
+    element: <InProcessInspectionMaster />,
   },
   {
     path: "/labourcharges",
