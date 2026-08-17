@@ -11,6 +11,7 @@ import {
   ClipboardList,
   Wrench,
   ClipboardCheck,
+  Shield,
 } from "lucide-react";
 import { useSelector } from "react-redux";
 import { NavLink } from "react-router-dom";
@@ -145,6 +146,14 @@ const Sidebar = () => {
           bgColor:
             "bg-gradient-to-br from-orange-600 to-amber-500 dark:from-orange-500 dark:to-amber-400",
           screenCode: "LABOUR_CHARGES",
+        },
+        {
+          name: "Security",
+          href: "/security",
+          icon: Shield,
+          bgColor:
+            "bg-gradient-to-br from-red-600 to-rose-500 dark:from-red-500 dark:to-rose-400",
+          screenCode: "SECURITY",
         },
       ];
 

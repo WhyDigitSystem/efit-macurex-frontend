@@ -110,6 +110,7 @@ import SalesDelivery from "../components/sales/salesdeliveryschedule/SalesDelive
 import StockTransferChallanMaster from "../components/sales/stockTransferChallan/StockTransferChallanMaster";
 import TransportBillMaster from "../components/sales/transportBill/TransportBillMaster";
 import salesRoutes from "./salesRoutes";
+import securityRoutes from "./securityRoutes";
 export const routesConfig = [
   { path: "/", label: "Dashboard", element: <Dashboard /> },
 
@@ -582,4 +583,5 @@ export const routesConfig = [
   ...purchaseRoutes,
   ...inventoryRoutes,
   ...salesRoutes,
+  ...securityRoutes,
 ];

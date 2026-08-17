@@ -23,6 +23,8 @@ const DocTypeMasterForm = ({ onBack, onSave, editData }) => {
   const [branchLoading, setBranchLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
 
+  const [codes, setCodes] = useState([]);
+  const [codeLoading, setCodeLoading] = useState(false);
   // editData is expected to come back from the GET endpoint, where `branch`
   // is a nested object ({ id, branchName, branchCode }), unlike the flat
   // numeric `branch` id the create/update endpoint expects on save.
@@ -32,6 +34,7 @@ const DocTypeMasterForm = ({ onBack, onSave, editData }) => {
     name: editData?.name || "",
     des: editData?.des || "",
     description: editData?.description || "",
+    decCode: editData?.decCode || "",
     financialYear: editData?.financialYear || "",
     branch: editData?.branch?.id || editData?.branch || "",
     active: editData?.active ?? true,
@@ -161,6 +164,24 @@ const DocTypeMasterForm = ({ onBack, onSave, editData }) => {
         }
         break;
 
+      case "decCode":
+        if (!alphanumericRegex.test(value)) {
+          setFieldErrors((prev) => ({
+            ...prev,
+            decCode: "Only alphanumeric characters are allowed",
+          }));
+          return;
+        }
+
+        if (value.length > 10) {
+          setFieldErrors((prev) => ({
+            ...prev,
+            decCode: "Dec Code must be maximum 10 characters",
+          }));
+          return;
+        }
+        break;
+
       case "financialYear":
         if (value.length > 20) {
           setFieldErrors((prev) => ({
@@ -236,6 +257,7 @@ const DocTypeMasterForm = ({ onBack, onSave, editData }) => {
       name: form.name,
       des: form.des,
       description: form.description,
+      decCode: form.decCode,
       financialYear: form.financialYear,
       branch: form.branch,
       active: Boolean(form.active),
@@ -308,21 +330,29 @@ const DocTypeMasterForm = ({ onBack, onSave, editData }) => {
       {/* MAIN CARD */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
         {/* MAIN FORM GRID */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
           {/* Code */}
           <div>
             <label className={labelClasses}>
               Code <span className="text-red-500">*</span>
             </label>
 
-            <input
+            <select
               name="code"
               value={form.code}
               onChange={handleChange}
               className={`${controlClasses} ${
                 fieldErrors.code ? "border-red-500" : ""
               }`}
-            />
+            >
+              <option value="">Select Code</option>
+
+              {codes.map((item) => (
+                <option key={item.id} value={item.code}>
+                  {item.code}
+                </option>
+              ))}
+            </select>
 
             {fieldErrors.code && (
               <p className="text-red-500 text-[11px] mt-1">
@@ -353,29 +383,8 @@ const DocTypeMasterForm = ({ onBack, onSave, editData }) => {
             )}
           </div>
 
-          {/* Financial Year */}
-          <div>
-            <label className={labelClasses}>Financial Year</label>
-
-            <input
-              name="financialYear"
-              placeholder="e.g. 2026-2027"
-              value={form.financialYear}
-              onChange={handleChange}
-              className={`${controlClasses} ${
-                fieldErrors.financialYear ? "border-red-500" : ""
-              }`}
-            />
-
-            {fieldErrors.financialYear && (
-              <p className="text-red-500 text-[11px] mt-1">
-                {fieldErrors.financialYear}
-              </p>
-            )}
-          </div>
-
           {/* Branch */}
-          <div>
+          {/* <div>
             <label className={labelClasses}>
               Branch <span className="text-red-500">*</span>
             </label>
@@ -402,34 +411,10 @@ const DocTypeMasterForm = ({ onBack, onSave, editData }) => {
                 {fieldErrors.branch}
               </p>
             )}
-          </div>
-
-          {/* Active */}
-          <div>
-            <label className={labelClasses}>Active</label>
-
-            <button
-              type="button"
-              onClick={() =>
-                setForm((prev) => ({
-                  ...prev,
-                  active: !prev.active,
-                }))
-              }
-              className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${
-                form.active ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
-              }`}
-            >
-              <span
-                className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${
-                  form.active ? "translate-x-6" : "translate-x-0.5"
-                }`}
-              />
-            </button>
-          </div>
+          </div> */}
 
           {/* description */}
-          <div className="md:col-span-2 lg:col-span-3">
+          <div>
             <label className={labelClasses}>Description</label>
 
             <input
@@ -444,6 +429,26 @@ const DocTypeMasterForm = ({ onBack, onSave, editData }) => {
             {fieldErrors.description && (
               <p className="text-red-500 text-[11px] mt-1">
                 {fieldErrors.description}
+              </p>
+            )}
+          </div>
+
+          {/* Dec Code */}
+          <div>
+            <label className={labelClasses}>Dec Code</label>
+
+            <input
+              name="decCode"
+              value={form.decCode}
+              onChange={handleChange}
+              className={`${controlClasses} ${
+                fieldErrors.decCode ? "border-red-500" : ""
+              }`}
+            />
+
+            {fieldErrors.decCode && (
+              <p className="text-red-500 text-[11px] mt-1">
+                {fieldErrors.decCode}
               </p>
             )}
           </div>
