@@ -18,6 +18,7 @@ const PartyMasterList = ({ onAddNew, onEdit, onBack }) => {
       const transformedData = (response || []).map(item => ({
         id: item.id || 0,
         partyCode: item.docId || "",
+        customerCode: item.customerCode || "",
         partyName: item.customerName || "",
         shortName: item.tradeName || "",
         gstPartyName: item.customerLegalName || "",
@@ -89,9 +90,16 @@ const PartyMasterList = ({ onAddNew, onEdit, onBack }) => {
 
   const columns = [
     {
-      key: "partyCode",
+      key: "docId",
+      label: "Doc Id",
+      accessor: "docId",
+      type: "text",
+      noWrap: true,
+    },
+    {
+      key: "customerCode",
       label: "Party Code",
-      accessor: "partyCode",
+      accessor: "customerCode",
       type: "text",
       noWrap: true,
     },

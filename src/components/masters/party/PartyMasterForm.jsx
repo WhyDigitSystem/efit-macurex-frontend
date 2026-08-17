@@ -479,7 +479,7 @@ const PartyMasterForm = ({ data, onBack }) => {
         salutation: apiData.salutation || "",
         partyType: apiData.customerType || "",
         accountName: apiData.accountName || "",
-        vendorCustomerId: apiData.docId || "",
+        vendorCustomerId: apiData.customerCode || "",
         partyName: apiData.customerName || "",
         active: apiData.active === "Active" ? "YES" : "NO",
         groupIndividual: apiData.groupCompany ? "Group" : "Individual",
@@ -898,6 +898,7 @@ const PartyMasterForm = ({ data, onBack }) => {
       // Customer Names
       customerLegalName: general.legalName || "",
       customerName: general.partyName || "",
+      customerCode: general.vendorCustomerId || "",
 
       // Customer Shipping Details
       customerShippingDetails: [{
@@ -913,8 +914,8 @@ const PartyMasterForm = ({ data, onBack }) => {
 
       // Dates
       dateOfApproval: supplier.dateOfApproval || "",
-      docDate: general.date || "",
-      docId: general.vendorCustomerId || "",
+      // docDate: general.date || "",
+      // docId: general.vendorCustomerId || "",
 
       // ECC Details
       eccNo: general.eccNo || "",

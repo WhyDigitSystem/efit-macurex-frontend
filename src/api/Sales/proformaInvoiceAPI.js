@@ -1,18 +1,29 @@
 import apiClient from "../apiClient";
 
-/* Proforma Invoice API
-   Mirrors the sales module API convention used in this app.
-   The backend persists the header, product details, tax details and
-   terms & conditions in a single transaction and keeps the complete
-   proforma invoice history (server-side validation). */
 const proformaInvoiceAPI = {
-  // Get Proforma Invoices by Organization ID
+  // Get Tax Value by HSN Code
+  getTaxValue: async (hsn, orgId) => {
+    try {
+      const res = await apiClient.get(
+        `/api/rejectionInvoice/getTaxValue?hsn=${hsn}&orgId=${orgId}`,
+      );
+      return res;
+    } catch (error) {
+      console.error("Error fetching tax value:", error);
+      throw error;
+    }
+  },
+
+  // Get Proforma Invoices by Organization ID and Branch
   getProformaInvoiceByOrgId: async (orgId, branch) => {
     try {
       const res = await apiClient.get(
-        `/api/sales/getProformaInvoiceByOrgId?branch=${branch}&orgId=${orgId}`,
+        `/api/rejectionInvoice/getProformaInvoiceByOrgId?branch=${branch}&orgId=${orgId}`,
       );
-      return res?.paramObjectsMap?.proformaInvoiceVO || [];
+      // Return the array from paramObjectsMap.proformaInvoiceResponseVO
+      // Note: When fetching list, it returns an array
+      const responseData = res?.paramObjectsMap?.proformaInvoiceResponseVO;
+      return Array.isArray(responseData) ? responseData : [];
     } catch (error) {
       console.error("Error fetching proforma invoices:", error);
       throw error;
@@ -23,9 +34,10 @@ const proformaInvoiceAPI = {
   getProformaInvoiceById: async (id) => {
     try {
       const res = await apiClient.get(
-        `/api/sales/getProformaInvoiceById?id=${id}`,
+        `/api/rejectionInvoice/getProformaInvoiceById?id=${id}`,
       );
-      return res?.paramObjectsMap?.proformaInvoiceVO || null;
+      // Note: When fetching by ID, it returns a single object (not an array)
+      return res?.paramObjectsMap?.proformaInvoiceResponseVO || null;
     } catch (error) {
       console.error("Error fetching proforma invoice by ID:", error);
       throw error;
@@ -36,7 +48,7 @@ const proformaInvoiceAPI = {
   createUpdateProformaInvoice: async (payload) => {
     try {
       const res = await apiClient.put(
-        "/api/sales/updateCreateProformaInvoice",
+        "/api/rejectionInvoice/createUpdateProformaInvoice",
         payload,
       );
       return res;

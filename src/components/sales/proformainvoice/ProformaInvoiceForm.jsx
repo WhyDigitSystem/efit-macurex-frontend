@@ -1,5 +1,13 @@
-import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import {
+  ArrowLeft,
+  Save,
+  X,
+  Plus,
+  Trash2,
+  Upload,
+  File,
+} from "lucide-react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { useForm, Controller, useFieldArray } from "react-hook-form";
 import dayjs from "dayjs";
 import { useToast } from "../../Toast/ToastContext";
@@ -12,6 +20,7 @@ import partyMasterAPI from "../../../api/partyMasterAPI";
 import { employeeAPI } from "../../../api/employeeAPI";
 import { stateAPI } from "../../../api/stateAPI";
 import bankAPI from "../../../api/bankAPI";
+import listOfValuesAPI from "../../../api/listOfValuesAPI";
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -19,7 +28,7 @@ const controlClasses =
   "text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 " +
   "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
   "dark:focus:ring-blue-400 dark:focus:border-blue-400 " +
-  "disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed";
+  "[color-scheme:light] dark:[color-scheme:dark]";
 
 const labelClasses = "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
@@ -29,40 +38,134 @@ const fieldGrid =
 const subTabFieldGrid =
   "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-5 gap-y-4 items-start";
 
+// ===================== Reusable Components =====================
+
 const SectionHeader = ({ children }) => (
   <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">
     {children}
   </h3>
 );
 
-const InputField = ({ label, required, error, children }) => (
-  <div>
-    {label && (
-      <label className={labelClasses}>
-        {label}
-        {required && <span className="text-red-500"> *</span>}
-      </label>
-    )}
-    {children}
-    {error && <p className="text-[10px] text-red-500 mt-0.5">{error}</p>}
-  </div>
-);
+const InputField = ({
+  control,
+  name,
+  label,
+  type = "text",
+  required,
+  placeholder,
+  errors,
+  disabled,
+  step,
+  readOnly,
+}) => {
+  const getError = () => {
+    const parts = name.split(".");
+    let error = errors;
+    for (const part of parts) {
+      if (error && error[part]) {
+        error = error[part];
+      } else {
+        return null;
+      }
+    }
+    return error?.message;
+  };
 
-const ToggleSwitch = ({ value, onChange }) => (
-  <button
-    type="button"
-    onClick={() => onChange(!value)}
-    className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${
-      value ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
-    }`}
-  >
-    <span
-      className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${
-        value ? "translate-x-6" : "translate-x-0.5"
-      }`}
-    />
-  </button>
-);
+  const errorMessage = getError();
+
+  return (
+    <div>
+      <label className={labelClasses}>
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      <Controller
+        name={name}
+        control={control}
+        rules={required ? { required: `${label} is required` } : undefined}
+        render={({ field }) => (
+          <input
+            {...field}
+            type={type}
+            step={step}
+            className={`${controlClasses} ${errorMessage ? "border-red-500 focus:border-red-500" : ""} ${readOnly ? "bg-gray-50 dark:bg-gray-800" : ""}`}
+            placeholder={placeholder}
+            disabled={disabled}
+            readOnly={readOnly}
+          />
+        )}
+      />
+      {errorMessage && (
+        <p className="text-red-500 text-[11px] mt-1">{errorMessage}</p>
+      )}
+    </div>
+  );
+};
+
+const SelectField = ({
+  control,
+  name,
+  label,
+  options,
+  required,
+  errors,
+  onChange,
+  disabled,
+  placeholder = "-- Select --",
+}) => {
+  const getError = () => {
+    const parts = name.split(".");
+    let error = errors;
+    for (const part of parts) {
+      if (error && error[part]) {
+        error = error[part];
+      } else {
+        return null;
+      }
+    }
+    return error?.message;
+  };
+
+  const errorMessage = getError();
+
+  return (
+    <div>
+      <label className={labelClasses}>
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      <Controller
+        name={name}
+        control={control}
+        rules={required ? { required: `${label} is required` } : undefined}
+        render={({ field }) => (
+          <select
+            {...field}
+            className={`${controlClasses} ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
+            onChange={(e) => {
+              field.onChange(e);
+              if (onChange) {
+                onChange(e.target.value);
+              }
+            }}
+            disabled={disabled}
+          >
+            <option value="">{placeholder}</option>
+            {options.map((opt) => (
+              <option
+                key={typeof opt === "object" ? opt.value : opt}
+                value={typeof opt === "object" ? opt.value : opt}
+              >
+                {typeof opt === "object" ? opt.label : opt}
+              </option>
+            ))}
+          </select>
+        )}
+      />
+      {errorMessage && (
+        <p className="text-red-500 text-[11px] mt-1">{errorMessage}</p>
+      )}
+    </div>
+  );
+};
 
 const TableWrapper = ({ children }) => (
   <div className="w-full overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
@@ -76,13 +179,12 @@ const TableHead = ({ headers }) => (
       {headers.map((h, i) => (
         <th
           key={i}
-          className={`p-2 whitespace-nowrap ${
-            i === 0
-              ? "w-8 text-center"
-              : i === headers.length - 1
-                ? "w-20 text-left"
-                : "text-left"
-          } text-gray-700 dark:text-gray-200`}
+          className={`p-2 whitespace-nowrap ${i === 0
+            ? "w-8 text-center"
+            : i === headers.length - 1
+              ? "w-20 text-left"
+              : "text-left"
+            } text-gray-700 dark:text-gray-200 text-[10px] font-medium`}
         >
           {h}
         </th>
@@ -91,129 +193,152 @@ const TableHead = ({ headers }) => (
   </thead>
 );
 
-const TableRow = ({ children, index, onRemove, disabled }) => (
+const TableRow = ({ children, index, onRemove, disabled, showDelete = true }) => (
   <tr className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-    <td className="p-2 text-center font-medium dark:text-white">{index + 1}</td>
+    <td className="p-2 text-center font-medium dark:text-white text-[10px]">{index + 1}</td>
     {children}
-    <td className="p-2 text-center">
-      <button
-        type="button"
-        onClick={onRemove}
-        disabled={disabled}
-        className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-          disabled
+    {showDelete && (
+      <td className="p-2 text-center">
+        <button
+          type="button"
+          onClick={onRemove}
+          disabled={disabled}
+          className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
             ? "bg-gray-400 cursor-not-allowed"
             : "bg-red-600 hover:bg-red-700"
-        }`}
-      >
-        <Trash2 size={10} />
-      </button>
-    </td>
+            }`}
+        >
+          <Trash2 size={10} />
+        </button>
+      </td>
+    )}
   </tr>
 );
 
-const SelectCell = ({ type, value, onChange, options, placeholder }) => (
-  <td className="p-2 align-top">
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className={controlClasses}
-    >
-      <option value="">{placeholder || "-- Select --"}</option>
-      {(options || []).map((opt) => (
-        <option key={opt.value ?? opt} value={opt.value ?? opt}>
-          {opt.label ?? opt}
-        </option>
-      ))}
-    </select>
-  </td>
-);
+const SelectCell = ({ control, name, options, required, errors, onChange, disabled }) => {
+  const getError = () => {
+    const parts = name.split(".");
+    let error = errors;
+    for (const part of parts) {
+      if (error && error[part]) {
+        error = error[part];
+      } else {
+        return null;
+      }
+    }
+    return error?.message;
+  };
 
-const getDefaultSalesRow = () => ({
-  itemCode: "",
-  customerPartNo: "",
-  itemDescription: "",
-  hsCode: "",
-  taxType: "",
-  taxRs: "",
-  unit: "",
-  qty: "",
-  quotRate: "",
-  orderRate: "",
-  discountPercent: "",
-  effectiveFrom: "",
-  effectiveTo: "",
-  discountAmount: "",
-  amount: "",
-  sgstRate: "",
-  sgstAmount: "",
-  cgstRate: "",
-  cgstAmount: "",
-  igstRate: "",
-  igstAmount: "",
-  currencyName: "",
-});
+  const errorMessage = getError();
 
-const getDefaultTaxRow = () => ({
-  particulars: "",
-  amount: "",
-  postFin: "",
-});
+  return (
+    <td className="p-2 align-top">
+      <Controller
+        name={name}
+        control={control}
+        rules={required ? { required: "This field is required" } : undefined}
+        render={({ field }) => (
+          <select
+            {...field}
+            className={`${controlClasses} ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
+            onChange={(e) => {
+              field.onChange(e);
+              if (onChange) {
+                onChange(e.target.value);
+              }
+            }}
+            disabled={disabled}
+          >
+            <option value="">-- Select --</option>
+            {options.map((opt) => (
+              <option
+                key={typeof opt === "object" ? opt.value : opt}
+                value={typeof opt === "object" ? opt.value : opt}
+              >
+                {typeof opt === "object" ? opt.label : opt}
+              </option>
+            ))}
+          </select>
+        )}
+      />
+      {errorMessage && (
+        <p className="text-red-500 text-[9px] mt-0.5">{errorMessage}</p>
+      )}
+    </td>
+  );
+};
 
-const getDefaultValues = () => ({
-  plant: "",
-  invoiceNo: "",
-  invoiceDate: dayjs().format("YYYY-MM-DD"),
-  customerId: "",
-  customerName: "",
-  belongsTo: "",
-  customerCode: "",
-  poNo: "",
-  partyGSTState: "",
-  refNo: "",
-  poDate: "",
-  isIGSTAppli: "",
-  refDate: "",
-  locationId: "",
-  gstnNo: "",
-  kindAttention: "",
-  designation: "",
-  timeOfIssue: dayjs().format("HH:mm:ss"),
-  taxCode: "",
-  bankName: "",
-  date: dayjs().format("YYYY-MM-DD"),
-  timeOfRemoval: dayjs().format("HH:mm:ss"),
+const InputCell = ({
+  control,
+  name,
+  type = "text",
+  step,
+  placeholder,
+  required,
+  errors,
+  align = "left",
+  disabled,
+  readOnly,
+  onChange,
+}) => {
+  const getError = () => {
+    const parts = name.split(".");
+    let error = errors;
+    for (const part of parts) {
+      if (error && error[part]) {
+        error = error[part];
+      } else {
+        return null;
+      }
+    }
+    return error?.message;
+  };
 
-  salesContractDetails: [getDefaultSalesRow()],
-  taxDetails: [getDefaultTaxRow()],
+  const errorMessage = getError();
 
-  termsAndConditions: {
-    insurance: "",
-    freight: "",
-    noOfPkg: "",
-    pkgType: "",
-    modeOfTransport: "",
-    rateOfDuty: "",
-    tariffNo: "",
-    basicValue: "",
-    grossAmount: "",
-    amountInWords: "",
-    deliveryTo: "",
-    paymentTerms: "",
-    paymentPercentage: "",
-    narration: "",
-  },
-});
+  return (
+    <td className="p-2 align-top">
+      <Controller
+        name={name}
+        control={control}
+        rules={required ? { required: "This field is required" } : undefined}
+        render={({ field }) => (
+          <input
+            {...field}
+            type={type}
+            step={step}
+            className={`${controlClasses} ${align === "right" ? "text-right" : ""} ${errorMessage ? "border-red-500 focus:border-red-500" : ""
+              } ${readOnly ? "bg-gray-50 dark:bg-gray-800" : ""}`}
+            placeholder={placeholder}
+            disabled={disabled}
+            readOnly={readOnly}
+            onChange={(e) => {
+              field.onChange(e);
+              if (onChange) {
+                onChange(e);
+              }
+            }}
+          />
+        )}
+      />
+      {errorMessage && (
+        <p className="text-red-500 text-[9px] mt-0.5">{errorMessage}</p>
+      )}
+    </td>
+  );
+};
 
-const BELONGS_TO = ["Appliances", "Electricals", "Packaging", "Raw Material"];
+// ===================== Constants =====================
+
+const BELONGS_TO = ["Appliances", "Bosch"];
 const YES_NO = ["Yes", "No"];
-const TAX_TYPE = ["CGST+SGST", "IGST", "UTGST", "GST"];
+const TAX_TYPE = ["SGST", "IGST"];
 const CURRENCY = ["INR", "USD", "EUR", "GBP"];
-const PARTICULAR = ["Freight", "Insurance", "Packing Charges", "Handling Charges", "Other"];
 const POST_FIN = ["Yes", "No"];
 const PKG_TYPE = ["Box", "Pallet", "Crate", "Bag", "Drum", "Container"];
 const TRANSPORT = ["Road", "Rail", "Air", "Sea", "Courier"];
-const KIND_ATTENTION = ["Mr.", "Ms.", "Mrs.", "Dr.", "Prof."];
+
+// ===================== Utility Functions =====================
 
 const fmtDate = (value) => (value ? dayjs(value).format("YYYY-MM-DD") : "");
 
@@ -239,17 +364,110 @@ const numberToWords = (num) => {
   return (words || "Zero").trim() + " Only";
 };
 
+// ===================== Default Values =====================
+
+const getDefaultSalesRow = () => ({
+  itemCode: "",
+  customerPartNo: "",
+  itemDescription: "",
+  hsCode: "",
+  taxType: "",
+  taxPercentage: "",
+  dispatchQty: "",
+  unit: "",
+  orderRate: "",
+  amount: "",
+  sgstRate: "",
+  sgstAmount: "",
+  cgstRate: "",
+  cgstAmount: "",
+  igstRate: "",
+  igstAmount: "",
+});
+
+const getDefaultTaxRow = () => ({
+  particulars: "",
+  amount: "",
+  postFin: "",
+  isSystemRow: false,
+});
+
+const getDefaultValues = () => ({
+  plant: "",
+  invoiceNo: "",
+  invoiceDate: dayjs().format("YYYY-MM-DD"),
+  customerId: "",
+  customerName: "",
+  belongsTo: "",
+  customerCode: "",
+  poNo: "",
+  partyGSTState: "",
+  refNo: "",
+  poDate: "",
+  isIGSTApplicable: "",
+  refDate: "",
+  locationId: "",
+  gstnNo: "",
+  kindAttention: "",
+  designation: "",
+  timeOfIssue: dayjs().format("HH:mm:ss"),
+  taxCode: "",
+  bankName: "",
+  date: dayjs().format("YYYY-MM-DD"),
+  timeOfRemoval: dayjs().format("HH:mm:ss"),
+  salesContractDetails: [getDefaultSalesRow()],
+  taxDetails: [getDefaultTaxRow()],
+  termsAndConditions: {
+    insurance: "",
+    freight: "",
+    noOfPkg: "",
+    pkgType: "",
+    modeOfTransport: "",
+    rateOfDuty: "",
+    tariffNo: "",
+    basicValue: "",
+    grossAmount: "",
+    amountInWords: "",
+    deliveryTo: "",
+    paymentTerms: "",
+    paymentPercentage: "",
+    narration: "",
+  },
+});
+
+// ===================== Main Component =====================
+
 const ProformaInvoiceForm = ({ data, onBack }) => {
   const { addToast } = useToast();
-  const orgId = Number(localStorage.getItem("orgId")) || 0;
-  const branch = Number(localStorage.getItem("branchId")) || 0;
+  const [orgId] = useState(Number(localStorage.getItem("orgId")) || 0);
+  const [branch] = useState(Number(localStorage.getItem("branchId")) || 0);
   const usersId = localStorage.getItem("usersId");
-
   const userData = JSON.parse(localStorage.getItem("userData") || "{}");
   const orgName = (userData?.companyVO?.companyName || userData?.orgName || "").trim();
   const isMacurex = ["mecurex", "macurex"].includes(orgName.toLowerCase());
 
   const [activeTab, setActiveTab] = useState("salesContract");
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const isUpdatingRef = useRef(false);
+  const dataLoadedRef = useRef(false);
+
+  // Lookup data states
+  const [plantOptions, setPlantOptions] = useState([]);
+  const [customerOptions, setCustomerOptions] = useState([]);
+  const [itemOptions, setItemOptions] = useState([]);
+  const [locationData, setLocationData] = useState([]);
+  const [itemMap, setItemMap] = useState({});
+  const [unitOptions, setUnitOptions] = useState([]);
+  const [locationOptions, setLocationOptions] = useState([]);
+  const [stateOptions, setStateOptions] = useState([]);
+  const [bankOptions, setBankOptions] = useState([]);
+  const [employeeOptions, setEmployeeOptions] = useState([]);
+  const [listOfValuesData, setListOfValuesData] = useState({});
+
+  const LIST_OF_VALUES_GROUPS = {
+    PARTICULARS: "Particulars",
+  };
 
   const defaults = useCallback(() => {
     const base = getDefaultValues();
@@ -265,7 +483,9 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
       base.partyGSTState = data.partyGSTState || "";
       base.refNo = data.refNo || "";
       base.poDate = fmtDate(data.poDate);
-      base.isIGSTAppli = data.isIGSTAppli || "";
+      base.isIGSTApplicable =
+        data.isIGSTApplicable === true ? "Yes" :
+          data.isIGSTApplicable === false ? "No" : data.isIGSTApplicable || "No";
       base.refDate = fmtDate(data.refDate);
       base.locationId = data.locationId?.id ?? data.locationId ?? "";
       base.gstnNo = data.gstnNo || "";
@@ -297,6 +517,7 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
     setValue,
     watch,
     reset,
+    getValues,
     formState: { errors, isSubmitting },
   } = useForm({
     mode: "onTouched",
@@ -311,25 +532,142 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
     control,
     name: "salesContractDetails",
   });
+
   const taxDetailsArray = useFieldArray({
     control,
     name: "taxDetails",
   });
 
   const watchSalesRows = watch("salesContractDetails");
-  const grossAmount = watch("termsAndConditions.grossAmount");
+  const isIGSTApplicable = watch("isIGSTApplicable");
 
-  /* ---------------- Lookup loading ---------------- */
+  // ===================== Load Data for Edit =====================
 
-  const [plantOptions, setPlantOptions] = useState([]);
-  const [customerOptions, setCustomerOptions] = useState([]);
-  const [itemOptions, setItemOptions] = useState([]);
-  const [itemMap, setItemMap] = useState({});
-  const [unitOptions, setUnitOptions] = useState([]);
-  const [locationOptions, setLocationOptions] = useState([]);
-  const [stateOptions, setStateOptions] = useState([]);
-  const [bankOptions, setBankOptions] = useState([]);
-  const [employeeOptions, setEmployeeOptions] = useState([]);
+  const loadProformaInvoiceData = useCallback(async (invoiceId) => {
+    if (!invoiceId) return;
+
+    setLoading(true);
+    try {
+      const response = await proformaInvoiceAPI.getProformaInvoiceById(invoiceId);
+      console.log("Proforma Invoice Data:", response);
+
+      if (response) {
+        const invoice = response;
+
+        // Map the response data to form fields
+        setValue("plant", invoice.branch?.id || "");
+        setValue("invoiceNo", invoice.docId || "");
+        setValue("invoiceDate", invoice.docDate || "");
+        setValue("customerId", invoice.customer?.id || "");
+        setValue("customerName", invoice.customer?.customerName || "");
+        setValue("belongsTo", invoice.belongsTo || "");
+        setValue("customerCode", invoice.customer?.customerCode || "");
+        setValue("poNo", invoice.purchaseOrderNo || "");
+        setValue("partyGSTState", invoice.customer?.state || "");
+        setValue("refNo", invoice.refNo || "");
+        setValue("poDate", invoice.purchaseOrderDate || "");
+        setValue("isIGSTApplicable", invoice.customer.gstApproval || "No");
+        setValue("refDate", invoice.refDate || "");
+        setValue("locationId", invoice.location?.id || "");
+        setValue("gstnNo", invoice.customer?.customerGstNo || "");
+        setValue("kindAttention", invoice.kindAttention || "");
+        setValue("designation", invoice.designation || "");
+        setValue("timeOfIssue", invoice.timeOfIssue || "");
+        setValue("bankName", invoice.bankName?.id || "");
+        setValue("date", invoice.docDate || "");
+        setValue("timeOfRemoval", invoice.timeOfRemoval || "");
+
+        // Terms and Conditions
+        setValue("termsAndConditions.insurance", invoice.insurance === 1 ? "Yes" : "No");
+        setValue("termsAndConditions.freight", invoice.freight === 1 ? "Yes" : "No");
+        setValue("termsAndConditions.noOfPkg", invoice.noOfPkg || "");
+        setValue("termsAndConditions.pkgType", invoice.pkgType || "");
+        setValue("termsAndConditions.modeOfTransport", invoice.modeOfTransport || "");
+        setValue("termsAndConditions.rateOfDuty", invoice.rateOfDuty || "");
+        setValue("termsAndConditions.tariffNo", invoice.tariffNo || "");
+        setValue("termsAndConditions.basicValue", invoice.basicValue || "");
+        setValue("termsAndConditions.grossAmount", invoice.grossAmount || "");
+        setValue("termsAndConditions.amountInWords", invoice.amountInWords || "");
+        setValue("termsAndConditions.deliveryTo", invoice.deliveryTo || "");
+        setValue("termsAndConditions.paymentTerms", invoice.paymentTerms || "");
+        setValue("termsAndConditions.paymentPercentage", invoice.paymentPercentage || "");
+        setValue("termsAndConditions.narration", invoice.narration || "");
+
+        // Product Details
+        if (invoice.proformaInvoiceDetailsResponseDTO?.length > 0) {
+          const details = invoice.proformaInvoiceDetailsResponseDTO.map(item => ({
+            // IMPORTANT: select value must be item.id, not itemCode
+            itemCode: item.item?.id || "",
+
+            customerPartNo: item.item?.customerPoNo || "",
+
+            itemDescription: item.item?.itemDescription || "",
+
+            hsCode: item.hsnCode || "",
+
+            taxType: item.taxType || "",
+
+            taxPercentage: item.taxPercentage || "",
+
+            dispatchQty: item.despatchQty || "",
+
+            unit: item.item?.unit?.id || "",
+
+            orderRate: item.orderRate || "",
+
+            amount: item.amount || "",
+
+            sgstRate: item.sgstRate || "",
+            sgstAmount: item.sgstAmount || "",
+
+            cgstRate: item.cgstRate || "",
+            cgstAmount: item.cgstAmount || "",
+
+            igstRate: item.igstRate || "",
+            igstAmount: item.igstAmount || "",
+          }));
+          salesContractArray.replace(details);
+        }
+
+        // Tax Details
+        if (invoice.proformaInvoiceTaxDetailsResponseDTO?.length > 0) {
+          const taxDetails = invoice.proformaInvoiceTaxDetailsResponseDTO.map(item => ({
+            particulars: item.particulars || "",
+            amount: item.amount || 0,
+            isSystemRow: ['Gross Amount', 'IGST', 'CGST', 'SGST'].includes(item.particulars || ""),
+            postFin: "",
+          }));
+          taxDetailsArray.replace(taxDetails);
+        }
+
+        addToast("Proforma Invoice loaded successfully", "success");
+      } else {
+        addToast("Failed to load Proforma Invoice data", "error");
+      }
+    } catch (error) {
+      console.error("Error loading proforma invoice:", error);
+      addToast("Failed to load Proforma Invoice data", "error");
+    } finally {
+      setLoading(false);
+    }
+  }, [setValue, salesContractArray, taxDetailsArray, addToast]);
+
+  useEffect(() => {
+    const invoiceId = data?.id;
+
+    if (!invoiceId) return;
+
+    // Prevent multiple API calls for the same invoice
+    if (dataLoadedRef.current === invoiceId) {
+      return;
+    }
+
+    dataLoadedRef.current = invoiceId;
+
+    loadProformaInvoiceData(invoiceId);
+  }, [data?.id, loadProformaInvoiceData]);
+
+  // ===================== Data Loading =====================
 
   const loadPlants = useCallback(async () => {
     try {
@@ -339,7 +677,7 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
           (res || []).map((p) => ({
             value: p.id,
             label: p.plantName || p.plantId || p.id,
-          })),
+          }))
         );
       } else {
         const res = await branchAPI.getBranchByOrgId(orgId);
@@ -347,7 +685,7 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
           (res || []).map((b) => ({
             value: b.id,
             label: b.branchName || b.branchCode || b.id,
-          })),
+          }))
         );
       }
     } catch (error) {
@@ -356,16 +694,36 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
     }
   }, [orgId, isMacurex]);
 
+  const loadLocation = useCallback(async () => {
+    try {
+      const response = await locationMasterAPI.getLocationMasterByOrgId(orgId, branch);
+      console.log("Loaded Locations:", response);
+      const options = (response || []).map(location => ({
+        value: location.id,
+        label: location.locationName,
+      }));
+      console.log("Normalized Location Options:", options);
+      setLocationData(options);
+    } catch (error) {
+      console.error("Failed to load locations:", error);
+      setLocationData([]);
+    }
+  }, [orgId]);
+
   const loadCustomers = useCallback(async () => {
     try {
       const res = await partyMasterAPI.getPartyByOrgId(orgId, branch);
+      console.log("Loaded Customers:", res);
       setCustomerOptions(
         (res || []).map((c) => ({
           value: c.id,
           label: c.customerCode || c.docId || c.id,
           customerName: c.customerName || "",
           customerCode: c.customerCode || "",
-        })),
+          partyGSTState: c.gstState?.stateName || "",
+          isIGSTApplicable: c.gstApplicable || false,
+          gstnNo: c.gstNo || "",
+        }))
       );
     } catch (error) {
       console.error("Failed to load customer options:", error);
@@ -397,7 +755,7 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
         (res || []).map((u) => ({
           value: u.id,
           label: u.unitId,
-        })),
+        }))
       );
     } catch (error) {
       console.error("Failed to load unit options:", error);
@@ -412,7 +770,7 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
         (res || []).map((l) => ({
           value: l.id,
           label: l.locationName || l.locationCode || l.id,
-        })),
+        }))
       );
     } catch (error) {
       console.error("Failed to load location options:", error);
@@ -427,7 +785,7 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
         (res || []).map((s) => ({
           value: s.id,
           label: s.stateName || s.stateCode || s.id,
-        })),
+        }))
       );
     } catch (error) {
       console.error("Failed to load state options:", error);
@@ -441,8 +799,8 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
       setBankOptions(
         (res || []).map((b) => ({
           value: b.id,
-          label: b.bankName || b.bankCode || b.id,
-        })),
+          label: b.bank,
+        }))
       );
     } catch (error) {
       console.error("Failed to load bank options:", error);
@@ -457,7 +815,7 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
         (res || []).map((e) => ({
           value: e.id,
           label: e.employeeName || e.name || e.id,
-        })),
+        }))
       );
     } catch (error) {
       console.error("Failed to load employee options:", error);
@@ -465,9 +823,49 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
     }
   }, [orgId]);
 
+  const loadListOfValuesData = useCallback(async () => {
+    try {
+      const result = {};
+
+      await Promise.all(
+        Object.entries(LIST_OF_VALUES_GROUPS).map(async ([key, group]) => {
+          try {
+            const response = await listOfValuesAPI.getListValuesGroup(group, orgId);
+
+            let items = [];
+            if (response?.paramObjectsMap?.listValues) {
+              items = response.paramObjectsMap.listValues;
+            } else if (response?.data?.paramObjectsMap?.listValues) {
+              items = response.data.paramObjectsMap.listValues;
+            } else if (Array.isArray(response)) {
+              items = response;
+            } else if (response?.listValues) {
+              items = response.listValues;
+            }
+
+            result[key] = items.map(item => ({
+              value: item.id || item.value,
+              label: item.valuesDescription || item.label || item.name,
+              ...item,
+            }));
+
+          } catch (err) {
+            console.error(`${group} failed`, err);
+            result[key] = [];
+          }
+        })
+      );
+
+      setListOfValuesData(result);
+    } catch (err) {
+      console.error("Error loading ListOfValues:", err);
+    }
+  }, [orgId]);
+
   useEffect(() => {
     if (orgId) {
       loadPlants();
+      loadLocation();
       loadCustomers();
       loadItems();
       loadUnits();
@@ -475,10 +873,12 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
       loadStates();
       loadBanks();
       loadEmployees();
+      loadListOfValuesData();
     }
   }, [
     orgId,
     loadPlants,
+    loadLocation,
     loadCustomers,
     loadItems,
     loadUnits,
@@ -486,82 +886,264 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
     loadStates,
     loadBanks,
     loadEmployees,
+    loadListOfValuesData,
   ]);
 
-  /* ---------------- Handlers ---------------- */
+  // ===================== API Calls =====================
+
+  const fetchTaxValue = useCallback(async (hsnCode) => {
+    if (!hsnCode || !orgId) return null;
+
+    try {
+      const response = await proformaInvoiceAPI.getTaxValue(hsnCode, orgId);
+      console.log("Tax API Response:", response);
+
+      if (response?.status && response?.paramObjectsMap?.mapp?.length > 0) {
+        const taxData = response.paramObjectsMap.mapp[0];
+        return {
+          taxPercentage: taxData.taxPercentage || 0,
+          sgst: taxData.sgst || 0,
+          cgst: taxData.cgst || 0,
+          igst: taxData.igst || 0,
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error("Failed to fetch tax value:", error);
+      return null;
+    }
+  }, [orgId]);
+
+  // ===================== Handlers =====================
 
   const handleCustomerChange = (id) => {
     const customer = customerOptions.find((c) => String(c.value) === String(id));
+    console.log("Selected Customer:", customer);
     setValue("customerId", id, { shouldDirty: true });
     setValue("customerName", customer?.customerName || "", { shouldDirty: true });
     setValue("customerCode", customer?.customerCode || "", { shouldDirty: true });
+    setValue("partyGSTState", customer?.partyGSTState || "", { shouldDirty: true });
+    const igstValue = customer?.isIGSTApplicable === true ? "Yes" : "No";
+    setValue("isIGSTApplicable", igstValue, { shouldDirty: true });
+    setValue("gstnNo", customer?.gstnNo || "", { shouldDirty: true });
+
+    // Update tax type for all rows based on IGST applicability
+    salesContractArray.fields.forEach((_, index) => {
+      const taxType = igstValue === "Yes" ? "IGST" : "SGST";
+      setValue(`salesContractDetails.${index}.taxType`, taxType);
+    });
   };
 
   const handleItemChange = (idx, field, value) => {
     setValue(`salesContractDetails.${idx}.${field}`, value, {
       shouldDirty: true,
     });
+
     if (field === "itemCode") {
       const item = itemMap[value];
       setValue(`salesContractDetails.${idx}.itemDescription`, item?.itemDescription || "", { shouldDirty: true });
-      setValue(`salesContractDetails.${idx}.hsCode`, item?.hsnCode || item?.hsnSacCode || "", { shouldDirty: true });
+
+      // Get HSN code from item
+      const hsnCode = item?.itemHsn?.hsnCode || "";
+      setValue(`salesContractDetails.${idx}.hsCode`, hsnCode, { shouldDirty: true });
       setValue(`salesContractDetails.${idx}.unit`, item?.primaryUnits?.id || "", { shouldDirty: true });
+
+      // Set tax type based on IGST applicability
+      const taxType = isIGSTApplicable === "Yes" ? "IGST" : "SGST";
+      setValue(`salesContractDetails.${idx}.taxType`, taxType, { shouldDirty: true });
+
+      // Fetch tax values if HSN code exists
+      if (hsnCode) {
+        fetchTaxValue(hsnCode).then(taxData => {
+          if (taxData) {
+            setValue(`salesContractDetails.${idx}.taxPercentage`, taxData.taxPercentage, { shouldDirty: true });
+            setValue(`salesContractDetails.${idx}.sgstRate`, taxData.sgst, { shouldDirty: true });
+            setValue(`salesContractDetails.${idx}.cgstRate`, taxData.cgst, { shouldDirty: true });
+            setValue(`salesContractDetails.${idx}.igstRate`, taxData.igst, { shouldDirty: true });
+
+            // Recalculate amounts with new tax rates
+            recalcRow(idx);
+          }
+        });
+      }
     }
   };
 
-  // Recompute row amount = qty x orderRate minus discount.
-  const recalcRow = (idx) => {
-    const row = watchSalesRows?.[idx];
-    if (!row) return;
-    const qty = parseFloat(row.qty) || 0;
-    const rate = parseFloat(row.orderRate) || 0;
-    const disc = parseFloat(row.discountPercent) || 0;
-    const amount = qty * rate * (1 - (disc / 100));
-    setValue(`salesContractDetails.${idx}.amount`, amount ? amount.toFixed(2) : "", { shouldDirty: true });
+  const handleHSNChange = async (idx, hsnCode) => {
+    setValue(`salesContractDetails.${idx}.hsCode`, hsnCode, { shouldDirty: true });
+
+    if (hsnCode) {
+      const taxData = await fetchTaxValue(hsnCode);
+      if (taxData) {
+        setValue(`salesContractDetails.${idx}.taxPercentage`, taxData.taxPercentage, { shouldDirty: true });
+        setValue(`salesContractDetails.${idx}.sgstRate`, taxData.sgst, { shouldDirty: true });
+        setValue(`salesContractDetails.${idx}.cgstRate`, taxData.cgst, { shouldDirty: true });
+        setValue(`salesContractDetails.${idx}.igstRate`, taxData.igst, { shouldDirty: true });
+
+        // Recalculate amounts with new tax rates
+        recalcRow(idx);
+      }
+    }
   };
 
-  useEffect(() => {
+  const recalcRow = (idx) => {
+    if (isUpdatingRef.current) return;
+    isUpdatingRef.current = true;
+
+    try {
+      const row = watchSalesRows?.[idx];
+      if (!row) return;
+
+      const dispatchQty = parseFloat(row.dispatchQty) || 0;
+      const orderRate = parseFloat(row.orderRate) || 0;
+
+      // Calculate amount (Dispatch Qty * Order Rate)
+      const amount = dispatchQty * orderRate;
+      setValue(`salesContractDetails.${idx}.amount`, amount ? amount.toFixed(2) : "", { shouldDirty: true });
+
+      // Calculate tax amounts based on tax type
+      const taxType = row.taxType || (isIGSTApplicable === "Yes" ? "IGST" : "SGST");
+
+      if (taxType === "IGST") {
+        const igstRate = parseFloat(row.igstRate) || 0;
+        const igstAmount = (amount * igstRate) / 100;
+        setValue(`salesContractDetails.${idx}.igstAmount`, igstAmount ? igstAmount.toFixed(2) : "", { shouldDirty: true });
+        // Clear SGST/CGST amounts
+        setValue(`salesContractDetails.${idx}.sgstAmount`, "", { shouldDirty: true });
+        setValue(`salesContractDetails.${idx}.cgstAmount`, "", { shouldDirty: true });
+      } else {
+        const sgstRate = parseFloat(row.sgstRate) || 0;
+        const cgstRate = parseFloat(row.cgstRate) || 0;
+        const sgstAmount = (amount * sgstRate) / 100;
+        const cgstAmount = (amount * cgstRate) / 100;
+        setValue(`salesContractDetails.${idx}.sgstAmount`, sgstAmount ? sgstAmount.toFixed(2) : "", { shouldDirty: true });
+        setValue(`salesContractDetails.${idx}.cgstAmount`, cgstAmount ? cgstAmount.toFixed(2) : "", { shouldDirty: true });
+        // Clear IGST amount
+        setValue(`salesContractDetails.${idx}.igstAmount`, "", { shouldDirty: true });
+      }
+    } finally {
+      isUpdatingRef.current = false;
+    }
+  };
+
+  const calculateTaxDetails = useCallback(() => {
     if (!watchSalesRows?.length) return;
-    const total = watchSalesRows.reduce((sum, r) => {
-      const amount = parseFloat(r.amount) || 0;
-      const tax =
-        (parseFloat(r.sgstAmount) || 0) +
-        (parseFloat(r.cgstAmount) || 0) +
-        (parseFloat(r.igstAmount) || 0);
-      return sum + amount + tax;
-    }, 0);
-    const taxRowsTotal = (watch("taxDetails") || []).reduce(
-      (sum, r) => sum + (parseFloat(r.amount) || 0),
-      0,
-    );
-    const grand = total + taxRowsTotal;
+
+    const contractDetails = watchSalesRows || [];
+    const totalAmount = contractDetails.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+
+    const taxType = isIGSTApplicable === "Yes" ? "IGST" : "SGST";
+
+    let sgstTotal = 0, cgstTotal = 0, igstTotal = 0;
+
+    contractDetails.forEach(item => {
+      sgstTotal += Number(item.sgstAmount) || 0;
+      cgstTotal += Number(item.cgstAmount) || 0;
+      igstTotal += Number(item.igstAmount) || 0;
+    });
+
+    const existingTaxDetails = getValues('taxDetails') || [];
+    const userAddedRows = existingTaxDetails.filter(item => !item.isSystemRow);
+
+    const systemRows = [];
+
+    systemRows.push({
+      particulars: "Gross Amount",
+      amount: totalAmount,
+      isSystemRow: true,
+      postFin: ""
+    });
+
+    if (taxType === "IGST") {
+      systemRows.push({
+        particulars: "IGST",
+        amount: igstTotal,
+        isSystemRow: true,
+        postFin: ""
+      });
+    } else {
+      systemRows.push({
+        particulars: "SGST",
+        amount: sgstTotal,
+        isSystemRow: true,
+        postFin: ""
+      });
+      systemRows.push({
+        particulars: "CGST",
+        amount: cgstTotal,
+        isSystemRow: true,
+        postFin: ""
+      });
+    }
+
+    const allTaxEntries = [...systemRows, ...userAddedRows];
+
+    const currentRows = getValues("taxDetails") || [];
+
+    const hasChanged =
+      JSON.stringify(currentRows) !== JSON.stringify(allTaxEntries);
+
+    if (hasChanged) {
+      taxDetailsArray.replace(allTaxEntries);
+    }
+
+    // Set Basic Value as total of all amounts
+    setValue("termsAndConditions.basicValue", totalAmount ? totalAmount.toFixed(2) : "", { shouldDirty: true });
+
+    const grand = totalAmount + sgstTotal + cgstTotal + igstTotal;
     setValue("termsAndConditions.grossAmount", grand ? grand.toFixed(2) : "", { shouldDirty: true });
     setValue("termsAndConditions.amountInWords", grand ? numberToWords(grand) : "", { shouldDirty: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [watchSalesRows, grossAmount, watch("taxDetails")]);
+  }, [watchSalesRows, getValues, isIGSTApplicable, taxDetailsArray, setValue]);
+
+  useEffect(() => {
+    calculateTaxDetails();
+  }, [watchSalesRows, calculateTaxDetails]);
 
   const handleAddItem = () => {
     const idx = salesContractArray.fields.length;
-    salesContractArray.append(getDefaultSalesRow());
-    setValue(`salesContractDetails.${idx}.effectiveFrom`, dayjs().format("YYYY-MM-DD"), { shouldDirty: true });
+    const newRow = getDefaultSalesRow();
+    // Set tax type based on IGST applicability
+    newRow.taxType = isIGSTApplicable === "Yes" ? "IGST" : "SGST";
+    salesContractArray.append(newRow);
   };
 
   const handleRemoveItem = (index) => {
     if (salesContractArray.fields.length > 1) salesContractArray.remove(index);
   };
 
-  const handleAddTax = () => taxDetailsArray.append(getDefaultTaxRow());
-  const handleRemoveTax = (index) => {
-    if (taxDetailsArray.fields.length > 1) taxDetailsArray.remove(index);
+  const handleAddTax = () => {
+    const newItem = {
+      particulars: "",
+      amount: 0.0,
+      postFin: "",
+      isSystemRow: false
+    };
+    taxDetailsArray.append(newItem);
   };
 
-  /* ---------------- Validation & Save ---------------- */
+  const handleRemoveTax = (index) => {
+    const currentTaxDetails = getValues('taxDetails') || [];
+    const isSystemRow = currentTaxDetails[index]?.isSystemRow;
+
+    if (isSystemRow) {
+      addToast('Cannot delete system calculated rows', 'error');
+      return;
+    }
+
+    if (taxDetailsArray.fields.length > 1) {
+      taxDetailsArray.remove(index);
+      setTimeout(() => {
+        calculateTaxDetails();
+      }, 100);
+    }
+  };
+
+  // ===================== Validation & Save =====================
+
+  // ===================== Validation & Save =====================
 
   const validate = () => {
     const fundErrors = [];
-    if (!defaults().invoiceNo && !watch("invoiceNo")) {
-      // invoice no auto generated; nothing to validate
-    }
     if (!watch("plant")) fundErrors.push("Plant");
     if (!watch("customerId")) fundErrors.push("Customer");
     if (!watch("invoiceDate")) fundErrors.push("Invoice Date");
@@ -573,45 +1155,101 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
   const onSubmit = async (formData) => {
     if (!validate()) return;
 
+    setSaving(true);
     const isUpdate = Boolean(data?.id);
 
-    const payload = {
-      ...(isUpdate ? { id: data.id } : {}),
-      orgId,
-      branch,
-      ...formData,
-      invoiceNo: formData.invoiceNo || `PI-${dayjs().format("YYYYMMDD")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`,
-      salesContractDetails: (formData.salesContractDetails || []).filter(
-        (r) => r.itemCode?.trim(),
-      ),
-      taxDetails: (formData.taxDetails || []).filter(
-        (r) => r.particulars?.trim() || parseFloat(r.amount) > 0,
-      ),
-      createdBy: isUpdate ? data?.createdBy || usersId : usersId,
-      ...(isUpdate ? { updatedBy: usersId } : {}),
+    // Format date for API
+    const formatDateForAPI = (dateString) => {
+      if (!dateString) return null;
+      try {
+        const date = new Date(dateString);
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+      } catch (e) {
+        return null;
+      }
     };
 
+    // Build the payload according to the API structure
+    const payload = {
+      active: true,
+      bankName: formData.bankName ? parseInt(formData.bankName) : 0,
+      belongsTo: formData.belongsTo || "",
+      branch: branch,
+      cancelRemarks: "",
+      createdBy: usersId || "admin",
+      customer: formData.customerId ? parseInt(formData.customerId) : 0,
+      deliveryTo: formData.termsAndConditions?.deliveryTo || "",
+      designation: formData.designation || "",
+      financialYear: new Date().getFullYear().toString(),
+      freight: formData.termsAndConditions?.freight === "Yes" ? 1 : 0,
+      id: isUpdate ? parseInt(data.id) : 0,
+      insurance: formData.termsAndConditions?.insurance === "Yes" ? 1 : 0,
+      isIgstApplicable: formData.isIGSTApplicable || "No",
+      kindAttention: formData.kindAttention || "",
+      location: formData.locationId ? parseInt(formData.locationId) : 0,
+      modeOfTransport: formData.termsAndConditions?.modeOfTransport || "",
+      narration: formData.termsAndConditions?.narration || "",
+      noOfPkg: parseInt(formData.termsAndConditions?.noOfPkg) || 0,
+      orgId: orgId,
+      paymentPercentage: formData.termsAndConditions?.paymentPercentage || "",
+      paymentTerms: formData.termsAndConditions?.paymentTerms || "",
+      pkgType: formData.termsAndConditions?.pkgType || "",
+      purchaseOrderDate: formatDateForAPI(formData.poDate) || "",
+      purchaseOrderNo: formData.poNo || "",
+      rateOfDuty: parseFloat(formData.termsAndConditions?.rateOfDuty) || 0,
+      refDate: formatDateForAPI(formData.refDate) || "",
+      refNo: formData.refNo || "",
+      tariffNo: formData.termsAndConditions?.tariffNo || "",
+      // Proforma Invoice Details (Product Details)
+      proformaInvoiceDetailsDTO: (formData.salesContractDetails || [])
+        .filter((r) => r.itemCode?.trim())
+        .map((item) => ({
+          despatchQty: parseFloat(item.dispatchQty) || 0,
+          hsnCode: item.hsCode || "",
+          item: itemMap[item.itemCode]?.id ? parseInt(itemMap[item.itemCode].id) : 0,
+          orderRate: parseFloat(item.orderRate) || 0,
+          taxPercentage: parseFloat(item.taxPercentage) || 0,
+          taxType: item.taxType || "SGST",
+        })),
+      // Proforma Invoice Tax Details
+      proformaInvoiceTaxDetailsDTO: (formData.taxDetails || [])
+        .filter((r) => r.particulars?.trim() || parseFloat(r.amount) > 0)
+        .map((item) => ({
+          amount: parseFloat(item.amount) || 0,
+          particulars: item.particulars || "",
+        })),
+    };
+
+    // If updating, keep the id, otherwise remove it
+    if (!isUpdate) {
+      delete payload.id;
+    }
+
+    console.log("Saving Proforma Invoice Payload:", payload);
+
     try {
-      const response =
-        await proformaInvoiceAPI.createUpdateProformaInvoice(payload);
+      const response = await proformaInvoiceAPI.createUpdateProformaInvoice(payload);
 
       if (response?.status) {
         addToast(
           response?.paramObjectsMap?.message ||
-            (isUpdate
-              ? "Proforma Invoice updated successfully!"
-              : "Proforma Invoice created successfully!"),
-          "success",
+          (isUpdate
+            ? "Proforma Invoice updated successfully!"
+            : "Proforma Invoice created successfully!"),
+          "success"
         );
         onBack?.();
       } else {
         addToast(
           response?.errors?.[0]?.shortMessage ||
-            response?.errors?.[0]?.longMessage ||
-            response?.message ||
-            response?.paramObjectsMap?.message ||
-            "Failed to save Proforma Invoice.",
-          "error",
+          response?.errors?.[0]?.longMessage ||
+          response?.message ||
+          response?.paramObjectsMap?.message ||
+          "Failed to save Proforma Invoice.",
+          "error"
         );
       }
     } catch (err) {
@@ -619,751 +1257,626 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
       if (err.response?.data) {
         addToast(
           err.response.data.message ||
-            err.response.data.statusMessage ||
-            err.response.data.error ||
-            JSON.stringify(err.response.data),
-          "error",
+          err.response.data.statusMessage ||
+          err.response.data.error ||
+          JSON.stringify(err.response.data),
+          "error"
         );
       } else {
         addToast("Something went wrong.", "error");
       }
+    } finally {
+      setSaving(false);
     }
   };
 
+  // ===================== Render Functions =====================
+
   const renderHeader = () => (
     <div className={fieldGrid}>
-      <InputField label="Plant" required error={errors.plant?.message}>
-        <Controller
-          control={control}
-          name="plant"
-          rules={{ required: "Plant is required" }}
-          render={({ field }) => (
-            <select {...field} className={`${controlClasses} ${errors.plant ? "border-red-500" : ""}`}>
-              <option value="">-- Select --</option>
-              {plantOptions.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          )}
-        />
-      </InputField>
+      <SelectField
+        control={control}
+        name="plant"
+        label="Plant"
+        options={plantOptions}
+        required
+        errors={errors}
+        placeholder="-- Select --"
+      />
 
-      <InputField label="Invoice No">
-        <input
-          {...register("invoiceNo")}
-          placeholder="Auto"
-          disabled={!data}
-          className={`${controlClasses} bg-gray-50 dark:bg-gray-800`}
-        />
-      </InputField>
+      <InputField
+        control={control}
+        name="invoiceNo"
+        label="Invoice No"
+        placeholder="Auto"
+        readOnly={!data}
+        errors={errors}
+      />
 
-      <InputField label="Invoice Date" required error={errors.invoiceDate?.message}>
-        <input
-          type="date"
-          {...register("invoiceDate", { required: "Invoice Date is required" })}
-          className={`${controlClasses} ${errors.invoiceDate ? "border-red-500" : ""}`}
-        />
-      </InputField>
+      <InputField
+        control={control}
+        name="invoiceDate"
+        label="Invoice Date"
+        type="date"
+        required
+        errors={errors}
+      />
 
-      <InputField label="Customer ID" required error={errors.customerId?.message}>
-        <Controller
-          control={control}
-          name="customerId"
-          rules={{ required: "Customer is required" }}
-          render={({ field }) => (
-            <select
-              {...field}
-              onChange={(e) => handleCustomerChange(e.target.value)}
-              className={`${controlClasses} ${errors.customerId ? "border-red-500" : ""}`}
-            >
-              <option value="">-- Select --</option>
-              {customerOptions.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          )}
-        />
-      </InputField>
+      <SelectField
+        control={control}
+        name="customerId"
+        label="Customer ID"
+        options={customerOptions}
+        required
+        errors={errors}
+        onChange={handleCustomerChange}
+        placeholder="-- Select --"
+      />
 
-      <InputField label="Customer Name">
-        <input {...register("customerName")} disabled className={`${controlClasses} bg-gray-50 dark:bg-gray-800`} />
-      </InputField>
+      <InputField
+        control={control}
+        name="customerName"
+        label="Customer Name"
+        readOnly
+        errors={errors}
+      />
 
-      <InputField label="Belongs To">
-        <Controller
-          control={control}
-          name="belongsTo"
-          render={({ field }) => (
-            <select {...field} className={controlClasses}>
-              <option value="">-- Select --</option>
-              {BELONGS_TO.map((o) => (
-                <option key={o} value={o}>
-                  {o}
-                </option>
-              ))}
-            </select>
-          )}
-        />
-      </InputField>
+      <SelectField
+        control={control}
+        name="belongsTo"
+        label="Belongs To"
+        options={BELONGS_TO}
+        errors={errors}
+        placeholder="-- Select --"
+      />
 
-      <InputField label="Customer Code">
-        <input {...register("customerCode")} disabled className={`${controlClasses} bg-gray-50 dark:bg-gray-800`} />
-      </InputField>
+      <InputField
+        control={control}
+        name="poNo"
+        label="PO No."
+        placeholder="PO No."
+        errors={errors}
+      />
 
-      <InputField label="PO No.">
-        <input {...register("poNo")} className={controlClasses} placeholder="PO No." />
-      </InputField>
+      <InputField
+        control={control}
+        name="poDate"
+        label="PO Date"
+        type="date"
+        errors={errors}
+      />
 
-      <InputField label="Party GST State">
-        <Controller
-          control={control}
-          name="partyGSTState"
-          render={({ field }) => (
-            <select {...field} className={controlClasses}>
-              <option value="">-- Select --</option>
-              {stateOptions.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          )}
-        />
-      </InputField>
+      <InputField
+        control={control}
+        name="partyGSTState"
+        disabled
+        label="Party GST State"
+        errors={errors}
+        placeholder="Party GST State"
+      />
 
-      <InputField label="Ref.No.">
-        <input {...register("refNo")} className={controlClasses} placeholder="Ref.No." />
-      </InputField>
+      <InputField
+        control={control}
+        name="isIGSTApplicable"
+        label="Is IGST Applicable?"
+        disabled
+        errors={errors}
+      />
 
-      <InputField label="PO Date">
-        <input type="date" {...register("poDate")} className={controlClasses} />
-      </InputField>
+      <InputField
+        control={control}
+        name="refNo"
+        label="Ref.No."
+        placeholder="Ref.No."
+        errors={errors}
+      />
 
-      <InputField label="Is IGST Appli?">
-        <Controller
-          control={control}
-          name="isIGSTAppli"
-          render={({ field }) => (
-            <select {...field} className={controlClasses}>
-              <option value="">-- Select --</option>
-              {YES_NO.map((o) => (
-                <option key={o} value={o}>
-                  {o}
-                </option>
-              ))}
-            </select>
-          )}
-        />
-      </InputField>
+      <InputField
+        control={control}
+        name="refDate"
+        label="Ref.Date."
+        type="date"
+        errors={errors}
+      />
 
-      <InputField label="Ref.Date.">
-        <input type="date" {...register("refDate")} className={controlClasses} />
-      </InputField>
+      <SelectField
+        control={control}
+        name="locationId"
+        label="Location ID"
+        options={locationData}
+        errors={errors}
+        placeholder="Location ID"
+      />
 
-      <InputField label="Location ID">
-        <Controller
-          control={control}
-          name="locationId"
-          render={({ field }) => (
-            <select {...field} className={controlClasses}>
-              <option value="">-- Select --</option>
-              {locationOptions.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          )}
-        />
-      </InputField>
+      <InputField
+        control={control}
+        name="gstnNo"
+        label="GSTN No."
+        placeholder="GSTN No."
+        disabled
+        errors={errors}
+      />
 
-      <InputField label="GSTN No.">
-        <input {...register("gstnNo")} className={controlClasses} placeholder="GSTN No." />
-      </InputField>
+      <InputField
+        control={control}
+        name="kindAttention"
+        label="Kind Attention"
+        errors={errors}
+        placeholder="Kind Attention"
+      />
 
-      <InputField label="Kind Attention">
-        <Controller
-          control={control}
-          name="kindAttention"
-          render={({ field }) => (
-            <select {...field} className={controlClasses}>
-              <option value="">-- Select --</option>
-              {KIND_ATTENTION.map((o) => (
-                <option key={o} value={o}>
-                  {o}
-                </option>
-              ))}
-            </select>
-          )}
-        />
-      </InputField>
+      <InputField
+        control={control}
+        name="designation"
+        label="Designation"
+        errors={errors}
+        placeholder="Designation"
+      />
 
-      <InputField label="Designation">
-        <Controller
-          control={control}
-          name="designation"
-          render={({ field }) => (
-            <select {...field} className={controlClasses}>
-              <option value="">-- Select --</option>
-              {employeeOptions.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          )}
-        />
-      </InputField>
+      <InputField
+        control={control}
+        name="timeOfIssue"
+        label="Time Of Issue"
+        type="time"
+        errors={errors}
+      />
 
-      <InputField label="Time Of Issue">
-        <input type="time" {...register("timeOfIssue")} className={controlClasses} />
-      </InputField>
+      <SelectField
+        control={control}
+        name="bankName"
+        label="Bank Name"
+        options={bankOptions}
+        errors={errors}
+        placeholder="-- Select --"
+      />
 
-      <InputField label="Tax Code">
-        <Controller
-          control={control}
-          name="taxCode"
-          render={({ field }) => (
-            <select {...field} className={controlClasses}>
-              <option value="">-- Select --</option>
-              {TAX_TYPE.map((o) => (
-                <option key={o} value={o}>
-                  {o}
-                </option>
-              ))}
-            </select>
-          )}
-        />
-      </InputField>
+      <InputField
+        control={control}
+        name="date"
+        label="Date"
+        type="date"
+        errors={errors}
+      />
 
-      <InputField label="Bank Name">
-        <Controller
-          control={control}
-          name="bankName"
-          render={({ field }) => (
-            <select {...field} className={controlClasses}>
-              <option value="">-- Select --</option>
-              {bankOptions.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          )}
-        />
-      </InputField>
-
-      <InputField label="Date">
-        <input type="date" {...register("date")} className={controlClasses} />
-      </InputField>
-
-      <InputField label="Time Of Removal">
-        <input type="time" {...register("timeOfRemoval")} className={controlClasses} />
-      </InputField>
+      <InputField
+        control={control}
+        name="timeOfRemoval"
+        label="Time Of Removal"
+        type="time"
+        errors={errors}
+      />
     </div>
   );
 
-  const renderSalesTab = () => (
-    <div className="pt-2 space-y-2">
-      <div className="flex items-center gap-2 text-[11px] text-gray-500 dark:text-gray-400">
-        <span>Add products to the proforma invoice</span>
-        <button
-          type="button"
-          onClick={handleAddItem}
-          className="ml-auto h-6 w-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-colors"
-        >
-          <Plus size={12} />
-        </button>
-      </div>
+  const renderSalesTab = () => {
+    // Determine if we should show SGST/CGST or IGST columns
+    const showSGST = isIGSTApplicable === "No";
+    const showIGST = isIGSTApplicable === "Yes";
 
-      <TableWrapper>
-        <TableHead
-          headers={[
-            "S.No",
-            "Item Code *",
-            "Customer Part No",
-            "Item Description",
-            "HSN/SAC Code",
-            "Tax Type",
-            "Tax (%)",
-            "Unit",
-            "Qty",
-            "Quot. Rate",
-            "Order Rate",
-            "Discount %",
-            "Effective From",
-            "Effective To",
-            "Discount Amount",
-            "Amount",
-            "SGST Rate",
-            "SGST Amount",
-            "CGST Rate",
-            "CGST Amount",
-            "IGST Rate",
-            "IGST Amount",
-            "Currency",
-            "Action",
-          ]}
-        />
-        <tbody>
-          {salesContractArray.fields.map((field, index) => (
-            <TableRow
-              key={field.id}
-              index={index}
-              onRemove={() => handleRemoveItem(index)}
-              disabled={salesContractArray.fields.length <= 1}
-            >
-              <SelectCell
-                value={watchSalesRows?.[index]?.itemCode}
-                onChange={(v) => handleItemChange(index, "itemCode", v)}
-                options={itemOptions}
-              />
-              <td className="p-2 align-top">
-                <input
-                  value={watchSalesRows?.[index]?.customerPartNo}
-                  onChange={(e) => handleItemChange(index, "customerPartNo", e.target.value)}
-                  className={controlClasses}
+    // Build headers based on tax type
+    const baseHeaders = [
+      "S.No",
+      "Item Code *",
+      "Customer Part No",
+      "Item Description",
+      "HSN/SAC Code",
+      "Tax Type",
+      "Tax %",
+      "Despatch Qty",
+      "Unit",
+      "Order Rate",
+      "Amount",
+    ];
+
+    const sgstHeaders = ["SGST Rate", "SGST Amount", "CGST Rate", "CGST Amount"];
+    const igstHeaders = ["IGST Rate", "IGST Amount"];
+
+    let taxHeaders = [];
+    if (showSGST) {
+      taxHeaders = sgstHeaders;
+    } else if (showIGST) {
+      taxHeaders = igstHeaders;
+    }
+
+    const headers = [...baseHeaders, ...taxHeaders, "Action"];
+
+    return (
+      <div className="pt-2 space-y-2">
+        <div className="flex items-center gap-2 text-[11px] text-gray-500 dark:text-gray-400">
+          <span>Add products to the proforma invoice</span>
+          <button
+            type="button"
+            onClick={handleAddItem}
+            className="ml-auto h-6 w-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-colors"
+          >
+            <Plus size={12} />
+          </button>
+        </div>
+
+        <TableWrapper>
+          <TableHead headers={headers} />
+          <tbody>
+            {salesContractArray.fields.map((field, index) => (
+              <TableRow
+                key={field.id}
+                index={index}
+                onRemove={() => handleRemoveItem(index)}
+                disabled={salesContractArray.fields.length <= 1}
+              >
+                <SelectCell
+                  control={control}
+                  name={`salesContractDetails.${index}.itemCode`}
+                  options={itemOptions}
+                  errors={errors}
+                  onChange={(v) => handleItemChange(index, "itemCode", v)}
+                />
+                <InputCell
+                  control={control}
+                  name={`salesContractDetails.${index}.customerPartNo`}
                   placeholder="Part No"
+                  errors={errors}
                 />
-              </td>
-              <td className="p-2 align-top">
-                <input
-                  value={watchSalesRows?.[index]?.itemDescription}
-                  onChange={(e) => handleItemChange(index, "itemDescription", e.target.value)}
-                  className={`${controlClasses} bg-gray-50 dark:bg-gray-800`}
-                  placeholder="Description"
-                />
-              </td>
-              <td className="p-2 align-top">
-                <input
-                  value={watchSalesRows?.[index]?.hsCode}
-                  onChange={(e) => handleItemChange(index, "hsCode", e.target.value)}
-                  className={`${controlClasses} bg-gray-50 dark:bg-gray-800`}
-                  placeholder="HS Code"
-                />
-              </td>
-              <td className="p-2 align-top">
-                <select
-                  value={watchSalesRows?.[index]?.taxType}
-                  onChange={(e) => handleItemChange(index, "taxType", e.target.value)}
-                  className={controlClasses}
-                >
-                  <option value="">-- Select --</option>
-                  {TAX_TYPE.map((o) => (
-                    <option key={o} value={o}>
-                      {o}
-                    </option>
-                  ))}
-                </select>
-              </td>
-              <td className="p-2 align-top">
-                <input
-                  type="number"
-                  step="0.01"
-                  value={watchSalesRows?.[index]?.taxRs}
-                  onChange={(e) => handleItemChange(index, "taxRs", e.target.value)}
-                  className={controlClasses}
-                  placeholder="0.00"
-                />
-              </td>
-              <td className="p-2 align-top">
-                <select
-                  value={watchSalesRows?.[index]?.unit}
-                  onChange={(e) => handleItemChange(index, "unit", e.target.value)}
-                  className={controlClasses}
-                >
-                  <option value="">-- Select --</option>
-                  {unitOptions.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </td>
-              <td className="p-2 align-top">
-                <input
-                  type="number"
-                  step="0.001"
-                  value={watchSalesRows?.[index]?.qty}
-                  onChange={(e) => {
-                    handleItemChange(index, "qty", e.target.value);
-                    recalcRow(index);
-                  }}
-                  className={controlClasses}
-                  placeholder="0.000"
-                />
-              </td>
-              <td className="p-2 align-top">
-                <input
-                  type="number"
-                  step="0.01"
-                  value={watchSalesRows?.[index]?.quotRate}
-                  onChange={(e) => handleItemChange(index, "quotRate", e.target.value)}
-                  className={controlClasses}
-                  placeholder="0.00"
-                />
-              </td>
-              <td className="p-2 align-top">
-                <input
-                  type="number"
-                  step="0.001"
-                  value={watchSalesRows?.[index]?.orderRate}
-                  onChange={(e) => {
-                    handleItemChange(index, "orderRate", e.target.value);
-                    recalcRow(index);
-                  }}
-                  className={controlClasses}
-                  placeholder="0.000"
-                />
-              </td>
-              <td className="p-2 align-top">
-                <input
-                  type="number"
-                  step="0.01"
-                  value={watchSalesRows?.[index]?.discountPercent}
-                  onChange={(e) => {
-                    handleItemChange(index, "discountPercent", e.target.value);
-                    recalcRow(index);
-                  }}
-                  className={controlClasses}
-                  placeholder="0.00"
-                />
-              </td>
-              <td className="p-2 align-top">
-                <input
-                  type="date"
-                  value={watchSalesRows?.[index]?.effectiveFrom}
-                  onChange={(e) => handleItemChange(index, "effectiveFrom", e.target.value)}
-                  className={controlClasses}
-                />
-              </td>
-              <td className="p-2 align-top">
-                <input
-                  type="date"
-                  value={watchSalesRows?.[index]?.effectiveTo}
-                  onChange={(e) => handleItemChange(index, "effectiveTo", e.target.value)}
-                  className={controlClasses}
-                />
-              </td>
-              <td className="p-2 align-top">
-                <input
-                  type="number"
-                  step="0.001"
-                  value={watchSalesRows?.[index]?.discountAmount}
-                  onChange={(e) => handleItemChange(index, "discountAmount", e.target.value)}
-                  className={`${controlClasses} bg-gray-50 dark:bg-gray-800`}
-                  placeholder="0.000"
-                />
-              </td>
-              <td className="p-2 align-top">
-                <input
-                  type="number"
-                  step="0.001"
-                  value={watchSalesRows?.[index]?.amount}
-                  className={`${controlClasses} bg-gray-50 dark:bg-gray-800`}
+                <InputCell
+                  control={control}
+                  name={`salesContractDetails.${index}.itemDescription`}
                   readOnly
+                  placeholder="Description"
+                  errors={errors}
+                />
+                <InputCell
+                  control={control}
+                  name={`salesContractDetails.${index}.hsCode`}
+                  placeholder="HS Code"
+                  errors={errors}
+                  onChange={(e) => handleHSNChange(index, e.target.value)}
+                />
+                <SelectCell
+                  control={control}
+                  name={`salesContractDetails.${index}.taxType`}
+                  options={TAX_TYPE}
+                  errors={errors}
+                  disabled={true}
+                />
+                <InputCell
+                  control={control}
+                  name={`salesContractDetails.${index}.taxPercentage`}
+                  type="number"
+                  disabled
+                  step="0.01"
+                  placeholder="0.00"
+                  errors={errors}
+                />
+                <InputCell
+                  control={control}
+                  name={`salesContractDetails.${index}.dispatchQty`}
+                  type="number"
+                  step="0.001"
                   placeholder="0.000"
+                  errors={errors}
+                  onChange={() => recalcRow(index)}
                 />
-              </td>
-              <td className="p-2 align-top">
-                <input
+                <SelectCell
+                  control={control}
+                  name={`salesContractDetails.${index}.unit`}
+                  options={unitOptions}
+                  errors={errors}
+                />
+                <InputCell
+                  control={control}
+                  name={`salesContractDetails.${index}.orderRate`}
                   type="number"
-                  step="0.0001"
-                  value={watchSalesRows?.[index]?.sgstRate}
-                  onChange={(e) => handleItemChange(index, "sgstRate", e.target.value)}
-                  className={controlClasses}
-                  placeholder="0.0000"
+                  step="0.001"
+                  placeholder="0.000"
+                  errors={errors}
+                  onChange={() => recalcRow(index)}
                 />
-              </td>
-              <td className="p-2 align-top">
-                <input
+                <InputCell
+                  control={control}
+                  name={`salesContractDetails.${index}.amount`}
                   type="number"
-                  step="0.01"
-                  value={watchSalesRows?.[index]?.sgstAmount}
-                  onChange={(e) => handleItemChange(index, "sgstAmount", e.target.value)}
-                  className={controlClasses}
-                  placeholder="0.00"
+                  step="0.001"
+                  placeholder="0.000"
+                  readOnly
+                  errors={errors}
                 />
-              </td>
-              <td className="p-2 align-top">
-                <input
-                  type="number"
-                  step="0.0001"
-                  value={watchSalesRows?.[index]?.cgstRate}
-                  onChange={(e) => handleItemChange(index, "cgstRate", e.target.value)}
-                  className={controlClasses}
-                  placeholder="0.0000"
-                />
-              </td>
-              <td className="p-2 align-top">
-                <input
-                  type="number"
-                  step="0.01"
-                  value={watchSalesRows?.[index]?.cgstAmount}
-                  onChange={(e) => handleItemChange(index, "cgstAmount", e.target.value)}
-                  className={controlClasses}
-                  placeholder="0.00"
-                />
-              </td>
-              <td className="p-2 align-top">
-                <input
-                  type="number"
-                  step="0.0001"
-                  value={watchSalesRows?.[index]?.igstRate}
-                  onChange={(e) => handleItemChange(index, "igstRate", e.target.value)}
-                  className={controlClasses}
-                  placeholder="0.0000"
-                />
-              </td>
-              <td className="p-2 align-top">
-                <input
-                  type="number"
-                  step="0.01"
-                  value={watchSalesRows?.[index]?.igstAmount}
-                  onChange={(e) => handleItemChange(index, "igstAmount", e.target.value)}
-                  className={controlClasses}
-                  placeholder="0.00"
-                />
-              </td>
-              <td className="p-2 align-top">
-                <select
-                  value={watchSalesRows?.[index]?.currencyName}
-                  onChange={(e) => handleItemChange(index, "currencyName", e.target.value)}
-                  className={controlClasses}
-                >
-                  <option value="">-- Select --</option>
-                  {CURRENCY.map((o) => (
-                    <option key={o} value={o}>
-                      {o}
-                    </option>
-                  ))}
-                </select>
-              </td>
-            </TableRow>
-          ))}
-        </tbody>
-      </TableWrapper>
-    </div>
-  );
 
-  const renderTaxTab = () => (
-    <div className="pt-2 space-y-2">
-      <div className="flex items-center justify-end">
-        <button
-          type="button"
-          onClick={handleAddTax}
-          className="h-6 w-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-colors"
-        >
-          <Plus size={12} />
-        </button>
+                {/* Conditionally render SGST/CGST or IGST columns */}
+                {showSGST && (
+                  <>
+                    <InputCell
+                      control={control}
+                      name={`salesContractDetails.${index}.sgstRate`}
+                      type="number"
+                      step="0.0001"
+                      placeholder="0.0000"
+                      errors={errors}
+                      readOnly
+                    />
+                    <InputCell
+                      control={control}
+                      name={`salesContractDetails.${index}.sgstAmount`}
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      readOnly
+                      errors={errors}
+                    />
+                    <InputCell
+                      control={control}
+                      name={`salesContractDetails.${index}.cgstRate`}
+                      type="number"
+                      step="0.0001"
+                      placeholder="0.0000"
+                      errors={errors}
+                      readOnly
+                    />
+                    <InputCell
+                      control={control}
+                      name={`salesContractDetails.${index}.cgstAmount`}
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      readOnly
+                      errors={errors}
+                    />
+                  </>
+                )}
+
+                {showIGST && (
+                  <>
+                    <InputCell
+                      control={control}
+                      name={`salesContractDetails.${index}.igstRate`}
+                      type="number"
+                      step="0.0001"
+                      placeholder="0.0000"
+                      errors={errors}
+                      readOnly
+                    />
+                    <InputCell
+                      control={control}
+                      name={`salesContractDetails.${index}.igstAmount`}
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      readOnly
+                      errors={errors}
+                    />
+                  </>
+                )}
+              </TableRow>
+            ))}
+          </tbody>
+        </TableWrapper>
       </div>
+    );
+  };
 
-      <TableWrapper>
-        <TableHead headers={["S.No", "Particulars", "Amount", "Post Fin", "Action"]} />
-        <tbody>
-          {taxDetailsArray.fields.map((field, index) => (
-            <TableRow
-              key={field.id}
-              index={index}
-              onRemove={() => handleRemoveTax(index)}
-              disabled={taxDetailsArray.fields.length <= 1}
-            >
-              <td className="p-2 align-top">
-                <select
-                  value={watch(`taxDetails.${index}.particulars`)}
-                  onChange={(e) => setValue(`taxDetails.${index}.particulars`, e.target.value, { shouldDirty: true })}
-                  className={controlClasses}
+  const renderTaxTab = () => {
+    // Get all available options from listOfValuesData
+    const allOptions = listOfValuesData.PARTICULARS || [];
+
+    // Get system option labels
+    const systemOptionLabels = ['Gross Amount', 'IGST', 'CGST', 'SGST'];
+
+    return (
+      <div className="pt-2 space-y-2">
+        <div className="flex items-center justify-end">
+          <button
+            type="button"
+            onClick={handleAddTax}
+            className="h-6 w-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-colors"
+          >
+            <Plus size={12} />
+          </button>
+        </div>
+
+        <TableWrapper>
+          <TableHead headers={["S.No", "Particulars", "Amount", "Action"]} />
+          <tbody>
+            {taxDetailsArray.fields.map((field, index) => {
+              const isSystemRow = getValues(`taxDetails.${index}.isSystemRow`);
+              const particulars = getValues(`taxDetails.${index}.particulars`);
+              const isReadOnly = isSystemRow || systemOptionLabels.includes(particulars);
+
+              // For system rows, only show their specific value
+              // For user rows, show all options except system ones
+              let availableOptions = [];
+              if (isSystemRow) {
+                availableOptions = [{ label: particulars, value: particulars }];
+              } else {
+                // Filter out system options for user rows
+                availableOptions = allOptions.filter(option =>
+                  !systemOptionLabels.includes(option.label)
+                );
+              }
+
+              return (
+                <TableRow
+                  key={field.id}
+                  index={index}
+                  onRemove={() => handleRemoveTax(index)}
+                  disabled={taxDetailsArray.fields.length <= 1}
                 >
-                  <option value="">-- Select --</option>
-                  {PARTICULAR.map((o) => (
-                    <option key={o} value={o}>
-                      {o}
-                    </option>
-                  ))}
-                </select>
-              </td>
-              <td className="p-2 align-top">
-                <input
-                  type="number"
-                  step="0.01"
-                  value={watch(`taxDetails.${index}.amount`)}
-                  onChange={(e) => setValue(`taxDetails.${index}.amount`, e.target.value, { shouldDirty: true })}
-                  className={controlClasses}
-                  placeholder="0.00"
-                />
-              </td>
-              <td className="p-2 align-top">
-                <select
-                  value={watch(`taxDetails.${index}.postFin`)}
-                  onChange={(e) => setValue(`taxDetails.${index}.postFin`, e.target.value, { shouldDirty: true })}
-                  className={controlClasses}
-                >
-                  <option value="">-- Select --</option>
-                  {POST_FIN.map((o) => (
-                    <option key={o} value={o}>
-                      {o}
-                    </option>
-                  ))}
-                </select>
-              </td>
-            </TableRow>
-          ))}
-        </tbody>
-      </TableWrapper>
-    </div>
-  );
+                  <td className="p-2 align-top">
+                    <Controller
+                      name={`taxDetails.${index}.particulars`}
+                      control={control}
+                      render={({ field }) => (
+                        <select
+                          {...field}
+                          className={`${controlClasses} ${isReadOnly ? 'bg-gray-100 dark:bg-gray-700 cursor-not-allowed' : ''}`}
+                          disabled={isReadOnly}
+                          onChange={(e) => {
+                            field.onChange(e.target.value);
+                          }}
+                          value={field.value || ""}
+                        >
+                          <option value="">Select Particulars</option>
+                          {availableOptions.map((option) => (
+                            <option key={option.value || option.label} value={option.label}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    />
+                  </td>
+                  <td className="p-2 align-top">
+                    <Controller
+                      name={`taxDetails.${index}.amount`}
+                      control={control}
+                      render={({ field }) => (
+                        <input
+                          {...field}
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          className={`${controlClasses} text-right ${isReadOnly ? 'bg-gray-100 dark:bg-gray-700 cursor-not-allowed' : ''}`}
+                          disabled={isReadOnly}
+                          value={field.value || 0}
+                          onChange={(e) => {
+                            field.onChange(parseFloat(e.target.value) || 0);
+                          }}
+                        />
+                      )}
+                    />
+                  </td>
+                </TableRow>
+              );
+            })}
+          </tbody>
+        </TableWrapper>
+      </div>
+    );
+  };
 
   const renderTermsTab = () => (
     <div className="pt-2">
       <div className={subTabFieldGrid}>
-        <InputField label="Insurance">
-          <Controller
-            control={control}
-            name="termsAndConditions.insurance"
-            render={({ field }) => (
-              <select {...field} className={controlClasses}>
-                <option value="">-- Select --</option>
-                {YES_NO.map((o) => (
-                  <option key={o} value={o}>
-                    {o}
-                  </option>
-                ))}
-              </select>
-            )}
-          />
-        </InputField>
+        <InputField
+          control={control}
+          name="termsAndConditions.insurance"
+          label="Insurance"
+          errors={errors}
+        />
 
-        <InputField label="Freight">
-          <Controller
-            control={control}
-            name="termsAndConditions.freight"
-            render={({ field }) => (
-              <select {...field} className={controlClasses}>
-                <option value="">-- Select --</option>
-                {YES_NO.map((o) => (
-                  <option key={o} value={o}>
-                    {o}
-                  </option>
-                ))}
-              </select>
-            )}
-          />
-        </InputField>
+        <InputField
+          control={control}
+          name="termsAndConditions.freight"
+          label="Freight"
+          errors={errors}
+        />
 
-        <InputField label="No. Of Pkg">
-          <input
-            type="number"
-            {...register("termsAndConditions.noOfPkg")}
-            className={controlClasses}
-            placeholder="No. of packages"
-          />
-        </InputField>
+        <InputField
+          control={control}
+          name="termsAndConditions.noOfPkg"
+          label="No. Of Pkg"
+          type="number"
+          placeholder="No. of packages"
+          errors={errors}
+        />
 
-        <InputField label="Pkg Type">
-          <Controller
-            control={control}
-            name="termsAndConditions.pkgType"
-            render={({ field }) => (
-              <select {...field} className={controlClasses}>
-                <option value="">-- Select --</option>
-                {PKG_TYPE.map((o) => (
-                  <option key={o} value={o}>
-                    {o}
-                  </option>
-                ))}
-              </select>
-            )}
-          />
-        </InputField>
+        <InputField
+          control={control}
+          name="termsAndConditions.pkgType"
+          label="Pkg Type"
+          errors={errors}
+        />
 
-        <InputField label="Mode Of Transport">
-          <Controller
-            control={control}
-            name="termsAndConditions.modeOfTransport"
-            render={({ field }) => (
-              <select {...field} className={controlClasses}>
-                <option value="">-- Select --</option>
-                {TRANSPORT.map((o) => (
-                  <option key={o} value={o}>
-                    {o}
-                  </option>
-                ))}
-              </select>
-            )}
-          />
-        </InputField>
+        <InputField
+          control={control}
+          name="termsAndConditions.modeOfTransport"
+          label="Mode Of Transport"
+          errors={errors}
+        />
 
-        <InputField label="Rate Of Duty">
-          <input
-            type="number"
-            step="0.01"
-            {...register("termsAndConditions.rateOfDuty")}
-            className={controlClasses}
-            placeholder="0.00"
-          />
-        </InputField>
+        <InputField
+          control={control}
+          name="termsAndConditions.rateOfDuty"
+          label="Rate Of Duty"
+          type="number"
+          step="0.01"
+          placeholder="0.00"
+          errors={errors}
+        />
 
-        <InputField label="Tariff No.">
-          <input {...register("termsAndConditions.tariffNo")} className={controlClasses} placeholder="Tariff No." />
-        </InputField>
+        <InputField
+          control={control}
+          name="termsAndConditions.tariffNo"
+          label="Tariff No."
+          placeholder="Tariff No."
+          errors={errors}
+        />
 
-        <InputField label="Basic Value">
-          <input
-            type="number"
-            step="0.01"
-            {...register("termsAndConditions.basicValue")}
-            className={controlClasses}
-            placeholder="0.00"
-          />
-        </InputField>
+        <InputField
+          control={control}
+          name="termsAndConditions.basicValue"
+          label="Basic Value"
+          readOnly
+          errors={errors}
+        />
 
-        <InputField label="Gross Amount">
-          <input {...register("termsAndConditions.grossAmount")} readOnly className={`${controlClasses} bg-gray-50 dark:bg-gray-800`} />
-        </InputField>
+        <InputField
+          control={control}
+          name="termsAndConditions.grossAmount"
+          label="Gross Amount"
+          readOnly
+          errors={errors}
+        />
 
         <div className="col-span-1 md:col-span-2 xl:col-span-3">
-          <InputField label="Amount In Words">
-            <input {...register("termsAndConditions.amountInWords")} readOnly className={`${controlClasses} bg-gray-50 dark:bg-gray-800`} />
-          </InputField>
+          <InputField
+            control={control}
+            name="termsAndConditions.amountInWords"
+            label="Amount In Words"
+            readOnly
+            errors={errors}
+          />
         </div>
 
         <div className="col-span-1 md:col-span-2 xl:col-span-3">
-          <InputField label="Delivery To">
-            <input {...register("termsAndConditions.deliveryTo")} className={controlClasses} placeholder="Delivery address" />
-          </InputField>
+          <InputField
+            control={control}
+            name="termsAndConditions.deliveryTo"
+            label="Delivery To"
+            placeholder="Delivery address"
+            errors={errors}
+          />
         </div>
 
-        <InputField label="Payment Terms">
-          <input {...register("termsAndConditions.paymentTerms")} className={controlClasses} placeholder="Payment terms" />
-        </InputField>
+        <InputField
+          control={control}
+          name="termsAndConditions.paymentTerms"
+          label="Payment Terms"
+          placeholder="Payment terms"
+          errors={errors}
+        />
 
-        <InputField label="Payment %">
-          <input
-            type="number"
-            step="0.01"
-            {...register("termsAndConditions.paymentPercentage")}
-            className={controlClasses}
-            placeholder="0.00"
-          />
-        </InputField>
+        <InputField
+          control={control}
+          name="termsAndConditions.paymentPercentage"
+          label="Payment %"
+          type="number"
+          step="0.01"
+          placeholder="0.00"
+          errors={errors}
+        />
 
         <div className="col-span-1 md:col-span-2 xl:col-span-3">
-          <InputField label="Narration">
-            <textarea
-              rows={2}
-              {...register("termsAndConditions.narration")}
-              className={`${controlClasses} h-auto min-h-[60px] resize-y`}
-              placeholder="Enter narration..."
-            />
-          </InputField>
+          <InputField
+            control={control}
+            name="termsAndConditions.narration"
+            label="Narration"
+            placeholder="Enter narration..."
+            errors={errors}
+          />
         </div>
       </div>
     </div>
   );
+
+  // ===================== Main Render =====================
 
   return (
     <div className="w-full p-2">
@@ -1383,45 +1896,42 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
 
       {/* Main Card */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
-        {/* ---------------- Header Info ---------------- */}
+        {/* Header Info */}
         <div>
           <SectionHeader>Proforma Invoice</SectionHeader>
           {renderHeader()}
         </div>
 
-        {/* ---------------- Tabs ---------------- */}
+        {/* Tabs */}
         <section className="mt-0 bg-white dark:bg-gray-800">
           <div className="flex items-center border-b border-gray-200 dark:border-gray-700 mb-0">
             <button
               type="button"
               onClick={() => setActiveTab("salesContract")}
-              className={`px-4 py-1 text-xs font-semibold rounded-t ${
-                activeTab === "salesContract"
-                  ? "bg-blue-600 text-white"
-                  : "text-gray-600 dark:text-gray-300"
-              }`}
+              className={`px-4 py-1 text-xs font-semibold rounded-t ${activeTab === "salesContract"
+                ? "bg-blue-600 text-white"
+                : "text-gray-600 dark:text-gray-300"
+                }`}
             >
               Product Details
             </button>
             <button
               type="button"
               onClick={() => setActiveTab("taxDetails")}
-              className={`px-4 py-1 text-xs font-semibold rounded-t ${
-                activeTab === "taxDetails"
-                  ? "bg-blue-600 text-white"
-                  : "text-gray-600 dark:text-gray-300"
-              }`}
+              className={`px-4 py-1 text-xs font-semibold rounded-t ${activeTab === "taxDetails"
+                ? "bg-blue-600 text-white"
+                : "text-gray-600 dark:text-gray-300"
+                }`}
             >
               Tax Details
             </button>
             <button
               type="button"
               onClick={() => setActiveTab("termsAndConditions")}
-              className={`px-4 py-1 text-xs font-semibold rounded-t ${
-                activeTab === "termsAndConditions"
-                  ? "bg-blue-600 text-white"
-                  : "text-gray-600 dark:text-gray-300"
-              }`}
+              className={`px-4 py-1 text-xs font-semibold rounded-t ${activeTab === "termsAndConditions"
+                ? "bg-blue-600 text-white"
+                : "text-gray-600 dark:text-gray-300"
+                }`}
             >
               Terms And Conditions
             </button>
@@ -1432,11 +1942,11 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
           {activeTab === "termsAndConditions" && renderTermsTab()}
         </section>
 
-        {/* ---------------- Buttons ---------------- */}
+        {/* Buttons */}
         <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
           <button
             onClick={onBack}
-            disabled={isSubmitting}
+            disabled={saving || isSubmitting}
             className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
           >
             <X className="h-3 w-3" />
@@ -1445,11 +1955,11 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
 
           <button
             onClick={handleSubmit(onSubmit)}
-            disabled={isSubmitting}
+            disabled={saving || isSubmitting}
             className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
           >
             <Save className="h-3 w-3" />
-            {isSubmitting ? "Saving..." : data ? "Update" : "Save"}
+            {saving || isSubmitting ? "Saving..." : data ? "Update" : "Save"}
           </button>
         </div>
       </div>

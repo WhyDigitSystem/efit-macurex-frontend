@@ -17,6 +17,7 @@ const ProformaInvoiceList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
         ORG_ID,
         BRANCH_ID,
       );
+      // Sort by id descending (newest first)
       data.sort((a, b) => (b.id || 0) - (a.id || 0));
       setRecords(data);
     } catch (error) {
@@ -34,33 +35,29 @@ const ProformaInvoiceList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
 
   const columns = [
     {
-      key: "invoiceNo",
+      key: "docId",
       label: "Invoice No",
-      accessor: (row) =>
-        row.invoiceNo || row.salesInvoiceNo || row.docNo,
+      accessor: (row) => row.docId || row.invoiceNo || row.salesInvoiceNo,
       type: "text",
       noWrap: true,
     },
     {
-      key: "invoiceDate",
+      key: "docDate",
       label: "Invoice Date",
-      accessor: (row) => row.invoiceDate || row.date,
+      accessor: (row) => row.docDate || row.invoiceDate || row.date,
       type: "text",
       noWrap: true,
     },
     {
-      key: "customerName",
+      key: "customer",
       label: "Customer",
-      accessor: (row) => row.customerName,
+      accessor: (row) => row.customer?.customerName || row.customerName,
       type: "text",
     },
     {
-      key: "plantId",
+      key: "branch",
       label: "Plant",
-      accessor: (row) =>
-        typeof row.plantId === "object"
-          ? row.plantId.branchName || row.plantId.id
-          : row.plantName || row.plantId,
+      accessor: (row) => row.branch?.branchName || row.plantName || row.plantId,
       type: "text",
     },
     {
@@ -104,16 +101,18 @@ const ProformaInvoiceList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   ];
 
   const searchFields = [
+    "docId",
     "invoiceNo",
     "salesInvoiceNo",
-    "docNo",
+    "docDate",
     "invoiceDate",
     "date",
+    "customer.customerName",
     "customerName",
-    "plantId",
-    "plantId.branchName",
+    "branch.branchName",
     "plantName",
     "belongsTo",
+    "purchaseOrderNo",
     "poNo",
   ];
 

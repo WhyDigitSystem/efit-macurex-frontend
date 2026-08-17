@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
-import stockTransferChallanAPI from "../../../api/Inventory/stockTransferChallanAPI";
 import { toast } from "../../../utils/toast";
+import stockTransferChallanAPI from "../../../api/Sales/stockTranferChallanAPI";
 
 const normalizeActive = (value) => {
   if (value === true || value === "Yes" || value === "Active") return true;
@@ -12,14 +12,15 @@ const StockTransferChallanList = ({ onAddNew, onEdit, onBack, refreshTrigger }) 
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
   const ORG_ID = Number(localStorage.getItem("orgId")) || 0;
-  const BRANCH = Number(localStorage.getItem("branchId")) || 1000000001;
+  const BRANCH = Number(localStorage.getItem("branchId")) || 0;
   const prevRefreshRef = useRef(refreshTrigger);
 
   const loadData = useCallback(async () => {
     if (!ORG_ID) return;
     setLoading(true);
     try {
-      const res = await stockTransferChallanAPI.getAll(ORG_ID, BRANCH);
+      const res = await stockTransferChallanAPI.getStockTransferChallanByOrgId(ORG_ID, BRANCH);
+      // Sort by id descending (newest first)
       const sorted = (res || []).sort((a, b) => (b.id || 0) - (a.id || 0));
       setData(sorted);
     } catch (error) {
@@ -43,22 +44,57 @@ const StockTransferChallanList = ({ onAddNew, onEdit, onBack, refreshTrigger }) 
   }, [refreshTrigger, loadData]);
 
   const columns = [
-    { key: "docId", label: "Doc ID", accessor: "docId", type: "text", noWrap: true },
-    { key: "transferDate", label: "Transfer Date", accessor: "transferDate", type: "text", noWrap: true },
-    { key: "customerName", label: "Customer", accessor: "customerName", type: "text" },
-    { key: "plantId", label: "Plant", accessor: "plantId", type: "text" },
-    { key: "locationId", label: "Location", accessor: "locationId", type: "text", noWrap: true },
-    { key: "noOfPackages", label: "Packages", accessor: "noOfPackages", type: "text", noWrap: true },
     {
-      key: "active", label: "Status", accessor: "active",
+      key: "docId",
+      label: "Doc ID",
+      accessor: (row) => row.docId || row.docId || "-",
+      type: "text",
+      noWrap: true
+    },
+    {
+      key: "docDate",
+      label: "Transfer Date",
+      accessor: (row) => row.docDate || row.date || row.docDate,
+      type: "text",
+      noWrap: true
+    },
+    {
+      key: "customer",
+      label: "Customer",
+      accessor: (row) => row.customer?.customerName || row.customerName,
+      type: "text"
+    },
+    {
+      key: "branch",
+      label: "Branch",
+      accessor: (row) => row.branch?.branchName || row.branchName || row.plantId,
+      type: "text"
+    },
+    {
+      key: "location",
+      label: "Location",
+      accessor: (row) => row.location?.locationName || row.locationId,
+      type: "text",
+      noWrap: true
+    },
+    {
+      key: "noOfPackages",
+      label: "Packages",
+      accessor: (row) => row.noOfPackages,
+      type: "text",
+      noWrap: true
+    },
+    {
+      key: "active",
+      label: "Status",
+      accessor: "active",
       render: (value) => {
         const isActive = normalizeActive(value);
         return (
-          <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
-            isActive
+          <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${isActive
               ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
               : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300"
-          }`}>
+            }`}>
             {isActive ? "Active" : "Inactive"}
           </span>
         );
@@ -67,7 +103,15 @@ const StockTransferChallanList = ({ onAddNew, onEdit, onBack, refreshTrigger }) 
     { key: "actions", label: "Actions", type: "actions", align: "center", width: "90px" },
   ];
 
-  const searchFields = ["docId", "customerName", "plantId", "locationId"];
+  const searchFields = [
+    "docId",
+    "customer.customerName",
+    "customerName",
+    "branch.branchName",
+    "branchName",
+    "location.locationName",
+    "locationId"
+  ];
 
   const filterOptions = [
     { value: "all", label: "All" },
