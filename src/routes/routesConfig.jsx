@@ -73,6 +73,7 @@ import SetUpApprovalMaster from "../components/quality/setUpApproval/SetUpApprov
 import ZeroKmFailureMaster from "../components/quality/zeroKmFailure/ZeroKmFailureMaster";
 import InitialStageInspectionMaster from "../components/quality/initialStageInspection/InitialStageInspectionMaster";
 import InitialSampleInspectionMaster from "../components/quality/initialSampleInspection/InitialSampleInspectionMaster";
+import ProblemSolvingEntryMaster from "../components/quality/problemSolvingEntry/ProblemSolvingEntryMaster";
 import SalesContractAmendment from "../components/sales/SalesContractAmendment/SalesContractAmendmentMaster";
 import SalesList from "../components/sales/SalesList";
 import SalesOrderAmendment from "../components/sales/SalesOrderAmendment/SalesOrderAmendmentMaster";
@@ -344,6 +345,12 @@ export const routesConfig = [
     label: "Initial Sample Inspection",
     keywords: ["initial sample", "inspection", "quality"],
     element: <InitialSampleInspectionMaster />,
+  },
+  {
+    path: "/problemsolvingentry",
+    label: "Problem Solving Entry",
+    keywords: ["problem solving", "quality"],
+    element: <ProblemSolvingEntryMaster />,
   },
   {
     path: "/labourcharges",
