@@ -32,11 +32,31 @@ const DispatchList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     loadRecords();
   }, [loadRecords, refreshTrigger]);
 
+  // Handle Edit - fetch the full record by ID
+  const handleEdit = async (row) => {
+    try {
+      // Show loading toast
+      toast.info("Loading record details...");
+
+      const record = await despatchInstructionAPI.getDispatchById(row.id);
+
+      if (record) {
+        // Pass the full record to the parent for editing
+        onEdit(record);
+      } else {
+        toast.error("Failed to fetch record details");
+      }
+    } catch (error) {
+      console.error("Error fetching record for edit:", error);
+      toast.error("Failed to fetch record details");
+    }
+  };
+
   const columns = [
     {
       key: "diNo",
       label: "Dispatch No",
-      accessor: "diNo",
+      accessor: (row) => row.docId || row.diNo,
       type: "text",
       noWrap: true,
     },
@@ -119,7 +139,12 @@ const DispatchList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     {
       key: "active",
       label: "Status",
-      accessor: "active",
+      accessor: (row) => {
+        if (row.active === null || row.active === undefined) {
+          return "Active";
+        }
+        return row.active ? "Active" : "Inactive";
+      },
       type: "status",
       statusVariants: {
         Active: {
@@ -144,18 +169,16 @@ const DispatchList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   ];
 
   const searchFields = [
+    "docId",
     "diNo",
     "schduleNo",
     "scheduleNo",
     "schduleDate",
     "schDate",
-    "branch",
     "branch.branchName",
-    "customer",
     "customer.customerName",
     "customerName",
     "partyName",
-    "location",
     "location.locationName",
     "locationName",
     "modeOfTransport",
@@ -192,7 +215,7 @@ const DispatchList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
       defaultFilter="all"
       onBack={onBack}
       onAddNew={onAddNew}
-      onEdit={onEdit}
+      onEdit={handleEdit}
       onView={false}
       showSerialNumber={true}
       itemsPerPageOptions={[5, 10, 20, 50, 100]}

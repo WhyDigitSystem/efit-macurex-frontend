@@ -6,6 +6,7 @@ import listOfValuesAPI from "../../../api/listOfValuesAPI";
 import { employeeAPI } from "../../../api/employeeAPI";
 import { masterAPI } from "../../../api/customerAPI";
 import branchAPI from "../../../api/branchAPI";
+import partyMasterAPI from "../../../api/partyMasterAPI";
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -35,6 +36,7 @@ const refId = (ref) => (ref?.id ? String(ref.id) : "");
 
 const LocationMasterForm = ({ data, onBack }) => {
   const ORG_ID = parseInt(localStorage.getItem("orgId"));
+  const branchId = parseInt(localStorage.getItem("branchId"));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { addToast } = useToast();
 
@@ -116,7 +118,7 @@ const LocationMasterForm = ({ data, onBack }) => {
         setEmployees([]);
       }
       try {
-        const cust = await masterAPI.getCustomer(ORG_ID);
+        const cust = await partyMasterAPI.getPartyByOrgId(ORG_ID, branchId);
         setParties((cust || []).map((c) => ({ id: c.id, label: c.customerName || c.id })));
       } catch (error) {
         console.warn("Failed to load customers", error);

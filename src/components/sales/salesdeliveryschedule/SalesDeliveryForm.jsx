@@ -727,6 +727,28 @@ const SalesDeliveryForm = ({ data, onBack }) => {
     }
   };
 
+  const handleMonthChange = (month) => {
+    if (!month) {
+      setValue("monthYear", "");
+      return;
+    }
+
+    const monthIndex = SELECT_OPTIONS.monthOfSchedule.indexOf(month);
+
+    if (monthIndex === -1) {
+      setValue("monthYear", "");
+      return;
+    }
+
+    const monthNumber = String(monthIndex + 1).padStart(2, "0");
+    const year = new Date().getFullYear();
+
+    setValue(
+      "monthYear",
+      `${monthNumber}-${year}`
+    );
+  };
+
   const handleContractChange = async (contractNo, index) => {
     try {
       const selectedContract = contractData.find(
@@ -1034,6 +1056,7 @@ const SalesDeliveryForm = ({ data, onBack }) => {
             options={SELECT_OPTIONS.monthOfSchedule}
             required
             errors={errors}
+            onChange={handleMonthChange}
           />
           <InputField
             control={control}
@@ -1158,7 +1181,6 @@ const SalesDeliveryForm = ({ data, onBack }) => {
                     />
                     <InputCell
                       control={control}
-                      required
                       disabled
                       name={`scheduleDetails.${index}.unit`}
                       errors={errors}

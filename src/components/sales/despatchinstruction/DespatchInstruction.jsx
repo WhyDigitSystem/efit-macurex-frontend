@@ -5,7 +5,7 @@ import DispatchForm from "./DispatchForm";
 
 const DespatchInstruction = () => {
   const navigate = useNavigate();
-  const [view, setView] = useState("list"); // "list" | "form"
+  const [view, setView] = useState("list");
   const [editData, setEditData] = useState(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
@@ -14,20 +14,18 @@ const DespatchInstruction = () => {
     setView("form");
   };
 
-  // Pencil icon click -> open the form with the selected row's data
-  const handleEdit = useCallback((row) => {
-    setEditData(row);
+  // This will be called from DispatchList with the full record from getDispatchById
+  const handleEdit = useCallback((fullRecord) => {
+    setEditData(fullRecord);
     setView("form");
   }, []);
 
   const handleBack = () => {
     setEditData(null);
     setView("list");
-    // bump refreshTrigger so the list re-fetches after add/update
     setRefreshTrigger((prev) => prev + 1);
   };
 
-  // List screen back button -> return to the Sales module home.
   const handleNavigateHome = () => {
     navigate("/Sales");
   };
