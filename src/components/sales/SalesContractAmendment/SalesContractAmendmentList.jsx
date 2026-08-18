@@ -1,69 +1,147 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import salesContractAmendmentAPI from "../../../api/Sales/salesContractAmendmentAPI";
+import { toast } from "../../../utils/toast";
 
-const SalesContractAmendmentList = ({ onAdd, onEdit }) => {
-  const [data, setData] = useState([]);
+const SalesContractAmendmentList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
+  const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const orgId = Number(localStorage.getItem("orgId")) || 0;
-  const branch = Number(localStorage.getItem("branchId")) || 1000000001;
+  const ORG_ID = localStorage.getItem("orgId");
+  const BRANCH_ID = localStorage.getItem("branchId");
 
-  const loadData = useCallback(async () => {
-    if (!orgId) return;
-    setLoading(true);
+  const loadRecords = useCallback(async () => {
     try {
-      const list = await salesContractAmendmentAPI.getAll(orgId, branch);
-      setData(list);
+      setLoading(true);
+      const data = await salesContractAmendmentAPI.getAll(
+        Number(ORG_ID) || 0,
+        Number(BRANCH_ID) || 1000000001,
+      );
+      data.sort((a, b) => (b.id || 0) - (a.id || 0));
+      setRecords(data);
     } catch (error) {
       console.error("Failed to load SC amendments:", error);
+      setRecords([]);
+      toast.error("Failed to fetch Sales Contract Amendments");
     } finally {
       setLoading(false);
     }
-  }, [orgId, branch]);
+  }, [ORG_ID, BRANCH_ID]);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    loadRecords();
+  }, [loadRecords, refreshTrigger]);
 
   const columns = [
-    { key: "sno", label: "#", type: "text" },
-    { key: "contractAmdNo", label: "Contract Amd No", type: "text", accessor: (row) => row.contractAmdNo || "" },
-    { key: "date", label: "Date", type: "text", accessor: (row) => row.date || "" },
-    { key: "contractNo", label: "Contract No", type: "text", accessor: (row) => row.contractNo || "" },
-    { key: "custPONo", label: "Cust. P.O. No", type: "text", accessor: (row) => row.custPONo || "" },
-    { key: "revisionNo", label: "Revision", type: "text", accessor: (row) => row.revisionNo || "" },
     {
-      key: "status",
+      key: "contractAmdNo",
+      label: "Contract Amd No",
+      accessor: "contractAmdNo",
+      type: "text",
+    },
+    {
+      key: "date",
+      label: "Date",
+      accessor: (row) => row.date || row.partyPoAmdDate || "",
+      type: "text",
+    },
+    {
+      key: "contractNo",
+      label: "Contract No",
+      accessor: "contractNo",
+      type: "text",
+    },
+    {
+      key: "custPoNo",
+      label: "Cust. P.O. No",
+      accessor: (row) => row.custPoNo || row.custPONo || "",
+      type: "text",
+    },
+    {
+      key: "plantName",
+      label: "Plant",
+      accessor: (row) =>
+        typeof row.branch === "object"
+          ? row.branch.branchName || row.branch.id
+          : row.plantName || row.branch || "",
+      type: "text",
+    },
+    {
+      key: "revisionNo",
+      label: "Revision",
+      accessor: "revisionNo",
+      type: "text",
+    },
+    {
+      key: "active",
       label: "Status",
-      type: "status",
       accessor: (row) => (row.active !== false ? "Active" : "Inactive"),
+      type: "status",
       statusVariants: {
-        Active: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
-        Inactive: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+        Active:
+          "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+        Inactive:
+          "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
       },
     },
     {
       key: "actions",
       label: "Actions",
       type: "actions",
-      onEdit: (row) => onEdit(row),
+      align: "center",
+      width: "90px",
     },
   ];
 
-  const searchFields = ["contractAmdNo", "contractNo", "custPONo"];
+  const searchFields = [
+    "contractAmdNo",
+    "contractNo",
+    "custPoNo",
+    "custPONo",
+    "revisionNo",
+  ];
+
+  const filterOptions = [
+    { value: "all", label: "All", field: null },
+    {
+      value: "active",
+      label: "Active",
+      field: "active",
+      filterValue: "active",
+      activeValue: "Active",
+    },
+    {
+      value: "inactive",
+      label: "Inactive",
+      field: "active",
+      filterValue: "inactive",
+      activeValue: "Active",
+    },
+  ];
 
   return (
     <CommonListViewTable
       title="Sales Contract Amendment"
       subtitle="Manage sales contract amendments and revisions"
-      data={data}
+      data={records}
       loading={loading}
       columns={columns}
       searchFields={searchFields}
-      onAddNew={onAdd}
+      filterOptions={filterOptions}
+      defaultFilter="all"
+      onBack={onBack}
+      onAddNew={onAddNew}
       onEdit={onEdit}
-      emptyMessage="No SC amendments found"
+      onView={false}
+      showSerialNumber={true}
+      itemsPerPageOptions={[5, 10, 20, 50, 100]}
+      defaultItemsPerPage={10}
+      emptyMessage="No Sales Contract Amendments found"
+      loadingMessage="Loading Sales Contract Amendments..."
+      enableRefresh={true}
+      onRefresh={loadRecords}
+      enableExport={true}
+      exportFileName="SalesContractAmendments"
     />
   );
 };
