@@ -76,6 +76,7 @@ import InitialSampleInspectionMaster from "../components/quality/initialSampleIn
 import ProblemSolvingEntryMaster from "../components/quality/problemSolvingEntry/ProblemSolvingEntryMaster";
 import InProcessInspectionMaster from "../components/quality/inProcessInspection/InProcessInspectionMaster";
 import InstrumentCalibrationMaster from "../components/quality/instrumentCalibration/InstrumentCalibrationMaster";
+import VendorComplaintMaster from "../components/quality/vendorComplaint/VendorComplaintMaster";
 import SalesContractAmendment from "../components/sales/SalesContractAmendment/SalesContractAmendmentMaster";
 import SalesList from "../components/sales/SalesList";
 import SalesOrderAmendment from "../components/sales/SalesOrderAmendment/SalesOrderAmendmentMaster";
@@ -366,6 +367,12 @@ export const routesConfig = [
     label: "Instrument Calibration",
     keywords: ["instrument", "calibration", "quality"],
     element: <InstrumentCalibrationMaster />,
+  },
+  {
+    path: "/vendorcomplaintentry",
+    label: "Vendor Complaint Entry",
+    keywords: ["vendor", "complaint", "supplier", "quality"],
+    element: <VendorComplaintMaster />,
   },
   {
     path: "/labourcharges",
