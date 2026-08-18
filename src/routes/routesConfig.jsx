@@ -77,6 +77,8 @@ import ProblemSolvingEntryMaster from "../components/quality/problemSolvingEntry
 import InProcessInspectionMaster from "../components/quality/inProcessInspection/InProcessInspectionMaster";
 import InstrumentCalibrationMaster from "../components/quality/instrumentCalibration/InstrumentCalibrationMaster";
 import VendorComplaintMaster from "../components/quality/vendorComplaint/VendorComplaintMaster";
+import SupplierResponseMaster from "../components/quality/supplierResponse/SupplierResponseMaster";
+import DICRMaster from "../components/quality/dailyInspectionCumRejectionData/DICRMaster";
 import SalesContractAmendment from "../components/sales/SalesContractAmendment/SalesContractAmendmentMaster";
 import SalesList from "../components/sales/SalesList";
 import SalesOrderAmendment from "../components/sales/SalesOrderAmendment/SalesOrderAmendmentMaster";
@@ -373,6 +375,18 @@ export const routesConfig = [
     label: "Vendor Complaint Entry",
     keywords: ["vendor", "complaint", "supplier", "quality"],
     element: <VendorComplaintMaster />,
+  },
+  {
+    path: "/supplierresponseentry",
+    label: "Supplier Response Entry",
+    keywords: ["supplier", "response", "complaint", "quality"],
+    element: <SupplierResponseMaster />,
+  },
+  {
+    path: "/dailyinspectioncumrejectiondata",
+    label: "Daily Inspection Cum Rejection Data",
+    keywords: ["daily", "inspection", "rejection", "scrap", "quality"],
+    element: <DICRMaster />,
   },
   {
     path: "/labourcharges",
