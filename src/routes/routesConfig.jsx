@@ -75,6 +75,7 @@ import InitialStageInspectionMaster from "../components/quality/initialStageInsp
 import InitialSampleInspectionMaster from "../components/quality/initialSampleInspection/InitialSampleInspectionMaster";
 import ProblemSolvingEntryMaster from "../components/quality/problemSolvingEntry/ProblemSolvingEntryMaster";
 import InProcessInspectionMaster from "../components/quality/inProcessInspection/InProcessInspectionMaster";
+import InstrumentCalibrationMaster from "../components/quality/instrumentCalibration/InstrumentCalibrationMaster";
 import SalesContractAmendment from "../components/sales/SalesContractAmendment/SalesContractAmendmentMaster";
 import SalesList from "../components/sales/SalesList";
 import SalesOrderAmendment from "../components/sales/SalesOrderAmendment/SalesOrderAmendmentMaster";
@@ -359,6 +360,12 @@ export const routesConfig = [
     label: "In-Process Inspection",
     keywords: ["in process", "inspection", "quality"],
     element: <InProcessInspectionMaster />,
+  },
+  {
+    path: "/instrumentcalibration",
+    label: "Instrument Calibration",
+    keywords: ["instrument", "calibration", "quality"],
+    element: <InstrumentCalibrationMaster />,
   },
   {
     path: "/labourcharges",
