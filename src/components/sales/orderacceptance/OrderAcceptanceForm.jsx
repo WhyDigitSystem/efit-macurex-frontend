@@ -16,6 +16,7 @@ import salesContractAPI from "../../../api/Sales/salesContract";
 import listOfValuesAPI from "../../../api/listOfValuesAPI";
 import currencyAPI from "../../../api/currencyAPI";
 import { useToast } from "../../Toast/ToastContext";
+import { formatDateForDisplay } from "../../../utils/dateFormatter";
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -1986,7 +1987,7 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
             label="Quotation No"
             options={quotationOptions.map(q => ({
               value: q.quotationNo,
-              label: `${q.quotationNo} - ${q.quotationDate}`
+              label: `${q.quotationNo} - ${formatDateForDisplay(q.quotationDate)}`
             }))}
             errors={errors}
             disabled={shouldDisableQuotation || loadingQuotation}

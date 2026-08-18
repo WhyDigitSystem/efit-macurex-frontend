@@ -43,7 +43,7 @@ const SalesContractAmendmentList = ({ onAddNew, onEdit, onBack, refreshTrigger }
       key: "date",
       label: "Date",
       accessor: (row) => row.date || row.partyPoAmdDate || "",
-      type: "text",
+      type: "date",
     },
     {
       key: "contractNo",

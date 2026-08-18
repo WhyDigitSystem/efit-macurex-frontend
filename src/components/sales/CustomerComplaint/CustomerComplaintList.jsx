@@ -51,7 +51,7 @@ const CustomerComplaintList = ({
       key: "complaintDate",
       label: "Complaint Date",
       accessor: "complaintDate",
-      type: "text",
+      type: "date",
     },
     {
       key: "branch",

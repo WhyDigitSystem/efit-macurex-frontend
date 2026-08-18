@@ -76,7 +76,7 @@ const Field = ({
           disabled={disabled || loading}
           className={`${controlClasses} ${error ? controlErrClasses : ""}`}
         >
-          <option value="">{loading ? "Loading..." : "-- Select --"}</option>
+          <option value="">-- Select --</option>
           {(options || []).map((opt) => (
             <option key={opt.value ?? opt} value={opt.value ?? opt}>
               {opt.label ?? opt}
@@ -470,6 +470,14 @@ const SalesContractAmendmentForm = ({ data, onBack }) => {
           ? formatDate(c.contractDate)
           : prev.contractDate,
       }));
+    } else if (!header.contractNo) {
+      setHeader((prev) => ({
+        ...prev,
+        custPONo: "",
+        custPODate: "",
+        contractDate: "",
+        revisionNo: "",
+      }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [header.contractNo, contractMap]);
@@ -530,6 +538,11 @@ const SalesContractAmendmentForm = ({ data, onBack }) => {
             next.oldRate = item.oldRate ?? row.oldRate ?? 0;
             next.newRate =
               item.newRate != null ? item.newRate : row.newRate ?? 0;
+          } else {
+            next.itemCode = "";
+            next.itemName = "";
+            next.oldRate = 0;
+            next.newRate = 0;
           }
         }
         return next;
@@ -661,10 +674,10 @@ const SalesContractAmendmentForm = ({ data, onBack }) => {
         {/* ---------------- Header Info ---------------- */}
         <div>
           <div className="flex items-center justify-between mb-2">
-            <SectionHeader>Amendment Details</SectionHeader>
-            <div className="flex items-center gap-2">
-              <label className={labelClasses}>Active</label>
-              <button
+           
+            {/* <div className="flex items-center gap-2">
+              {/* <label className={labelClasses}>Active</label> */}
+             {/*  <button
                 type="button"
                 onClick={() =>
                   setHeader((prev) => ({ ...prev, active: !prev.active }))
@@ -679,13 +692,13 @@ const SalesContractAmendmentForm = ({ data, onBack }) => {
                   }`}
                 />
               </button>
-            </div>
+            </div> */}
           </div>
 
           <div className={fieldGrid}>
             <Field
               type="select"
-              label="Plant Id"
+              label="Branch"
               name="plantId"
               value={header.plantId}
               onChange={handleHeaderChange}
@@ -749,6 +762,7 @@ const SalesContractAmendmentForm = ({ data, onBack }) => {
               name="custPONo"
               value={header.custPONo}
               onChange={handleHeaderChange}
+              disabled
             />
             <Field
               label="Revision No"
@@ -756,7 +770,7 @@ const SalesContractAmendmentForm = ({ data, onBack }) => {
               value={header.revisionNo}
               onChange={handleHeaderChange}
               disabled
-              placeholder={loadingRevision ? "Loading..." : ""}
+              placeholder=""
             />
             <Field
               type="date"
@@ -764,13 +778,7 @@ const SalesContractAmendmentForm = ({ data, onBack }) => {
               name="custPODate"
               value={header.custPODate}
               onChange={handleHeaderChange}
-            />
-            <Field
-              type="textarea"
-              label="Cancel Remarks"
-              name="cancelRemarks"
-              value={header.cancelRemarks}
-              onChange={handleHeaderChange}
+              disabled
             />
           </div>
         </div>
@@ -840,11 +848,9 @@ const SalesContractAmendmentForm = ({ data, onBack }) => {
                           className={cellInputClasses}
                         >
                           <option value="">
-                            {loadingItems
-                              ? "Loading items..."
-                              : header.contractNo
-                                ? "-- Select --"
-                                : "Select Contract first"}
+                            {header.contractNo
+                              ? "-- Select --"
+                              : "-- Select --"}
                           </option>
                           {itemOptions.map((opt) => (
                             <option key={opt.value} value={opt.value}>

@@ -49,7 +49,7 @@ const SalesOrderShortCloseList = ({
       key: "docDate",
       label: "Date",
       accessor: (row) => row.docDate,
-      type: "text",
+      type: "date",
     },
     {
       key: "customerId",

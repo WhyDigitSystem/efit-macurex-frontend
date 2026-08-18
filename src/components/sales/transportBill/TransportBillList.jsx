@@ -64,7 +64,7 @@ const TransportBillList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
 
   const columns = [
     { key: "docNo", label: "Doc No", accessor: "docNo", type: "text", noWrap: true },
-    { key: "docDate", label: "Doc Date", accessor: "docDate", type: "text", noWrap: true },
+    { key: "docDate", label: "Doc Date", accessor: "docDate", type: "date", noWrap: true },
     {
       key: "transportName",
       label: "Transport Name",
@@ -73,7 +73,7 @@ const TransportBillList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
       noWrap: true
     },
     { key: "billNo", label: "Bill No", accessor: "billNo", type: "text", noWrap: true },
-    { key: "billDate", label: "Bill Date", accessor: "billDate", type: "text", noWrap: true },
+    { key: "billDate", label: "Bill Date", accessor: "billDate", type: "date", noWrap: true },
     { key: "totalAmount", label: "Total Amount", accessor: "totalAmount", type: "text", noWrap: true },
     {
       key: "active", label: "Status", accessor: "active",

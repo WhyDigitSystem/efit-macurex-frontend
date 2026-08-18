@@ -42,7 +42,7 @@ const RejectionInvoiceList = ({ onAddNew, onEdit, refreshTrigger, onBack }) => {
       key: "invoiceDate",
       label: "Invoice Date",
       accessor: "invoiceDate",
-      type: "text",
+      type: "date",
     },
     {
       key: "plantId",

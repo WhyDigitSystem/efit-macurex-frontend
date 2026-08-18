@@ -94,7 +94,7 @@ const DocketInvoiceDetailsList = ({ onAddNew, onEdit, onBack, refreshTrigger }) 
       key: "docDate",
       label: "Doc Date",
       accessor: "docDate",
-      type: "text",
+      type: "date",
       noWrap: true
     },
     {
@@ -114,7 +114,7 @@ const DocketInvoiceDetailsList = ({ onAddNew, onEdit, onBack, refreshTrigger }) 
       key: "billDate",
       label: "Bill Date",
       accessor: "billDate",
-      type: "text",
+      type: "date",
       noWrap: true
     },
     {

@@ -90,7 +90,7 @@ const SalesContractList = ({ onAddNew, onEdit, onBack }) => {
       key: "contractDate",
       label: "Contract Date",
       accessor: "contractDate",
-      type: "text",
+      type: "date",
     },
     {
       key: "branchName",
@@ -144,13 +144,13 @@ const SalesContractList = ({ onAddNew, onEdit, onBack }) => {
       key: "effectiveFrom",
       label: "Effective From",
       accessor: "effectiveFrom",
-      type: "text",
+      type: "date",
     },
     {
       key: "effectiveTo",
       label: "Effective To",
       accessor: "effectiveTo",
-      type: "text",
+      type: "date",
     },
     {
       key: "totalAmount",

@@ -7,6 +7,7 @@ import {
   Filter,
   ArrowLeft,
 } from "lucide-react";
+import { formatDateForDisplay } from "./dateFormatter";
 
 const CommonListViewTable = ({
   // Core props
@@ -231,7 +232,7 @@ const CommonListViewTable = ({
     },
     date: (value, row, column) => (
       <span className="text-xs text-gray-500 dark:text-gray-400">
-        {value || "-"}
+        {formatDateForDisplay(value) || "-"}
       </span>
     ),
     actions: (row, index) => (

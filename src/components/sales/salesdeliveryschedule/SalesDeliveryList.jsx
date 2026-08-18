@@ -76,7 +76,7 @@ const SalesDeliveryList = ({ onAddNew, onEdit, onBack }) => {
       key: "dlvDate",
       label: "Div Date",
       accessor: "dlvDate",
-      type: "text",
+      type: "date",
     },
     {
       key: "branchCode",

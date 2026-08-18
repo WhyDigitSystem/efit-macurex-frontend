@@ -44,7 +44,7 @@ const OtherSalesInvoiceList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => 
 
   const columns = [
     { key: "salesInvoiceNo", label: "Invoice No", accessor: "salesInvoiceNo", type: "text", noWrap: true },
-    { key: "invoiceDate", label: "Invoice Date", accessor: "invoiceDate", type: "text", noWrap: true },
+    { key: "invoiceDate", label: "Invoice Date", accessor: "invoiceDate", type: "date", noWrap: true },
     { key: "customerName", label: "Customer", accessor: "customerName", type: "text" },
     { key: "plantId", label: "Plant", accessor: "plantId", type: "text" },
     { key: "belongsTo", label: "Belongs To", accessor: "belongsTo", type: "text" },

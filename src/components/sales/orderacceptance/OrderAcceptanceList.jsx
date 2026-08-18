@@ -99,7 +99,7 @@ const OrderAcceptanceList = ({ onAddNew, onEdit, onBack }) => {
       key: "docDate",
       label: "Date",
       accessor: "docDate",
-      type: "text",
+      type: "date",
     },
     {
       key: "customerName",

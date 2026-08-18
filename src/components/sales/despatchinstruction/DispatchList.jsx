@@ -64,7 +64,7 @@ const DispatchList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
       key: "schduleDate",
       label: "Sch. Date",
       accessor: (row) => row.schduleDate || row.schDate,
-      type: "text",
+      type: "date",
     },
     {
       key: "schduleNo",

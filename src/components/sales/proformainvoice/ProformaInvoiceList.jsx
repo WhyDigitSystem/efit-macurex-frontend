@@ -45,7 +45,7 @@ const ProformaInvoiceList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
       key: "docDate",
       label: "Invoice Date",
       accessor: (row) => row.docDate || row.invoiceDate || row.date,
-      type: "text",
+      type: "date",
       noWrap: true,
     },
     {

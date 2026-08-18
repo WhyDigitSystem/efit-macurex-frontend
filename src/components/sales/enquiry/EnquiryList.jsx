@@ -93,7 +93,7 @@ const EnquiryList = ({ onAddNew, onEdit, onBack }) => {
       key: "enquiryDate",
       label: "Enquiry Date",
       accessor: "enquiryDate",
-      type: "text",
+      type: "date",
     },
     {
       key: "branchCode",
@@ -117,7 +117,7 @@ const EnquiryList = ({ onAddNew, onEdit, onBack }) => {
       key: "enquiryDueDate",
       label: "Due Date",
       accessor: "enquiryDueDate",
-      type: "text",
+      type: "date",
     },
     {
       key: "contactName",

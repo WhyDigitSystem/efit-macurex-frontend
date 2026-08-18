@@ -72,7 +72,7 @@ const SalesOrderAmendmentList = ({ onAdd, onEdit, onView }) => {
     {
       key: "date",
       label: "Date",
-      type: "text",
+      type: "date",
       accessor: (row) => row.date || "",
     },
     {

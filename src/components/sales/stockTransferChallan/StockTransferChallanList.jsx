@@ -55,7 +55,7 @@ const StockTransferChallanList = ({ onAddNew, onEdit, onBack, refreshTrigger }) 
       key: "docDate",
       label: "Transfer Date",
       accessor: (row) => row.docDate || row.date || row.docDate,
-      type: "text",
+      type: "date",
       noWrap: true
     },
     {
