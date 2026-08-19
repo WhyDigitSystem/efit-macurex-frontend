@@ -82,10 +82,10 @@ const SECTIONS = [
         screenCode: "DESPATCH_INSTRUCTION",
       },
       {
-        name: "DC Cum Invoice",
+        name: "Sales Rejection Invoice",
         icon: FileStack,
-        path: "/dccuminvoice",
-        screenCode: "DC_CUM_INVOICE",
+        path: "/salesrejectioninvoice",
+        screenCode: "SALES_REJECTION_INVOICE",
       },
       {
         name: "Other Sales Invoice",
@@ -116,18 +116,6 @@ const SECTIONS = [
         icon: Receipt,
         path: "/sales/proformainvoice",
         screenCode: "PROFORMA_INVOICE",
-      },
-      {
-        name: "Other Sales Invoice",
-        icon: ReceiptText,
-        path: "/othersalesinvoice",
-        screenCode: "OTHER_SALES_INVOICE",
-      },
-      {
-        name: "Rejection Invoice",
-        icon: Ban,
-        path: "/rejectioninvoice",
-        screenCode: "REJECTION_INVOICE",
       },
     ],
   },

@@ -1,5 +1,6 @@
 import CustomerComplaintMaster from "../components/sales/CustomerComplaint/CustomerComplaintMaster";
 import RejectionInvoiceMaster from "../components/sales/RejectionInvoice/RejectionInvoiceMaster";
+import SalesInvoiceMaster from "../components/sales/SalesInvoice/SalesInvoiceMaster";
 import SalesOrderShortCloseMaster from "../components/sales/salesOrderShortClose/SalesOrderShortCloseMaster";
 
 const salesRoutes = [
@@ -17,6 +18,16 @@ const salesRoutes = [
     path: "/salesordershortclose",
     label: "Sales Order Short-Close",
     element: <SalesOrderShortCloseMaster />,
+  },
+   {
+    path: "/salesordershortclose",
+    label: "Sales Order Short-Close",
+    element: <SalesOrderShortCloseMaster />,
+  },
+  {
+    path: "/salesrejectioninvoice",
+    label: "Sales Rejection Invoice",
+    element: <SalesInvoiceMaster />,
   },
 ];
 
