@@ -96,6 +96,29 @@ const salesOrderShortCloseAPI = {
       throw error;
     }
   },
+  // GET /api/orderAcceptance/getSalesOrderShortCloseDocId
+  getSalesOrderShortCloseDocId: async ({
+    financialYear,
+    orgId,
+    screenCode,
+  }) => {
+    try {
+      const params = new URLSearchParams({
+        financialYear: String(financialYear),
+        orgId: String(orgId),
+        screenCode,
+      });
+
+      const response = await apiClient.get(
+        `/api/orderAcceptance/getSalesOrderShortCloseDocId?${params.toString()}`,
+      );
+
+      return response?.paramObjectsMap?.invoiceDocId || "";
+    } catch (error) {
+      console.error("Error fetching sales order short close doc id:", error);
+      throw error;
+    }
+  },
 };
 
 export default salesOrderShortCloseAPI;

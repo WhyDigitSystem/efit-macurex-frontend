@@ -16,7 +16,7 @@ import salesContractAPI from "../../../api/Sales/salesContract";
 import listOfValuesAPI from "../../../api/listOfValuesAPI";
 import currencyAPI from "../../../api/currencyAPI";
 import { useToast } from "../../Toast/ToastContext";
-import { formatDateForDisplay } from "../../../utils/dateFormatter";
+import docTypeMappingAPI from "../../../api/docTypeMappingAPI";
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -137,7 +137,16 @@ const SELECT_OPTIONS = {
 };
 
 // Helper Components
-const SelectField = ({ control, name, label, options, required, errors, onChange, disabled }) => {
+const SelectField = ({
+  control,
+  name,
+  label,
+  options,
+  required,
+  errors,
+  onChange,
+  disabled,
+}) => {
   const getError = () => {
     const parts = name.split(".");
     let error = errors;
@@ -328,7 +337,9 @@ const TableRow = ({
   showDelete = true,
 }) => (
   <tr className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-    <td className="p-1 text-center font-medium dark:text-white text-[10px]">{index + 1}</td>
+    <td className="p-1 text-center font-medium dark:text-white text-[10px]">
+      {index + 1}
+    </td>
     {children}
     {showDelete && (
       <td className="p-1 text-center">
@@ -336,10 +347,11 @@ const TableRow = ({
           type="button"
           onClick={onRemove}
           disabled={disabled}
-          className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
-            ? "bg-gray-400 cursor-not-allowed"
-            : "bg-red-600 hover:bg-red-700"
-            }`}
+          className={`h-5 w-5 rounded text-white flex items-center justify-center ${
+            disabled
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-red-600 hover:bg-red-700"
+          }`}
         >
           <Trash2 size={10} />
         </button>
@@ -348,7 +360,15 @@ const TableRow = ({
   </tr>
 );
 
-const SelectCell = ({ control, name, options, required, errors, onChange, disabled }) => {
+const SelectCell = ({
+  control,
+  name,
+  options,
+  required,
+  errors,
+  onChange,
+  disabled,
+}) => {
   const getError = () => {
     const parts = name.split(".");
     let error = errors;
@@ -384,7 +404,10 @@ const SelectCell = ({ control, name, options, required, errors, onChange, disabl
           >
             <option value="">Select</option>
             {options.map((opt) => (
-              <option key={typeof opt === "object" ? opt.value : opt} value={typeof opt === "object" ? opt.value : opt}>
+              <option
+                key={typeof opt === "object" ? opt.value : opt}
+                value={typeof opt === "object" ? opt.value : opt}
+              >
                 {typeof opt === "object" ? opt.label : opt}
               </option>
             ))}
@@ -482,17 +505,20 @@ const FileUploadCell = ({ control, name, errors, onView }) => {
         control={control}
         render={({ field: { onChange, value } }) => {
           // Check if there's an existing file from the API response
-          const isExistingFile = value && typeof value === 'object' && value.filePath && !value.name;
-          const isNewFile = value && typeof value === 'object' && value.name && !value.filePath;
+          const isExistingFile =
+            value && typeof value === "object" && value.filePath && !value.name;
+          const isNewFile =
+            value && typeof value === "object" && value.name && !value.filePath;
 
           return (
             <div className="flex items-center gap-2">
               <div className="flex-1 relative">
                 <div
-                  className={`border-2 border-dashed rounded-md p-2 text-center cursor-pointer transition-colors ${errorMessage
-                    ? "border-red-500 bg-red-50 dark:bg-red-900/20"
-                    : "border-gray-300 dark:border-gray-600 hover:border-blue-500 dark:hover:border-blue-400"
-                    }`}
+                  className={`border-2 border-dashed rounded-md p-2 text-center cursor-pointer transition-colors ${
+                    errorMessage
+                      ? "border-red-500 bg-red-50 dark:bg-red-900/20"
+                      : "border-gray-300 dark:border-gray-600 hover:border-blue-500 dark:hover:border-blue-400"
+                  }`}
                   onDragOver={(e) => {
                     e.preventDefault();
                     e.currentTarget.classList.add(
@@ -536,7 +562,7 @@ const FileUploadCell = ({ control, name, errors, onView }) => {
                     }}
                   />
 
-                  {(isNewFile || (value && value.name)) ? (
+                  {isNewFile || (value && value.name) ? (
                     <div className="flex items-center justify-center gap-2 text-green-600 dark:text-green-400">
                       <File className="h-4 w-4" />
                       <span className="text-xs truncate max-w-[150px]">
@@ -574,7 +600,9 @@ const FileUploadCell = ({ control, name, errors, onView }) => {
                 <button
                   type="button"
                   onClick={() => {
-                    const filePath = isExistingFile ? value?.filePath : URL.createObjectURL(value);
+                    const filePath = isExistingFile
+                      ? value?.filePath
+                      : URL.createObjectURL(value);
                     if (filePath) {
                       onView(filePath);
                     }
@@ -652,26 +680,34 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
   // Check if SO Type is "Direct" or With Quotation is "No"
   const isDirectSoType = soType === "Direct";
   const isWithQuotationNo = withQuotation === "No";
-  const shouldDisableQuotation = isDirectSoType || isWithQuotationNo || !customerId;
+  const shouldDisableQuotation =
+    isDirectSoType || isWithQuotationNo || !customerId;
 
   const calculateTaxDetails = useCallback(() => {
     console.log("calculateTaxDetails called");
-    const orderDetails = getValues('orderAcceptanceDetails') || [];
+    const orderDetails = getValues("orderAcceptanceDetails") || [];
 
-    const totalAmount = orderDetails.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+    const totalAmount = orderDetails.reduce(
+      (sum, item) => sum + (Number(item.amount) || 0),
+      0,
+    );
 
     const taxType = isIGSTApplicable === "Yes" ? "IGST" : "SGST";
 
-    let sgstTotal = 0, cgstTotal = 0, igstTotal = 0;
+    let sgstTotal = 0,
+      cgstTotal = 0,
+      igstTotal = 0;
 
-    orderDetails.forEach(item => {
+    orderDetails.forEach((item) => {
       sgstTotal += Number(item.sgstAmount) || 0;
       cgstTotal += Number(item.cgstAmount) || 0;
       igstTotal += Number(item.igstAmount) || 0;
     });
 
-    const existingTaxDetails = getValues('taxDetails') || [];
-    const userAddedRows = existingTaxDetails.filter(item => !item.isSystemRow);
+    const existingTaxDetails = getValues("taxDetails") || [];
+    const userAddedRows = existingTaxDetails.filter(
+      (item) => !item.isSystemRow,
+    );
 
     const systemRows = [];
 
@@ -679,7 +715,7 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
       particulars: "Gross Amount",
       acceptedAmount: totalAmount,
       revisedAmount: totalAmount,
-      isSystemRow: true
+      isSystemRow: true,
     });
 
     if (taxType === "IGST") {
@@ -687,20 +723,20 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
         particulars: "IGST",
         acceptedAmount: igstTotal,
         revisedAmount: igstTotal,
-        isSystemRow: true
+        isSystemRow: true,
       });
     } else {
       systemRows.push({
         particulars: "SGST",
         acceptedAmount: sgstTotal,
         revisedAmount: sgstTotal,
-        isSystemRow: true
+        isSystemRow: true,
       });
       systemRows.push({
         particulars: "CGST",
         acceptedAmount: cgstTotal,
         revisedAmount: cgstTotal,
-        isSystemRow: true
+        isSystemRow: true,
       });
     }
 
@@ -714,81 +750,91 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
     if (hasChanged) {
       taxDetailsArray.replace(allTaxEntries);
     }
-
   }, [getValues, isIGSTApplicable, taxDetailsArray, setValue]);
 
-  const calculateRowCalculation = useCallback((index) => {
-    if (isUpdatingRef.current) return;
+  const calculateRowCalculation = useCallback(
+    (index) => {
+      if (isUpdatingRef.current) return;
 
-    isUpdatingRef.current = true;
+      isUpdatingRef.current = true;
 
-    try {
-      const quantity = Number(getValues(`orderAcceptanceDetails.${index}.quantity`)) || 0;
-      const unitRate = Number(getValues(`orderAcceptanceDetails.${index}.unitRate`)) || 0;
-      const otherRate = Number(getValues(`orderAcceptanceDetails.${index}.otherRate`)) || 0;
-      const dis = Number(getValues(`orderAcceptanceDetails.${index}.dis`)) || 0;
+      try {
+        const quantity =
+          Number(getValues(`orderAcceptanceDetails.${index}.quantity`)) || 0;
+        const unitRate =
+          Number(getValues(`orderAcceptanceDetails.${index}.unitRate`)) || 0;
+        const otherRate =
+          Number(getValues(`orderAcceptanceDetails.${index}.otherRate`)) || 0;
+        const dis =
+          Number(getValues(`orderAcceptanceDetails.${index}.dis`)) || 0;
 
-      const itemCode = getValues(`orderAcceptanceDetails.${index}.itemCode`);
-      const taxType =
-        getValues(`orderAcceptanceDetails.${index}.taxType`) ||
-        (isIGSTApplicable === "Yes" ? "IGST" : "SGST");
+        const itemCode = getValues(`orderAcceptanceDetails.${index}.itemCode`);
+        const taxType =
+          getValues(`orderAcceptanceDetails.${index}.taxType`) ||
+          (isIGSTApplicable === "Yes" ? "IGST" : "SGST");
 
-      // Calculate amount before discount
-      const amountBeforeDiscount = quantity * unitRate;
-      const discountAmount = (amountBeforeDiscount * dis) / 100;
-      const amount = amountBeforeDiscount - discountAmount;
+        // Calculate amount before discount
+        const amountBeforeDiscount = quantity * unitRate;
+        const discountAmount = (amountBeforeDiscount * dis) / 100;
+        const amount = amountBeforeDiscount - discountAmount;
 
-      let sgstRate = 0, cgstRate = 0, igstRate = 0;
+        let sgstRate = 0,
+          cgstRate = 0,
+          igstRate = 0;
 
-      if (itemCode) {
-        const selectedItem = itemOptions.find(
-          (i) => String(i.itemCode) === String(itemCode)
-        );
+        if (itemCode) {
+          const selectedItem = itemOptions.find(
+            (i) => String(i.itemCode) === String(itemCode),
+          );
 
-        if (selectedItem) {
-          sgstRate = Number(selectedItem.sgst) || 0;
-          cgstRate = Number(selectedItem.cgst) || 0;
-          igstRate = Number(selectedItem.igst) || 0;
+          if (selectedItem) {
+            sgstRate = Number(selectedItem.sgst) || 0;
+            cgstRate = Number(selectedItem.cgst) || 0;
+            igstRate = Number(selectedItem.igst) || 0;
+          }
         }
-      }
 
-      let sgstAmount = 0, cgstAmount = 0, igstAmount = 0;
+        let sgstAmount = 0,
+          cgstAmount = 0,
+          igstAmount = 0;
 
-      if (taxType === "IGST") {
-        igstAmount = (amount * igstRate) / 100;
-        sgstAmount = 0;
-        cgstAmount = 0;
-      } else {
-        sgstAmount = (amount * sgstRate) / 100;
-        cgstAmount = (amount * cgstRate) / 100;
-        igstAmount = 0;
-      }
-
-      const updateField = (name, value) => {
-        if (getValues(name) !== value) {
-          setValue(name, value, {
-            shouldDirty: false,
-            shouldValidate: false,
-            shouldTouch: false,
-          });
+        if (taxType === "IGST") {
+          igstAmount = (amount * igstRate) / 100;
+          sgstAmount = 0;
+          cgstAmount = 0;
+        } else {
+          sgstAmount = (amount * sgstRate) / 100;
+          cgstAmount = (amount * cgstRate) / 100;
+          igstAmount = 0;
         }
-      };
 
-      updateField(`orderAcceptanceDetails.${index}.amount`, amount);
+        const updateField = (name, value) => {
+          if (getValues(name) !== value) {
+            setValue(name, value, {
+              shouldDirty: false,
+              shouldValidate: false,
+              shouldTouch: false,
+            });
+          }
+        };
 
-      updateField(`orderAcceptanceDetails.${index}.sgstRate`, sgstRate);
-      updateField(`orderAcceptanceDetails.${index}.cgstRate`, cgstRate);
-      updateField(`orderAcceptanceDetails.${index}.igstRate`, igstRate);
+        updateField(`orderAcceptanceDetails.${index}.amount`, amount);
 
-      updateField(`orderAcceptanceDetails.${index}.sgstAmount`, sgstAmount);
-      updateField(`orderAcceptanceDetails.${index}.cgstAmount`, cgstAmount);
-      updateField(`orderAcceptanceDetails.${index}.igstAmount`, igstAmount);
+        updateField(`orderAcceptanceDetails.${index}.sgstRate`, sgstRate);
+        updateField(`orderAcceptanceDetails.${index}.cgstRate`, cgstRate);
+        updateField(`orderAcceptanceDetails.${index}.igstRate`, igstRate);
 
-      calculateTaxDetails();
-    } finally {
-      isUpdatingRef.current = false;
-    }
-  }, [getValues, setValue, itemOptions, isIGSTApplicable, calculateTaxDetails]);
+        updateField(`orderAcceptanceDetails.${index}.sgstAmount`, sgstAmount);
+        updateField(`orderAcceptanceDetails.${index}.cgstAmount`, cgstAmount);
+        updateField(`orderAcceptanceDetails.${index}.igstAmount`, igstAmount);
+
+        calculateTaxDetails();
+      } finally {
+        isUpdatingRef.current = false;
+      }
+    },
+    [getValues, setValue, itemOptions, isIGSTApplicable, calculateTaxDetails],
+  );
 
   useEffect(() => {
     const subscription = watch((value, { name }) => {
@@ -830,12 +876,17 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
         calculateTaxDetails();
       }, 100);
     }
-  }, [isIGSTApplicable, orderAcceptanceArray.fields.length, setValue, calculateTaxDetails]);
+  }, [
+    isIGSTApplicable,
+    orderAcceptanceArray.fields.length,
+    setValue,
+    calculateTaxDetails,
+  ]);
 
   const loadBranches = useCallback(async () => {
     try {
       const response = await branchAPI.getBranchByOrgId(orgId);
-      const options = (response || []).map(branch => ({
+      const options = (response || []).map((branch) => ({
         value: branch.id,
         label: branch.branchName,
       }));
@@ -849,7 +900,7 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
   const loadCurrencies = useCallback(async () => {
     try {
       const response = await currencyAPI.getCurrencies(orgId);
-      const options = (response || []).map(item => ({
+      const options = (response || []).map((item) => ({
         value: item.id,
         label: item.currency,
       }));
@@ -860,39 +911,42 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
     }
   }, [orgId]);
 
-  const loadCustomers = useCallback(async (soTypeParam) => {
-    const effectiveSoType = soTypeParam || soType;
+  const loadCustomers = useCallback(
+    async (soTypeParam) => {
+      const effectiveSoType = soTypeParam || soType;
 
-    if (!orgId || !branchId || !effectiveSoType) {
-      console.log("Cannot load customers - missing params:", {
-        orgId,
-        branchId,
-        effectiveSoType
-      });
-      return;
-    }
-
-    setLoadingCustomer(true);
-
-    try {
-      const response = await orderAcceptanceAPI.getCustomerDropdown(
-        orgId,
-        branchId,
-        effectiveSoType
-      );
-
-      if (response?.status && response?.paramObjectsMap?.customers) {
-        setCustomerOptions(response.paramObjectsMap.customers);
-      } else {
-        setCustomerOptions([]);
+      if (!orgId || !branchId || !effectiveSoType) {
+        console.log("Cannot load customers - missing params:", {
+          orgId,
+          branchId,
+          effectiveSoType,
+        });
+        return;
       }
-    } catch (error) {
-      console.error("Error loading customers:", error);
-      setCustomerOptions([]);
-    } finally {
-      setLoadingCustomer(false);
-    }
-  }, [orgId, branchId, soType]);
+
+      setLoadingCustomer(true);
+
+      try {
+        const response = await orderAcceptanceAPI.getCustomerDropdown(
+          orgId,
+          branchId,
+          effectiveSoType,
+        );
+
+        if (response?.status && response?.paramObjectsMap?.customers) {
+          setCustomerOptions(response.paramObjectsMap.customers);
+        } else {
+          setCustomerOptions([]);
+        }
+      } catch (error) {
+        console.error("Error loading customers:", error);
+        setCustomerOptions([]);
+      } finally {
+        setLoadingCustomer(false);
+      }
+    },
+    [orgId, branchId, soType],
+  );
 
   const loadQuotations = useCallback(async () => {
     if (!orgId || !branchId || !customerId || !soType) {
@@ -903,12 +957,13 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
 
     try {
       const customer = customerOptions.find(
-        (c) => String(c.customerId) === String(customerId)
+        (c) => String(c.customerId) === String(customerId),
       );
 
       const customerCode = customer?.customerCode || "";
       const recId = isEditMode && data?.recId ? data.recId : 0;
-      const oldQuotationNo = isEditMode && data?.oldQuotationNo ? data.oldQuotationNo : "";
+      const oldQuotationNo =
+        isEditMode && data?.oldQuotationNo ? data.oldQuotationNo : "";
 
       const response = await salesContractAPI.getQuotationDropdown(
         orgId,
@@ -916,7 +971,7 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
         soType,
         customerCode,
         recId,
-        oldQuotationNo
+        oldQuotationNo,
       );
 
       if (response?.status && response?.paramObjectsMap?.quotations) {
@@ -932,92 +987,144 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
     }
   }, [orgId, branchId, customerId, soType, customerOptions, isEditMode, data]);
 
-  const loadQuotationItems = useCallback(async (quotationNo) => {
-    if (!orgId || !branchId || !quotationNo) {
-      return;
-    }
+  const loadQuotationItems = useCallback(
+    async (quotationNo) => {
+      if (!orgId || !branchId || !quotationNo) {
+        return;
+      }
 
-    setLoadingItems(true);
+      setLoadingItems(true);
 
-    try {
-      const response = await salesContractAPI.getQuotationItems(
-        orgId,
-        branchId,
-        quotationNo
-      );
+      try {
+        const response = await salesContractAPI.getQuotationItems(
+          orgId,
+          branchId,
+          quotationNo,
+        );
 
-      if (response?.status && response?.paramObjectsMap?.items) {
-        const items = response.paramObjectsMap.items;
-        setItemOptions(items);
+        if (response?.status && response?.paramObjectsMap?.items) {
+          const items = response.paramObjectsMap.items;
+          setItemOptions(items);
 
-        if (items.length > 0 && orderAcceptanceArray.fields.length === 1) {
-          const firstItem = items[0];
-          const taxType = isIGSTApplicable === "Yes" ? "IGST" : "SGST";
+          if (items.length > 0 && orderAcceptanceArray.fields.length === 1) {
+            const firstItem = items[0];
+            const taxType = isIGSTApplicable === "Yes" ? "IGST" : "SGST";
 
-          isUpdatingRef.current = true;
+            isUpdatingRef.current = true;
 
-          setValue(`orderAcceptanceDetails.0.itemCode`, firstItem.itemCode || "");
-          setValue(`orderAcceptanceDetails.0.itemDescription`, firstItem.itemDescription || "");
-          setValue(`orderAcceptanceDetails.0.hsCode`, firstItem.hsnCode || "");
-          setValue(`orderAcceptanceDetails.0.customerPartNo`, firstItem.customerPartNo || "");
-          setValue(`orderAcceptanceDetails.0.unit`, firstItem.unitId || "");
-          setValue(`orderAcceptanceDetails.0.taxType`, taxType);
+            setValue(
+              `orderAcceptanceDetails.0.itemCode`,
+              firstItem.itemCode || "",
+            );
+            setValue(
+              `orderAcceptanceDetails.0.itemDescription`,
+              firstItem.itemDescription || "",
+            );
+            setValue(
+              `orderAcceptanceDetails.0.hsCode`,
+              firstItem.hsnCode || "",
+            );
+            setValue(
+              `orderAcceptanceDetails.0.customerPartNo`,
+              firstItem.customerPartNo || "",
+            );
+            setValue(`orderAcceptanceDetails.0.unit`, firstItem.unitId || "");
+            setValue(`orderAcceptanceDetails.0.taxType`, taxType);
 
-          setValue(`orderAcceptanceDetails.0.sgstRate`, Number(firstItem.sgst) || 0);
-          setValue(`orderAcceptanceDetails.0.cgstRate`, Number(firstItem.cgst) || 0);
-          setValue(`orderAcceptanceDetails.0.igstRate`, Number(firstItem.igst) || 0);
+            setValue(
+              `orderAcceptanceDetails.0.sgstRate`,
+              Number(firstItem.sgst) || 0,
+            );
+            setValue(
+              `orderAcceptanceDetails.0.cgstRate`,
+              Number(firstItem.cgst) || 0,
+            );
+            setValue(
+              `orderAcceptanceDetails.0.igstRate`,
+              Number(firstItem.igst) || 0,
+            );
 
-          setValue(`orderAcceptanceDetails.0.taxRs`, Number(firstItem.rate) || 0);
+            setValue(
+              `orderAcceptanceDetails.0.taxRs`,
+              Number(firstItem.rate) || 0,
+            );
 
-          setValue(`orderAcceptanceDetails.0._itemId`, firstItem.itemId || "");
-          setValue(`orderAcceptanceDetails.0._unitMasterId`, firstItem.unitMasterId || "");
-          setValue(`orderAcceptanceDetails.0._gstRateMasterId`, firstItem.gstRateMasterId || "");
+            setValue(
+              `orderAcceptanceDetails.0._itemId`,
+              firstItem.itemId || "",
+            );
+            setValue(
+              `orderAcceptanceDetails.0._unitMasterId`,
+              firstItem.unitMasterId || "",
+            );
+            setValue(
+              `orderAcceptanceDetails.0._gstRateMasterId`,
+              firstItem.gstRateMasterId || "",
+            );
 
-          setValue(`orderAcceptanceDetails.0.unitRate`, Number(firstItem.rate) || 0);
-
-          setTimeout(() => {
-            isUpdatingRef.current = false;
-            const quantity = Number(getValues(`orderAcceptanceDetails.0.quantity`)) || 0;
-            const unitRate = Number(getValues(`orderAcceptanceDetails.0.unitRate`)) || 0;
-            const dis = Number(getValues(`orderAcceptanceDetails.0.dis`)) || 0;
-
-            const amountBeforeDiscount = quantity * unitRate;
-            const discountAmount = (amountBeforeDiscount * dis) / 100;
-            const amount = amountBeforeDiscount - discountAmount;
-
-            setValue(`orderAcceptanceDetails.0.amount`, amount);
-
-            const sgstRate = Number(firstItem.sgst) || 0;
-            const cgstRate = Number(firstItem.cgst) || 0;
-            const igstRate = Number(firstItem.igst) || 0;
-
-            let sgstAmount = 0, cgstAmount = 0, igstAmount = 0;
-            if (taxType === "IGST") {
-              igstAmount = (amount * igstRate) / 100;
-            } else {
-              sgstAmount = (amount * sgstRate) / 100;
-              cgstAmount = (amount * cgstRate) / 100;
-            }
-
-            setValue(`orderAcceptanceDetails.0.sgstAmount`, sgstAmount);
-            setValue(`orderAcceptanceDetails.0.cgstAmount`, cgstAmount);
-            setValue(`orderAcceptanceDetails.0.igstAmount`, igstAmount);
+            setValue(
+              `orderAcceptanceDetails.0.unitRate`,
+              Number(firstItem.rate) || 0,
+            );
 
             setTimeout(() => {
-              calculateTaxDetails();
+              isUpdatingRef.current = false;
+              const quantity =
+                Number(getValues(`orderAcceptanceDetails.0.quantity`)) || 0;
+              const unitRate =
+                Number(getValues(`orderAcceptanceDetails.0.unitRate`)) || 0;
+              const dis =
+                Number(getValues(`orderAcceptanceDetails.0.dis`)) || 0;
+
+              const amountBeforeDiscount = quantity * unitRate;
+              const discountAmount = (amountBeforeDiscount * dis) / 100;
+              const amount = amountBeforeDiscount - discountAmount;
+
+              setValue(`orderAcceptanceDetails.0.amount`, amount);
+
+              const sgstRate = Number(firstItem.sgst) || 0;
+              const cgstRate = Number(firstItem.cgst) || 0;
+              const igstRate = Number(firstItem.igst) || 0;
+
+              let sgstAmount = 0,
+                cgstAmount = 0,
+                igstAmount = 0;
+              if (taxType === "IGST") {
+                igstAmount = (amount * igstRate) / 100;
+              } else {
+                sgstAmount = (amount * sgstRate) / 100;
+                cgstAmount = (amount * cgstRate) / 100;
+              }
+
+              setValue(`orderAcceptanceDetails.0.sgstAmount`, sgstAmount);
+              setValue(`orderAcceptanceDetails.0.cgstAmount`, cgstAmount);
+              setValue(`orderAcceptanceDetails.0.igstAmount`, igstAmount);
+
+              setTimeout(() => {
+                calculateTaxDetails();
+              }, 100);
             }, 100);
-          }, 100);
+          }
+        } else {
+          setItemOptions([]);
         }
-      } else {
+      } catch (error) {
+        console.error("Error loading quotation items:", error);
         setItemOptions([]);
+      } finally {
+        setLoadingItems(false);
       }
-    } catch (error) {
-      console.error("Error loading quotation items:", error);
-      setItemOptions([]);
-    } finally {
-      setLoadingItems(false);
-    }
-  }, [orgId, branchId, orderAcceptanceArray.fields.length, setValue, getValues, isIGSTApplicable, calculateTaxDetails]);
+    },
+    [
+      orgId,
+      branchId,
+      orderAcceptanceArray.fields.length,
+      setValue,
+      getValues,
+      isIGSTApplicable,
+      calculateTaxDetails,
+    ],
+  );
 
   const loadFinishedGoodsItems = useCallback(async () => {
     if (!orgId || !branchId) {
@@ -1029,7 +1136,7 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
     try {
       const response = await salesContractAPI.getFinishedGoodsItems(
         orgId,
-        branchId
+        branchId,
       );
 
       if (response?.status && response?.paramObjectsMap?.items) {
@@ -1054,10 +1161,7 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
     setLoadingItems(true);
 
     try {
-      const response = await orderAcceptanceAPI.getItems(
-        orgId,
-        branchId
-      );
+      const response = await orderAcceptanceAPI.getItems(orgId, branchId);
 
       if (response?.status && response?.paramObjectsMap?.items) {
         setItemOptions(response.paramObjectsMap.items);
@@ -1079,7 +1183,10 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
       await Promise.all(
         Object.entries(LIST_OF_VALUES_GROUPS).map(async ([key, group]) => {
           try {
-            const response = await listOfValuesAPI.getListValuesGroup(group, orgId);
+            const response = await listOfValuesAPI.getListValuesGroup(
+              group,
+              orgId,
+            );
 
             let items = [];
             if (response?.paramObjectsMap?.listValues) {
@@ -1092,17 +1199,16 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
               items = response.listValues;
             }
 
-            result[key] = items.map(item => ({
+            result[key] = items.map((item) => ({
               value: item.id || item.value,
               label: item.valuesDescription || item.label || item.name,
               ...item,
             }));
-
           } catch (err) {
             console.error(`${group} failed`, err);
             result[key] = [];
           }
-        })
+        }),
       );
 
       setListOfValuesData(result);
@@ -1117,100 +1223,93 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
     }
   };
 
-  const handleItemSelect = useCallback((index, itemCode) => {
-    const selectedItem = itemOptions.find(
-      item => String(item.itemCode) === String(itemCode)
-    );
+  const handleItemSelect = useCallback(
+    (index, itemCode) => {
+      const selectedItem = itemOptions.find(
+        (item) => String(item.itemCode) === String(itemCode),
+      );
 
-    if (selectedItem) {
-      isUpdatingRef.current = true;
+      if (selectedItem) {
+        isUpdatingRef.current = true;
 
-      setValue(`orderAcceptanceDetails.${index}.itemCode`, selectedItem.itemCode || "");
-      setValue(`orderAcceptanceDetails.${index}.itemDescription`, selectedItem.itemDescription || "");
-      setValue(`orderAcceptanceDetails.${index}.hsCode`, selectedItem.hsnCode || "");
-      setValue(`orderAcceptanceDetails.${index}.customerPartNo`, selectedItem.customerPartNo || "");
-      setValue(`orderAcceptanceDetails.${index}.unit`, selectedItem.unitId || "");
+        setValue(
+          `orderAcceptanceDetails.${index}.itemCode`,
+          selectedItem.itemCode || "",
+        );
+        setValue(
+          `orderAcceptanceDetails.${index}.itemDescription`,
+          selectedItem.itemDescription || "",
+        );
+        setValue(
+          `orderAcceptanceDetails.${index}.hsCode`,
+          selectedItem.hsnCode || "",
+        );
+        setValue(
+          `orderAcceptanceDetails.${index}.customerPartNo`,
+          selectedItem.customerPartNo || "",
+        );
+        setValue(
+          `orderAcceptanceDetails.${index}.unit`,
+          selectedItem.unitId || "",
+        );
 
-      const sgstRate = Number(selectedItem.sgst) || 0;
-      const cgstRate = Number(selectedItem.cgst) || 0;
-      const igstRate = Number(selectedItem.igst) || 0;
+        const sgstRate = Number(selectedItem.sgst) || 0;
+        const cgstRate = Number(selectedItem.cgst) || 0;
+        const igstRate = Number(selectedItem.igst) || 0;
 
-      setValue(`orderAcceptanceDetails.${index}.sgstRate`, sgstRate);
-      setValue(`orderAcceptanceDetails.${index}.cgstRate`, cgstRate);
-      setValue(`orderAcceptanceDetails.${index}.igstRate`, igstRate);
+        setValue(`orderAcceptanceDetails.${index}.sgstRate`, sgstRate);
+        setValue(`orderAcceptanceDetails.${index}.cgstRate`, cgstRate);
+        setValue(`orderAcceptanceDetails.${index}.igstRate`, igstRate);
 
-      setValue(`orderAcceptanceDetails.${index}.taxRs`, Number(selectedItem.rate) || 0);
+        setValue(
+          `orderAcceptanceDetails.${index}.taxRs`,
+          Number(selectedItem.rate) || 0,
+        );
 
-      setValue(`orderAcceptanceDetails.${index}._itemId`, selectedItem.itemId || "");
-      setValue(`orderAcceptanceDetails.${index}._unitMasterId`, selectedItem.unitMasterId || "");
-      setValue(`orderAcceptanceDetails.${index}._gstRateMasterId`, selectedItem.gstRateMasterId || "");
+        setValue(
+          `orderAcceptanceDetails.${index}._itemId`,
+          selectedItem.itemId || "",
+        );
+        setValue(
+          `orderAcceptanceDetails.${index}._unitMasterId`,
+          selectedItem.unitMasterId || "",
+        );
+        setValue(
+          `orderAcceptanceDetails.${index}._gstRateMasterId`,
+          selectedItem.gstRateMasterId || "",
+        );
 
-      setValue(`orderAcceptanceDetails.${index}.unitRate`, Number(selectedItem.rate) || 0);
+        setValue(
+          `orderAcceptanceDetails.${index}.unitRate`,
+          Number(selectedItem.rate) || 0,
+        );
 
-      const taxType = isIGSTApplicable === "Yes" ? "IGST" : "SGST";
-      setValue(`orderAcceptanceDetails.${index}.taxType`, taxType);
-
-      setTimeout(() => {
-        isUpdatingRef.current = false;
-        const quantity = Number(getValues(`orderAcceptanceDetails.${index}.quantity`)) || 0;
-        const unitRate = Number(getValues(`orderAcceptanceDetails.${index}.unitRate`)) || 0;
-        const dis = Number(getValues(`orderAcceptanceDetails.${index}.dis`)) || 0;
-
-        const amountBeforeDiscount = quantity * unitRate;
-        const discountAmount = (amountBeforeDiscount * dis) / 100;
-        const amount = amountBeforeDiscount - discountAmount;
-
-        setValue(`orderAcceptanceDetails.${index}.amount`, amount);
-
-        let sgstAmount = 0, cgstAmount = 0, igstAmount = 0;
-        if (taxType === "IGST") {
-          igstAmount = (amount * igstRate) / 100;
-        } else {
-          sgstAmount = (amount * sgstRate) / 100;
-          cgstAmount = (amount * cgstRate) / 100;
-        }
-
-        setValue(`orderAcceptanceDetails.${index}.sgstAmount`, sgstAmount);
-        setValue(`orderAcceptanceDetails.${index}.cgstAmount`, cgstAmount);
-        setValue(`orderAcceptanceDetails.${index}.igstAmount`, igstAmount);
+        const taxType = isIGSTApplicable === "Yes" ? "IGST" : "SGST";
+        setValue(`orderAcceptanceDetails.${index}.taxType`, taxType);
 
         setTimeout(() => {
-          calculateTaxDetails();
-        }, 100);
-      }, 100);
-    }
-  }, [itemOptions, setValue, getValues, isIGSTApplicable, calculateTaxDetails]);
-
-  const handleTaxTypeChange = useCallback((index, newTaxType) => {
-    isUpdatingRef.current = true;
-    setValue(`orderAcceptanceDetails.${index}.taxType`, newTaxType);
-
-    setTimeout(() => {
-      const quantity = Number(getValues(`orderAcceptanceDetails.${index}.quantity`)) || 0;
-      const unitRate = Number(getValues(`orderAcceptanceDetails.${index}.unitRate`)) || 0;
-      const dis = Number(getValues(`orderAcceptanceDetails.${index}.dis`)) || 0;
-      const itemCode = getValues(`orderAcceptanceDetails.${index}.itemCode`);
-
-      if (itemCode) {
-        const selectedItem = itemOptions.find(i => String(i.itemCode) === String(itemCode));
-        if (selectedItem) {
-          const sgstRate = Number(selectedItem.sgst) || 0;
-          const cgstRate = Number(selectedItem.cgst) || 0;
-          const igstRate = Number(selectedItem.igst) || 0;
+          isUpdatingRef.current = false;
+          const quantity =
+            Number(getValues(`orderAcceptanceDetails.${index}.quantity`)) || 0;
+          const unitRate =
+            Number(getValues(`orderAcceptanceDetails.${index}.unitRate`)) || 0;
+          const dis =
+            Number(getValues(`orderAcceptanceDetails.${index}.dis`)) || 0;
 
           const amountBeforeDiscount = quantity * unitRate;
           const discountAmount = (amountBeforeDiscount * dis) / 100;
           const amount = amountBeforeDiscount - discountAmount;
 
-          let sgstAmount = 0, cgstAmount = 0, igstAmount = 0;
-          if (newTaxType === "IGST") {
+          setValue(`orderAcceptanceDetails.${index}.amount`, amount);
+
+          let sgstAmount = 0,
+            cgstAmount = 0,
+            igstAmount = 0;
+          if (taxType === "IGST") {
             igstAmount = (amount * igstRate) / 100;
-            setValue(`orderAcceptanceDetails.${index}.sgstRate`, 0);
-            setValue(`orderAcceptanceDetails.${index}.cgstRate`, 0);
           } else {
             sgstAmount = (amount * sgstRate) / 100;
             cgstAmount = (amount * cgstRate) / 100;
-            setValue(`orderAcceptanceDetails.${index}.igstRate`, 0);
           }
 
           setValue(`orderAcceptanceDetails.${index}.sgstAmount`, sgstAmount);
@@ -1220,265 +1319,424 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
           setTimeout(() => {
             calculateTaxDetails();
           }, 100);
-        }
+        }, 100);
       }
+    },
+    [itemOptions, setValue, getValues, isIGSTApplicable, calculateTaxDetails],
+  );
+
+  const handleTaxTypeChange = useCallback(
+    (index, newTaxType) => {
+      isUpdatingRef.current = true;
+      setValue(`orderAcceptanceDetails.${index}.taxType`, newTaxType);
 
       setTimeout(() => {
-        isUpdatingRef.current = false;
-      }, 50);
-    }, 100);
-  }, [setValue, getValues, itemOptions, calculateTaxDetails]);
+        const quantity =
+          Number(getValues(`orderAcceptanceDetails.${index}.quantity`)) || 0;
+        const unitRate =
+          Number(getValues(`orderAcceptanceDetails.${index}.unitRate`)) || 0;
+        const dis =
+          Number(getValues(`orderAcceptanceDetails.${index}.dis`)) || 0;
+        const itemCode = getValues(`orderAcceptanceDetails.${index}.itemCode`);
 
-  const populateFormData = useCallback((orderData) => {
-    console.log("Populating form from raw data:", orderData);
-    if (!orderData) return;
+        if (itemCode) {
+          const selectedItem = itemOptions.find(
+            (i) => String(i.itemCode) === String(itemCode),
+          );
+          if (selectedItem) {
+            const sgstRate = Number(selectedItem.sgst) || 0;
+            const cgstRate = Number(selectedItem.cgst) || 0;
+            const igstRate = Number(selectedItem.igst) || 0;
 
-    try {
-      // Header Fields
-      setValue("plantId", orderData.plantId || orderData.branch?.id || "");
-      setValue("belongsTo", orderData.belongsTo || "");
-      setValue("soType", orderData.soType || "");
-      setValue("withQuotation", orderData.withQuotation || "");
-      setValue("customerId", orderData.customerId || "");
-      setValue("customerName", orderData.customerName || "");
-      setValue("quotationNo", orderData.quotationNo || "");
-      setValue("quotationDate", orderData.quotationDate || "");
-      setValue("enquiryNo", orderData.enquiryNo || "");
-      setValue("enquiryDate", orderData.enquiryDate || "");
-      setValue("custPONo", orderData.custPONo || orderData.customerPurchaseOrderNo || "");
-      setValue("custPODate", orderData.custPODate || orderData.customerPurchaseOrderDate || "");
-      setValue("invoiceType", orderData.invoiceType || "");
-      setValue("postRate", orderData.postRate || "");
-      setValue("isGSTAppl", orderData.isGSTAppl || "");
-      setValue("customerType", orderData.customerType || "");
-      setValue("gstnNo", orderData.gstnNo || "");
-      setValue("auto", orderData.auto || orderData.docId || orderData.orderNo || "");
-      setValue("orderDate", orderData.orderDate || orderData.docDate || "");
-      setValue("recId", orderData.recId || "");
-      setValue("oldQuotationNo", orderData.oldQuotationNo || "");
+            const amountBeforeDiscount = quantity * unitRate;
+            const discountAmount = (amountBeforeDiscount * dis) / 100;
+            const amount = amountBeforeDiscount - discountAmount;
 
-      // Auto-fill customer details if customerId is present and customerOptions are loaded
-      if (orderData.customerId && customerOptions.length > 0) {
-        const customer = customerOptions.find(
-          (c) => String(c.customerId) === String(orderData.customerId)
-        );
-        if (customer) {
-          setSelectedCustomer(customer);
-          setValue("customerName", customer.customerName || orderData.customerName || "");
-          setValue("gstnNo", customer.gstNo || orderData.gstnNo || "");
-          setValue("isGSTAppl", customer.igstApplicable ? "Yes" : orderData.isGSTAppl || "No");
-          if (customer.gstType) {
-            setValue("customerType", customer.gstType || orderData.customerType || "");
+            let sgstAmount = 0,
+              cgstAmount = 0,
+              igstAmount = 0;
+            if (newTaxType === "IGST") {
+              igstAmount = (amount * igstRate) / 100;
+              setValue(`orderAcceptanceDetails.${index}.sgstRate`, 0);
+              setValue(`orderAcceptanceDetails.${index}.cgstRate`, 0);
+            } else {
+              sgstAmount = (amount * sgstRate) / 100;
+              cgstAmount = (amount * cgstRate) / 100;
+              setValue(`orderAcceptanceDetails.${index}.igstRate`, 0);
+            }
+
+            setValue(`orderAcceptanceDetails.${index}.sgstAmount`, sgstAmount);
+            setValue(`orderAcceptanceDetails.${index}.cgstAmount`, cgstAmount);
+            setValue(`orderAcceptanceDetails.${index}.igstAmount`, igstAmount);
+
+            setTimeout(() => {
+              calculateTaxDetails();
+            }, 100);
           }
         }
-      }
 
-      // Terms and Conditions
-      if (orderData.termsConditions) {
-        setValue("termsConditions.destination", orderData.termsConditions.destination || "");
-        setValue("termsConditions.freight", orderData.termsConditions.freight || "");
-        setValue("termsConditions.modeOfTransport", orderData.termsConditions.modeOfTransport || "");
-        setValue("termsConditions.grossValue", orderData.termsConditions.grossValue || 0);
-        setValue("termsConditions.deliveryTerms", orderData.termsConditions.deliveryTerms || "");
-        setValue("termsConditions.paymentTerms", orderData.termsConditions.paymentTerms || "");
-        setValue("termsConditions.specification", orderData.termsConditions.specification || "");
-        setValue("termsConditions.note", orderData.termsConditions.note || "");
-      } else {
-        // If termsConditions is not in the data, try to set from root level
-        setValue("termsConditions.destination", orderData.destination || "");
-        setValue("termsConditions.freight", orderData.freight || "");
-        setValue("termsConditions.modeOfTransport", orderData.modeOfTransport || "");
-        setValue("termsConditions.grossValue", orderData.grossalue || orderData.grossValue || 0);
-        setValue("termsConditions.deliveryTerms", orderData.deliveryTerms || "");
-        setValue("termsConditions.paymentTerms", orderData.paymentTerms || "");
-        setValue("termsConditions.specification", orderData.specification || "");
-        setValue("termsConditions.note", orderData.note || "");
-      }
+        setTimeout(() => {
+          isUpdatingRef.current = false;
+        }, 50);
+      }, 100);
+    },
+    [setValue, getValues, itemOptions, calculateTaxDetails],
+  );
 
-      // Order Acceptance Details
-      if (orderData.orderAcceptanceDetails && orderData.orderAcceptanceDetails.length > 0) {
-        const details = orderData.orderAcceptanceDetails.map((item, index) => ({
-          sno: index + 1,
-          itemCode: item.itemCode || "",
-          _itemId: item._itemId || item.item?.id || 0,
-          customerPartNo: item.customerPartNo || "",
-          itemDescription: item.itemDescription || item.item?.itemDescription || "",
-          hsCode: item.hsCode || item.item?.hsnCode || "",
-          taxType: item.taxType || "",
-          taxRs: item.taxRs || item.taxPercentage?.taxPercentage || 0,
-          _gstRateMasterId: item._gstRateMasterId || item.taxPercentage?.id || 0,
-          lastInvitedDate: item.lastInvitedDate || item.lastInvoiceDate || "",
-          unit: item.unit || item.unit?.unitId || "",
-          _unitMasterId: item._unitMasterId || item.unit?.id || 0,
-          quantity: item.quantity || 0,
-          unitRate: item.unitRate || item.orderRate || 0,
-          otherRate: item.otherRate || 0,
-          dis: item.dis || item.discount || 0,
-          amount: item.amount || 0,
-          sgstRate: item.sgstRate || 0,
-          sgstAmount: item.sgstAmount || 0,
-          cgstRate: item.cgstRate || 0,
-          cgstAmount: item.cgstAmount || 0,
-          igstRate: item.igstRate || 0,
-          igstAmount: item.igstAmount || 0,
-          currencyName: item.currencyName || "",
-        }));
-        orderAcceptanceArray.replace(details);
-      }
+  const populateFormData = useCallback(
+    (orderData) => {
+      console.log("Populating form from raw data:", orderData);
+      if (!orderData) return;
 
-      // Tax Details
-      if (orderData.taxDetails && orderData.taxDetails.length > 0) {
-        const taxDetails = orderData.taxDetails.map((item, index) => ({
-          id: index + 1,
-          particulars: item.particulars || "",
-          acceptedAmount: item.acceptedAmount || item.acceptedQtyAmount || 0,
-          revisedAmount: item.revisedAmount || 0,
-          isSystemRow: item.isSystemRow ||
-            ['Gross Amount', 'IGST', 'CGST', 'SGST'].includes(item.particulars || "") ||
-            ['1000000092', '1000000093'].includes(String(item.particulars)),
-        }));
-        taxDetailsArray.replace(taxDetails);
-      }
+      try {
+        // Header Fields
+        setValue("plantId", orderData.plantId || orderData.branch?.id || "");
+        setValue("belongsTo", orderData.belongsTo || "");
+        setValue("soType", orderData.soType || "");
+        setValue("withQuotation", orderData.withQuotation || "");
+        setValue("customerId", orderData.customerId || "");
+        setValue("customerName", orderData.customerName || "");
+        setValue("quotationNo", orderData.quotationNo || "");
+        setValue("quotationDate", orderData.quotationDate || "");
+        setValue("enquiryNo", orderData.enquiryNo || "");
+        setValue("enquiryDate", orderData.enquiryDate || "");
+        setValue(
+          "custPONo",
+          orderData.custPONo || orderData.customerPurchaseOrderNo || "",
+        );
+        setValue(
+          "custPODate",
+          orderData.custPODate || orderData.customerPurchaseOrderDate || "",
+        );
+        setValue("invoiceType", orderData.invoiceType || "");
+        setValue("postRate", orderData.postRate || "");
+        setValue("isGSTAppl", orderData.isGSTAppl || "");
+        setValue("customerType", orderData.customerType || "");
+        setValue("gstnNo", orderData.gstnNo || "");
+        setValue(
+          "auto",
+          orderData.auto || orderData.docId || orderData.orderNo || "",
+        );
+        setValue("orderDate", orderData.orderDate || orderData.docDate || "");
+        setValue("recId", orderData.recId || "");
+        setValue("oldQuotationNo", orderData.oldQuotationNo || "");
 
-      // Attachments
-      if (orderData.attachments && orderData.attachments.length > 0) {
-        const attachments = orderData.attachments.map(item => ({
-          pdfAttached: {
-            filePath: item.filePath || item.pdfAttached?.filePath || "",
-            fileName: item.fileName || item.pdfAttached?.fileName || item.name || "Attachment",
-            id: item.id || item.pdfAttached?.id,
-            name: item.name || item.pdfAttached?.name,
-            fileSize: item.fileSize || item.pdfAttached?.fileSize,
-            uploadOn: item.uploadOn || item.pdfAttached?.uploadOn,
-            // Flag to indicate this is an existing file
-            isExisting: true,
-          },
-        }));
-        attachedPOCopyArray.replace(attachments);
-      }
-
-      dataLoadedRef.current = true;
-    } catch (error) {
-      console.error("Error populating form data:", error);
-    }
-  }, [setValue, orderAcceptanceArray, taxDetailsArray, attachedPOCopyArray, customerOptions, setSelectedCustomer]);
-
-  const loadOrderAcceptanceData = useCallback(async (orderId) => {
-    if (!orderId) {
-      console.log("No order ID provided");
-      return;
-    }
-
-    setLoading(true);
-    try {
-      console.log("Calling getOrderAcceptanceById with ID:", orderId);
-      const response = await orderAcceptanceAPI.getOrderAcceptanceById(orderId);
-      console.log("Order Acceptance Data Response:", response);
-
-      if (response?.status && response?.paramObjectsMap?.orderAcceptanceResponseVO) {
-        const order = response.paramObjectsMap.orderAcceptanceResponseVO;
-        console.log("Order data received:", order);
-
-        // Map the response fields to form fields
-        const mappedData = {
-          id: order.id,
-          plantId: order.branch?.id || "",
-          belongsTo: order.belongsTo || "",
-          soType: order.soType || "",
-          withQuotation: order.withQuotation || "",
-          customerId: order.customerId?.id || "",
-          customerName: order.customerId?.customerName || "",
-          quotationNo: order.quotationNo || "",
-          quotationDate: order.quotationDate || "",
-          enquiryNo: order.enquiryNo || "",
-          enquiryDate: order.enquiryDate || "",
-          custPONo: order.customerPurchaseOrderNo || "",
-          custPODate: order.customerPurchaseOrderDate || "",
-          invoiceType: order.invoiceType || "",
-          postRate: order.postRate || "",
-          isGSTAppl: order.customerId?.gstApproval || "",
-          customerType: order.customerId?.customerType || "",
-          gstnNo: order.customerId?.customerGstNo || "",
-          auto: order.docId || order.orderNo || "",
-          orderDate: order.docDate || order.orderDate || "",
-          recId: order.recId || "",
-          oldQuotationNo: order.oldQuotationNo || "",
-          active: order.active !== false,
-          createdBy: order.createdBy || "",
-          updatedBy: order.updatedBy || "",
-          cancelRemarks: order.cancelRemarks || "",
-          financialYear: order.financialYear || "",
-          branch: order.branch?.branchName || "",
-          destination: order.destination || "",
-          freight: order.freight || "",
-          modeOfTransport: order.modeOfTransport || "",
-          grossValue: order.grossalue || order.grossValue || 0,
-          deliveryTerms: order.deliveryTerms || "",
-          paymentTerms: order.paymentTerms || "",
-          specification: order.specification || "",
-          note: order.note || "",
-          orderAcceptanceDetails: (order.orderAcceptanceDetailsResponseDTO || []).map(item => ({
-            itemCode: item.item?.itemCode || "",
-            _itemId: item.item?.id || 0,
-            customerPartNo: item.customerPartNo || "",
-            itemDescription: item.item?.itemDescription || "",
-            hsCode: item.hsCode || item.item?.hsnCode || "",
-            taxType: item.taxType || "",
-            taxRs: item.taxPercentage?.taxPercentage || 0,
-            _gstRateMasterId: item.taxPercentage?.id || 0,
-            lastInvitedDate: item.lastInvoiceDate || "",
-            unit: item.unit || item.unit?.unitId || "",
-            _unitMasterId: item.unit?.id || 0,
-            quantity: item.quantity || 0,
-            unitRate: item.orderRate || 0,
-            otherRate: item.orderRate || 0,
-            dis: item.discount || 0,
-            amount: item.amount || 0,
-            currencyName: item.currencyName || "",
-          })),
-          taxDetails: (order.orderAcceptanceTaxDetailsResponsVO || []).map(item => {
-            // Get particulars label from listOfValuesData if available
-            let particularsLabel = item.particulars || "";
-            if (listOfValuesData.PARTICULARS && listOfValuesData.PARTICULARS.length > 0) {
-              const found = listOfValuesData.PARTICULARS.find(
-                option => String(option.value) === String(item.particulars)
+        // Auto-fill customer details if customerId is present and customerOptions are loaded
+        if (orderData.customerId && customerOptions.length > 0) {
+          const customer = customerOptions.find(
+            (c) => String(c.customerId) === String(orderData.customerId),
+          );
+          if (customer) {
+            setSelectedCustomer(customer);
+            setValue(
+              "customerName",
+              customer.customerName || orderData.customerName || "",
+            );
+            setValue("gstnNo", customer.gstNo || orderData.gstnNo || "");
+            setValue(
+              "isGSTAppl",
+              customer.igstApplicable ? "Yes" : orderData.isGSTAppl || "No",
+            );
+            if (customer.gstType) {
+              setValue(
+                "customerType",
+                customer.gstType || orderData.customerType || "",
               );
-              if (found) {
-                particularsLabel = found.label;
-              }
             }
-            return {
-              particulars: particularsLabel,
-              acceptedAmount: item.acceptedQtyAmount || 0,
-              revisedAmount: item.revisedAmount || 0,
-              isSystemRow: ['Gross Amount', 'IGST', 'CGST', 'SGST'].includes(particularsLabel) ||
-                ['1000000092', '1000000093'].includes(String(item.particulars)),
-            };
-          }),
-          attachments: (order.orderAcceptanceFileUploadDetailsDTO || []).map(item => ({
-            filePath: item.filePath,
-            fileName: item.fileName || item.name || "Attachment",
-            id: item.id,
-            name: item.name,
-            fileSize: item.fileSize,
-            uploadOn: item.uploadOn,
-          })),
-        };
+          }
+        }
 
-        // Set the values in the form
-        populateFormData(mappedData);
-        addToast("Order acceptance loaded successfully", "success");
-      } else {
-        console.error("Invalid response structure:", response);
-        addToast("Failed to load order acceptance data", "error");
+        // Terms and Conditions
+        if (orderData.termsConditions) {
+          setValue(
+            "termsConditions.destination",
+            orderData.termsConditions.destination || "",
+          );
+          setValue(
+            "termsConditions.freight",
+            orderData.termsConditions.freight || "",
+          );
+          setValue(
+            "termsConditions.modeOfTransport",
+            orderData.termsConditions.modeOfTransport || "",
+          );
+          setValue(
+            "termsConditions.grossValue",
+            orderData.termsConditions.grossValue || 0,
+          );
+          setValue(
+            "termsConditions.deliveryTerms",
+            orderData.termsConditions.deliveryTerms || "",
+          );
+          setValue(
+            "termsConditions.paymentTerms",
+            orderData.termsConditions.paymentTerms || "",
+          );
+          setValue(
+            "termsConditions.specification",
+            orderData.termsConditions.specification || "",
+          );
+          setValue(
+            "termsConditions.note",
+            orderData.termsConditions.note || "",
+          );
+        } else {
+          // If termsConditions is not in the data, try to set from root level
+          setValue("termsConditions.destination", orderData.destination || "");
+          setValue("termsConditions.freight", orderData.freight || "");
+          setValue(
+            "termsConditions.modeOfTransport",
+            orderData.modeOfTransport || "",
+          );
+          setValue(
+            "termsConditions.grossValue",
+            orderData.grossalue || orderData.grossValue || 0,
+          );
+          setValue(
+            "termsConditions.deliveryTerms",
+            orderData.deliveryTerms || "",
+          );
+          setValue(
+            "termsConditions.paymentTerms",
+            orderData.paymentTerms || "",
+          );
+          setValue(
+            "termsConditions.specification",
+            orderData.specification || "",
+          );
+          setValue("termsConditions.note", orderData.note || "");
+        }
+
+        // Order Acceptance Details
+        if (
+          orderData.orderAcceptanceDetails &&
+          orderData.orderAcceptanceDetails.length > 0
+        ) {
+          const details = orderData.orderAcceptanceDetails.map(
+            (item, index) => ({
+              sno: index + 1,
+              itemCode: item.itemCode || "",
+              _itemId: item._itemId || item.item?.id || 0,
+              customerPartNo: item.customerPartNo || "",
+              itemDescription:
+                item.itemDescription || item.item?.itemDescription || "",
+              hsCode: item.hsCode || item.item?.hsnCode || "",
+              taxType: item.taxType || "",
+              taxRs: item.taxRs || item.taxPercentage?.taxPercentage || 0,
+              _gstRateMasterId:
+                item._gstRateMasterId || item.taxPercentage?.id || 0,
+              lastInvitedDate:
+                item.lastInvitedDate || item.lastInvoiceDate || "",
+              unit: item.unit || item.unit?.unitId || "",
+              _unitMasterId: item._unitMasterId || item.unit?.id || 0,
+              quantity: item.quantity || 0,
+              unitRate: item.unitRate || item.orderRate || 0,
+              otherRate: item.otherRate || 0,
+              dis: item.dis || item.discount || 0,
+              amount: item.amount || 0,
+              sgstRate: item.sgstRate || 0,
+              sgstAmount: item.sgstAmount || 0,
+              cgstRate: item.cgstRate || 0,
+              cgstAmount: item.cgstAmount || 0,
+              igstRate: item.igstRate || 0,
+              igstAmount: item.igstAmount || 0,
+              currencyName: item.currencyName || "",
+            }),
+          );
+          orderAcceptanceArray.replace(details);
+        }
+
+        // Tax Details
+        if (orderData.taxDetails && orderData.taxDetails.length > 0) {
+          const taxDetails = orderData.taxDetails.map((item, index) => ({
+            id: index + 1,
+            particulars: item.particulars || "",
+            acceptedAmount: item.acceptedAmount || item.acceptedQtyAmount || 0,
+            revisedAmount: item.revisedAmount || 0,
+            isSystemRow:
+              item.isSystemRow ||
+              ["Gross Amount", "IGST", "CGST", "SGST"].includes(
+                item.particulars || "",
+              ) ||
+              ["1000000092", "1000000093"].includes(String(item.particulars)),
+          }));
+          taxDetailsArray.replace(taxDetails);
+        }
+
+        // Attachments
+        if (orderData.attachments && orderData.attachments.length > 0) {
+          const attachments = orderData.attachments.map((item) => ({
+            pdfAttached: {
+              filePath: item.filePath || item.pdfAttached?.filePath || "",
+              fileName:
+                item.fileName ||
+                item.pdfAttached?.fileName ||
+                item.name ||
+                "Attachment",
+              id: item.id || item.pdfAttached?.id,
+              name: item.name || item.pdfAttached?.name,
+              fileSize: item.fileSize || item.pdfAttached?.fileSize,
+              uploadOn: item.uploadOn || item.pdfAttached?.uploadOn,
+              // Flag to indicate this is an existing file
+              isExisting: true,
+            },
+          }));
+          attachedPOCopyArray.replace(attachments);
+        }
+
+        dataLoadedRef.current = true;
+      } catch (error) {
+        console.error("Error populating form data:", error);
       }
-    } catch (error) {
-      console.error("Error loading order acceptance:", error);
-      addToast("Failed to load order acceptance data", "error");
-    } finally {
-      setLoading(false);
-    }
-  }, [populateFormData, addToast, listOfValuesData]);
+    },
+    [
+      setValue,
+      orderAcceptanceArray,
+      taxDetailsArray,
+      attachedPOCopyArray,
+      customerOptions,
+      setSelectedCustomer,
+    ],
+  );
+
+  const loadOrderAcceptanceData = useCallback(
+    async (orderId) => {
+      if (!orderId) {
+        console.log("No order ID provided");
+        return;
+      }
+
+      setLoading(true);
+      try {
+        console.log("Calling getOrderAcceptanceById with ID:", orderId);
+        const response =
+          await orderAcceptanceAPI.getOrderAcceptanceById(orderId);
+        console.log("Order Acceptance Data Response:", response);
+
+        if (
+          response?.status &&
+          response?.paramObjectsMap?.orderAcceptanceResponseVO
+        ) {
+          const order = response.paramObjectsMap.orderAcceptanceResponseVO;
+          console.log("Order data received:", order);
+
+          // Map the response fields to form fields
+          const mappedData = {
+            id: order.id,
+            plantId: order.branch?.id || "",
+            belongsTo: order.belongsTo || "",
+            soType: order.soType || "",
+            withQuotation: order.withQuotation || "",
+            customerId: order.customerId?.id || "",
+            customerName: order.customerId?.customerName || "",
+            quotationNo: order.quotationNo || "",
+            quotationDate: order.quotationDate || "",
+            enquiryNo: order.enquiryNo || "",
+            enquiryDate: order.enquiryDate || "",
+            custPONo: order.customerPurchaseOrderNo || "",
+            custPODate: order.customerPurchaseOrderDate || "",
+            invoiceType: order.invoiceType || "",
+            postRate: order.postRate || "",
+            isGSTAppl: order.customerId?.gstApproval || "",
+            customerType: order.customerId?.customerType || "",
+            gstnNo: order.customerId?.customerGstNo || "",
+            auto: order.docId || order.orderNo || "",
+            orderDate: order.docDate || order.orderDate || "",
+            recId: order.recId || "",
+            oldQuotationNo: order.oldQuotationNo || "",
+            active: order.active !== false,
+            createdBy: order.createdBy || "",
+            updatedBy: order.updatedBy || "",
+            cancelRemarks: order.cancelRemarks || "",
+            financialYear: order.financialYear || "",
+            branch: order.branch?.branchName || "",
+            destination: order.destination || "",
+            freight: order.freight || "",
+            modeOfTransport: order.modeOfTransport || "",
+            grossValue: order.grossalue || order.grossValue || 0,
+            deliveryTerms: order.deliveryTerms || "",
+            paymentTerms: order.paymentTerms || "",
+            specification: order.specification || "",
+            note: order.note || "",
+            orderAcceptanceDetails: (
+              order.orderAcceptanceDetailsResponseDTO || []
+            ).map((item) => ({
+              itemCode: item.item?.itemCode || "",
+              _itemId: item.item?.id || 0,
+              customerPartNo: item.customerPartNo || "",
+              itemDescription: item.item?.itemDescription || "",
+              hsCode: item.hsCode || item.item?.hsnCode || "",
+              taxType: item.taxType || "",
+              taxRs: item.taxPercentage?.taxPercentage || 0,
+              _gstRateMasterId: item.taxPercentage?.id || 0,
+              lastInvitedDate: item.lastInvoiceDate || "",
+              unit: item.unit || item.unit?.unitId || "",
+              _unitMasterId: item.unit?.id || 0,
+              quantity: item.quantity || 0,
+              unitRate: item.orderRate || 0,
+              otherRate: item.orderRate || 0,
+              dis: item.discount || 0,
+              amount: item.amount || 0,
+              currencyName: item.currencyName || "",
+            })),
+            taxDetails: (order.orderAcceptanceTaxDetailsResponsVO || []).map(
+              (item) => {
+                // Get particulars label from listOfValuesData if available
+                let particularsLabel = item.particulars || "";
+                if (
+                  listOfValuesData.PARTICULARS &&
+                  listOfValuesData.PARTICULARS.length > 0
+                ) {
+                  const found = listOfValuesData.PARTICULARS.find(
+                    (option) =>
+                      String(option.value) === String(item.particulars),
+                  );
+                  if (found) {
+                    particularsLabel = found.label;
+                  }
+                }
+                return {
+                  particulars: particularsLabel,
+                  acceptedAmount: item.acceptedQtyAmount || 0,
+                  revisedAmount: item.revisedAmount || 0,
+                  isSystemRow:
+                    ["Gross Amount", "IGST", "CGST", "SGST"].includes(
+                      particularsLabel,
+                    ) ||
+                    ["1000000092", "1000000093"].includes(
+                      String(item.particulars),
+                    ),
+                };
+              },
+            ),
+            attachments: (order.orderAcceptanceFileUploadDetailsDTO || []).map(
+              (item) => ({
+                filePath: item.filePath,
+                fileName: item.fileName || item.name || "Attachment",
+                id: item.id,
+                name: item.name,
+                fileSize: item.fileSize,
+                uploadOn: item.uploadOn,
+              }),
+            ),
+          };
+
+          // Set the values in the form
+          populateFormData(mappedData);
+          addToast("Order acceptance loaded successfully", "success");
+        } else {
+          console.error("Invalid response structure:", response);
+          addToast("Failed to load order acceptance data", "error");
+        }
+      } catch (error) {
+        console.error("Error loading order acceptance:", error);
+        addToast("Failed to load order acceptance data", "error");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [populateFormData, addToast, listOfValuesData],
+  );
 
   useEffect(() => {
     if (dataLoadedRef.current) return;
@@ -1527,7 +1785,14 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
 
   // Load quotations when customerId changes and conditions are met
   useEffect(() => {
-    if (orgId && branchId && customerId && soType && !isDirectSoType && withQuotation === "Yes") {
+    if (
+      orgId &&
+      branchId &&
+      customerId &&
+      soType &&
+      !isDirectSoType &&
+      withQuotation === "Yes"
+    ) {
       loadQuotations();
     } else {
       setQuotationOptions([]);
@@ -1553,7 +1818,7 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
   useEffect(() => {
     if (customerId && customerOptions.length > 0) {
       const customer = customerOptions.find(
-        (c) => String(c.customerId) === String(customerId)
+        (c) => String(c.customerId) === String(customerId),
       );
       if (customer) {
         setSelectedCustomer(customer);
@@ -1571,9 +1836,14 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
 
   // Auto-fill quotation date when quotationNo changes
   useEffect(() => {
-    if (quotationNo && quotationOptions.length > 0 && !isDirectSoType && withQuotation === "Yes") {
+    if (
+      quotationNo &&
+      quotationOptions.length > 0 &&
+      !isDirectSoType &&
+      withQuotation === "Yes"
+    ) {
       const selectedQuotation = quotationOptions.find(
-        (q) => String(q.quotationNo) === String(quotationNo)
+        (q) => String(q.quotationNo) === String(quotationNo),
       );
       if (selectedQuotation) {
         setValue("quotationDate", selectedQuotation.quotationDate || "");
@@ -1596,7 +1866,7 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
         particulars: "",
         acceptedAmount: 0,
         revisedAmount: 0,
-        isSystemRow: false
+        isSystemRow: false,
       };
       taxDetailsArray.append(newItem);
     } else if (arrayName === "attachedPOCopy") {
@@ -1605,10 +1875,74 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
     }
   };
 
+  const [generatingDocId, setGeneratingDocId] = useState(false);
+
+  useEffect(() => {
+    // Don't regenerate the order number while editing
+    if (isEditMode && data?.id) return;
+
+    const generateOrderNo = async () => {
+      setGeneratingDocId(true);
+      setValue("auto", "");
+
+      try {
+        const storedOrgId = localStorage.getItem("orgId");
+        const storedBranchId = localStorage.getItem("branchId");
+
+        if (!storedOrgId || !storedBranchId) {
+          console.error("OrgId or BranchId not found in localStorage");
+          return;
+        }
+
+        const mappingList =
+          await docTypeMappingAPI.getDocumentTypeMappingByOrgId(
+            storedOrgId,
+            storedBranchId,
+          );
+
+        const record = mappingList?.[0];
+        const oaDetail = record?.documentTypeMappingDetails?.find(
+          (d) => d.screenCode === "OA",
+        );
+
+        if (!oaDetail) {
+          console.error(
+            "Order Acceptance document mapping not found for screenCode OA",
+          );
+          addToast(
+            "No document type mapping found for Order Acceptance (OA)",
+            "error",
+          );
+          return;
+        }
+
+        const docId = await orderAcceptanceAPI.getOrderAcceptanceDocId({
+          financialYear: oaDetail.finYear,
+          orgId: oaDetail.orgId,
+          screenCode: oaDetail.screenCode,
+        });
+
+        if (docId) {
+          setValue("auto", docId);
+        } else {
+          addToast("Failed to generate Order No", "error");
+        }
+      } catch (error) {
+        console.error("Error generating order acceptance number:", error);
+        addToast("Failed to generate Order No", "error");
+      } finally {
+        setGeneratingDocId(false);
+      }
+    };
+
+    generateOrderNo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditMode, data]);
+
   const handleFileView = (filePath) => {
     if (filePath) {
       // Open the file in a new tab
-      window.open(filePath, '_blank');
+      window.open(filePath, "_blank");
     }
   };
 
@@ -1621,11 +1955,11 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
         }, 100);
       }
     } else if (arrayName === "taxDetails") {
-      const currentTaxDetails = getValues('taxDetails') || [];
+      const currentTaxDetails = getValues("taxDetails") || [];
       const isSystemRow = currentTaxDetails[index]?.isSystemRow;
 
       if (isSystemRow) {
-        alert('Cannot delete system calculated rows');
+        alert("Cannot delete system calculated rows");
         return;
       }
 
@@ -1660,18 +1994,19 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
       const getParticularId = (label) => {
         if (!label) return "";
         const allOptions = listOfValuesData.PARTICULARS || [];
-        const found = allOptions.find(option => option.label === label);
+        const found = allOptions.find((option) => option.label === label);
         return found ? found.value : label;
       };
 
       // Get the tax type from the first row
-      const taxType = formData.orderAcceptanceDetails?.[0]?.taxType ||
+      const taxType =
+        formData.orderAcceptanceDetails?.[0]?.taxType ||
         (formData.isGSTAppl === "Yes" ? "IGST" : "SGST");
 
       // Build order acceptance details
       const orderAcceptanceDetailsDTO = (formData.orderAcceptanceDetails || [])
-        .filter(item => item.itemCode && item.quantity > 0)
-        .map(item => {
+        .filter((item) => item.itemCode && item.quantity > 0)
+        .map((item) => {
           // Calculate quantity rate (quantity * unitRate)
           const quantity = parseFloat(item.quantity) || 0;
           const unitRate = parseFloat(item.unitRate) || 0;
@@ -1716,8 +2051,8 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
 
       // Build tax details
       const orderAcceptanceTaxDetailsDTO = (formData.taxDetails || [])
-        .filter(item => item.particulars && item.particulars.trim() !== "")
-        .map(item => ({
+        .filter((item) => item.particulars && item.particulars.trim() !== "")
+        .map((item) => ({
           acceptedQtyAmount: parseFloat(item.acceptedAmount) || 0,
           revisedAmount: parseFloat(item.revisedAmount) || 0,
           particulars: parseInt(getParticularId(item.particulars)) || 0,
@@ -1736,10 +2071,15 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
         customerPurchaseOrderNo: formData.custPONo || "",
         deliveryTerms: formData.termsConditions?.deliveryTerms || "",
         destination: formData.termsConditions?.destination || "",
-        docId: formData.auto || `OA/${new Date().getFullYear()}/${String(Math.floor(Math.random() * 100000)).padStart(6, "0")}`,
+        docId:
+          formData.auto ||
+          `OA/${new Date().getFullYear()}/${String(Math.floor(Math.random() * 100000)).padStart(6, "0")}`,
         enquiryDate: formatDateForAPI(formData.enquiryDate) || "",
         enquiryNo: formData.enquiryNo || "",
-        financialYear: new Date().getFullYear() + "-" + String(new Date().getFullYear() + 1).slice(-2),
+        financialYear:
+          new Date().getFullYear() +
+          "-" +
+          String(new Date().getFullYear() + 1).slice(-2),
         freight: formData.termsConditions?.freight || "",
         grossValue: parseFloat(formData.termsConditions?.grossValue) || 0,
         gstApproval: formData.isGSTAppl || "No",
@@ -1747,8 +2087,12 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
         note: formData.termsConditions?.note || "",
         orderAcceptanceDetailsDTO: orderAcceptanceDetailsDTO,
         orderAcceptanceTaxDetailsDTO: orderAcceptanceTaxDetailsDTO,
-        orderDate: formatDateForAPI(formData.orderDate) || new Date().toISOString().split('T')[0],
-        orderNo: formData.auto || `OA/${new Date().getFullYear()}/${String(Math.floor(Math.random() * 100000)).padStart(6, "0")}`,
+        orderDate:
+          formatDateForAPI(formData.orderDate) ||
+          new Date().toISOString().split("T")[0],
+        orderNo:
+          formData.auto ||
+          `OA/${new Date().getFullYear()}/${String(Math.floor(Math.random() * 100000)).padStart(6, "0")}`,
         orgId: parseInt(orgId),
         paymentTerms: formData.termsConditions?.paymentTerms || "",
         postRate: formData.postRate || "",
@@ -1762,7 +2106,8 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
       // If editing, add id and updatedBy
       if (isEditMode && data?.id) {
         orderAcceptanceData.id = parseInt(data.id);
-        orderAcceptanceData.updatedBy = localStorage.getItem("userId") || "admin";
+        orderAcceptanceData.updatedBy =
+          localStorage.getItem("userId") || "admin";
       }
 
       // Create FormData for file uploads
@@ -1774,7 +2119,11 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
         type: "application/json",
       });
 
-      formDataToSend.append("orderAcceptance", orderAcceptanceDataBlob, "orderAcceptanceDTO.json");
+      formDataToSend.append(
+        "orderAcceptance",
+        orderAcceptanceDataBlob,
+        "orderAcceptanceDTO.json",
+      );
 
       // Handle attachments - only send new files, not existing ones
       const pdfAttachments = watch("attachedPOCopy");
@@ -1795,14 +2144,18 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
             // This is a new file, send it
             formDataToSend.append("files", attachment, attachment.name);
             console.log("Uploading new file:", attachment.name);
-          } else if (attachment && typeof attachment === 'object' && attachment.filePath) {
+          } else if (
+            attachment &&
+            typeof attachment === "object" &&
+            attachment.filePath
+          ) {
             // This is an existing file, keep its ID
             if (attachment.id) {
               existingFileIds.push(attachment.id);
             }
-            console.log('Existing file - keeping:', attachment.filePath);
-          } else if (attachment && typeof attachment === 'string') {
-            console.log('Existing file path:', attachment);
+            console.log("Existing file - keeping:", attachment.filePath);
+          } else if (attachment && typeof attachment === "string") {
+            console.log("Existing file path:", attachment);
           }
         }
 
@@ -1810,11 +2163,19 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
         if (existingFileIds.length > 0) {
           orderAcceptanceData.existingFileIds = existingFileIds;
           // Update the blob with the new data
-          const updatedOrderAcceptanceDataJSON = JSON.stringify(orderAcceptanceData);
-          const updatedOrderAcceptanceDataBlob = new Blob([updatedOrderAcceptanceDataJSON], {
-            type: "application/json",
-          });
-          formDataToSend.set("orderAcceptance", updatedOrderAcceptanceDataBlob, "orderAcceptanceDTO.json");
+          const updatedOrderAcceptanceDataJSON =
+            JSON.stringify(orderAcceptanceData);
+          const updatedOrderAcceptanceDataBlob = new Blob(
+            [updatedOrderAcceptanceDataJSON],
+            {
+              type: "application/json",
+            },
+          );
+          formDataToSend.set(
+            "orderAcceptance",
+            updatedOrderAcceptanceDataBlob,
+            "orderAcceptanceDTO.json",
+          );
         }
       }
 
@@ -1822,15 +2183,21 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
       console.log("FormData entries:");
       for (let pair of formDataToSend.entries()) {
         // Use typeof check instead of instanceof
-        const isFile = pair[1] && typeof pair[1] === 'object' && 'name' in pair[1] && 'size' in pair[1];
-        console.log(pair[0] + ': ' + (isFile ? pair[1].name : 'Blob'));
+        const isFile =
+          pair[1] &&
+          typeof pair[1] === "object" &&
+          "name" in pair[1] &&
+          "size" in pair[1];
+        console.log(pair[0] + ": " + (isFile ? pair[1].name : "Blob"));
       }
 
-      const response = await orderAcceptanceAPI.createUpdateOrderAcceptance(formDataToSend);
+      const response =
+        await orderAcceptanceAPI.createUpdateOrderAcceptance(formDataToSend);
 
       console.log("Full API Response:", response);
 
-      const isSuccess = response?.status === true ||
+      const isSuccess =
+        response?.status === true ||
         response?.success === true ||
         response?.status === "SUCCESS" ||
         response?.status === 200 ||
@@ -1841,21 +2208,22 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
           isEditMode
             ? "Order acceptance updated successfully"
             : "Order acceptance created successfully",
-          "success"
+          "success",
         );
         onBack();
       } else {
-        const errorMessage = response?.message ||
+        const errorMessage =
+          response?.message ||
           response?.paramObjectsMap?.message ||
           response?.errorMessage ||
           response?.error ||
           "Something went wrong";
         addToast(errorMessage, "error");
       }
-
     } catch (error) {
       console.error("Error saving order acceptance:", error);
-      const errorMessage = error?.response?.data?.message ||
+      const errorMessage =
+        error?.response?.data?.message ||
         error?.message ||
         "Failed to save order acceptance. Please try again.";
       addToast(errorMessage, "error");
@@ -1867,7 +2235,9 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500 dark:text-gray-400">Loading order acceptance data...</div>
+        <div className="text-gray-500 dark:text-gray-400">
+          Loading order acceptance data...
+        </div>
       </div>
     );
   }
@@ -1903,7 +2273,7 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
             control={control}
             name="auto"
             label="Order No"
-            placeholder="Auto generated"
+            placeholder={generatingDocId ? "Generating..." : "Auto generated"}
             disabled
             errors={errors}
           />
@@ -1965,9 +2335,9 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
             control={control}
             name="customerId"
             label="Customer Id"
-            options={customerOptions.map(c => ({
+            options={customerOptions.map((c) => ({
               value: c.customerId,
-              label: `${c.customerCode} - ${c.customerName}`
+              label: `${c.customerCode} - ${c.customerName}`,
             }))}
             required
             errors={errors}
@@ -1985,9 +2355,9 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
             control={control}
             name="quotationNo"
             label="Quotation No"
-            options={quotationOptions.map(q => ({
+            options={quotationOptions.map((q) => ({
               value: q.quotationNo,
-              label: `${q.quotationNo} - ${formatDateForDisplay(q.quotationDate)}`
+              label: `${q.quotationNo} - ${q.quotationDate}`,
             }))}
             errors={errors}
             disabled={shouldDisableQuotation || loadingQuotation}
@@ -2074,40 +2444,44 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
             <button
               type="button"
               onClick={() => setActiveTab("orderAcceptance")}
-              className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${activeTab === "orderAcceptance"
-                ? "bg-blue-600 text-white"
-                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                }`}
+              className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${
+                activeTab === "orderAcceptance"
+                  ? "bg-blue-600 text-white"
+                  : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+              }`}
             >
               Order Acceptance Detail
             </button>
             <button
               type="button"
               onClick={() => setActiveTab("taxDetails")}
-              className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${activeTab === "taxDetails"
-                ? "bg-blue-600 text-white"
-                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                }`}
+              className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${
+                activeTab === "taxDetails"
+                  ? "bg-blue-600 text-white"
+                  : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+              }`}
             >
               Tax Details
             </button>
             <button
               type="button"
               onClick={() => setActiveTab("termsConditions")}
-              className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${activeTab === "termsConditions"
-                ? "bg-blue-600 text-white"
-                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                }`}
+              className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${
+                activeTab === "termsConditions"
+                  ? "bg-blue-600 text-white"
+                  : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+              }`}
             >
               Terms and Conditions
             </button>
             <button
               type="button"
               onClick={() => setActiveTab("attachedPOCopy")}
-              className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${activeTab === "attachedPOCopy"
-                ? "bg-blue-600 text-white"
-                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                }`}
+              className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${
+                activeTab === "attachedPOCopy"
+                  ? "bg-blue-600 text-white"
+                  : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+              }`}
             >
               Attached PO Copy
             </button>
@@ -2130,53 +2504,118 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
                 <table className="w-full text-xs min-w-max">
                   <thead className="bg-gray-100 dark:bg-gray-700">
                     <tr>
-                      <th className="p-1.5 text-center dark:text-white whitespace-nowrap text-[10px] font-medium sticky left-0 bg-gray-100 dark:bg-gray-700 z-10">S.No</th>
-                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]">Item Code *</th>
-                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[120px]">Customer Part No</th>
-                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[120px]">Item Description</th>
-                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[110px]">HSN/SAC Code *</th>
-                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]">Tax Type *</th>
-                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[80px]">Tax (%)</th>
-                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[80px]">Unit *</th>
-                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[80px]">Quantity</th>
-                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[90px]">Quot. Rate</th>
-                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[90px]">Order Rate</th>
-                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[80px]">Dis. %</th>
-                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]">Amount</th>
+                      <th className="p-1.5 text-center dark:text-white whitespace-nowrap text-[10px] font-medium sticky left-0 bg-gray-100 dark:bg-gray-700 z-10">
+                        S.No
+                      </th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]">
+                        Item Code *
+                      </th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[120px]">
+                        Customer Part No
+                      </th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[120px]">
+                        Item Description
+                      </th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[110px]">
+                        HSN/SAC Code *
+                      </th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]">
+                        Tax Type *
+                      </th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[80px]">
+                        Tax (%)
+                      </th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[80px]">
+                        Unit *
+                      </th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[80px]">
+                        Quantity
+                      </th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[90px]">
+                        Quot. Rate
+                      </th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[90px]">
+                        Order Rate
+                      </th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[80px]">
+                        Dis. %
+                      </th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]">
+                        Amount
+                      </th>
                       {/* Conditionally show/hide columns based on tax type */}
                       {orderAcceptanceArray.fields.map((field, idx) => {
-                        const rowTaxType = getValues(`orderAcceptanceDetails.${idx}.taxType`) ||
+                        const rowTaxType =
+                          getValues(`orderAcceptanceDetails.${idx}.taxType`) ||
                           (isIGSTApplicable === "Yes" ? "IGST" : "SGST");
                         if (rowTaxType === "SGST") {
                           return (
                             <>
-                              <th key={`sgst-rate-${idx}`} className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[90px]">SGST Rate</th>
-                              <th key={`sgst-amount-${idx}`} className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]">SGST Amount</th>
-                              <th key={`cgst-rate-${idx}`} className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[90px]">CGST Rate</th>
-                              <th key={`cgst-amount-${idx}`} className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]">CGST Amount</th>
+                              <th
+                                key={`sgst-rate-${idx}`}
+                                className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[90px]"
+                              >
+                                SGST Rate
+                              </th>
+                              <th
+                                key={`sgst-amount-${idx}`}
+                                className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]"
+                              >
+                                SGST Amount
+                              </th>
+                              <th
+                                key={`cgst-rate-${idx}`}
+                                className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[90px]"
+                              >
+                                CGST Rate
+                              </th>
+                              <th
+                                key={`cgst-amount-${idx}`}
+                                className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]"
+                              >
+                                CGST Amount
+                              </th>
                             </>
                           );
                         } else if (rowTaxType === "IGST") {
                           return (
                             <>
-                              <th key={`igst-rate-${idx}`} className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[90px]">IGST Rate</th>
-                              <th key={`igst-amount-${idx}`} className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]">IGST Amount</th>
+                              <th
+                                key={`igst-rate-${idx}`}
+                                className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[90px]"
+                              >
+                                IGST Rate
+                              </th>
+                              <th
+                                key={`igst-amount-${idx}`}
+                                className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]"
+                              >
+                                IGST Amount
+                              </th>
                             </>
                           );
                         }
                         return null;
                       })}
-                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]">Currency Name</th>
-                      <th className="p-1.5 text-center dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[60px] sticky right-0 bg-gray-100 dark:bg-gray-700 z-10">Action</th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]">
+                        Currency Name
+                      </th>
+                      <th className="p-1.5 text-center dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[60px] sticky right-0 bg-gray-100 dark:bg-gray-700 z-10">
+                        Action
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {orderAcceptanceArray.fields.map((field, index) => {
-                      const rowTaxType = getValues(`orderAcceptanceDetails.${index}.taxType`) ||
+                      const rowTaxType =
+                        getValues(`orderAcceptanceDetails.${index}.taxType`) ||
                         (isIGSTApplicable === "Yes" ? "IGST" : "SGST");
 
                       return (
-                        <tr key={field.id} className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
+                        <tr
+                          key={field.id}
+                          className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"
+                        >
                           <td className="p-1 text-center font-medium dark:text-white text-[10px] sticky left-0 bg-white dark:bg-gray-800 z-10">
                             {index + 1}
                           </td>
@@ -2184,13 +2623,15 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
                             <SelectCell
                               control={control}
                               name={`orderAcceptanceDetails.${index}.itemCode`}
-                              options={itemOptions.map(item => ({
+                              options={itemOptions.map((item) => ({
                                 value: item.itemCode,
-                                label: `${item.itemCode} - ${item.itemDescription}`
+                                label: `${item.itemCode} - ${item.itemDescription}`,
                               }))}
                               required
                               errors={errors}
-                              onChange={(value) => handleItemSelect(index, value)}
+                              onChange={(value) =>
+                                handleItemSelect(index, value)
+                              }
                               disabled={loadingItems}
                             />
                           </td>
@@ -2403,12 +2844,15 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
                           <td className="p-1 text-center sticky right-0 bg-white dark:bg-gray-800 z-10">
                             <button
                               type="button"
-                              onClick={() => handleRemoveItem("orderAcceptance", index)}
+                              onClick={() =>
+                                handleRemoveItem("orderAcceptance", index)
+                              }
                               disabled={orderAcceptanceArray.fields.length <= 1}
-                              className={`h-5 w-5 rounded text-white flex items-center justify-center ${orderAcceptanceArray.fields.length <= 1
-                                ? "bg-gray-400 cursor-not-allowed"
-                                : "bg-red-600 hover:bg-red-700"
-                                }`}
+                              className={`h-5 w-5 rounded text-white flex items-center justify-center ${
+                                orderAcceptanceArray.fields.length <= 1
+                                  ? "bg-gray-400 cursor-not-allowed"
+                                  : "bg-red-600 hover:bg-red-700"
+                              }`}
                             >
                               <Trash2 size={10} />
                             </button>
@@ -2436,26 +2880,50 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
               </div>
 
               <TableWrapper>
-                <TableHead headers={["S.No", "Particulars", "Accepted Amount", "Revised Amount", "Action"]} />
+                <TableHead
+                  headers={[
+                    "S.No",
+                    "Particulars",
+                    "Accepted Amount",
+                    "Revised Amount",
+                    "Action",
+                  ]}
+                />
                 <tbody>
                   {taxDetailsArray.fields.map((field, index) => {
-                    const isSystemRow = getValues(`taxDetails.${index}.isSystemRow`);
-                    const particulars = getValues(`taxDetails.${index}.particulars`);
-                    const isReadOnly = isSystemRow || ['Gross Amount', 'IGST', 'CGST', 'SGST'].includes(particulars);
+                    const isSystemRow = getValues(
+                      `taxDetails.${index}.isSystemRow`,
+                    );
+                    const particulars = getValues(
+                      `taxDetails.${index}.particulars`,
+                    );
+                    const isReadOnly =
+                      isSystemRow ||
+                      ["Gross Amount", "IGST", "CGST", "SGST"].includes(
+                        particulars,
+                      );
 
                     const allOptions = listOfValuesData.PARTICULARS || [];
 
                     let availableOptions = [];
                     if (isSystemRow) {
-                      availableOptions = [{ label: particulars, value: particulars }];
+                      availableOptions = [
+                        { label: particulars, value: particulars },
+                      ];
                     } else {
-                      availableOptions = allOptions.filter(option =>
-                        !['Gross Amount', 'IGST', 'CGST', 'SGST'].includes(option.label)
+                      availableOptions = allOptions.filter(
+                        (option) =>
+                          !["Gross Amount", "IGST", "CGST", "SGST"].includes(
+                            option.label,
+                          ),
                       );
                     }
 
                     return (
-                      <tr key={field.id} className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
+                      <tr
+                        key={field.id}
+                        className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"
+                      >
                         <td className="p-1 text-center font-medium dark:text-white text-[10px]">
                           {index + 1}
                         </td>
@@ -2466,7 +2934,7 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
                             render={({ field }) => (
                               <select
                                 {...field}
-                                className={`${controlClasses} h-8 text-xs ${isReadOnly ? 'bg-gray-100 dark:bg-gray-700 cursor-not-allowed' : ''}`}
+                                className={`${controlClasses} h-8 text-xs ${isReadOnly ? "bg-gray-100 dark:bg-gray-700 cursor-not-allowed" : ""}`}
                                 disabled={isReadOnly}
                                 onChange={(e) => {
                                   field.onChange(e.target.value);
@@ -2475,7 +2943,10 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
                               >
                                 <option value="">Select Particulars</option>
                                 {availableOptions.map((option) => (
-                                  <option key={option.value || option.label} value={option.label}>
+                                  <option
+                                    key={option.value || option.label}
+                                    value={option.label}
+                                  >
                                     {option.label}
                                   </option>
                                 ))}
@@ -2493,11 +2964,13 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
                                 type="number"
                                 step="0.01"
                                 placeholder="0.00"
-                                className={`${controlClasses} h-8 text-xs text-right ${isReadOnly ? 'bg-gray-100 dark:bg-gray-700 cursor-not-allowed' : ''}`}
+                                className={`${controlClasses} h-8 text-xs text-right ${isReadOnly ? "bg-gray-100 dark:bg-gray-700 cursor-not-allowed" : ""}`}
                                 disabled={isReadOnly}
                                 value={field.value || 0}
                                 onChange={(e) => {
-                                  field.onChange(parseFloat(e.target.value) || 0);
+                                  field.onChange(
+                                    parseFloat(e.target.value) || 0,
+                                  );
                                 }}
                               />
                             )}
@@ -2513,11 +2986,13 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
                                 type="number"
                                 step="0.01"
                                 placeholder="0.00"
-                                className={`${controlClasses} h-8 text-xs text-right ${isReadOnly ? 'bg-gray-100 dark:bg-gray-700 cursor-not-allowed' : ''}`}
+                                className={`${controlClasses} h-8 text-xs text-right ${isReadOnly ? "bg-gray-100 dark:bg-gray-700 cursor-not-allowed" : ""}`}
                                 disabled={isReadOnly}
                                 value={field.value || 0}
                                 onChange={(e) => {
-                                  field.onChange(parseFloat(e.target.value) || 0);
+                                  field.onChange(
+                                    parseFloat(e.target.value) || 0,
+                                  );
                                 }}
                               />
                             )}
@@ -2530,10 +3005,11 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
                               handleRemoveItem("taxDetails", index);
                             }}
                             disabled={isSystemRow}
-                            className={`h-5 w-5 rounded text-white flex items-center justify-center ${isSystemRow
-                              ? "bg-gray-400 cursor-not-allowed"
-                              : "bg-red-600 hover:bg-red-700"
-                              }`}
+                            className={`h-5 w-5 rounded text-white flex items-center justify-center ${
+                              isSystemRow
+                                ? "bg-gray-400 cursor-not-allowed"
+                                : "bg-red-600 hover:bg-red-700"
+                            }`}
                           >
                             <Trash2 size={10} />
                           </button>
@@ -2632,16 +3108,13 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
               </div>
 
               <TableWrapper>
-                <TableHead
-                  headers={[
-                    "S.No",
-                    "PDF Attached",
-                    "Action",
-                  ]}
-                />
+                <TableHead headers={["S.No", "PDF Attached", "Action"]} />
                 <tbody>
                   {attachedPOCopyArray.fields.map((field, index) => (
-                    <tr key={field.id} className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
+                    <tr
+                      key={field.id}
+                      className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"
+                    >
                       <td className="p-2 text-center font-medium dark:text-white text-[10px]">
                         {index + 1}
                       </td>
@@ -2651,14 +3124,21 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
                           name={`attachedPOCopy.${index}.pdfAttached`}
                           render={({ field: { onChange, value } }) => {
                             // Check if there's an existing file from the API response
-                            const isExistingFile = value && typeof value === 'object' && value.filePath && !value.name;
-                            const isNewFile = value && typeof value === 'object' && value.name && !value.filePath;
+                            const isExistingFile =
+                              value &&
+                              typeof value === "object" &&
+                              value.filePath &&
+                              !value.name;
+                            const isNewFile =
+                              value &&
+                              typeof value === "object" &&
+                              value.name &&
+                              !value.filePath;
 
                             return (
                               <div className="relative">
                                 <div
-                                  className={`border-2 border-dashed rounded-md p-2 text-center cursor-pointer transition-colors ${"border-gray-300 dark:border-gray-600 hover:border-blue-500 dark:hover:border-blue-400"
-                                    }`}
+                                  className={`border-2 border-dashed rounded-md p-2 text-center cursor-pointer transition-colors ${"border-gray-300 dark:border-gray-600 hover:border-blue-500 dark:hover:border-blue-400"}`}
                                   onDragOver={(e) => {
                                     e.preventDefault();
                                     e.currentTarget.classList.add(
@@ -2687,7 +3167,9 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
                                     }
                                   }}
                                   onClick={() =>
-                                    document.getElementById(`file-input-${field.id}`)?.click()
+                                    document
+                                      .getElementById(`file-input-${field.id}`)
+                                      ?.click()
                                   }
                                 >
                                   <input
@@ -2696,14 +3178,17 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
                                     accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
                                     className="hidden"
                                     onChange={(e) => {
-                                      if (e.target.files && e.target.files.length > 0) {
+                                      if (
+                                        e.target.files &&
+                                        e.target.files.length > 0
+                                      ) {
                                         onChange(e.target.files[0]);
                                       }
                                     }}
                                   />
 
                                   {/* Show uploaded file or existing file */}
-                                  {(isNewFile || (value && value.name)) ? (
+                                  {isNewFile || (value && value.name) ? (
                                     <div className="flex items-center justify-center gap-2 text-green-600 dark:text-green-400">
                                       <File className="h-4 w-4" />
                                       <span className="text-xs truncate max-w-[150px]">
@@ -2741,14 +3226,16 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
                             control={control}
                             name={`attachedPOCopy.${index}.pdfAttached`}
                             render={({ field: { value } }) => {
-                              const hasFile = value && (value.filePath || value.name);
+                              const hasFile =
+                                value && (value.filePath || value.name);
                               return hasFile ? (
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    const filePath = value?.filePath || value?.name;
+                                    const filePath =
+                                      value?.filePath || value?.name;
                                     if (filePath) {
-                                      window.open(filePath, '_blank');
+                                      window.open(filePath, "_blank");
                                     }
                                   }}
                                   className="p-1 rounded text-blue-600 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-blue-900/30 transition-colors"
@@ -2762,12 +3249,15 @@ const OrderAcceptanceForm = ({ data, onBack, isEditMode = false }) => {
                           {/* Delete Button */}
                           <button
                             type="button"
-                            onClick={() => handleRemoveItem("attachedPOCopy", index)}
+                            onClick={() =>
+                              handleRemoveItem("attachedPOCopy", index)
+                            }
                             disabled={attachedPOCopyArray.fields.length <= 1}
-                            className={`p-1 rounded transition-colors ${attachedPOCopyArray.fields.length <= 1
-                              ? "text-gray-300 dark:text-gray-600 cursor-not-allowed"
-                              : "text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-900/30"
-                              }`}
+                            className={`p-1 rounded transition-colors ${
+                              attachedPOCopyArray.fields.length <= 1
+                                ? "text-gray-300 dark:text-gray-600 cursor-not-allowed"
+                                : "text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-900/30"
+                            }`}
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>

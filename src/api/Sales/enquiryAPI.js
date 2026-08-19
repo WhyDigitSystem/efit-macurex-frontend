@@ -1,92 +1,110 @@
 // api/Sales/enquiryAPI.js
-import axios from 'axios';
+import apiClient from "../apiClient";
+import axios from "axios";
 
-const API_BASE_URL =  import.meta.env.VITE_API_URL;
+const API_BASE_URL = import.meta.env.VITE_API_URL;
 
 const enquiryAPI = {
-    // POST method - Create/Update Enquiry
-    updateCreateEnquiry: async (formData) => {
-        try {
-            const response = await axios.post(
-                `${API_BASE_URL}/api/develop/updateCreateEnquiry`,
-                formData,
-                {
-                    headers: {
-                        'Content-Type': 'multipart/form-data',
-                    },
-                }
-            );
-            return response.data;
-        } catch (error) {
-            console.error('Error saving enquiry:', error);
-            throw error;
-        }
-    },
+  // POST method - Create/Update Enquiry
+  updateCreateEnquiry: async (formData) => {
+    try {
+      const response = await axios.post(
+        `${API_BASE_URL}/api/develop/updateCreateEnquiry`,
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        },
+      );
+      return response.data;
+    } catch (error) {
+      console.error("Error saving enquiry:", error);
+      throw error;
+    }
+  },
 
-    // GET method - Get Enquiries by OrgId and Branch
-    getEnquiryByOrgId: async (orgId, branchId) => {
-        try {
-            const response = await axios.get(
-                `${API_BASE_URL}/api/develop/getEnquiryByOrgId`,
-                {
-                    params: {
-                        orgId: orgId,
-                        branch: branchId,
-                    },
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                }
-            );
-            return response.data;
-        } catch (error) {
-            console.error('Error fetching enquiries:', error);
-            throw error;
-        }
-    },
+  // GET method - Get Enquiries by OrgId and Branch
+  getEnquiryByOrgId: async (orgId, branchId) => {
+    try {
+      const response = await axios.get(
+        `${API_BASE_URL}/api/develop/getEnquiryByOrgId`,
+        {
+          params: {
+            orgId: orgId,
+            branch: branchId,
+          },
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      );
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching enquiries:", error);
+      throw error;
+    }
+  },
 
-    // GET method - Get Enquiry by ID for editing
-    getEnquiryById: async (enquiryId) => {
-        try {
-            const response = await axios.get(
-                `${API_BASE_URL}/api/develop/getEnquiryById`,
-                {
-                    params: {
-                        id: enquiryId,
-                    },
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                }
-            );
-            return response.data;
-        } catch (error) {
-            console.error('Error fetching enquiry:', error);
-            throw error;
-        }
-    },
+  // GET method - Get Enquiry by ID for editing
+  getEnquiryById: async (enquiryId) => {
+    try {
+      const response = await axios.get(
+        `${API_BASE_URL}/api/develop/getEnquiryById`,
+        {
+          params: {
+            id: enquiryId,
+          },
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      );
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching enquiry:", error);
+      throw error;
+    }
+  },
 
-    // GET method - Download file
-    downloadFile: async (filePath) => {
-        try {
-            const response = await axios.get(
-                `${API_BASE_URL}/api/files/download`,
-                {
-                    params: {
-                        path: filePath,
-                    },
-                    responseType: 'blob',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                }
-            );
-            return response.data;
-        } catch (error) {
-            console.error('Error downloading file:', error);
-            throw error;
-        }
-    },
+  // GET method - Download file
+  downloadFile: async (filePath) => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/files/download`, {
+        params: {
+          path: filePath,
+        },
+        responseType: "blob",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Error downloading file:", error);
+      throw error;
+    }
+  },
+  // GET /api/develop/getEnquiryDocId
+  getEnquiryDocId: async ({ financialYear, orgId, screenCode }) => {
+    try {
+      const params = new URLSearchParams({
+        financialYear,
+        orgId,
+        screenCode,
+      });
+
+      const res = await apiClient.get(
+        `/api/develop/getEnquiryDocId?${params.toString()}`,
+      );
+
+      // res shape: { statusFlag, status, paramObjectsMap: { invoiceDocId, message } }
+      return res?.paramObjectsMap?.invoiceDocId || "";
+    } catch (error) {
+      console.error("Error fetching enquiry doc id:", error);
+      throw error;
+    }
+  },
 };
 
 export default enquiryAPI;

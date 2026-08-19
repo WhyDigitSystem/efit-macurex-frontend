@@ -4,7 +4,7 @@ import dayjs from "dayjs";
 import { customerComplaintAPI } from "../../../api/Sales/customerComplaintAPI";
 import { departmentAPI } from "../../../api/departmentAPI";
 import { useToast } from "../../Toast/ToastContext";
-
+import docTypeMappingAPI from "../../../api/docTypeMappingAPI";
 /* ---------------------------------------------------------------------------- */
 /* Shared design tokens                                                        */
 
@@ -399,6 +399,62 @@ const CustomerComplaintForm = ({ data, onBack }) => {
     ]);
   }, [orgId, branch]);
 
+  const [generatingDocId, setGeneratingDocId] = useState(false);
+
+  useEffect(() => {
+    // Don't regenerate the complaint number while editing
+    if (data?.id) return;
+
+    const generateComplaintNo = async () => {
+      setGeneratingDocId(true);
+      setForm((prev) => ({ ...prev, complaintNo: "" }));
+
+      try {
+        if (!orgId || !branch) {
+          console.error("OrgId or Branch missing");
+          return;
+        }
+
+        const mappingList =
+          await docTypeMappingAPI.getDocumentTypeMappingByOrgId(orgId, branch);
+
+        const record = mappingList?.[0];
+        const cceDetail = record?.documentTypeMappingDetails?.find(
+          (d) => d.screenCode === "CCE",
+        );
+
+        if (!cceDetail) {
+          console.error(
+            "Customer Complaint document mapping not found for screenCode CCE",
+          );
+          addToast(
+            "No document type mapping found for Customer Complaint (CCE)",
+          );
+          return;
+        }
+
+        const docId = await customerComplaintAPI.getCustomerComplaintDocId({
+          financialYear: cceDetail.finYear,
+          orgId: cceDetail.orgId,
+          screenCode: cceDetail.screenCode,
+        });
+
+        if (docId) {
+          setForm((prev) => ({ ...prev, complaintNo: docId }));
+        } else {
+          addToast("Failed to generate Complaint No");
+        }
+      } catch (error) {
+        console.error("Error generating complaint number:", error);
+        addToast("Failed to generate Complaint No");
+      } finally {
+        setGeneratingDocId(false);
+      }
+    };
+
+    generateComplaintNo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
   /* ---------------- Handlers ---------------- */
 
   const handleChange = (e) => {
@@ -439,9 +495,12 @@ const CustomerComplaintForm = ({ data, onBack }) => {
     if (!form.branch) errors.branch = "Plant ID is required";
     if (!form.userCategory) errors.userCategory = "Belongs To is required";
     if (!form.department) errors.department = "Department is required";
-    if (!form.complaintType) errors.complaintType = "Complaint Type is required";
-    if (!form.complaintNo?.trim()) errors.complaintNo = "Complaint No is required";
-    if (!form.complaintDate) errors.complaintDate = "Complaint Date is required";
+    if (!form.complaintType)
+      errors.complaintType = "Complaint Type is required";
+    if (!form.complaintNo?.trim())
+      errors.complaintNo = "Complaint No is required";
+    if (!form.complaintDate)
+      errors.complaintDate = "Complaint Date is required";
     if (!form.customer?.trim()) errors.customer = "Customer is required";
     if (!form.item?.trim()) errors.item = "Item Code is required";
     if (!form.detailsOfComplaint?.trim())
@@ -602,9 +661,9 @@ const CustomerComplaintForm = ({ data, onBack }) => {
               value={form.complaintNo}
               onChange={handleChange}
               error={fieldErrors.complaintNo}
-              placeholder="Auto"
-              // disabled
-              // required
+              placeholder={generatingDocId ? "Generating..." : "Auto"}
+              disabled
+              required
             />
             <Field
               type="date"

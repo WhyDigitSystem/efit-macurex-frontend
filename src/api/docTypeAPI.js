@@ -1,7 +1,34 @@
 import apiClient from "./apiClient";
 
-export const docTypeAPI = {
-  getDocumentTypeById: async (id) => {
+const docTypeAPI = {
+  // GET /api/commonmaster/getAllScreenCode?orgId=...
+  getAllScreenCode: async (orgId) => {
+    try {
+      const res = await apiClient.get(
+        `/api/commonmaster/getAllScreenCode?orgId=${orgId}`,
+      );
+      return res?.paramObjectsMap?.finScreen || [];
+    } catch (error) {
+      console.error("Error fetching screen codes:", error);
+      throw error;
+    }
+  },
+
+  // GET /api/commonmaster/getAllDocumentTypeMasterByOrgId?orgId=...
+  getAllDocumentTypeMasterByOrgId: async (orgId) => {
+    try {
+      const res = await apiClient.get(
+        `/api/commonmaster/getAllDocumentTypeMasterByOrgId?orgId=${orgId}`,
+      );
+      return res?.paramObjectsMap?.documentTypeMasterList || [];
+    } catch (error) {
+      console.error("Error fetching document type list:", error);
+      throw error;
+    }
+  },
+
+  // GET /api/commonmaster/getDocumentTypeMasterById?id=...
+  getDocumentTypeMasterById: async (id) => {
     try {
       const res = await apiClient.get(
         `/api/commonmaster/getDocumentTypeMasterById?id=${id}`,
@@ -13,19 +40,8 @@ export const docTypeAPI = {
     }
   },
 
-  getDocumentTypeByOrgId: async (branch, orgId) => {
-    try {
-      const res = await apiClient.get(
-        `/api/commonmaster/getDocumentTypeMasterByOrgId?branch=${branch}&orgId=${orgId}`,
-      );
-      return res?.paramObjectsMap?.documentTypeMasterList || [];
-    } catch (error) {
-      console.error("Error fetching document type list:", error);
-      throw error;
-    }
-  },
-
-  updateCreateDocumentType: async (documentTypeMasterDTO) => {
+  // PUT /api/commonmaster/createUpdateDocumentTypeMaster
+  createUpdateDocumentType: async (documentTypeMasterDTO) => {
     try {
       const res = await apiClient.put(
         "/api/commonmaster/createUpdateDocumentTypeMaster",

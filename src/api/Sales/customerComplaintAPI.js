@@ -114,6 +114,25 @@ export const customerComplaintAPI = {
       throw error;
     }
   },
+  // GET /api/dev/getCustomerComplaintDocId
+  getCustomerComplaintDocId: async ({ financialYear, orgId, screenCode }) => {
+    try {
+      const params = new URLSearchParams({
+        financialYear: String(financialYear),
+        orgId: String(orgId),
+        screenCode,
+      });
+
+      const response = await apiClient.get(
+        `/api/dev/getCustomerComplaintDocId?${params.toString()}`,
+      );
+
+      return response?.paramObjectsMap?.invoiceDocId || "";
+    } catch (error) {
+      console.error("Error fetching customer complaint doc id:", error);
+      throw error;
+    }
+  },
 };
 
 export default customerComplaintAPI;

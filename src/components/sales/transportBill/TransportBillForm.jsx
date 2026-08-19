@@ -1,10 +1,4 @@
-import {
-  ArrowLeft,
-  Save,
-  X,
-  Plus,
-  Trash2,
-} from "lucide-react";
+import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useForm, Controller, useFieldArray } from "react-hook-form";
 import branchAPI from "../../../api/branchAPI";
@@ -12,6 +6,7 @@ import transportBillAPI from "../../../api/Sales/transportBillAPI";
 import { useToast } from "../../Toast/ToastContext";
 import transportAPI from "../../../api/transportAPI";
 import employeeAPI from "../../../api/employeeAPI";
+import docTypeMappingAPI from "../../../api/docTypeMappingAPI";
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -48,16 +43,25 @@ const getDefaultValues = (data) => ({
   id: data?.id || 0,
   paymentDetails1: data?.paymentDetails1?.length
     ? data.paymentDetails1.map((r) => ({
-      chequeRtgsNo: r.chequeRtgsNo || r.chequeNo || "",
-      chequeDate: r.chequeDate || "",
-      totalAmount: r.totalAmount ?? "",
-      paidAmount: r.paidAmount ?? "",
-      pendingAmount: r.pendingAmount ?? "",
-    }))
+        chequeRtgsNo: r.chequeRtgsNo || r.chequeNo || "",
+        chequeDate: r.chequeDate || "",
+        totalAmount: r.totalAmount ?? "",
+        paidAmount: r.paidAmount ?? "",
+        pendingAmount: r.pendingAmount ?? "",
+      }))
     : [getDefaultPaymentRow()],
 });
 
-const SelectField = ({ control, name, label, options, required, errors, onChange, disabled }) => {
+const SelectField = ({
+  control,
+  name,
+  label,
+  options,
+  required,
+  errors,
+  onChange,
+  disabled,
+}) => {
   const getError = () => {
     const parts = name.split(".");
     let error = errors;
@@ -211,8 +215,9 @@ const InputCell = ({
             {...field}
             type={type}
             step={step}
-            className={`${controlClasses} h-7 text-[10px] ${align === "right" ? "text-right" : ""} ${errorMessage ? "border-red-500 focus:border-red-500" : ""
-              }`}
+            className={`${controlClasses} h-7 text-[10px] ${align === "right" ? "text-right" : ""} ${
+              errorMessage ? "border-red-500 focus:border-red-500" : ""
+            }`}
             placeholder={placeholder}
             disabled={disabled}
             readOnly={readOnly}
@@ -238,12 +243,14 @@ const ToggleSwitch = ({ value, onChange }) => (
   <button
     type="button"
     onClick={() => onChange(!value)}
-    className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${value ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
-      }`}
+    className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${
+      value ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
+    }`}
   >
     <span
-      className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${value ? "translate-x-6" : "translate-x-0.5"
-        }`}
+      className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${
+        value ? "translate-x-6" : "translate-x-0.5"
+      }`}
     />
   </button>
 );
@@ -273,7 +280,12 @@ const TransportBillForm = ({ data, onBack }) => {
     defaultValues: getDefaultValues(data),
   });
 
-  const { fields: fields1, append: append1, remove: remove1, replace: replace1 } = useFieldArray({
+  const {
+    fields: fields1,
+    append: append1,
+    remove: remove1,
+    replace: replace1,
+  } = useFieldArray({
     control,
     name: "paymentDetails1",
   });
@@ -312,12 +324,12 @@ const TransportBillForm = ({ data, onBack }) => {
               active: response.active === true || response.active === "Active",
               paymentDetails1: response.paymentDetails1?.length
                 ? response.paymentDetails1.map((item) => ({
-                  chequeRtgsNo: item.chequeRtgsNo || "",
-                  chequeDate: item.chequeDate || "",
-                  totalAmount: item.totalAmount || "",
-                  paidAmount: item.paidAmount || "",
-                  pendingAmount: item.pendingAmount || "",
-                }))
+                    chequeRtgsNo: item.chequeRtgsNo || "",
+                    chequeDate: item.chequeDate || "",
+                    totalAmount: item.totalAmount || "",
+                    paidAmount: item.paidAmount || "",
+                    pendingAmount: item.pendingAmount || "",
+                  }))
                 : [getDefaultPaymentRow()],
             };
 
@@ -346,6 +358,66 @@ const TransportBillForm = ({ data, onBack }) => {
 
     fetchData();
   }, [data?.id]);
+
+  const [generatingDocId, setGeneratingDocId] = useState(false);
+  useEffect(() => {
+    // Don't regenerate the doc number while editing
+    if (data?.id) return;
+
+    const generateDocNo = async () => {
+      setGeneratingDocId(true);
+      setValue("docNo", "");
+
+      try {
+        if (!orgId || !branchId) {
+          console.error("OrgId or BranchId missing");
+          return;
+        }
+
+        const mappingList =
+          await docTypeMappingAPI.getDocumentTypeMappingByOrgId(
+            orgId,
+            branchId,
+          );
+
+        const record = mappingList?.[0];
+        const tbDetail = record?.documentTypeMappingDetails?.find(
+          (d) => d.screenCode === "TB",
+        );
+
+        if (!tbDetail) {
+          console.error(
+            "Transport Bill document mapping not found for screenCode TB",
+          );
+          addToast(
+            "No document type mapping found for Transport Bill (TB)",
+            "error",
+          );
+          return;
+        }
+
+        const docId = await transportBillAPI.getTransportBillDocId({
+          financialYear: tbDetail.finYear,
+          orgId: tbDetail.orgId,
+          screenCode: tbDetail.screenCode,
+        });
+
+        if (docId) {
+          setValue("docNo", docId);
+        } else {
+          addToast("Failed to generate Doc No", "error");
+        }
+      } catch (error) {
+        console.error("Error generating transport bill doc number:", error);
+        addToast("Failed to generate Doc No", "error");
+      } finally {
+        setGeneratingDocId(false);
+      }
+    };
+
+    generateDocNo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
 
   const loadBranches = useCallback(async () => {
     try {
@@ -393,8 +465,10 @@ const TransportBillForm = ({ data, onBack }) => {
     const base = `${setName}.${idx}.`;
     setValue(`${base}${field}`, value, { shouldDirty: true });
     if (["totalAmount", "paidAmount"].includes(field)) {
-      const total = parseFloat(field === "totalAmount" ? value : row?.totalAmount) || 0;
-      const paid = parseFloat(field === "paidAmount" ? value : row?.paidAmount) || 0;
+      const total =
+        parseFloat(field === "totalAmount" ? value : row?.totalAmount) || 0;
+      const paid =
+        parseFloat(field === "paidAmount" ? value : row?.paidAmount) || 0;
       const pending = Math.max(0, total - paid);
       setValue(`${base}pendingAmount`, pending || "", { shouldDirty: true });
     }
@@ -407,7 +481,11 @@ const TransportBillForm = ({ data, onBack }) => {
     if (!vals.transportName) errs.transportName = "Required";
     if (!vals.billNo) errs.billNo = "Required";
     if (!vals.billDate) errs.billDate = "Required";
-    if (vals.totalAmount === "" || vals.totalAmount === undefined || Number(vals.totalAmount) <= 0) {
+    if (
+      vals.totalAmount === "" ||
+      vals.totalAmount === undefined ||
+      Number(vals.totalAmount) <= 0
+    ) {
       errs.totalAmount = "Required";
     }
     return errs;
@@ -461,14 +539,23 @@ const TransportBillForm = ({ data, onBack }) => {
     try {
       const response = await transportBillAPI.createUpdate(payload);
       if (response?.status === true || response?.status === "Ok") {
-        addToast(data ? "Transport Bill Updated!" : "Transport Bill Saved!", "success");
+        addToast(
+          data ? "Transport Bill Updated!" : "Transport Bill Saved!",
+          "success",
+        );
         onBack();
       } else {
-        addToast(response?.message || "Failed to save Transport Bill.", "error");
+        addToast(
+          response?.message || "Failed to save Transport Bill.",
+          "error",
+        );
       }
     } catch (error) {
       console.error("Save error:", error);
-      addToast(error?.response?.data?.message || "Failed to save Transport Bill.", "error");
+      addToast(
+        error?.response?.data?.message || "Failed to save Transport Bill.",
+        "error",
+      );
     }
   };
 
@@ -480,9 +567,7 @@ const TransportBillForm = ({ data, onBack }) => {
     );
   }
 
-  const tabs = [
-    { key: "payment1", label: "Payment Details 1" },
-  ];
+  const tabs = [{ key: "payment1", label: "Payment Details 1" }];
 
   return (
     <div className="p-2 max-w-7xl relative">
@@ -499,9 +584,13 @@ const TransportBillForm = ({ data, onBack }) => {
         </h2>
         <div className="ml-auto flex items-center gap-2">
           <label className={labelClasses}>Active</label>
-          <Controller control={control} name="active" render={({ field }) => (
-            <ToggleSwitch value={field.value} onChange={field.onChange} />
-          )} />
+          <Controller
+            control={control}
+            name="active"
+            render={({ field }) => (
+              <ToggleSwitch value={field.value} onChange={field.onChange} />
+            )}
+          />
         </div>
       </div>
 
@@ -522,6 +611,8 @@ const TransportBillForm = ({ data, onBack }) => {
             name="docNo"
             label="Doc No"
             errors={errors}
+            disabled
+            placeholder={generatingDocId ? "Generating..." : "Auto generated"}
           />
           <SelectField
             control={control}
@@ -602,10 +693,11 @@ const TransportBillForm = ({ data, onBack }) => {
                 key={tab.key}
                 type="button"
                 onClick={() => setActiveTab(tab.key)}
-                className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${activeTab === tab.key
+                className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${
+                  activeTab === tab.key
                     ? "bg-blue-600 text-white"
                     : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                  }`}
+                }`}
               >
                 {tab.label}
               </button>
@@ -629,18 +721,35 @@ const TransportBillForm = ({ data, onBack }) => {
                 <table className="w-full text-xs min-w-[600px]">
                   <thead className="bg-gray-100 dark:bg-gray-700">
                     <tr>
-                      <th className="p-1.5 text-center dark:text-white whitespace-nowrap text-[10px] font-medium sticky left-0 bg-gray-100 dark:bg-gray-700 z-10">S.No</th>
-                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[130px]">Cheque/RTGS No</th>
-                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[110px]">Cheque Date</th>
-                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]">Total Amount</th>
-                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]">Paid Amount</th>
-                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[110px]">Pending Amount</th>
-                      <th className="p-1.5 text-center dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[60px] sticky right-0 bg-gray-100 dark:bg-gray-700 z-10">Action</th>
+                      <th className="p-1.5 text-center dark:text-white whitespace-nowrap text-[10px] font-medium sticky left-0 bg-gray-100 dark:bg-gray-700 z-10">
+                        S.No
+                      </th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[130px]">
+                        Cheque/RTGS No
+                      </th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[110px]">
+                        Cheque Date
+                      </th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]">
+                        Total Amount
+                      </th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]">
+                        Paid Amount
+                      </th>
+                      <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[110px]">
+                        Pending Amount
+                      </th>
+                      <th className="p-1.5 text-center dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[60px] sticky right-0 bg-gray-100 dark:bg-gray-700 z-10">
+                        Action
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {fields1.map((field, index) => (
-                      <tr key={field.id} className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
+                      <tr
+                        key={field.id}
+                        className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"
+                      >
                         <td className="p-1 text-center font-medium dark:text-white text-[10px] sticky left-0 bg-white dark:bg-gray-800 z-10">
                           {index + 1}
                         </td>
@@ -672,7 +781,13 @@ const TransportBillForm = ({ data, onBack }) => {
                             onChange={(e) => {
                               const val = e.target.value;
                               const row = watch1?.[index];
-                              handlePaymentChange("paymentDetails1", index, "totalAmount", val, row);
+                              handlePaymentChange(
+                                "paymentDetails1",
+                                index,
+                                "totalAmount",
+                                val,
+                                row,
+                              );
                             }}
                           />
                         </td>
@@ -688,7 +803,13 @@ const TransportBillForm = ({ data, onBack }) => {
                             onChange={(e) => {
                               const val = e.target.value;
                               const row = watch1?.[index];
-                              handlePaymentChange("paymentDetails1", index, "paidAmount", val, row);
+                              handlePaymentChange(
+                                "paymentDetails1",
+                                index,
+                                "paidAmount",
+                                val,
+                                row,
+                              );
                             }}
                           />
                         </td>
@@ -709,10 +830,11 @@ const TransportBillForm = ({ data, onBack }) => {
                             type="button"
                             onClick={() => remove1(index)}
                             disabled={fields1.length <= 1}
-                            className={`h-5 w-5 rounded text-white flex items-center justify-center ${fields1.length <= 1
+                            className={`h-5 w-5 rounded text-white flex items-center justify-center ${
+                              fields1.length <= 1
                                 ? "bg-gray-400 cursor-not-allowed"
                                 : "bg-red-600 hover:bg-red-700"
-                              }`}
+                            }`}
                           >
                             <Trash2 size={10} />
                           </button>
@@ -721,7 +843,10 @@ const TransportBillForm = ({ data, onBack }) => {
                     ))}
                     {fields1.length === 0 && (
                       <tr>
-                        <td colSpan={7} className="p-4 text-center text-gray-500 dark:text-gray-400 text-xs">
+                        <td
+                          colSpan={7}
+                          className="p-4 text-center text-gray-500 dark:text-gray-400 text-xs"
+                        >
                           No records found
                         </td>
                       </tr>

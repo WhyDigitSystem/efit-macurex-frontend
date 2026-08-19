@@ -1,34 +1,32 @@
 import { useState } from "react";
 import DocTypeMasterList from "./DocTypeMasterList";
 import DocTypeMasterForm from "./DocTypeMasterForm";
-import docTypeAPI from "../../../api/docTypeAPI";
 
 const DocTypeMaster = () => {
   const [screen, setScreen] = useState("list");
-  const [editData, setEditData] = useState(null);
+  const [editId, setEditId] = useState(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const handleAddNew = () => {
-    setEditData(null);
+    setEditId(null);
     setScreen("form");
   };
 
-  const handleEdit = (data) => {
-    setEditData(data);
+  // row comes from the table; we only need its id — the form fetches
+  // the full record via getDocumentTypeMasterById.
+  const handleEdit = (row) => {
+    setEditId(row?.id);
     setScreen("form");
   };
 
   const handleBack = () => {
+    setEditId(null);
     setScreen("list");
   };
 
-  const handleSave = async (payload) => {
-    try {
-      await docTypeAPI.updateCreateDocType(payload); // Create/Update
-      handleBack();
-    } catch (error) {
-      console.error("Error saving doc type:", error);
-      throw error;
-    }
+  const handleSave = () => {
+    setRefreshTrigger((prev) => prev + 1);
+    handleBack();
   };
 
   return (
@@ -38,12 +36,13 @@ const DocTypeMaster = () => {
           onAddNew={handleAddNew}
           onEdit={handleEdit}
           onBack={() => window.history.back()}
+          refreshTrigger={refreshTrigger}
         />
       )}
 
       {screen === "form" && (
         <DocTypeMasterForm
-          editData={editData}
+          editId={editId}
           onBack={handleBack}
           onSave={handleSave}
         />

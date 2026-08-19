@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import dayjs from "dayjs";
 import { useToast } from "../../Toast/ToastContext";
 import salesOrderShortCloseAPI from "../../../api/Sales/salesOrderShortCloseAPI";
+import docTypeMappingAPI from "../../../api/docTypeMappingAPI";
 import itemAPI from "../../../api/itemAPI";
 
 /* ---------------------------------------------------------------------------- */
@@ -35,7 +36,8 @@ const cellReadOnlyClasses =
   "bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 " +
   "text-gray-500 dark:text-gray-400";
 
-const labelClasses = "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
+const labelClasses =
+  "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
 const fieldGrid =
   "grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-x-4 gap-y-3 items-start";
@@ -305,9 +307,6 @@ const emptyDetailRow = () => ({
 
 const fmtDate = (value) => (value ? dayjs(value).format("YYYY-MM-DD") : "");
 
-const generateShortCloseNo = () =>
-  `SC-${dayjs().format("YYYYMMDD")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
-
 /* ---------------------------------------------------------------------------- */
 
 const SalesOrderShortCloseForm = ({ data, onBack }) => {
@@ -329,11 +328,9 @@ const SalesOrderShortCloseForm = ({ data, onBack }) => {
   const [header, setHeader] = useState(() => {
     const base = {
       customerId: data?.customerId?.id ?? data?.customerId ?? "",
-      customerName:
-        data?.customerId?.customerName ?? data?.customerName ?? "",
+      customerName: data?.customerId?.customerName ?? data?.customerName ?? "",
       salesAgreementNo: data?.docId ?? data?.salesAgreementNo ?? "",
-      shortCloseNo:
-        data?.shortCloseNo || (data ? "" : generateShortCloseNo()),
+      shortCloseNo: data?.shortCloseNo || "",
       date: data?.docDate ?? data?.date ?? dayjs().format("YYYY-MM-DD"),
       active: data?.active !== false,
     };
@@ -357,14 +354,18 @@ const SalesOrderShortCloseForm = ({ data, onBack }) => {
   );
 
   const [summary, setSummary] = useState({
-    referenceForSc: data?.cancelRemarks ?? data?.shortCloseSummary?.referenceForSc ?? "",
+    referenceForSc:
+      data?.cancelRemarks ?? data?.shortCloseSummary?.referenceForSc ?? "",
   });
 
   /* ---------------- Lookup loading ---------------- */
 
   const loadCustomers = useCallback(async () => {
     try {
-      const res = await salesOrderShortCloseAPI.getCustomerDetails(branch, orgId);
+      const res = await salesOrderShortCloseAPI.getCustomerDetails(
+        branch,
+        orgId,
+      );
       setCustomerOptions(
         (res || []).map((c) => ({
           value: c.customerId,
@@ -381,31 +382,27 @@ const SalesOrderShortCloseForm = ({ data, onBack }) => {
 
   // Sales Agreement No dropdown is populated from Order Acceptance docs for
   // the selected customer. Response items: [{ orderAccptanceId, docId, docDate }]
-  const loadAgreements = useCallback(
-    async (customer) => {
-      if (!customer) {
-        setAgreementOptions([]);
-        return;
-      }
-      try {
-        const items = await salesOrderShortCloseAPI.getOrderAcceptanceDocIdDetails(
-          customer,
-        );
-        setAgreementOptions(
-          (items || []).map((it) => ({
-            value: it.docId,
-            label: it.docId,
-            orderAcceptanceId: it.orderAccptanceId,
-            docDate: it.docDate,
-          })),
-        );
-      } catch (error) {
-        console.error("Failed to load sales agreement options:", error);
-        setAgreementOptions([]);
-      }
-    },
-    [],
-  );
+  const loadAgreements = useCallback(async (customer) => {
+    if (!customer) {
+      setAgreementOptions([]);
+      return;
+    }
+    try {
+      const items =
+        await salesOrderShortCloseAPI.getOrderAcceptanceDocIdDetails(customer);
+      setAgreementOptions(
+        (items || []).map((it) => ({
+          value: it.docId,
+          label: it.docId,
+          orderAcceptanceId: it.orderAccptanceId,
+          docDate: it.docDate,
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to load sales agreement options:", error);
+      setAgreementOptions([]);
+    }
+  }, []);
 
   const loadItems = useCallback(async () => {
     try {
@@ -431,9 +428,10 @@ const SalesOrderShortCloseForm = ({ data, onBack }) => {
     async (docId) => {
       if (docId) {
         try {
-          const items = await salesOrderShortCloseAPI.getOrderAcceptanceItemDetailsDetails(
-            docId,
-          );
+          const items =
+            await salesOrderShortCloseAPI.getOrderAcceptanceItemDetailsDetails(
+              docId,
+            );
           setDetailRows(
             (items || []).map((it) => ({
               itemId: it.itemId || "",
@@ -476,6 +474,60 @@ const SalesOrderShortCloseForm = ({ data, onBack }) => {
       loadItems();
     }
   }, [orgId, branch, loadCustomers, loadItems]);
+  const [generatingDocId, setGeneratingDocId] = useState(false);
+  useEffect(() => {
+    // Don't regenerate the short close number while editing
+    if (data?.id) return;
+
+    const generateShortCloseNo = async () => {
+      setGeneratingDocId(true);
+      setHeader((prev) => ({ ...prev, shortCloseNo: "" }));
+
+      try {
+        if (!orgId || !branch) {
+          console.error("OrgId or BranchId missing");
+          return;
+        }
+
+        const mappingList =
+          await docTypeMappingAPI.getDocumentTypeMappingByOrgId(orgId, branch);
+
+        const record = mappingList?.[0];
+        const sosDetail = record?.documentTypeMappingDetails?.find(
+          (d) => d.screenCode === "SOS",
+        );
+
+        if (!sosDetail) {
+          console.error(
+            "Sales Order Short Close mapping not found for screenCode SOS",
+          );
+          addToast("No document type mapping found for Short Close (SOS)");
+          return;
+        }
+
+        const docId =
+          await salesOrderShortCloseAPI.getSalesOrderShortCloseDocId({
+            financialYear: sosDetail.finYear,
+            orgId: sosDetail.orgId,
+            screenCode: sosDetail.screenCode,
+          });
+
+        if (docId) {
+          setHeader((prev) => ({ ...prev, shortCloseNo: docId }));
+        } else {
+          addToast("Failed to generate Short Close No");
+        }
+      } catch (error) {
+        console.error("Error generating short close number:", error);
+        addToast("Failed to generate Short Close No");
+      } finally {
+        setGeneratingDocId(false);
+      }
+    };
+
+    generateShortCloseNo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
 
   /* ---------------- Handlers ---------------- */
 
@@ -525,7 +577,9 @@ const SalesOrderShortCloseForm = ({ data, onBack }) => {
           const pendingQty = parseFloat(next.pendingQty) || 0;
           const requiredQty = parseFloat(next.requiredQty) || 0;
           const shortCloseQty = pendingQty - requiredQty;
-          next.shortCloseQty = shortCloseQty ? shortCloseQty.toFixed(2) : "0.00";
+          next.shortCloseQty = shortCloseQty
+            ? shortCloseQty.toFixed(2)
+            : "0.00";
         }
 
         return next;
@@ -701,7 +755,8 @@ const SalesOrderShortCloseForm = ({ data, onBack }) => {
               onChange={handleHeaderChange}
               error={fieldErrors.shortCloseNo}
               required
-              // disabled={!data}
+              disabled
+              placeholder={generatingDocId ? "Generating..." : ""}
             />
             <Field
               type="date"

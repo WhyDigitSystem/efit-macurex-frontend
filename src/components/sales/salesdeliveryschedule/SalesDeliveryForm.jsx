@@ -5,6 +5,7 @@ import branchAPI from "../../../api/branchAPI";
 import listOfValuesAPI from "../../../api/listOfValuesAPI";
 import salesDeliveryAPI from "../../../api/Sales/salesDelivery";
 import { useToast } from "../../Toast/ToastContext";
+import docTypeMappingAPI from "../../../api/docTypeMappingAPI";
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -115,20 +116,40 @@ const SELECT_OPTIONS = {
 const getWeekNumber = (date) => {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
+  d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
   const week1 = new Date(d.getFullYear(), 0, 4);
-  return 1 + Math.round(((d - week1) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+  return (
+    1 +
+    Math.round(((d - week1) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7)
+  );
 };
 
 // Helper function to get day name
 const getDayName = (date) => {
-  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const days = [
+    "Sunday",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+  ];
   const d = new Date(date);
   return days[d.getDay()];
 };
 
 // Helper Components
-const SelectField = ({ control, name, label, options, required, errors, onChange, disabled }) => {
+const SelectField = ({
+  control,
+  name,
+  label,
+  options,
+  required,
+  errors,
+  onChange,
+  disabled,
+}) => {
   const getError = () => {
     const parts = name.split(".");
     let error = errors;
@@ -167,7 +188,7 @@ const SelectField = ({ control, name, label, options, required, errors, onChange
           >
             <option value="">Select an option</option>
             {options.map((opt) => {
-              if (typeof opt === 'object' && opt !== null) {
+              if (typeof opt === "object" && opt !== null) {
                 return (
                   <option key={opt.value} value={opt.value}>
                     {opt.label}
@@ -286,10 +307,11 @@ const TableRow = ({
           type="button"
           onClick={onRemove}
           disabled={disabled}
-          className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
-            ? "bg-gray-400 cursor-not-allowed"
-            : "bg-red-600 hover:bg-red-700"
-            }`}
+          className={`h-5 w-5 rounded text-white flex items-center justify-center ${
+            disabled
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-red-600 hover:bg-red-700"
+          }`}
         >
           <Trash2 size={10} />
         </button>
@@ -298,7 +320,15 @@ const TableRow = ({
   </tr>
 );
 
-const SelectCell = ({ control, name, options, required, errors, onChange, disabled }) => {
+const SelectCell = ({
+  control,
+  name,
+  options,
+  required,
+  errors,
+  onChange,
+  disabled,
+}) => {
   const getError = () => {
     const parts = name.split(".");
     let error = errors;
@@ -334,7 +364,7 @@ const SelectCell = ({ control, name, options, required, errors, onChange, disabl
           >
             <option value="">Select an option</option>
             {options.map((opt) => {
-              if (typeof opt === 'object' && opt !== null) {
+              if (typeof opt === "object" && opt !== null) {
                 return (
                   <option key={opt.value} value={opt.value}>
                     {opt.label}
@@ -394,7 +424,9 @@ const InputCell = ({
           <Controller
             name={name}
             control={control}
-            rules={required ? { required: "This field is required" } : undefined}
+            rules={
+              required ? { required: "This field is required" } : undefined
+            }
             render={({ field }) => (
               <input
                 {...field}
@@ -434,7 +466,15 @@ const InputCell = ({
   );
 };
 
-const DeliverySchedulePopup = ({ isOpen, onClose, control, errors, deliveryScheduleArray, setValue, onSave }) => {
+const DeliverySchedulePopup = ({
+  isOpen,
+  onClose,
+  control,
+  errors,
+  deliveryScheduleArray,
+  setValue,
+  onSave,
+}) => {
   if (!isOpen) return null;
 
   const handleDateChange = (e, index) => {
@@ -625,7 +665,7 @@ const SalesDeliveryForm = ({ data, onBack }) => {
       monthYear: apiData.monthYear || new Date().getFullYear().toString(),
       customerId: apiData.customer?.customerId?.toString() || "",
       customerName: apiData.customer?.customerName || "",
-      scheduleDetails: apiData.details?.map(detail => ({
+      scheduleDetails: apiData.details?.map((detail) => ({
         soNo: detail.soNocontractNo || "",
         invoiceType: detail.invoiceType || "",
         itemCode: detail.item?.itemCode || "",
@@ -636,31 +676,35 @@ const SalesDeliveryForm = ({ data, onBack }) => {
         orderQty: detail.orderQty || 0,
         pendingQty: detail.pendingQty || 0,
         actualPlannedQty: detail.actualPlannedQty || 0,
-      })) || [{
-        soNo: "",
-        invoiceType: "",
-        itemCode: "",
-        itemId: 0,
-        itemDescription: "",
-        unit: "",
-        unitId: 0,
-        orderQty: 0,
-        pendingQty: 0,
-        actualPlannedQty: 0,
-      }],
-      deliverySchedule: deliverySchedules.map(schedule => ({
+      })) || [
+        {
+          soNo: "",
+          invoiceType: "",
+          itemCode: "",
+          itemId: 0,
+          itemDescription: "",
+          unit: "",
+          unitId: 0,
+          orderQty: 0,
+          pendingQty: 0,
+          actualPlannedQty: 0,
+        },
+      ],
+      deliverySchedule: deliverySchedules.map((schedule) => ({
         dayNo: schedule.dayNo?.toString() || "",
         deliveryDate: schedule.deliveryDate || "",
         weekNo: schedule.weekNo?.toString() || "",
         day: schedule.dayName || "",
         deliveryQty: schedule.deliveryQty || 0,
-      })) || [{
-        dayNo: "",
-        deliveryDate: "",
-        weekNo: "",
-        day: "",
-        deliveryQty: 0,
-      }],
+      })) || [
+        {
+          dayNo: "",
+          deliveryDate: "",
+          weekNo: "",
+          day: "",
+          deliveryQty: 0,
+        },
+      ],
       remarks: apiData.remarks || "",
     };
   };
@@ -717,7 +761,7 @@ const SalesDeliveryForm = ({ data, onBack }) => {
 
   const handleCustomerChange = (customerId) => {
     const selectedCustomer = customerData.find(
-      c => String(c.value) === String(customerId)
+      (c) => String(c.value) === String(customerId),
     );
 
     if (selectedCustomer) {
@@ -743,21 +787,18 @@ const SalesDeliveryForm = ({ data, onBack }) => {
     const monthNumber = String(monthIndex + 1).padStart(2, "0");
     const year = new Date().getFullYear();
 
-    setValue(
-      "monthYear",
-      `${monthNumber}-${year}`
-    );
+    setValue("monthYear", `${monthNumber}-${year}`);
   };
 
   const handleContractChange = async (contractNo, index) => {
     try {
       const selectedContract = contractData.find(
-        (c) => String(c.value) === String(contractNo)
+        (c) => String(c.value) === String(contractNo),
       );
 
       setValue(
         `scheduleDetails.${index}.invoiceType`,
-        selectedContract?.invoiceType || ""
+        selectedContract?.invoiceType || "",
       );
 
       setValue(`scheduleDetails.${index}.itemCode`, "");
@@ -776,7 +817,7 @@ const SalesDeliveryForm = ({ data, onBack }) => {
       const response = await salesDeliveryAPI.getItemDetails(
         orgId,
         branchId,
-        contractNo
+        contractNo,
       );
 
       const items = response?.paramObjectsMap?.itemList || [];
@@ -792,7 +833,6 @@ const SalesDeliveryForm = ({ data, onBack }) => {
       }));
 
       setItemData(options);
-
     } catch (error) {
       console.error("Failed to load item details:", error);
       setItemData([]);
@@ -801,35 +841,22 @@ const SalesDeliveryForm = ({ data, onBack }) => {
 
   const handleItemChange = (itemCode, index) => {
     const selectedItem = itemData.find(
-      (item) => String(item.value) === String(itemCode)
+      (item) => String(item.value) === String(itemCode),
     );
 
     if (selectedItem) {
       setValue(
         `scheduleDetails.${index}.itemDescription`,
-        selectedItem.itemDescription || ""
+        selectedItem.itemDescription || "",
       );
 
-      setValue(
-        `scheduleDetails.${index}.unit`,
-        selectedItem.unit || ""
-      );
+      setValue(`scheduleDetails.${index}.unit`, selectedItem.unit || "");
 
-      setValue(
-        `scheduleDetails.${index}.orderQty`,
-        selectedItem.orderQty || 0
-      );
+      setValue(`scheduleDetails.${index}.orderQty`, selectedItem.orderQty || 0);
 
-      setValue(
-        `scheduleDetails.${index}.itemId`,
-        selectedItem.itemId || 0
-      );
+      setValue(`scheduleDetails.${index}.itemId`, selectedItem.itemId || 0);
 
-      setValue(
-        `scheduleDetails.${index}.unitId`,
-        selectedItem.unitId || 0
-      );
-
+      setValue(`scheduleDetails.${index}.unitId`, selectedItem.unitId || 0);
     } else {
       setValue(`scheduleDetails.${index}.itemDescription`, "");
       setValue(`scheduleDetails.${index}.unit`, "");
@@ -851,10 +878,77 @@ const SalesDeliveryForm = ({ data, onBack }) => {
     }
   }, []);
 
+  const [generatingDocId, setGeneratingDocId] = useState(false);
+
+  useEffect(() => {
+    // Don't regenerate the div no while editing
+    if (data?.id) return;
+
+    const generateDivNo = async () => {
+      setGeneratingDocId(true);
+      setValue("divNo", "");
+
+      try {
+        const storedOrgId = localStorage.getItem("orgId");
+        const storedBranchId = localStorage.getItem("branchId");
+
+        if (!storedOrgId || !storedBranchId) {
+          console.error("OrgId or BranchId not found in localStorage");
+          return;
+        }
+
+        const mappingList =
+          await docTypeMappingAPI.getDocumentTypeMappingByOrgId(
+            storedOrgId,
+            storedBranchId,
+          );
+
+        const record = mappingList?.[0];
+        const sdsDetail = record?.documentTypeMappingDetails?.find(
+          (d) => d.screenCode === "SDS",
+        );
+
+        if (!sdsDetail) {
+          console.error(
+            "Sales Delivery Schedule document mapping not found for screenCode SDS",
+          );
+          addToast(
+            "No document type mapping found for Sales Delivery Schedule (SDS)",
+            "error",
+          );
+          return;
+        }
+
+        const docId = await salesDeliveryAPI.getSalesDeliveryScheduleDocId({
+          financialYear: sdsDetail.finYear,
+          orgId: sdsDetail.orgId,
+          screenCode: sdsDetail.screenCode,
+        });
+
+        if (docId) {
+          setValue("divNo", docId);
+        } else {
+          addToast("Failed to generate Div. No.", "error");
+        }
+      } catch (error) {
+        console.error(
+          "Error generating sales delivery schedule number:",
+          error,
+        );
+        addToast("Failed to generate Div. No.", "error");
+      } finally {
+        setGeneratingDocId(false);
+      }
+    };
+
+    generateDivNo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
+
   const loadBranches = useCallback(async () => {
     try {
       const response = await branchAPI.getBranchByOrgId(orgId);
-      const options = (response || []).map(branch => ({
+      const options = (response || []).map((branch) => ({
         value: branch.id,
         label: branch.branchName,
       }));
@@ -867,8 +961,11 @@ const SalesDeliveryForm = ({ data, onBack }) => {
 
   const loadBelongsTo = useCallback(async () => {
     try {
-      const response = await listOfValuesAPI.getListValuesGroup("SDS BELONGS TO", orgId);
-      const options = (response || []).map(branch => ({
+      const response = await listOfValuesAPI.getListValuesGroup(
+        "SDS BELONGS TO",
+        orgId,
+      );
+      const options = (response || []).map((branch) => ({
         value: branch.id,
         label: branch.valuesDescription,
       }));
@@ -881,9 +978,12 @@ const SalesDeliveryForm = ({ data, onBack }) => {
 
   const loadCustomerDetails = useCallback(async () => {
     try {
-      const response = await salesDeliveryAPI.getCustomerDropdown(orgId, branchId);
+      const response = await salesDeliveryAPI.getCustomerDropdown(
+        orgId,
+        branchId,
+      );
       const res = response?.paramObjectsMap?.customerDetails;
-      const options = (res || []).map(customer => ({
+      const options = (res || []).map((customer) => ({
         value: customer.customerId,
         label: customer.customerCode,
         customerName: customer.customerName,
@@ -899,7 +999,7 @@ const SalesDeliveryForm = ({ data, onBack }) => {
     try {
       const response = await salesDeliveryAPI.getContractNoDetails(
         orgId,
-        branchId
+        branchId,
       );
 
       const res = response?.paramObjectsMap?.contractList || [];
@@ -918,15 +1018,17 @@ const SalesDeliveryForm = ({ data, onBack }) => {
   }, [branchId, orgId]);
 
   const transformFormData = (formData, orgId, branchId, isEditMode) => {
-    const deliverySchedules = formData.deliverySchedule && formData.deliverySchedule.length > 0
-      ? formData.deliverySchedule.map(schedule => ({
-        dayName: schedule.day || "",
-        dayNo: parseInt(schedule.dayNo) || 0,
-        deliveryDate: schedule.deliveryDate || new Date().toISOString().split("T")[0],
-        deliveryQty: parseFloat(schedule.deliveryQty) || 0,
-        weekNo: parseInt(schedule.weekNo) || 0
-      }))
-      : [];
+    const deliverySchedules =
+      formData.deliverySchedule && formData.deliverySchedule.length > 0
+        ? formData.deliverySchedule.map((schedule) => ({
+            dayName: schedule.day || "",
+            dayNo: parseInt(schedule.dayNo) || 0,
+            deliveryDate:
+              schedule.deliveryDate || new Date().toISOString().split("T")[0],
+            deliveryQty: parseFloat(schedule.deliveryQty) || 0,
+            weekNo: parseInt(schedule.weekNo) || 0,
+          }))
+        : [];
 
     const payload = {
       active: true,
@@ -935,7 +1037,9 @@ const SalesDeliveryForm = ({ data, onBack }) => {
       cancelRemarks: "",
       createdBy: localStorage.getItem("userId") || "1",
       customer: parseInt(formData.customerId) || 0,
-      details: formData.scheduleDetails.map(detail => {
+      dlvNo: formData.divNo || "", // <-- add, matches apiData.dlvNo used in transformApiDataToForm
+      dlvDate: formData.divDate || "", // <-- add, matches apiData.dlvDate
+      details: formData.scheduleDetails.map((detail) => {
         const itemId = detail.itemId || parseInt(detail.itemCode) || 0;
         const unitId = detail.unitId || 0;
 
@@ -948,14 +1052,14 @@ const SalesDeliveryForm = ({ data, onBack }) => {
           orderQty: parseFloat(detail.orderQty) || 0,
           pendingQty: parseFloat(detail.pendingQty) || 0,
           soNoContractNo: detail.soNo || "",
-          unit: unitId
+          unit: unitId,
         };
       }),
       financialYear: new Date().getFullYear().toString(),
       monthOfSchedule: formData.monthOfSchedule || "",
       monthYear: formData.monthYear || new Date().getFullYear().toString(),
       orgId: parseInt(orgId),
-      remarks: formData.remarks || ""
+      remarks: formData.remarks || "",
     };
 
     if (isEditMode && data?.id) {
@@ -969,26 +1073,40 @@ const SalesDeliveryForm = ({ data, onBack }) => {
     try {
       const isEditMode = !!data?.id;
 
-      const apiPayload = transformFormData(formData, orgId, branchId, isEditMode);
+      const apiPayload = transformFormData(
+        formData,
+        orgId,
+        branchId,
+        isEditMode,
+      );
 
-      const response = await salesDeliveryAPI.createUpdateSalesDelivery(apiPayload);
+      const response =
+        await salesDeliveryAPI.createUpdateSalesDelivery(apiPayload);
 
       if (response?.status === true) {
         addToast(
-          isEditMode ? "Sales Delivery Schedule Updated Successfully!" : "Sales Delivery Schedule Saved Successfully!",
-          "success"
+          isEditMode
+            ? "Sales Delivery Schedule Updated Successfully!"
+            : "Sales Delivery Schedule Saved Successfully!",
+          "success",
         );
 
         setTimeout(() => {
           onBack();
         }, 1500);
       } else {
-        const errorMessage = response?.paramObjectsMap?.message || response?.message || "Failed to save sales delivery schedule";
+        const errorMessage =
+          response?.paramObjectsMap?.message ||
+          response?.message ||
+          "Failed to save sales delivery schedule";
         addToast(errorMessage, "error");
       }
     } catch (error) {
       console.error("Error saving sales delivery:", error);
-      const errorMessage = error.response?.data?.message || error.message || "Error saving sales delivery schedule";
+      const errorMessage =
+        error.response?.data?.message ||
+        error.message ||
+        "Error saving sales delivery schedule";
       addToast(errorMessage, "error");
     }
   };
@@ -1012,7 +1130,9 @@ const SalesDeliveryForm = ({ data, onBack }) => {
           <ArrowLeft className="h-4 w-4" />
         </button>
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-          {data?.id ? "Edit Sales Delivery Schedule" : "Add Sales Delivery Schedule"}
+          {data?.id
+            ? "Edit Sales Delivery Schedule"
+            : "Add Sales Delivery Schedule"}
         </h2>
       </div>
 
@@ -1024,6 +1144,8 @@ const SalesDeliveryForm = ({ data, onBack }) => {
             control={control}
             name="divNo"
             label="Div. No."
+            placeholder={generatingDocId ? "Generating..." : "Auto generated"}
+            disabled
             errors={errors}
           />
           <InputField
@@ -1092,14 +1214,13 @@ const SalesDeliveryForm = ({ data, onBack }) => {
                   key={tab}
                   type="button"
                   onClick={() => setActiveChildTab(tab)}
-                  className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${activeChildTab === tab
-                    ? "bg-blue-600 text-white"
-                    : "text-gray-600 dark:text-gray-300"
-                    }`}
+                  className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${
+                    activeChildTab === tab
+                      ? "bg-blue-600 text-white"
+                      : "text-gray-600 dark:text-gray-300"
+                  }`}
                 >
-                  {tab === "scheduleDetails"
-                    ? "Schedule Details"
-                    : "Summary"}
+                  {tab === "scheduleDetails" ? "Schedule Details" : "Summary"}
                 </button>
               ))}
             </div>

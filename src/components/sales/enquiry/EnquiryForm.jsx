@@ -4,6 +4,7 @@ import { useForm, Controller, useFieldArray } from "react-hook-form";
 import branchAPI from "../../../api/branchAPI";
 import partyMasterAPI from "../../../api/partyMasterAPI";
 import enquiryAPI from "../../../api/Sales/enquiryAPI";
+import docTypeMappingAPI from "../../../api/docTypeMappingAPI";
 import { useToast } from "../../Toast/ToastContext";
 
 const controlClasses =
@@ -62,7 +63,14 @@ const getDefaultValues = () => ({
 });
 
 const SELECT_OPTIONS = {
-  enquiryType: ["Contact", "Oral Enquiry", "E-Mail", "Hard Copy", "Telephone", "Supply on"],
+  enquiryType: [
+    "Contact",
+    "Oral Enquiry",
+    "E-Mail",
+    "Hard Copy",
+    "Telephone",
+    "Supply on",
+  ],
   partyId: ["Party 1", "Party 2", "Party 3"],
   status: ["Executed", "Discorded"],
   yesNo: ["Yes", "No"],
@@ -200,11 +208,15 @@ const TableHead = ({ headers }) => (
   </thead>
 );
 
-const TableRow = ({ children, index, onRemove, disabled, showDelete = true }) => (
+const TableRow = ({
+  children,
+  index,
+  onRemove,
+  disabled,
+  showDelete = true,
+}) => (
   <tr className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-    <td className="p-1 text-center font-medium dark:text-white">
-      {index + 1}
-    </td>
+    <td className="p-1 text-center font-medium dark:text-white">{index + 1}</td>
     {children}
     {showDelete && (
       <td className="p-1 text-center">
@@ -212,10 +224,11 @@ const TableRow = ({ children, index, onRemove, disabled, showDelete = true }) =>
           type="button"
           onClick={onRemove}
           disabled={disabled}
-          className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
-            ? "bg-gray-400 cursor-not-allowed"
-            : "bg-red-600 hover:bg-red-700"
-            }`}
+          className={`h-5 w-5 rounded text-white flex items-center justify-center ${
+            disabled
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-red-600 hover:bg-red-700"
+          }`}
         >
           <Trash2 size={10} />
         </button>
@@ -325,10 +338,10 @@ const InputCell = ({
 const fetchFileAsBlob = async (url) => {
   try {
     const response = await fetch(url);
-    if (!response.ok) throw new Error('Failed to fetch file');
+    if (!response.ok) throw new Error("Failed to fetch file");
     return await response.blob();
   } catch (error) {
-    console.error('Error fetching file:', error);
+    console.error("Error fetching file:", error);
     throw error;
   }
 };
@@ -381,7 +394,7 @@ const EnquiryForm = ({ data, onBack, onSave }) => {
     }
 
     const selectedParty = partyData.find(
-      item => String(item.value) === String(selectedPartyId)
+      (item) => String(item.value) === String(selectedPartyId),
     );
 
     if (selectedParty) {
@@ -396,7 +409,7 @@ const EnquiryForm = ({ data, onBack, onSave }) => {
     }
 
     const employee = buyerData.find(
-      item => String(item.value) === String(selectedContact)
+      (item) => String(item.value) === String(selectedContact),
     );
 
     if (employee) {
@@ -410,6 +423,60 @@ const EnquiryForm = ({ data, onBack, onSave }) => {
     loadBuyerDetails();
   }, []);
 
+  const [generatingDocId, setGeneratingDocId] = useState(false);
+
+  useEffect(() => {
+    if (data?.id) return; // don't override enquiryNo when editing
+
+    const storedBranchId = localStorage.getItem("branchId");
+    if (!storedBranchId) {
+      console.warn("No branchId found in localStorage");
+      return;
+    }
+
+    const generateEnquiryNo = async () => {
+      setGeneratingDocId(true);
+      setValue("enquiryNo", "");
+
+      try {
+        const mappingList =
+          await docTypeMappingAPI.getDocumentTypeMappingByOrgId(
+            orgId,
+            storedBranchId,
+          );
+
+        const record = mappingList?.[0];
+        const eqnDetail = record?.documentTypeMappingDetails?.find(
+          (d) => d.screenCode === "EQN",
+        );
+
+        if (!eqnDetail) {
+          addToast("No document type mapping found for this branch", "error");
+          return;
+        }
+
+        const docId = await enquiryAPI.getEnquiryDocId({
+          financialYear: eqnDetail.finYear,
+          orgId: eqnDetail.orgId,
+          screenCode: eqnDetail.screenCode,
+        });
+
+        if (docId) {
+          setValue("enquiryNo", docId);
+        } else {
+          addToast("Failed to generate Enquiry No", "error");
+        }
+      } catch (error) {
+        console.error("Failed to generate enquiry number:", error);
+        addToast("Failed to generate Enquiry No", "error");
+      } finally {
+        setGeneratingDocId(false);
+      }
+    };
+
+    generateEnquiryNo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
   const loadEnquiryData = async (enquiryId) => {
     setLoading(true);
     try {
@@ -436,7 +503,7 @@ const EnquiryForm = ({ data, onBack, onSave }) => {
 
         // Set enquiry details
         if (enquiry.enquiryDetails && enquiry.enquiryDetails.length > 0) {
-          const details = enquiry.enquiryDetails.map(detail => ({
+          const details = enquiry.enquiryDetails.map((detail) => ({
             contactPartNo: detail.itemCode || "",
             itemDescription: detail.itemDescription || "",
             annualQty: detail.annualquantity || 0,
@@ -449,8 +516,11 @@ const EnquiryForm = ({ data, onBack, onSave }) => {
         }
 
         // Set terms
-        if (enquiry.enquiryTermsandCond && enquiry.enquiryTermsandCond.length > 0) {
-          const terms = enquiry.enquiryTermsandCond.map(term => ({
+        if (
+          enquiry.enquiryTermsandCond &&
+          enquiry.enquiryTermsandCond.length > 0
+        ) {
+          const terms = enquiry.enquiryTermsandCond.map((term) => ({
             additionalInvestment: term.additionalInvestment || "",
             additionalManPower: term.additionalManPower || "",
             timeFrame: term.likelyTimeFrame || "",
@@ -468,10 +538,14 @@ const EnquiryForm = ({ data, onBack, onSave }) => {
         }
 
         // Set attachments with file path for display
-        if (enquiry.enquiryAttachmentDTO && enquiry.enquiryAttachmentDTO.length > 0) {
-          const attachments = enquiry.enquiryAttachmentDTO.map(attachment => {
+        if (
+          enquiry.enquiryAttachmentDTO &&
+          enquiry.enquiryAttachmentDTO.length > 0
+        ) {
+          const attachments = enquiry.enquiryAttachmentDTO.map((attachment) => {
             // Get the file name from the path or use the name field
-            const fileName = attachment.name || attachment.fileName || 'attachment';
+            const fileName =
+              attachment.name || attachment.fileName || "attachment";
             // Store both the file path for display and the file name
             return {
               attchement: {
@@ -480,8 +554,8 @@ const EnquiryForm = ({ data, onBack, onSave }) => {
                 fileSize: attachment.fileSize,
                 contentType: attachment.contentType,
                 // Store the full file path for fetching
-                fileUrl: attachment.filePath
-              }
+                fileUrl: attachment.filePath,
+              },
             };
           });
           attachementArray.replace(attachments);
@@ -500,7 +574,7 @@ const EnquiryForm = ({ data, onBack, onSave }) => {
   const loadBranches = useCallback(async () => {
     try {
       const response = await branchAPI.getBranchByOrgId(orgId);
-      const options = (response || []).map(branch => ({
+      const options = (response || []).map((branch) => ({
         value: branch.id,
         label: branch.branchName,
       }));
@@ -514,7 +588,7 @@ const EnquiryForm = ({ data, onBack, onSave }) => {
   const loadParties = async () => {
     try {
       const response = await partyMasterAPI.getPartyByOrgId(orgId, branch);
-      const options = (response || []).map(branch => ({
+      const options = (response || []).map((branch) => ({
         value: branch.id,
         label: branch.vendorCode,
         partyName: branch.customerName,
@@ -530,7 +604,7 @@ const EnquiryForm = ({ data, onBack, onSave }) => {
   const loadBuyerDetails = useCallback(async () => {
     try {
       const response = await partyMasterAPI.getBuyerDetails(orgId, branch);
-      const options = (response || []).map(item => ({
+      const options = (response || []).map((item) => ({
         value: item.employeeId,
         label: item.employeeName,
         contactEmail: item.email,
@@ -581,29 +655,29 @@ const EnquiryForm = ({ data, onBack, onSave }) => {
 
   // Helper function to get file display name
   const getFileDisplayName = (attachment) => {
-    if (!attachment) return '';
-    if (typeof attachment === 'string') {
-      return attachment.split('/').pop() || attachment;
+    if (!attachment) return "";
+    if (typeof attachment === "string") {
+      return attachment.split("/").pop() || attachment;
     }
     if (attachment.fileName) {
       return attachment.fileName;
     }
     if (attachment.filePath) {
-      return attachment.filePath.split('/').pop() || attachment.filePath;
+      return attachment.filePath.split("/").pop() || attachment.filePath;
     }
-    return '';
+    return "";
   };
 
   // Helper function to get file URL for display
   const getFileUrl = (attachment) => {
     if (!attachment) return null;
-    if (typeof attachment === 'string') {
+    if (typeof attachment === "string") {
       // If it's a file path, we need to serve it through the backend
       // You might need to adjust this URL based on your backend configuration
-      return `${ import.meta.env.VITE_API_URL}/api/files/download?path=${encodeURIComponent(attachment)}`;
+      return `${import.meta.env.VITE_API_URL}/api/files/download?path=${encodeURIComponent(attachment)}`;
     }
     if (attachment.filePath) {
-      return `${ import.meta.env.VITE_API_URL}/api/files/download?path=${encodeURIComponent(attachment.filePath)}`;
+      return `${import.meta.env.VITE_API_URL}/api/files/download?path=${encodeURIComponent(attachment.filePath)}`;
     }
     return null;
   };
@@ -630,7 +704,7 @@ const EnquiryForm = ({ data, onBack, onSave }) => {
         createdBy: userId || "admin",
         cancelRemarks: "",
         active: true,
-        enquiryDetails: formData.enquiryDetail.map(detail => ({
+        enquiryDetails: formData.enquiryDetail.map((detail) => ({
           itemcode: detail.contactPartNo || "",
           annualquantity: parseInt(detail.annualQty) || 0,
           dlrydate: formatDateForAPI(detail.dlryDate),
@@ -638,7 +712,7 @@ const EnquiryForm = ({ data, onBack, onSave }) => {
           quoteduedate: formatDateForAPI(detail.quoteDueDate),
           remarks: detail.remarks || "",
         })),
-        enquiryTermsandCond: formData.terms.map(term => ({
+        enquiryTermsandCond: formData.terms.map((term) => ({
           additionalInvestment: term.additionalInvestment || "",
           additionalManPower: term.additionalManPower || "",
           conclusion: term.conclusion || "",
@@ -679,14 +753,18 @@ const EnquiryForm = ({ data, onBack, onSave }) => {
           if (attachment instanceof File) {
             // New file
             formDataToSend.append("files", attachment, attachment.name);
-          } else if (attachment && typeof attachment === 'object' && attachment.filePath) {
+          } else if (
+            attachment &&
+            typeof attachment === "object" &&
+            attachment.filePath
+          ) {
             // Existing file - we need to fetch it and resend if it's a new upload
             // Note: In most cases, existing files should not be re-uploaded
             // You might want to skip this or handle it differently
-            console.log('Existing file:', attachment.filePath);
-          } else if (attachment && typeof attachment === 'string') {
+            console.log("Existing file:", attachment.filePath);
+          } else if (attachment && typeof attachment === "string") {
             // String path - handle if needed
-            console.log('Existing file path:', attachment);
+            console.log("Existing file path:", attachment);
           }
         }
       }
@@ -706,7 +784,7 @@ const EnquiryForm = ({ data, onBack, onSave }) => {
           data?.id
             ? "Enquiry updated successfully"
             : "Enquiry created successfully",
-          "success"
+          "success",
         );
 
         reset(getDefaultValues());
@@ -714,7 +792,6 @@ const EnquiryForm = ({ data, onBack, onSave }) => {
       } else {
         addToast(res.message || "Something went wrong", "error");
       }
-
     } catch (error) {
       console.error("Error saving enquiry:", error);
       addToast("Failed to save enquiry. Please try again.", "error");
@@ -726,7 +803,9 @@ const EnquiryForm = ({ data, onBack, onSave }) => {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500 dark:text-gray-400">Loading enquiry data...</div>
+        <div className="text-gray-500 dark:text-gray-400">
+          Loading enquiry data...
+        </div>
       </div>
     );
   }
@@ -762,6 +841,8 @@ const EnquiryForm = ({ data, onBack, onSave }) => {
             name="enquiryNo"
             label="Enquiry No"
             errors={errors}
+            disabled
+            placeholder={generatingDocId ? "Generating..." : ""}
           />
           <SelectField
             control={control}
@@ -847,10 +928,11 @@ const EnquiryForm = ({ data, onBack, onSave }) => {
                   key={tab}
                   type="button"
                   onClick={() => setActiveChildTab(tab)}
-                  className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${activeChildTab === tab
-                    ? "bg-blue-600 text-white"
-                    : "text-gray-600 dark:text-gray-300"
-                    }`}
+                  className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${
+                    activeChildTab === tab
+                      ? "bg-blue-600 text-white"
+                      : "text-gray-600 dark:text-gray-300"
+                  }`}
                 >
                   {tab === "attachement"
                     ? "Attachment"
@@ -945,16 +1027,20 @@ const EnquiryForm = ({ data, onBack, onSave }) => {
           {activeChildTab === "terms" && (
             <div className="pt-3">
               {termsArray.fields.map((field, index) => (
-                <div key={field.id} className="mb-4 p-3 border border-gray-200 dark:border-gray-700 rounded-lg relative">
+                <div
+                  key={field.id}
+                  className="mb-4 p-3 border border-gray-200 dark:border-gray-700 rounded-lg relative"
+                >
                   <div className="absolute top-2 right-2">
                     <button
                       type="button"
                       onClick={() => handleRemove("terms", index)}
                       disabled={termsArray.fields.length <= 1}
-                      className={`h-5 w-5 rounded text-white flex items-center justify-center ${termsArray.fields.length <= 1
-                        ? "bg-gray-400 cursor-not-allowed"
-                        : "bg-red-600 hover:bg-red-700"
-                        }`}
+                      className={`h-5 w-5 rounded text-white flex items-center justify-center ${
+                        termsArray.fields.length <= 1
+                          ? "bg-gray-400 cursor-not-allowed"
+                          : "bg-red-600 hover:bg-red-700"
+                      }`}
                     >
                       <Trash2 size={10} />
                     </button>
@@ -1067,11 +1153,14 @@ const EnquiryForm = ({ data, onBack, onSave }) => {
                         control={control}
                         render={({ field: { onChange, value } }) => {
                           // Get the file display name
-                          const fileDisplayName = value && typeof value === 'object'
-                            ? value.fileName || value.filePath?.split('/').pop() || 'File'
-                            : typeof value === 'string'
-                              ? value.split('/').pop() || value
-                              : '';
+                          const fileDisplayName =
+                            value && typeof value === "object"
+                              ? value.fileName ||
+                                value.filePath?.split("/").pop() ||
+                                "File"
+                              : typeof value === "string"
+                                ? value.split("/").pop() || value
+                                : "";
 
                           return (
                             <div className="space-y-1">
@@ -1086,22 +1175,24 @@ const EnquiryForm = ({ data, onBack, onSave }) => {
                                   }
                                 }}
                               />
-                              {value && typeof value === 'object' && value.filePath && (
-                                <div className="flex items-center gap-2">
-                                  <span className="text-xs text-blue-600 dark:text-blue-400">
-                                    📎 {fileDisplayName}
-                                  </span>
-                                  <a
-                                    href={getFileUrl(value)}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-xs text-blue-600 hover:underline dark:text-blue-400"
-                                  >
-                                    View File
-                                  </a>
-                                </div>
-                              )}
-                              {value && typeof value === 'string' && (
+                              {value &&
+                                typeof value === "object" &&
+                                value.filePath && (
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs text-blue-600 dark:text-blue-400">
+                                      📎 {fileDisplayName}
+                                    </span>
+                                    <a
+                                      href={getFileUrl(value)}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-xs text-blue-600 hover:underline dark:text-blue-400"
+                                    >
+                                      View File
+                                    </a>
+                                  </div>
+                                )}
+                              {value && typeof value === "string" && (
                                 <div className="flex items-center gap-2">
                                   <span className="text-xs text-blue-600 dark:text-blue-400">
                                     📎 {fileDisplayName}

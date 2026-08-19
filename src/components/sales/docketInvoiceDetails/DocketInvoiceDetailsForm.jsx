@@ -7,6 +7,7 @@ import branchAPI from "../../../api/branchAPI";
 import locationMasterAPI from "../../../api/locationMasterAPI";
 import { useToast } from "../../Toast/ToastContext";
 import transportAPI from "../../../api/transportAPI";
+import docTypeMappingAPI from "../../../api/docTypeMappingAPI";
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -16,30 +17,45 @@ const controlClasses =
   "dark:focus:ring-blue-400 dark:focus:border-blue-400 " +
   "disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed";
 
-const labelClasses = "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
+const labelClasses =
+  "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
-const fieldGrid = "grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-x-4 gap-y-3 items-start";
+const fieldGrid =
+  "grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-x-4 gap-y-3 items-start";
 
 const SectionHeader = ({ children }) => (
-  <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">{children}</h3>
+  <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">
+    {children}
+  </h3>
 );
 
 const InputField = ({ label, required, error, children }) => (
   <div>
-    {label && <label className={labelClasses}>{label}{required && <span className="text-red-500"> *</span>}</label>}
+    {label && (
+      <label className={labelClasses}>
+        {label}
+        {required && <span className="text-red-500"> *</span>}
+      </label>
+    )}
     {children}
     {error && <p className="text-[10px] text-red-500 mt-0.5">{error}</p>}
   </div>
 );
 
 const ToggleSwitch = ({ value, onChange }) => (
-  <button type="button" onClick={() => onChange(!value)}
-    className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${value ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"}`}>
-    <span className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${value ? "translate-x-6" : "translate-x-0.5"}`} />
+  <button
+    type="button"
+    onClick={() => onChange(!value)}
+    className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${value ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"}`}
+  >
+    <span
+      className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${value ? "translate-x-6" : "translate-x-0.5"}`}
+    />
   </button>
 );
 
-const thClass = "px-1 py-0.5 text-left font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap text-[10px]";
+const thClass =
+  "px-1 py-0.5 text-left font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap text-[10px]";
 
 const MODE_OPTIONS = ["Road", "Rail", "Air", "Sea"];
 
@@ -57,6 +73,7 @@ const getDefaultDocketRow = () => ({
 const getDefaultValues = () => ({
   id: 0,
   plantId: "",
+  docNo: "",
   docNo: `DK/${dayjs().format("DDD")}/${String(Date.now()).slice(-4)}`,
   docDate: dayjs().format("YYYY-MM-DD"),
   transportId: "",
@@ -75,7 +92,11 @@ const DocketInvoiceDetailsForm = ({ data, onBack }) => {
   const dataLoadedRef = useRef(false);
 
   const userData = JSON.parse(localStorage.getItem("userData") || "{}");
-  const orgName = (userData?.companyVO?.companyName || userData?.orgName || "").trim();
+  const orgName = (
+    userData?.companyVO?.companyName ||
+    userData?.orgName ||
+    ""
+  ).trim();
   const isMacurex = ["mecurex", "macurex"].includes(orgName.toLowerCase());
 
   const [plantOptions, setPlantOptions] = useState([]);
@@ -84,15 +105,14 @@ const DocketInvoiceDetailsForm = ({ data, onBack }) => {
   const [transportLoading, setTransportLoading] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const {
-    control, handleSubmit, setValue, watch, register, reset,
-  } = useForm({
+  const { control, handleSubmit, setValue, watch, register, reset } = useForm({
     mode: "onTouched",
     defaultValues: getDefaultValues(),
   });
 
   const { fields, append, remove } = useFieldArray({
-    control, name: "docketDetails",
+    control,
+    name: "docketDetails",
   });
 
   const watchRows = watch("docketDetails");
@@ -105,10 +125,17 @@ const DocketInvoiceDetailsForm = ({ data, onBack }) => {
       try {
         if (isMacurex) {
           const res = await locationMasterAPI.getPlants(orgId);
-          setPlantOptions((res || []).map((p) => ({ id: p.id, label: p.plantName || p.plantId || p.id })));
+          setPlantOptions(
+            (res || []).map((p) => ({
+              id: p.id,
+              label: p.plantName || p.plantId || p.id,
+            })),
+          );
         } else {
           const res = await branchAPI.getBranchByOrgId(orgId);
-          setPlantOptions((res || []).map((b) => ({ id: b.id, label: b.branchName || b.id })));
+          setPlantOptions(
+            (res || []).map((b) => ({ id: b.id, label: b.branchName || b.id })),
+          );
         }
       } catch (error) {
         console.error("Failed to load plant/branch options", error);
@@ -120,6 +147,62 @@ const DocketInvoiceDetailsForm = ({ data, onBack }) => {
     if (orgId) loadOptions();
   }, [orgId, isMacurex]);
 
+  const [generatingDocId, setGeneratingDocId] = useState(false);
+  useEffect(() => {
+    // Don't regenerate the doc number while editing an existing record
+    if (data?.id && data.id > 0) return;
+
+    const generateDocNo = async () => {
+      setGeneratingDocId(true);
+      setValue("docNo", "");
+
+      try {
+        if (!orgId || !branch) {
+          console.error("OrgId or Branch missing");
+          return;
+        }
+
+        const mappingList =
+          await docTypeMappingAPI.getDocumentTypeMappingByOrgId(orgId, branch);
+
+        const record = mappingList?.[0];
+        const didDetail = record?.documentTypeMappingDetails?.find(
+          (d) => d.screenCode === "DID",
+        );
+
+        if (!didDetail) {
+          console.error(
+            "Docket Invoice document mapping not found for screenCode DID",
+          );
+          addToast(
+            "No document type mapping found for Docket Invoice (DID)",
+            "error",
+          );
+          return;
+        }
+
+        const docId = await docketInvoiceDetailsAPI.getDocketInvoiceDocId({
+          financialYear: didDetail.finYear,
+          orgId: didDetail.orgId,
+          screenCode: didDetail.screenCode,
+        });
+
+        if (docId) {
+          setValue("docNo", docId);
+        } else {
+          addToast("Failed to generate Doc No", "error");
+        }
+      } catch (error) {
+        console.error("Error generating docket invoice doc number:", error);
+        addToast("Failed to generate Doc No", "error");
+      } finally {
+        setGeneratingDocId(false);
+      }
+    };
+
+    generateDocNo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
   // Load transports
   const loadTransports = useCallback(async () => {
     if (!orgId || !branch) return;
@@ -165,55 +248,60 @@ const DocketInvoiceDetailsForm = ({ data, onBack }) => {
   }, [orgId, branch, loadTransports]);
 
   // Load data by ID when in edit mode
-  const loadDataById = useCallback(async (id) => {
-    if (!id) return;
+  const loadDataById = useCallback(
+    async (id) => {
+      if (!id) return;
 
-    setLoading(true);
-    try {
-      const response = await docketInvoiceDetailsAPI.getById(id);
-      console.log("Get By ID Response:", response);
+      setLoading(true);
+      try {
+        const response = await docketInvoiceDetailsAPI.getById(id);
+        console.log("Get By ID Response:", response);
 
-      if (response) {
-        // Map the response to form fields
-        const formData = {
-          id: response.id || 0,
-          plantId: response.branch?.id || "",
-          docNo: response.docNo || `DK/${response.id}`,
-          docDate: response.docDate || "",
-          transportId: response.transport?.id || "",
-          transportName: response.transport?.transportName || "",
-          billNo: response.billNo || "",
-          billDate: response.billDate || "",
-          totalAmount: response.totalAmount || "",
-          active: response.active === "Active" || response.active === true,
-          docketDetails: (response.docketInvoiceDetResponseDTO || []).map((d) => ({
-            docketNo: d.docketNo || "",
-            docketDate: d.docketDate || "",
-            invoiceNo: d.invoiceNo || "",
-            qtyBoxes: d.noOfQty || "",
-            weightBoxes: d.weight || "",
-            totalValue: d.totalValue || "",
-            cumulativeTotal: d.cumulativeValue || "",
-            mode: d.mode || "",
-          })),
-        };
+        if (response) {
+          // Map the response to form fields
+          const formData = {
+            id: response.id || 0,
+            plantId: response.branch?.id || "",
+            docNo: response.docNo || `DK/${response.id}`,
+            docDate: response.docDate || "",
+            transportId: response.transport?.id || "",
+            transportName: response.transport?.transportName || "",
+            billNo: response.billNo || "",
+            billDate: response.billDate || "",
+            totalAmount: response.totalAmount || "",
+            active: response.active === "Active" || response.active === true,
+            docketDetails: (response.docketInvoiceDetResponseDTO || []).map(
+              (d) => ({
+                docketNo: d.docketNo || "",
+                docketDate: d.docketDate || "",
+                invoiceNo: d.invoiceNo || "",
+                qtyBoxes: d.noOfQty || "",
+                weightBoxes: d.weight || "",
+                totalValue: d.totalValue || "",
+                cumulativeTotal: d.cumulativeValue || "",
+                mode: d.mode || "",
+              }),
+            ),
+          };
 
-        // If no docket details, add one empty row
-        if (formData.docketDetails.length === 0) {
-          formData.docketDetails = [getDefaultDocketRow()];
+          // If no docket details, add one empty row
+          if (formData.docketDetails.length === 0) {
+            formData.docketDetails = [getDefaultDocketRow()];
+          }
+
+          reset(formData);
+          dataLoadedRef.current = true;
+        } else {
+          console.error("No data found for ID:", id);
         }
-
-        reset(formData);
-        dataLoadedRef.current = true;
-      } else {
-        console.error("No data found for ID:", id);
+      } catch (error) {
+        console.error("Error loading data by ID:", error);
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      console.error("Error loading data by ID:", error);
-    } finally {
-      setLoading(false);
-    }
-  }, [reset, addToast]);
+    },
+    [reset, addToast],
+  );
 
   // Load data when in edit mode
   useEffect(() => {
@@ -234,15 +322,15 @@ const DocketInvoiceDetailsForm = ({ data, onBack }) => {
         active: data.active !== false,
         docketDetails: data.docketDetails?.length
           ? data.docketDetails.map((d) => ({
-            docketNo: d.docketNo || "",
-            docketDate: d.docketDate || "",
-            invoiceNo: d.invoiceNo || "",
-            qtyBoxes: d.qtyBoxes || "",
-            weightBoxes: d.weightBoxes || "",
-            totalValue: d.totalValue || "",
-            cumulativeTotal: d.cumulativeTotal || "",
-            mode: d.mode || "",
-          }))
+              docketNo: d.docketNo || "",
+              docketDate: d.docketDate || "",
+              invoiceNo: d.invoiceNo || "",
+              qtyBoxes: d.qtyBoxes || "",
+              weightBoxes: d.weightBoxes || "",
+              totalValue: d.totalValue || "",
+              cumulativeTotal: d.cumulativeTotal || "",
+              mode: d.mode || "",
+            }))
           : [getDefaultDocketRow()],
       };
       reset(formData);
@@ -254,10 +342,12 @@ const DocketInvoiceDetailsForm = ({ data, onBack }) => {
   useEffect(() => {
     if (watchTransportId && transportOptions.length > 0) {
       const selectedTransport = transportOptions.find(
-        (t) => String(t.id) === String(watchTransportId)
+        (t) => String(t.id) === String(watchTransportId),
       );
       if (selectedTransport) {
-        setValue("transportName", selectedTransport.label, { shouldDirty: false });
+        setValue("transportName", selectedTransport.label, {
+          shouldDirty: false,
+        });
       }
     }
   }, [watchTransportId, transportOptions, setValue]);
@@ -268,7 +358,9 @@ const DocketInvoiceDetailsForm = ({ data, onBack }) => {
     let running = 0;
     (rows || []).forEach((r, i) => {
       running += parseFloat(r?.totalValue) || 0;
-      setValue(`docketDetails.${i}.cumulativeTotal`, running || "", { shouldDirty: false });
+      setValue(`docketDetails.${i}.cumulativeTotal`, running || "", {
+        shouldDirty: false,
+      });
     });
   };
 
@@ -315,6 +407,7 @@ const DocketInvoiceDetailsForm = ({ data, onBack }) => {
       ...(values.id && values.id > 0 ? { id: values.id } : {}),
       orgId: orgId,
       branch: parseInt(values.plantId) || branch,
+      docNo: values.docNo || "",
       transport: parseInt(values.transportId) || 0,
       totalAmount: parseFloat(values.totalAmount) || 0,
       billNo: values.billNo || "",
@@ -323,8 +416,8 @@ const DocketInvoiceDetailsForm = ({ data, onBack }) => {
       cancelRemarks: "",
       createdBy: localStorage.getItem("userName") || "SYSTEM",
       docketInvoiceDetailsDTO: (values.docketDetails || [])
-        .filter(d => d.docketNo) // Only include rows with docket number
-        .map(d => ({
+        .filter((d) => d.docketNo) // Only include rows with docket number
+        .map((d) => ({
           docketNo: d.docketNo || "",
           docketDate: d.docketDate || "",
           invoiceNo: d.invoiceNo || "",
@@ -347,15 +440,22 @@ const DocketInvoiceDetailsForm = ({ data, onBack }) => {
           data?.id && data.id > 0
             ? "Docket/Invoice Details Updated Successfully!"
             : "Docket/Invoice Details Saved Successfully!",
-          "success"
+          "success",
         );
         onBack();
       } else {
-        addToast(response?.message || "Failed to save Docket/Invoice Details.", "error");
+        addToast(
+          response?.message || "Failed to save Docket/Invoice Details.",
+          "error",
+        );
       }
     } catch (error) {
       console.error("Save error:", error);
-      addToast(error?.response?.data?.message || "Failed to save Docket/Invoice Details.", "error");
+      addToast(
+        error?.response?.data?.message ||
+          "Failed to save Docket/Invoice Details.",
+        "error",
+      );
     }
   };
 
@@ -369,47 +469,87 @@ const DocketInvoiceDetailsForm = ({ data, onBack }) => {
 
   const renderHeader = (errMap) => (
     <div className={fieldGrid}>
-      <InputField label={isMacurex ? "Plant ID" : "Branch"} required error={errMap.plantId}>
-        <Controller control={control} name="plantId" render={({ field }) => (
-          <select {...field} disabled={lookupLoading} className={`${controlClasses} ${errMap.plantId ? "border-red-500" : ""}`}>
-            <option value="">{isMacurex ? "Select" : "Select Branch"}</option>
-            {plantOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-          </select>
-        )} />
+      <InputField
+        label={isMacurex ? "Plant ID" : "Branch"}
+        required
+        error={errMap.plantId}
+      >
+        <Controller
+          control={control}
+          name="plantId"
+          render={({ field }) => (
+            <select
+              {...field}
+              disabled={lookupLoading}
+              className={`${controlClasses} ${errMap.plantId ? "border-red-500" : ""}`}
+            >
+              <option value="">{isMacurex ? "Select" : "Select Branch"}</option>
+              {plantOptions.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          )}
+        />
       </InputField>
       <InputField label="Doc No">
-        <input {...register("docNo")} disabled className={`${controlClasses} bg-gray-50 dark:bg-gray-800`} />
+        <input
+          {...register("docNo")}
+          disabled
+          placeholder={generatingDocId ? "Generating..." : "Auto generated"}
+          className={`${controlClasses} bg-gray-50 dark:bg-gray-800`}
+        />
       </InputField>
       <InputField label="Doc Date">
-        <input type="date" {...register("docDate")} className={controlClasses} />
+        <input
+          type="date"
+          {...register("docDate")}
+          className={controlClasses}
+        />
       </InputField>
       <InputField label="Transport" required error={errMap.transportId}>
-        <Controller control={control} name="transportId" render={({ field }) => (
-          <select
-            {...field}
-            disabled={transportLoading}
-            className={`${controlClasses} ${errMap.transportId ? "border-red-500" : ""}`}
-          >
-            <option value="">Select Transport</option>
-            {transportOptions.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.label} {o.address ? `- ${o.address}` : ""}
-              </option>
-            ))}
-          </select>
-        )} />
+        <Controller
+          control={control}
+          name="transportId"
+          render={({ field }) => (
+            <select
+              {...field}
+              disabled={transportLoading}
+              className={`${controlClasses} ${errMap.transportId ? "border-red-500" : ""}`}
+            >
+              <option value="">Select Transport</option>
+              {transportOptions.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.label} {o.address ? `- ${o.address}` : ""}
+                </option>
+              ))}
+            </select>
+          )}
+        />
         {transportLoading && (
-          <p className="text-[10px] text-gray-400 mt-0.5">Loading transports...</p>
+          <p className="text-[10px] text-gray-400 mt-0.5">
+            Loading transports...
+          </p>
         )}
       </InputField>
       <InputField label="Bill No">
         <input {...register("billNo")} className={controlClasses} />
       </InputField>
       <InputField label="Bill Date">
-        <input type="date" {...register("billDate")} className={controlClasses} />
+        <input
+          type="date"
+          {...register("billDate")}
+          className={controlClasses}
+        />
       </InputField>
       <InputField label="Total Amount">
-        <input type="number" step="0.01" {...register("totalAmount")} className={controlClasses} />
+        <input
+          type="number"
+          step="0.01"
+          {...register("totalAmount")}
+          className={controlClasses}
+        />
       </InputField>
     </div>
   );
@@ -430,22 +570,48 @@ const DocketInvoiceDetailsForm = ({ data, onBack }) => {
     const cls = `${controlClasses} w-[${col.width}]`;
 
     if (col.key === "cumulativeTotal") {
-      return <input value={cumulativeRows?.[idx] ?? ""} readOnly className={`${cls} bg-gray-50 dark:bg-gray-800`} />;
+      return (
+        <input
+          value={cumulativeRows?.[idx] ?? ""}
+          readOnly
+          className={`${cls} bg-gray-50 dark:bg-gray-800`}
+        />
+      );
     }
     if (col.key === "mode") {
       return (
-        <Controller control={control} name={`${base}${col.key}`} render={({ field }) => (
-          <select {...field} onChange={(e) => handleDocketChange(idx, col.key, e.target.value, row)} className={`${controlClasses} w-[${col.width}]`}>
-            <option value="">Select</option>
-            {MODE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
-          </select>
-        )} />
+        <Controller
+          control={control}
+          name={`${base}${col.key}`}
+          render={({ field }) => (
+            <select
+              {...field}
+              onChange={(e) =>
+                handleDocketChange(idx, col.key, e.target.value, row)
+              }
+              className={`${controlClasses} w-[${col.width}]`}
+            >
+              <option value="">Select</option>
+              {MODE_OPTIONS.map((o) => (
+                <option key={o} value={o}>
+                  {o}
+                </option>
+              ))}
+            </select>
+          )}
+        />
       );
     }
     if (col.key === "docketDate") {
       return (
-        <input type="date" defaultValue={row?.[col.key] ?? ""}
-          onChange={(e) => handleDocketChange(idx, col.key, e.target.value, row)} className={cls} />
+        <input
+          type="date"
+          defaultValue={row?.[col.key] ?? ""}
+          onChange={(e) =>
+            handleDocketChange(idx, col.key, e.target.value, row)
+          }
+          className={cls}
+        />
       );
     }
     const numericFields = ["qtyBoxes", "weightBoxes", "totalValue"];
@@ -474,8 +640,11 @@ const DocketInvoiceDetailsForm = ({ data, onBack }) => {
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <SectionHeader>Docket Details</SectionHeader>
-        <button type="button" onClick={addRow}
-          className="flex items-center gap-1 px-2 py-1 rounded text-[11px] bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50 transition-colors">
+        <button
+          type="button"
+          onClick={addRow}
+          className="flex items-center gap-1 px-2 py-1 rounded text-[11px] bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50 transition-colors"
+        >
           <Plus className="h-3 w-3" /> Add Row
         </button>
       </div>
@@ -485,33 +654,66 @@ const DocketInvoiceDetailsForm = ({ data, onBack }) => {
             <tr>
               <th className={thClass}>#</th>
               {docketColumns.map((c) => (
-                <th key={c.key} className={thClass} style={{ minWidth: c.width }}>
-                  {c.label}{c.required && <span className="text-red-500"> *</span>}
+                <th
+                  key={c.key}
+                  className={thClass}
+                  style={{ minWidth: c.width }}
+                >
+                  {c.label}
+                  {c.required && <span className="text-red-500"> *</span>}
                 </th>
               ))}
-              <th className={`${thClass} text-center`} style={{ minWidth: "50px" }}>Action</th>
+              <th
+                className={`${thClass} text-center`}
+                style={{ minWidth: "50px" }}
+              >
+                Action
+              </th>
             </tr>
           </thead>
           <tbody>
             {fields.map((row, idx) => (
-              <tr key={row.id} className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-                <td className="px-1.5 py-1 text-gray-500 dark:text-gray-400 text-[10px] w-[25px]">{idx + 1}</td>
+              <tr
+                key={row.id}
+                className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"
+              >
+                <td className="px-1.5 py-1 text-gray-500 dark:text-gray-400 text-[10px] w-[25px]">
+                  {idx + 1}
+                </td>
                 {docketColumns.map((col) => (
-                  <td key={col.key} className="px-1.5 py-1" style={{ minWidth: col.width }}>
-                    {renderDocketCell(col, watchRows?.[idx], idx, getCumulative())}
+                  <td
+                    key={col.key}
+                    className="px-1.5 py-1"
+                    style={{ minWidth: col.width }}
+                  >
+                    {renderDocketCell(
+                      col,
+                      watchRows?.[idx],
+                      idx,
+                      getCumulative(),
+                    )}
                     {errMap[`docketDetails.${idx}.${col.key}`] && (
-                      <p className="text-[9px] text-red-500 leading-none mt-0.5">{errMap[`docketDetails.${idx}.${col.key}`]}</p>
+                      <p className="text-[9px] text-red-500 leading-none mt-0.5">
+                        {errMap[`docketDetails.${idx}.${col.key}`]}
+                      </p>
                     )}
                   </td>
                 ))}
                 <td className="px-1.5 py-1 text-center whitespace-nowrap w-[50px]">
                   <div className="flex items-center justify-center gap-0.5">
-                    <button type="button" onClick={() => copyRow(idx)}
-                      className="p-0.5 rounded text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
+                    <button
+                      type="button"
+                      onClick={() => copyRow(idx)}
+                      className="p-0.5 rounded text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                    >
                       <Copy className="h-3 w-3" />
                     </button>
-                    <button type="button" onClick={() => remove(idx)} disabled={fields.length <= 1}
-                      className="p-0.5 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-30">
+                    <button
+                      type="button"
+                      onClick={() => remove(idx)}
+                      disabled={fields.length <= 1}
+                      className="p-0.5 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-30"
+                    >
                       <Trash2 className="h-3 w-3" />
                     </button>
                   </div>
@@ -527,11 +729,17 @@ const DocketInvoiceDetailsForm = ({ data, onBack }) => {
   return (
     <div className="animate-fadeIn px-3 py-3 max-w-7xl mx-auto">
       <div className="flex items-center gap-2 mb-3">
-        <button type="button" onClick={onBack} className="p-1 rounded-md text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+        <button
+          type="button"
+          onClick={onBack}
+          className="p-1 rounded-md text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+        >
           <ArrowLeft className="h-4 w-4" />
         </button>
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-          {data?.id && data.id > 0 ? "Edit Docket/Invoice Details" : "New Docket/Invoice Details"}
+          {data?.id && data.id > 0
+            ? "Edit Docket/Invoice Details"
+            : "New Docket/Invoice Details"}
         </h2>
       </div>
 
@@ -541,12 +749,18 @@ const DocketInvoiceDetailsForm = ({ data, onBack }) => {
         {renderDocketTab(formErrs)}
 
         <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
-          <button type="button" onClick={onBack}
-            className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+          <button
+            type="button"
+            onClick={onBack}
+            className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+          >
             <X className="h-3 w-3" /> Cancel
           </button>
-          <button type="button" onClick={handleSubmit(onSubmit)}
-            className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 transition-colors">
+          <button
+            type="button"
+            onClick={handleSubmit(onSubmit)}
+            className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 transition-colors"
+          >
             <Save className="h-3 w-3" /> Save
           </button>
         </div>
