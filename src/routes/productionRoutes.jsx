@@ -1,3 +1,5 @@
+import ConsumptionEntryMaster from "../components/Production/ConsumptionEntry/ConsumptionEntryMaster";
+import FGTransferSlipMaster from "../components/Production/FGTransferSlip/FGTransferSlipMaster";
 import MaterialIndentForProduction from "../components/Production/MaterialIndentForProduction/MaterialIndentForProduction";
 import ProductionEntry from "../components/Production/ProductionEntry/ProductionEntry";
 import ProductionScheduleOrder from "../components/Production/ProductionScheduleOrder/ProductionScheduleOrder";
@@ -23,6 +25,16 @@ const productionRoutes = [
     path: "/productiontransferslip",
     label: "Production Transfet Slip",
     element: <ProductionTransferSlip />,
+  },
+  {
+    path: "/fgtransferslipentry",
+    label: "FG Transfer Slip Entry",
+    element: <FGTransferSlipMaster />,
+  },
+  {
+    path: "/consumptionentry",
+    label: "Consumption Entry",
+    element: <ConsumptionEntryMaster />,
   },
 ];
 
