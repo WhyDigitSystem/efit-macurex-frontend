@@ -1,59 +1,105 @@
+// api/Purchase/purchaseIndentAPI.js
 import apiClient from "../apiClient";
+import axios from "axios";
 
-export const purchaseIndentAPI = {
+const API_BASE_URL = import.meta.env.VITE_API_URL;
+
+const purchaseIndentAPI = {
+  updateCreatePurchaseIndent: async (formData) => {
+    try {
+      const response = await axios.post(
+        `${API_BASE_URL}/api/purchaseservice/createUpdatePurchaseIndent`,
+        formData,
+      );
+
+      return response.data;
+    } catch (error) {
+      console.error("Error saving purchase indent:", error);
+      console.error("Status:", error.response?.status);
+      console.error("Backend response:", error.response?.data);
+      throw error;
+    }
+  },
+
+  // GET method - Get Purchase Indents by OrgId and Branch
+  getPurchaseIndentByOrgId: async (orgId, branchId) => {
+    try {
+      const response = await axios.get(
+        `${API_BASE_URL}/api/purchaseservice/getPurchaseIndentByOrgId`,
+        {
+          params: {
+            orgId: orgId,
+            branch: branchId,
+          },
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      );
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching purchase indents:", error);
+      throw error;
+    }
+  },
+
+  // GET method - Get Purchase Indent by ID for editing
   getPurchaseIndentById: async (id) => {
     try {
+      const response = await axios.get(
+        `${API_BASE_URL}/api/purchaseservice/getPurchaseIndentById`,
+        {
+          params: {
+            id: id,
+          },
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      );
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching purchase indent:", error);
+      throw error;
+    }
+  },
+
+  // GET method - Download file
+  downloadFile: async (filePath) => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/files/download`, {
+        params: {
+          path: filePath,
+        },
+        responseType: "blob",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Error downloading file:", error);
+      throw error;
+    }
+  },
+
+  // GET /api/develop/getPurchaseIndentDocId (adjust screenCode/path if your
+  // backend exposes a different doc-numbering endpoint for indents)
+  getPurchaseIndentDocId: async ({ financialYear, orgId, screenCode }) => {
+    try {
+      const params = new URLSearchParams({
+        financialYear,
+        orgId,
+        screenCode,
+      });
+
       const res = await apiClient.get(
-        `/api/purchasemaster/getPurchaseIndentById?id=${id}`,
+        `/api/develop/getPurchaseIndentDocId?${params.toString()}`,
       );
-      return res?.paramObjectsMap?.purchaseIndentVO || null;
-    } catch (error) {
-      console.error("Error fetching purchase indent by ID:", error);
-      throw error;
-    }
-  },
 
-  getPurchaseIndentByOrgId: async (orgId) => {
-    try {
-      const res = await apiClient.get(
-        `/api/purchasemaster/getPurchaseIndentByOrgId?orgId=${orgId}`,
-      );
-      return res?.paramObjectsMap?.purchaseIndentList || [];
+      return res?.paramObjectsMap?.invoiceDocId || "";
     } catch (error) {
-      console.error("Error fetching purchase indent list:", error);
-      throw error;
-    }
-  },
-
-  updateCreatePurchaseIndent: async (purchaseIndentDTO) => {
-    try {
-      const res = await apiClient.put(
-        "/api/purchasemaster/updateCreatePurchaseIndent",
-        purchaseIndentDTO,
-      );
-      return res;
-    } catch (error) {
-      console.error("Error creating/updating purchase indent:", error);
-      throw error;
-    }
-  },
-
-  // Uploads a single attachment for a given indent row; swap for your real
-  // multipart upload endpoint (e.g. FormData with the file + indent id)
-  uploadAttachment: async (indentId, file) => {
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("indentId", indentId);
-
-      const res = await apiClient.post(
-        "/api/purchasemaster/uploadPurchaseIndentAttachment",
-        formData,
-        { headers: { "Content-Type": "multipart/form-data" } },
-      );
-      return res;
-    } catch (error) {
-      console.error("Error uploading attachment:", error);
+      console.error("Error fetching purchase indent doc id:", error);
       throw error;
     }
   },

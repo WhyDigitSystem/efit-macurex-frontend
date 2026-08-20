@@ -2,7 +2,7 @@ import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import dayjs from "dayjs";
 import importPurchaseOrderAPI from "../../../api/Purchase/importPurchaseOrderAPI";
-import { purchaseIndentAPI } from "../../../api/Purchase/purchaseIndentAPI";
+import purchaseIndentAPI from "../../../api/Purchase/purchaseIndentAPI";
 import { itemAPI } from "../../../api/itemAPI";
 import { unitMasterAPI } from "../../../api/unitAPI";
 import { employeeAPI } from "../../../api/employeeAPI";
@@ -44,8 +44,7 @@ const cellReadOnlyClasses =
   "bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 " +
   "text-gray-500 dark:text-gray-400";
 
-const labelClasses =
-  "block text-[11px] text-gray-500 dark:text-gray-400 mb-1";
+const labelClasses = "block text-[11px] text-gray-500 dark:text-gray-400 mb-1";
 
 const fieldGrid =
   "grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-x-6 gap-y-4 items-start";
@@ -395,13 +394,49 @@ const generatePoNo = () => `IPO${dayjs().format("YYYYMMDDHHmmss")}`;
 
 const numberToWords = (num) => {
   if (!num || isNaN(num)) return "";
-  const a = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
-  const b = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
-  const twoDigits = (n) => (n < 20 ? a[n] : b[Math.floor(n / 10)] + (n % 10 ? " " + a[n % 10] : ""));
+  const a = [
+    "",
+    "One",
+    "Two",
+    "Three",
+    "Four",
+    "Five",
+    "Six",
+    "Seven",
+    "Eight",
+    "Nine",
+    "Ten",
+    "Eleven",
+    "Twelve",
+    "Thirteen",
+    "Fourteen",
+    "Fifteen",
+    "Sixteen",
+    "Seventeen",
+    "Eighteen",
+    "Nineteen",
+  ];
+  const b = [
+    "",
+    "",
+    "Twenty",
+    "Thirty",
+    "Forty",
+    "Fifty",
+    "Sixty",
+    "Seventy",
+    "Eighty",
+    "Ninety",
+  ];
+  const twoDigits = (n) =>
+    n < 20 ? a[n] : b[Math.floor(n / 10)] + (n % 10 ? " " + a[n % 10] : "");
   const threeDigits = (n) => {
     const hundred = Math.floor(n / 100);
     const rest = n % 100;
-    return (hundred ? a[hundred] + " Hundred" + (rest ? " " : "") : "") + (rest ? twoDigits(rest) : "");
+    return (
+      (hundred ? a[hundred] + " Hundred" + (rest ? " " : "") : "") +
+      (rest ? twoDigits(rest) : "")
+    );
   };
   let words = "";
   const crore = Math.floor(num / 10000000);
@@ -627,7 +662,10 @@ const ImportPurchaseOrderForm = ({ data, onBack }) => {
 
     const loadTaxCodes = async () => {
       try {
-        const res = await taxDefinitionAPI.getTaxDefinitionByOrgId(branch, orgId);
+        const res = await taxDefinitionAPI.getTaxDefinitionByOrgId(
+          branch,
+          orgId,
+        );
         setTaxCodeOptions(
           (res || []).map((t) => ({
             value: t.id,
@@ -707,7 +745,12 @@ const ImportPurchaseOrderForm = ({ data, onBack }) => {
           (res || []).map((u) => ({
             value: u.unitCode || u.code || u.id?.toString() || "",
             label:
-              u.unitName || u.name || u.unitCode || u.code || u.id?.toString() || "",
+              u.unitName ||
+              u.name ||
+              u.unitCode ||
+              u.code ||
+              u.id?.toString() ||
+              "",
           })),
         );
       } catch {
@@ -761,14 +804,22 @@ const ImportPurchaseOrderForm = ({ data, onBack }) => {
       ...row,
       indentNo: indentNoValue,
       indentDate:
-        fmtDate(indent.header?.indentDate || indent.indentDate) || row.indentDate,
+        fmtDate(indent.header?.indentDate || indent.indentDate) ||
+        row.indentDate,
       itemCode: detail.itemCode || row.itemCode,
       itemDescription: detail.itemDescription || row.itemDescription,
       purchaseUnit: detail.purchaseUnit || row.purchaseUnit,
       primaryUnit: detail.primaryUnit || row.primaryUnit,
-      indentQty: detail.qtyInPurchaseUnit ?? detail.qtyInPrimaryUnit ?? row.indentQty ?? "",
+      indentQty:
+        detail.qtyInPurchaseUnit ??
+        detail.qtyInPrimaryUnit ??
+        row.indentQty ??
+        "",
       pendingIndentQty:
-        detail.qtyInPurchaseUnit ?? detail.qtyInPrimaryUnit ?? row.pendingIndentQty ?? "",
+        detail.qtyInPurchaseUnit ??
+        detail.qtyInPrimaryUnit ??
+        row.pendingIndentQty ??
+        "",
     };
   };
 
@@ -793,7 +844,8 @@ const ImportPurchaseOrderForm = ({ data, onBack }) => {
     );
   };
 
-  const handleAddPoRow = () => setPoRows((prev) => [...prev, emptyPoDetailRow()]);
+  const handleAddPoRow = () =>
+    setPoRows((prev) => [...prev, emptyPoDetailRow()]);
   const handleRemovePoRow = (idx) =>
     setPoRows((prev) => prev.filter((_, i) => i !== idx));
 
@@ -877,18 +929,26 @@ const ImportPurchaseOrderForm = ({ data, onBack }) => {
 
     const validTax = computedTaxRows.every((r) => r.particulars?.trim());
 
-    if (!validPo) setTableError("Complete all mandatory columns in the PO Detail tab");
-    else if (!validTax) setTableError("Complete all mandatory columns in the Tax Details tab");
+    if (!validPo)
+      setTableError("Complete all mandatory columns in the PO Detail tab");
+    else if (!validTax)
+      setTableError("Complete all mandatory columns in the Tax Details tab");
     else if (!terms.modeOfDespatch?.trim())
-      setTableError("Mode Of Despatch is required in the Terms And Conditions tab");
+      setTableError(
+        "Mode Of Despatch is required in the Terms And Conditions tab",
+      );
     else if (!terms.paymentTerms?.trim())
-      setTableError("Payment Terms is required in the Terms And Conditions tab");
+      setTableError(
+        "Payment Terms is required in the Terms And Conditions tab",
+      );
     else if (!terms.preparedBy)
       setTableError("Prepared By is required in the Terms And Conditions tab");
     else if (!terms.checkedBy)
       setTableError("Checked By is required in the Terms And Conditions tab");
     else if (!terms.authorisedBy)
-      setTableError("Authorised By is required in the Terms And Conditions tab");
+      setTableError(
+        "Authorised By is required in the Terms And Conditions tab",
+      );
     else setTableError("");
 
     return (
@@ -1016,7 +1076,11 @@ const ImportPurchaseOrderForm = ({ data, onBack }) => {
           type: "number",
           step: "0.01",
         },
-        { key: "qtyInPrimaryUnit", label: "Qty in Primary Unit", readOnly: true },
+        {
+          key: "qtyInPrimaryUnit",
+          label: "Qty in Primary Unit",
+          readOnly: true,
+        },
         {
           key: "rateInFc",
           label: "Rate in FC *",
