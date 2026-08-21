@@ -18,6 +18,8 @@ import { departmentAPI } from "../../../api/departmentAPI";
 import purchaseOrderAPI from "../../../api/Purchase/purchaseOrderAPI";
 import purchaseIndentAPI from "../../../api/Purchase/purchaseIndentAPI";
 import { useToast } from "../../Toast/ToastContext";
+import countryAPI from "../../../api/countryAPI";
+import listOfValuesAPI from "../../../api/listOfValuesAPI";
 
 /* ========================================================================= */
 /* DESIGN TOKENS                                                             */
@@ -351,11 +353,7 @@ const UNITS = [
   },
 ];
 
-const SHIP_MODES = ["Road", "Rail", "Air", "Sea", "Courier"];
-
 const INCOTERMS = ["FOB", "CIF", "CFR", "EXW", "DDP", "FOR"];
-
-const COUNTRIES = ["India", "China", "Germany", "USA", "Japan"];
 
 const PACKING_TYPES = ["Standard", "Wooden Packing", "Carton", "Pallet"];
 
@@ -598,11 +596,79 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
 
   const [generatingDocId, setGeneratingDocId] = useState(false);
 
+  const [countryOptions, setCountryOptions] = useState([]);
+
+  const [shipModeOptions, setShipModeOptions] = useState([]);
+
   const isLocal = formData.poType === "Local";
 
   /* ========================================================================= */
   /* MASTER DATA LOADERS                                                       */
   /* ========================================================================= */
+
+  const loadCountries = useCallback(async () => {
+    try {
+      if (!ORG_ID) return;
+
+      const response = await countryAPI.getCountries(ORG_ID);
+
+      const list = Array.isArray(response)
+        ? response
+        : response?.paramObjectsMap?.countryVO ||
+          response?.paramObjectsMap?.countries ||
+          [];
+
+      console.log("Country API Response:", response);
+      console.log("Countries:", list);
+
+      setCountryOptions(
+        list.map((country) => ({
+          value: country.id,
+          label:
+            country.countryName ||
+            country.name ||
+            country.country ||
+            country.countryCode ||
+            `Country ${country.id}`,
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to load countries:", error);
+
+      setCountryOptions([]);
+    }
+  }, [ORG_ID]);
+
+  const loadShipModes = useCallback(async () => {
+    try {
+      if (!ORG_ID) return;
+
+      const response = await listOfValuesAPI.getListValuesGroup(
+        "SHIP MODE",
+        ORG_ID,
+      );
+
+      const list = Array.isArray(response) ? response : [];
+
+      console.log("Ship Mode API Response:", response);
+      console.log("Ship Modes:", list);
+
+      setShipModeOptions(
+        list.map((item) => ({
+          value: item.id,
+          label:
+            item.valuesDescription ||
+            item.valueDescription ||
+            item.description ||
+            "",
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to load ship modes:", error);
+
+      setShipModeOptions([]);
+    }
+  }, [ORG_ID]);
 
   const loadBranches = useCallback(async () => {
     try {
@@ -861,6 +927,8 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
     loadTaxDefinitions();
     loadSuppliers();
     loadIndentItemOptions();
+    loadCountries();
+    loadShipModes();
   }, [
     loadBranches,
     loadCurrencies,
@@ -869,6 +937,8 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
     loadTaxDefinitions,
     loadSuppliers,
     loadIndentItemOptions,
+    loadCountries,
+    loadShipModes,
   ]);
 
   /* ========================================================================= */
@@ -2315,7 +2385,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
                   name="shipMode"
                   value={formData.shipMode}
                   onChange={handleFieldChange}
-                  options={SHIP_MODES}
+                  options={shipModeOptions}
                 />
 
                 <Field
@@ -2333,7 +2403,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
                   name="countryOfOrigin"
                   value={formData.countryOfOrigin}
                   onChange={handleFieldChange}
-                  options={COUNTRIES}
+                  options={countryOptions}
                 />
 
                 <Field
