@@ -1,10 +1,14 @@
-// api/Purchase/purchaseOrderAPI.js
+// src/api/Purchase/purchaseOrderAPI.js
+
 import apiClient from "../apiClient";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL;
 
 const purchaseOrderAPI = {
-  // PUT /api/purchaseOrder/createUpdatePurchaseOrder (multipart/form-data)
+  /* ================================================================
+     CREATE / UPDATE PURCHASE ORDER
+  ================================================================ */
+
   createUpdatePurchaseOrder: async (purchaseOrderData, files = []) => {
     try {
       const formData = new FormData();
@@ -12,6 +16,7 @@ const purchaseOrderAPI = {
       const purchaseOrderBlob = new Blob([JSON.stringify(purchaseOrderData)], {
         type: "application/json",
       });
+
       formData.append(
         "purchaseOrder",
         purchaseOrderBlob,
@@ -19,86 +24,240 @@ const purchaseOrderAPI = {
       );
 
       files.forEach((file) => {
-        if (file) formData.append("files", file, file.name);
+        if (file) {
+          formData.append("files", file, file.name);
+        }
       });
 
       const response = await apiClient.put(
         `${API_BASE_URL}/api/purchaseOrder/createUpdatePurchaseOrder`,
         formData,
         {
-          headers: { "Content-Type": "multipart/form-data" },
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
         },
       );
-      return response;
+
+      return response?.data ?? response;
     } catch (error) {
-      console.error("Error saving purchase order:", error);
+      console.error(
+        "Error saving purchase order:",
+        error?.response?.data || error,
+      );
+
       throw error;
     }
   },
 
-  // GET /api/purchaseOrder/getPurchaseOrderById?id=&type=
+  /* ================================================================
+     GET PURCHASE ORDER BY ID
+  ================================================================ */
+
   getPurchaseOrderById: async (id, type) => {
     try {
       const response = await apiClient.get(
-        `/api/purchaseOrder/getPurchaseOrderById?id=${id}&type=${type}`,
+        `/api/purchaseOrder/getPurchaseOrderById`,
+        {
+          params: {
+            id,
+            type,
+          },
+        },
       );
-      return response;
+
+      return response?.data ?? response;
     } catch (error) {
-      console.error("Error fetching purchase order:", error);
+      console.error(
+        "Error fetching purchase order:",
+        error?.response?.data || error,
+      );
+
       throw error;
     }
   },
 
-  // GET /api/purchaseOrder/getPurchaseOrderByOrgId?branch=&orgId=
+  /* ================================================================
+     GET PURCHASE ORDERS BY ORG
+  ================================================================ */
+
   getPurchaseOrderByOrgId: async (orgId, branchId) => {
     try {
       const response = await apiClient.get(
-        `/api/purchaseOrder/getPurchaseOrderByOrgId?branch=${branchId}&orgId=${orgId}`,
+        `/api/purchaseOrder/getPurchaseOrderByOrgId`,
+        {
+          params: {
+            branch: branchId,
+            orgId,
+          },
+        },
       );
-      return response;
+
+      return response?.data ?? response;
     } catch (error) {
-      console.error("Error fetching purchase orders:", error);
+      console.error(
+        "Error fetching purchase orders:",
+        error?.response?.data || error,
+      );
+
       throw error;
     }
   },
 
-  // GET /api/purchaseOrder/getPurchaseOrderDocId?financialYear=&orgId=&screenCode=&type=
+  /* ================================================================
+     GET PURCHASE ORDER DOCUMENT NUMBER
+  ================================================================ */
+
   getPurchaseOrderDocId: async ({ financialYear, orgId, screenCode, type }) => {
     try {
-      const params = new URLSearchParams({
-        financialYear: String(financialYear),
-        orgId: String(orgId),
-        screenCode,
-        type,
-      });
-
       const response = await apiClient.get(
-        `/api/purchaseOrder/getPurchaseOrderDocId?${params.toString()}`,
+        `/api/purchaseOrder/getPurchaseOrderDocId`,
+        {
+          params: {
+            financialYear,
+            orgId,
+            screenCode,
+            type,
+          },
+        },
       );
 
-      return response?.paramObjectsMap?.invoiceDocId || "";
+      const data = response?.data ?? response;
+
+      return data?.paramObjectsMap?.invoiceDocId || "";
     } catch (error) {
-      console.error("Error fetching purchase order doc id:", error);
+      console.error(
+        "Error fetching purchase order doc id:",
+        error?.response?.data || error,
+      );
+
       throw error;
     }
   },
 
-  // GET /api/purchaseOrder/viewFile/** - builds the viewable URL for an attachment
+  /* ================================================================
+     VIEW ATTACHMENT
+  ================================================================ */
+
   getViewFileUrl: (filePath) => {
-    if (!filePath) return "";
-    // filePath may already include leading slashes from the backend - normalize
+    if (!filePath) {
+      return "";
+    }
+
     const cleanPath = String(filePath).replace(/^\/+/, "");
+
     return `${API_BASE_URL}/api/purchaseOrder/viewFile/${cleanPath}`;
   },
-  // GET /api/purchaseOrder/getSupplierDetails?branch=&orgId=
+
+  /* ================================================================
+     SUPPLIER DETAILS
+  ================================================================ */
+
   getSupplierDetails: async (orgId, branchId) => {
     try {
       const response = await apiClient.get(
-        `/api/purchaseOrder/getSupplierDetails?branch=${branchId}&orgId=${orgId}`,
+        `/api/purchaseOrder/getSupplierDetails`,
+        {
+          params: {
+            branch: branchId,
+            orgId,
+          },
+        },
       );
-      return response;
+
+      return response?.data ?? response;
     } catch (error) {
-      console.error("Error fetching supplier details:", error);
+      console.error(
+        "Error fetching supplier details:",
+        error?.response?.data || error,
+      );
+
+      throw error;
+    }
+  },
+
+  /* ================================================================
+     LOCAL ITEM DETAILS - INDENT REQUIRED = NO
+  ================================================================ */
+
+  getItemDetailsResponsePurchaseLocal: async (branch, orgId) => {
+    try {
+      const response = await apiClient.get(
+        `/api/purchaseOrder/getItemDetailsResponsePurchaseLocal`,
+        {
+          params: {
+            branch,
+            orgId,
+          },
+        },
+      );
+
+      console.log("LOCAL ITEM DETAILS API RAW RESPONSE:", response);
+
+      return response?.data ?? response;
+    } catch (error) {
+      console.error(
+        "Error fetching local item details:",
+        error?.response?.data || error,
+      );
+
+      throw error;
+    }
+  },
+
+  /* ================================================================
+     IMPORT ITEM DETAILS - INDENT REQUIRED = NO
+  ================================================================ */
+
+  getItemDetailsResponsePurchaseImport: async (branch, orgId) => {
+    try {
+      const response = await apiClient.get(
+        `/api/purchaseOrder/getItemDetailsResponsePurchaseImport`,
+        {
+          params: {
+            branch,
+            orgId,
+          },
+        },
+      );
+
+      console.log("IMPORT ITEM DETAILS API RAW RESPONSE:", response);
+
+      return response?.data ?? response;
+    } catch (error) {
+      console.error(
+        "Error fetching import item details:",
+        error?.response?.data || error,
+      );
+
+      throw error;
+    }
+  },
+
+  /* ================================================================
+     EXCHANGE RATE
+  ================================================================ */
+
+  getExchangeRateDetails: async (branch, currencyId, orgId) => {
+    try {
+      const response = await apiClient.get(
+        `/api/purchaseOrder/getExchangeRateDetails`,
+        {
+          params: {
+            branch,
+            currency: currencyId,
+            orgId,
+          },
+        },
+      );
+
+      return response?.data ?? response;
+    } catch (error) {
+      console.error(
+        "Error fetching exchange rate:",
+        error?.response?.data || error,
+      );
+
       throw error;
     }
   },
