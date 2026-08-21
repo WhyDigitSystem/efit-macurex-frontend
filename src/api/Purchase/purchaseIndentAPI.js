@@ -103,6 +103,27 @@ const purchaseIndentAPI = {
       throw error;
     }
   },
+  // GET method - Get item dropdown for Purchase Indent (Indent No. selection on PO)
+  getPurchaseIndentItemDropdown: async (branch, orgId) => {
+    try {
+      const response = await axios.get(
+        `${API_BASE_URL}/api/purchaseservice/getPurchaseIndentItemDropdown`,
+        {
+          params: {
+            branch: branch,
+            orgId: orgId,
+          },
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      );
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching purchase indent item dropdown:", error);
+      throw error;
+    }
+  },
 };
 
 export default purchaseIndentAPI;

@@ -11,23 +11,14 @@ const PurchaseOrderMaster = () => {
     setScreen("form");
   };
 
-  const handleEdit = (data) => {
-    setEditData(data);
+  const handleEdit = (row) => {
+    setEditData(row);
     setScreen("form");
   };
 
   const handleBack = () => {
+    setEditData(null);
     setScreen("list");
-  };
-
-  const handleSave = async (payload) => {
-    try {
-      await purchaseOrderAPI.updateCreatePurchaseOrder(payload); // Create/Update
-      handleBack();
-    } catch (error) {
-      console.error("Error saving purchase order:", error);
-      throw error;
-    }
   };
 
   return (
@@ -44,7 +35,7 @@ const PurchaseOrderMaster = () => {
         <PurchaseOrderForm
           editData={editData}
           onBack={handleBack}
-          onSave={handleSave}
+          onSave={handleBack}
         />
       )}
     </>
