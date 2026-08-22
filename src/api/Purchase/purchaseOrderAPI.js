@@ -261,6 +261,35 @@ const purchaseOrderAPI = {
       throw error;
     }
   },
+  getIndentNoBasedImport: async (orgId, type = "yes") => {
+    try {
+      const res = await apiClient.get(
+        "/api/purchaseOrder/getIndentNoBasedImport",
+        {
+          params: { orgId, type },
+        },
+      );
+      return res?.paramObjectsMap?.mapp || [];
+    } catch (error) {
+      console.error("Error fetching Indent No (Import):", error);
+      throw error;
+    }
+  },
+
+  getIndentNoBasedLocal: async (belongsTo, orgId, type = "yes") => {
+    try {
+      const res = await apiClient.get(
+        "/api/purchaseOrder/getIndentNoBasedLocal",
+        {
+          params: { belongsTo, orgId, type },
+        },
+      );
+      return res?.paramObjectsMap?.mapp || [];
+    } catch (error) {
+      console.error("Error fetching Indent No (Local):", error);
+      throw error;
+    }
+  },
 };
 
 export default purchaseOrderAPI;
