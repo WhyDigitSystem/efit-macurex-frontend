@@ -915,9 +915,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
         list.map((supplier) => ({
           value: supplier.supplierId || supplier.id,
 
-          label: `${supplier.supplierCode || ""} - ${
-            supplier.supplierName || ""
-          }`,
+          label: `${supplier.supplierCode || ""}`,
 
           supplierId: supplier.supplierId || supplier.id,
 
