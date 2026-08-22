@@ -18,7 +18,10 @@ const StateMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
       const sortedStates = (response || [])
         .map((item) => ({
           ...item,
-          country: item.country?.countryName || "",
+          // Keep the country object for editing
+          countryObject: item.country || null,
+          // Use countryName for display
+          countryName: item.country?.countryName || "",
         }))
         .sort((a, b) => (b.id || 0) - (a.id || 0));
 
@@ -59,7 +62,7 @@ const StateMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     {
       key: "country",
       label: "Country",
-      accessor: "country",
+      accessor: "countryName",
       type: "text",
     },
     {

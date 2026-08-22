@@ -30,6 +30,18 @@ export const purchaseDeliveryScheduleAPI = {
       throw error;
     }
   },
+
+  getSupplierDropdownForPurchaseDeliverySchedule: async (branchId, orgId) => {
+    try {
+      const res = await apiClient.get(
+        `/api/purchasedeliveryschedule/getSupplierDropdownForPurchaseDeliverySchedule?branch=${branchId}&orgId=${orgId}`
+      );
+      return res;
+    } catch (error) {
+      console.error("Error fetching suppliers:", error);
+      throw error;
+    }
+  },
 };
 
 export default purchaseDeliveryScheduleAPI;

@@ -1,12 +1,14 @@
 import BulkIssueIndentMaster from "../components/Production/BulkIssueIndent/BulkIssueIndentMaster";
 import ConsumptionEntryMaster from "../components/Production/ConsumptionEntry/ConsumptionEntryMaster";
 import FGTransferSlipMaster from "../components/Production/FGTransferSlip/FGTransferSlipMaster";
+import MachineSettingPlan from "../components/Production/MachineSettingPlan/machineSettingPlan";
 import MaterialIndentForProduction from "../components/Production/MaterialIndentForProduction/MaterialIndentForProduction";
 import MTRNMaster from "../components/Production/MaterialTransferReturnNote/MTRNMaster";
 import ProcessValidationEntryMaster from "../components/Production/ProcessValidationEntry/ProcessValidationEntryMaster";
 import ProductionEntry from "../components/Production/ProductionEntry/ProductionEntry";
 import ProductionScheduleOrder from "../components/Production/ProductionScheduleOrder/ProductionScheduleOrder";
 import ProductionTransferSlip from "../components/Production/ProductionTransferSlip/ProductionTransferSlip";
+import ReconcileConsumptionStock from "../components/Production/ReconcileConsumptionStock/reconcileConsumptionStock";
 import ScrapNoteMaster from "../components/Production/ScrapNote/ScrapNoteMaster";
 
 const productionRoutes = [
@@ -59,6 +61,16 @@ const productionRoutes = [
     path: "/scrapnote",
     label: "Scrap Note",
     element: <ScrapNoteMaster />,
+  },
+  {
+    path: "/reconcileconsumptionstock",
+    label: "Reconcile Consumption Stock",
+    element: <ReconcileConsumptionStock />,
+  },
+  {
+    path: "/machinesettingplan",
+    label: "Machine Setting Plan",
+    element: <MachineSettingPlan />,
   },
 ];
 

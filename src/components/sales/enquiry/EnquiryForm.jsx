@@ -590,7 +590,7 @@ const EnquiryForm = ({ data, onBack, onSave }) => {
       const response = await partyMasterAPI.getPartyByOrgId(orgId, branch);
       const options = (response || []).map((branch) => ({
         value: branch.id,
-        label: branch.vendorCode,
+        label: branch.customerCode,
         partyName: branch.customerName,
       }));
 
