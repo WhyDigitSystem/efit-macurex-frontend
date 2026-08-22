@@ -41,7 +41,11 @@ const StateMasterForm = ({ onBack, onSave, editData }) => {
     stateName: editData?.stateName || "",
     stateCode: editData?.stateCode || "",
     stateNumber: editData?.stateNumber || "",
-    country: editData?.country || "",
+    country: editData?.country?.id
+      ? editData.country.id
+      : editData?.countryId
+        ? editData.countryId
+        : "",
     region: editData?.region || "",
     active: editData?.active ?? true,
     cancel: editData?.cancel ?? false,

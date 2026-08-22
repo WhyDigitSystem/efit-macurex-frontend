@@ -19,7 +19,10 @@ const CurrencyList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
 
       const mappedData = rawList.map((item) => ({
         ...item,
-        country: item.country?.countryName || "",
+        // Keep both the country object and a display name
+        countryName: item.country?.countryName || "",
+        // Keep the original country object with its id
+        country: item.country || null,
         active: item.active === "Active",
       }));
 
@@ -47,7 +50,7 @@ const CurrencyList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     {
       key: "country",
       label: "Country",
-      accessor: "country",
+      accessor: "countryName",
       type: "text",
       noWrap: true,
     },

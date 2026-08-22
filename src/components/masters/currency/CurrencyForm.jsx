@@ -18,24 +18,22 @@ const labelClasses =
 
 const getDefaultValues = (editData) => ({
   id: editData?.id || 0,
-  country: editData?.country
-    ? Number(editData.country)
+  // If editData has country object with id, use that
+  // Otherwise check for countryId
+  country: editData?.country?.id
+    ? Number(editData.country.id)
     : editData?.countryId
       ? Number(editData.countryId)
       : "",
-
   mainCurrency: editData?.mainCurrency || "",
   currency: editData?.currency || "",
   subCurrency: editData?.subCurrency || "",
-
   mainCurrencySymbol: editData?.mainCurrencySymbol || "",
   subSymbol: editData?.subSymbol || "",
   currencyRepresentation: editData?.currencyRepresentation || "",
-
   currencyInteger: editData?.currencyInteger || "",
   currencyDecimal: editData?.currencyDecimal || "",
   currencyDescription: editData?.currencyDescription || "",
-
   active: editData?.active ?? true,
 });
 
@@ -142,14 +140,12 @@ const ToggleButton = ({ control, name }) => (
       <button
         type="button"
         onClick={() => field.onChange(!field.value)}
-        className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${
-          field.value ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
-        }`}
+        className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${field.value ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
+          }`}
       >
         <span
-          className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${
-            field.value ? "translate-x-6" : "translate-x-0.5"
-          }`}
+          className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${field.value ? "translate-x-6" : "translate-x-0.5"
+            }`}
         />
       </button>
     )}

@@ -1,16 +1,22 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import { toast } from "../../../utils/toast";
+import salesInvoiceAPI from "../../../api/Sales/salesInvoiceAPI";
 
 const DOC_TYPE_INVOICE = "Invoice";
 const DOC_TYPE_REJECTION = "Rejection";
 const DOC_TYPE_OTHER_SALES = "Other Sales Invoice";
 
-const DOC_TYPE_TABS = [
+const DOC_TYPE_OPTIONS = [
   { key: DOC_TYPE_INVOICE, label: "Invoice" },
   { key: DOC_TYPE_REJECTION, label: "Rejection" },
   { key: DOC_TYPE_OTHER_SALES, label: "Other Sales Invoice" },
+];
+
+// Add "All" option for the filter
+const FILTER_OPTIONS = [
+  { key: "all", label: "All" },
+  ...DOC_TYPE_OPTIONS,
 ];
 
 /* Column sets mirror what's captured on each side of the form. */
@@ -19,43 +25,43 @@ const INVOICE_COLUMNS = [
   {
     key: "salesInvoiceNo",
     label: "Sales Invoice No",
-    accessor: (row) => row.invoiceHeader?.salesInvoiceNo,
+    accessor: (row) => row.docId,
     type: "text",
   },
   {
     key: "invoiceDate",
     label: "Invoice Date",
-    accessor: (row) => row.invoiceHeader?.invoiceDate,
+    accessor: (row) => row.docDate,
     type: "date",
   },
   {
     key: "plant",
     label: "Plant Id",
-    accessor: (row) => row.commonHeader?.plant,
+    accessor: (row) => row.branch?.branchCode,
     type: "text",
   },
   {
     key: "locationId",
     label: "Location ID",
-    accessor: (row) => row.invoiceHeader?.locationId,
+    accessor: (row) => row.location?.locationName,
     type: "text",
   },
   {
     key: "customerName",
     label: "Customer Name",
-    accessor: (row) => row.invoiceHeader?.customerName,
+    accessor: (row) => row.customer?.customerName,
     type: "text",
   },
   {
     key: "invoiceType",
     label: "Invoice Type",
-    accessor: (row) => row.invoiceHeader?.invoiceType,
+    accessor: (row) => row.docType,
     type: "text",
   },
   {
     key: "stockPosting",
     label: "Stock Posting?",
-    accessor: (row) => row.invoiceHeader?.stockPosting,
+    accessor: (row) => row.stockPosting ? "Yes" : "No",
     type: "badge",
   },
   { key: "active", label: "Status", accessor: "active", type: "status" },
@@ -68,47 +74,50 @@ const INVOICE_COLUMNS = [
   },
 ];
 
+// Similar updates for REJECTION_COLUMNS and OTHER_SALES_COLUMNS
+// ... (rest of the column definitions)
+
 const REJECTION_COLUMNS = [
   {
     key: "rejectionInvoiceNo",
     label: "Rejection Invoice No",
-    accessor: (row) => row.rejectionHeader?.rejectionInvoiceNo,
+    accessor: (row) => row.docId,
     type: "text",
   },
   {
     key: "invoiceDate",
     label: "Invoice Date",
-    accessor: (row) => row.rejectionHeader?.invoiceDate,
+    accessor: (row) => row.docDate,
     type: "date",
   },
   {
     key: "plant",
     label: "Plant Id",
-    accessor: (row) => row.commonHeader?.plant,
+    accessor: (row) => row.branch?.branchCode,
     type: "text",
   },
   {
     key: "locationId",
     label: "Location ID",
-    accessor: (row) => row.rejectionHeader?.locationId,
+    accessor: (row) => row.location?.locationName,
     type: "text",
   },
   {
     key: "customerName",
     label: "Customer Name",
-    accessor: (row) => row.rejectionHeader?.customerName,
+    accessor: (row) => row.customer?.customerName,
     type: "text",
   },
   {
     key: "refNo",
     label: "Ref No",
-    accessor: (row) => row.rejectionHeader?.refNo,
+    accessor: (row) => row.refNo,
     type: "text",
   },
   {
     key: "supplierInvNo",
     label: "Supplier Inv No",
-    accessor: (row) => row.rejectionHeader?.supplierInvNo,
+    accessor: (row) => row.supplierInvoiceNo,
     type: "text",
   },
   { key: "active", label: "Status", accessor: "active", type: "status" },
@@ -125,43 +134,43 @@ const OTHER_SALES_COLUMNS = [
   {
     key: "salesInvoiceNo",
     label: "Sales Invoice No",
-    accessor: (row) => row.otherSalesHeader?.salesInvoiceNo,
+    accessor: (row) => row.docId,
     type: "text",
   },
   {
     key: "invoiceDate",
     label: "Invoice Date",
-    accessor: (row) => row.otherSalesHeader?.invoiceDate,
+    accessor: (row) => row.docDate,
     type: "date",
   },
   {
     key: "plant",
     label: "Plant Id",
-    accessor: (row) => row.commonHeader?.plant,
+    accessor: (row) => row.branch?.branchCode,
     type: "text",
   },
   {
     key: "monthYear",
     label: "Month Year",
-    accessor: (row) => row.otherSalesHeader?.monthYear,
+    accessor: (row) => row.monthYear,
     type: "text",
   },
   {
     key: "customerName",
     label: "Customer Name",
-    accessor: (row) => row.otherSalesHeader?.customerName,
+    accessor: (row) => row.customer?.customerName,
     type: "text",
   },
   {
     key: "invoiceType",
     label: "Invoice Type",
-    accessor: (row) => row.otherSalesHeader?.invoiceType,
+    accessor: (row) => row.docType,
     type: "text",
   },
   {
     key: "stockPosting",
     label: "Stock Posting?",
-    accessor: (row) => row.otherSalesHeader?.stockPosting,
+    accessor: (row) => row.stockPosting ? "Yes" : "No",
     type: "badge",
   },
   { key: "active", label: "Status", accessor: "active", type: "status" },
@@ -176,19 +185,19 @@ const OTHER_SALES_COLUMNS = [
 
 const SEARCH_FIELDS_BY_TYPE = {
   [DOC_TYPE_INVOICE]: [
-    "invoiceHeader.salesInvoiceNo",
-    "invoiceHeader.customerName",
-    "invoiceHeader.customerCode",
+    "docId",
+    "customer.customerName",
+    "customer.customerCode",
   ],
   [DOC_TYPE_REJECTION]: [
-    "rejectionHeader.rejectionInvoiceNo",
-    "rejectionHeader.customerName",
-    "rejectionHeader.refNo",
+    "docId",
+    "customer.customerName",
+    "refNo",
   ],
   [DOC_TYPE_OTHER_SALES]: [
-    "otherSalesHeader.salesInvoiceNo",
-    "otherSalesHeader.customerName",
-    "otherSalesHeader.customerCode",
+    "docId",
+    "customer.customerName",
+    "customer.customerCode",
   ],
 };
 
@@ -198,20 +207,31 @@ const COLUMNS_BY_TYPE = {
   [DOC_TYPE_OTHER_SALES]: OTHER_SALES_COLUMNS,
 };
 
+const TITLE_BY_TYPE = {
+  [DOC_TYPE_INVOICE]: "Invoice",
+  [DOC_TYPE_REJECTION]: "Rejection",
+  [DOC_TYPE_OTHER_SALES]: "Other Sales Invoice",
+};
+
 const SalesInvoiceList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   const [invoiceData, setInvoiceData] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [activeDocType, setActiveDocType] = useState(DOC_TYPE_INVOICE);
+  const [activeDocType, setActiveDocType] = useState("all");
 
   const ORG_ID = Number(localStorage.getItem("orgId"));
+  const BRANCH_ID = Number(localStorage.getItem("branchId")); // Add this
 
   const loadSalesInvoices = useCallback(async () => {
     try {
       setLoading(true);
 
-      const response = await salesInvoiceAPI.getSalesInvoiceByOrgId(ORG_ID);
+      // Pass both orgId AND branchId
+      const response = await salesInvoiceAPI.getSalesInvoiceByOrgId(ORG_ID, BRANCH_ID);
 
-      const sortedData = (response || []).sort(
+      // Extract the list from the response structure
+      const invoiceList = response?.paramObjectsMap?.salesRejectionInvoiceList || [];
+
+      const sortedData = invoiceList.sort(
         (a, b) => (b.id || 0) - (a.id || 0),
       );
 
@@ -223,51 +243,71 @@ const SalesInvoiceList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     } finally {
       setLoading(false);
     }
-  }, [ORG_ID]);
+  }, [ORG_ID, BRANCH_ID]);
 
   useEffect(() => {
     loadSalesInvoices();
   }, [loadSalesInvoices, refreshTrigger]);
 
-  // Rows without a saved docType (legacy data) default to Invoice, same as the form.
-  const filteredData = useMemo(
-    () =>
-      invoiceData.filter(
-        (row) =>
-          (row.commonHeader?.docType || DOC_TYPE_INVOICE) === activeDocType,
-      ),
-    [invoiceData, activeDocType],
-  );
+  // Filter data based on active document type
+  const filteredData = useMemo(() => {
+    if (activeDocType === "all") {
+      return invoiceData;
+    }
+    return invoiceData.filter(
+      (row) => (row.docType || DOC_TYPE_INVOICE) === activeDocType,
+    );
+  }, [invoiceData, activeDocType]);
 
-  const columns = COLUMNS_BY_TYPE[activeDocType];
-  const searchFields = SEARCH_FIELDS_BY_TYPE[activeDocType];
+  // Determine which columns and search fields to use based on active filter
+  const getColumns = () => {
+    if (activeDocType === "all") {
+      return COLUMNS_BY_TYPE[DOC_TYPE_INVOICE];
+    }
+    return COLUMNS_BY_TYPE[activeDocType] || COLUMNS_BY_TYPE[DOC_TYPE_INVOICE];
+  };
+
+  const getSearchFields = () => {
+    if (activeDocType === "all") {
+      return SEARCH_FIELDS_BY_TYPE[DOC_TYPE_INVOICE];
+    }
+    return SEARCH_FIELDS_BY_TYPE[activeDocType] || SEARCH_FIELDS_BY_TYPE[DOC_TYPE_INVOICE];
+  };
+
+  const getTitle = () => {
+    if (activeDocType === "all") {
+      return "All Sales Invoices";
+    }
+    return TITLE_BY_TYPE[activeDocType] || "Sales Invoices";
+  };
+
+  const columns = getColumns();
+  const searchFields = getSearchFields();
+
+  // Build filter options for the document type with "All" option
+  const filterOptions = FILTER_OPTIONS.map((option) => ({
+    value: option.key,
+    label: option.label,
+    field: null,
+  }));
+
+  // Handle filter change from CommonListViewTable
+  const handleFilterChange = (filterValue) => {
+    setActiveDocType(filterValue);
+  };
 
   return (
     <div className="h-full flex flex-col">
-      {/* Doc Type tabs - same look as the form's child tabs */}
-      <div className="flex overflow-x-auto border-b border-gray-200 dark:border-gray-700 mb-2">
-        {DOC_TYPE_TABS.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            onClick={() => setActiveDocType(tab.key)}
-            className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${
-              activeDocType === tab.key
-                ? "bg-blue-600 text-white"
-                : "text-gray-600 dark:text-gray-300"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
       <CommonListViewTable
-        title={`${activeDocType}`}
+        title={getTitle()}
         data={filteredData}
         loading={loading}
         columns={columns}
         searchFields={searchFields}
+        filterOptions={filterOptions}
+        defaultFilter="all"
+        filterLabel="Document Type"
+        onFilterChange={handleFilterChange}
         onBack={onBack}
         onAddNew={onAddNew}
         onEdit={onEdit}
@@ -275,7 +315,7 @@ const SalesInvoiceList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
         showSerialNumber={true}
         itemsPerPageOptions={[5, 10, 20, 50, 100]}
         defaultItemsPerPage={10}
-        emptyMessage={`No ${activeDocType} records found`}
+        emptyMessage={`No ${getTitle().toLowerCase()} records found`}
         loadingMessage="Loading Sales Invoices..."
         enableRefresh={true}
         onRefresh={loadSalesInvoices}
