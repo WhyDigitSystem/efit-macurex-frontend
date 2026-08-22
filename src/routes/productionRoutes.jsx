@@ -9,6 +9,7 @@ import ProductionScheduleOrder from "../components/Production/ProductionSchedule
 import ProductionTransferSlip from "../components/Production/ProductionTransferSlip/ProductionTransferSlip";
 import ScheduleOrderShortCloseMaster from "../components/Production/ScheduleOrderShortClose/ScheduleOrderShortCloseMaster";
 import ScrapNoteMaster from "../components/Production/ScrapNote/ScrapNoteMaster";
+import StockOrderMaster from "../components/Production/StockOrder/StockOrderMaster";
 
 const productionRoutes = [
   {
@@ -65,6 +66,11 @@ const productionRoutes = [
     path: "/productionscheduleordershortclosed",
     label: "Production Sch. Order ShortClosed",
     element: <ScheduleOrderShortCloseMaster />,
+  },
+  {
+    path: "/stockorder",
+    label: "Stock Order",
+    element: <StockOrderMaster />,
   },
 ];
 

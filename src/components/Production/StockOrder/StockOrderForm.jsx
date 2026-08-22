@@ -2,15 +2,13 @@ import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import dayjs from "dayjs";
 import { useToast } from "../../Toast/ToastContext";
-import materialTransferReturnNoteAPI from "../../../api/Production/materialTransferReturnNoteAPI";
+import stockOrderAPI from "../../../api/Production/stockOrderAPI";
 import branchAPI from "../../../api/branchAPI";
 import locationMasterAPI from "../../../api/locationMasterAPI";
 import { departmentAPI } from "../../../api/departmentAPI";
 import { employeeAPI } from "../../../api/employeeAPI";
 import itemAPI from "../../../api/itemAPI";
-import partyMasterAPI from "../../../api/partyMasterAPI";
 import { unitMasterAPI } from "../../../api/unitAPI";
-import productionScheduleOrderAPI from "../../../api/Production/productionScheduleOrderAPI";
 
 /* ---------------------------------------------------------------------------- */
 /* Shared design tokens                                                        */
@@ -38,7 +36,7 @@ const cellInputClasses =
   "border-gray-300 dark:border-gray-600 " +
   "text-gray-900 dark:text-gray-100 " +
   "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
-  "dark:focus:ring-blue-400 dark:focus:border-blue-400";
+  "dark:focus:ring-blue-400 dark:focus:border-blue-500";
 
 const cellReadOnlyClasses =
   "w-full px-2 py-1 rounded border text-xs leading-none " +
@@ -151,7 +149,7 @@ const Field = ({
 };
 
 /* Yes/No toggle matching the Field anatomy: label on top + h-[30px] control,
-   so it aligns perfectly with the neighbouring fields in the grid. */
+   neutral styling in both states - only the switch indicator changes color. */
 const ToggleField = ({ label, checked, onChange }) => (
   <div className="w-full">
     <label className={labelClasses}>{label}</label>
@@ -235,7 +233,7 @@ const TableHead = ({ headers }) => (
         >
           {h}
         </th>
-      ))}
+      )) }
     </tr>
   </thead>
 );
@@ -337,39 +335,30 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
 /* Options                                                                      */
 
 const CHILD_TABS = [
-  { key: "itemTransferDetails", label: "Item Transfer Details", kind: "table" },
-  { key: "summary", label: "Transfer/Return Summary", kind: "fields" },
-];
-
-const TYPE_OPTIONS = [
-  { value: "Transfer", label: "Transfer" },
-  { value: "Return", label: "Return" },
+  { key: "stockDetails", label: "Stock Details", kind: "table" },
+  { key: "chargesSummary", label: "Charges Summary", kind: "fields" },
 ];
 
 const fmtDate = (value) => (value ? dayjs(value).format("YYYY-MM-DD") : "");
 
 const toNum = (v) => Number(v) || 0;
 
-const generateMTRNNo = () =>
-  `MTRN-${dayjs().format("YYYYMMDD")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
+const generateStockOrderNo = () =>
+  `SO-${dayjs().format("YYYYMMDD")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
 
-const emptyDetailRow = () => ({
+const emptyStockDetailRow = () => ({
   itemCode: "",
   itemDescription: "",
   unit: "",
-  availableQty: "",
-  qty: "",
+  requiredQty: "",
   rate: "",
-  value: "",
-  reason: "",
-  supplierId: "",
-  supplierName: "",
+  amount: "",
 });
 
 /* ---------------------------------------------------------------------------- */
-/* Material Transfer/Return Note Form                                             */
+/* Stock Order Form                                                             */
 
-const MTRNForm = ({ data, onBack }) => {
+const StockOrderForm = ({ data, onBack }) => {
   const { addToast } = useToast();
   const orgId = Number(localStorage.getItem("orgId")) || 0;
   const branch = Number(localStorage.getItem("branchId")) || 0;
@@ -383,7 +372,7 @@ const MTRNForm = ({ data, onBack }) => {
   ).trim();
   const isMacurex = ["mecurex", "macurex"].includes(orgName.toLowerCase());
 
-  const [activeChildTab, setActiveChildTab] = useState("itemTransferDetails");
+  const [activeChildTab, setActiveChildTab] = useState("stockDetails");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
 
@@ -391,61 +380,39 @@ const MTRNForm = ({ data, onBack }) => {
   const [header, setHeader] = useState(() => {
     const base = {
       plantId: data?.plantId?.id ?? data?.plantId ?? "",
-      belongsTo: data?.belongsTo?.id ?? data?.belongsTo ?? "",
-      mtrnNo: data?.mtrnNo || data?.docNo || "",
-      mtrnDate: data?.mtrnDate ? fmtDate(data.mtrnDate) : fmtDate(dayjs()),
-      type: data?.type || "",
-      fromLocation: data?.fromLocation?.id ?? data?.fromLocation ?? "",
-      toLocation: data?.toLocation?.id ?? data?.toLocation ?? "",
-      fgSfgPartNo: data?.fgSfgPartNo?.id ?? data?.fgSfgPartNo ?? "",
-      subOrderNo: data?.subOrderNo?.id ?? data?.subOrderNo ?? "",
-      time: data?.time || dayjs().format("HH:mm:ss"),
-      preparedBy: data?.preparedBy?.id ?? data?.preparedBy ?? "",
+      stockOrderNo: data?.stockOrderNo || data?.docNo || "",
+      date: data?.date ? fmtDate(data.date) : fmtDate(dayjs()),
     };
-    if (!base.mtrnNo) base.mtrnNo = generateMTRNNo();
+    if (!base.stockOrderNo) base.stockOrderNo = generateStockOrderNo();
     return base;
   });
 
-  const [detailRows, setDetailRows] = useState(() => {
-    const raw = data?.itemTransferDetails?.length
-      ? data.itemTransferDetails
-      : data?.details?.length
-        ? data.details
-        : [];
-    if (raw.length) {
+  const [stockDetailRows, setStockDetailRows] = useState(() => {
+    const raw = data?.stockDetails;
+    if (raw?.length) {
       return raw.map((item) => ({
         itemCode: item.itemCode?.id ?? item.itemCode ?? "",
         itemDescription: item.itemDescription || item.itemName || "",
         unit: item.unit?.id ?? item.unit ?? "",
-        availableQty: item.availableQty ?? "",
-        qty: item.qty ?? "",
+        requiredQty: item.requiredQty ?? "",
         rate: item.rate ?? "",
-        value: item.value ?? "",
-        reason: item.reason || "",
-        supplierId: item.supplierId?.id ?? item.supplierId ?? "",
-        supplierName: item.supplierName || "",
+        amount: item.amount ?? "",
       }));
     }
-    return [emptyDetailRow()];
+    return [emptyStockDetailRow()];
   });
 
   const [summary, setSummary] = useState({
-    approvedByPM: data?.approvedByPM ?? data?.summary?.approvedByPM ?? false,
-    approvedByQC: data?.approvedByQC ?? data?.summary?.approvedByQC ?? false,
-    approvedByStores:
-      data?.approvedByStores ?? data?.summary?.approvedByStores ?? false,
-    narration: data?.narration || data?.summary?.narration || "",
+    totalAmount: data?.summary?.totalAmount ?? 0,
+    remarks: data?.remarks || data?.summary?.remarks || "",
   });
 
   /* ---------- Lookup loading ---------- */
 
   const [plantOptions, setPlantOptions] = useState([]);
   const [locationOptions, setLocationOptions] = useState([]);
-  const [departmentOptions, setDepartmentOptions] = useState([]);
-  const [employeeOptions, setEmployeeOptions] = useState([]);
   const [itemOptions, setItemOptions] = useState([]);
   const [unitOptions, setUnitOptions] = useState([]);
-  const [supplierOptions, setSupplierOptions] = useState([]);
   const [subOrderOptions, setSubOrderOptions] = useState([]);
 
   const loadPlants = useCallback(async () => {
@@ -472,52 +439,6 @@ const MTRNForm = ({ data, onBack }) => {
       setPlantOptions([]);
     }
   }, [orgId, isMacurex]);
-
-  const loadLocations = useCallback(async () => {
-    try {
-      const res = await locationMasterAPI.getLocationMasterByOrgId(orgId, branch);
-      setLocationOptions(
-        (res || []).map((l) => ({
-          value: l.id,
-          label: l.locationName || l.locationId || l.id,
-        })),
-      );
-    } catch (error) {
-      console.error("Failed to load location options:", error);
-      setLocationOptions([]);
-    }
-  }, [orgId, branch]);
-
-  const loadDepartments = useCallback(async () => {
-    try {
-      const res = await departmentAPI.getAllDepartments(orgId, branch);
-      const departments = res?.paramObjectsMap?.departmentVO || [];
-      setDepartmentOptions(
-        departments.map((d) => ({
-          value: d.id,
-          label: d.departmentName || d.id,
-        })),
-      );
-    } catch (error) {
-      console.error("Failed to load department options:", error);
-      setDepartmentOptions([]);
-    }
-  }, [orgId, branch]);
-
-  const loadEmployees = useCallback(async () => {
-    try {
-      const res = await employeeAPI.getEmployeeByOrgId(orgId);
-      setEmployeeOptions(
-        (res || []).map((e) => ({
-          value: e.id,
-          label: e.employeeCode || e.employeeName || e.id,
-        })),
-      );
-    } catch (error) {
-      console.error("Failed to load employee options:", error);
-      setEmployeeOptions([]);
-    }
-  }, [orgId]);
 
   const loadItems = useCallback(async () => {
     try {
@@ -550,61 +471,13 @@ const MTRNForm = ({ data, onBack }) => {
     }
   }, [orgId, branch]);
 
-  const loadSuppliers = useCallback(async () => {
-    try {
-      const res = await partyMasterAPI.getPartyByOrgId(orgId, branch);
-      setSupplierOptions(
-        (res || []).map((c) => ({
-          value: c.id,
-          label: c.customerCode || c.docId || c.id,
-          supplierName: c.customerName || "",
-        })),
-      );
-    } catch (error) {
-      console.error("Failed to load supplier options:", error);
-      setSupplierOptions([]);
-    }
-  }, [orgId, branch]);
-
-  const loadSubOrders = useCallback(async () => {
-    try {
-      const res = await productionScheduleOrderAPI.getByOrgId(orgId, branch);
-      setSubOrderOptions(
-        (res || [])
-          .filter((o) => o.docId || o.subOrderNo || o.id)
-          .map((o) => ({
-            value: o.docId || o.subOrderNo || o.id,
-            label: o.docId || o.subOrderNo || String(o.id),
-          })),
-      );
-    } catch (error) {
-      console.error("Failed to load sub order options:", error);
-      setSubOrderOptions([]);
-    }
-  }, [orgId, branch]);
-
   useEffect(() => {
     if (orgId) {
       loadPlants();
-      loadLocations();
-      loadDepartments();
-      loadEmployees();
       loadItems();
       loadUnits();
-      loadSuppliers();
-      loadSubOrders();
     }
-  }, [
-    orgId,
-    loadPlants,
-    loadLocations,
-    loadDepartments,
-    loadEmployees,
-    loadItems,
-    loadUnits,
-    loadSuppliers,
-    loadSubOrders,
-  ]);
+  }, [orgId, loadPlants, loadItems, loadUnits]);
 
   /* ---------------------------------------------------------------------------- */
   /* Handlers                                                                     */
@@ -615,8 +488,8 @@ const MTRNForm = ({ data, onBack }) => {
     setHeader((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleCellChange = (idx, key, value) => {
-    setDetailRows((prev) =>
+  const handleStockDetailCellChange = (idx, key, value) => {
+    setStockDetailRows((prev) =>
       prev.map((row, i) => {
         if (i !== idx) return row;
         const next = { ...row, [key]: value };
@@ -626,17 +499,11 @@ const MTRNForm = ({ data, onBack }) => {
             (it) => String(it.value) === String(value),
           );
           next.itemDescription = item ? item.itemDescription || "" : "";
+          next.unit = item ? item.unitId || "" : "";
         }
 
-        if (key === "supplierId") {
-          const supplier = supplierOptions.find(
-            (s) => String(s.value) === String(value),
-          );
-          next.supplierName = supplier ? supplier.supplierName || "" : "";
-        }
-
-        if (key === "qty" || key === "rate") {
-          next.value = toNum(next.qty) * toNum(next.rate);
+        if (key === "requiredQty" || key === "rate") {
+          next.amount = toNum(next.requiredQty) * toNum(next.rate);
         }
 
         return next;
@@ -648,22 +515,20 @@ const MTRNForm = ({ data, onBack }) => {
   };
 
   const handleAddRow = () =>
-    setDetailRows((prev) => [...prev, emptyDetailRow()]);
+    setStockDetailRows((prev) => [...prev, emptyStockDetailRow()]);
 
   const handleRemoveRow = (idx) =>
-    setDetailRows((prev) =>
+    setStockDetailRows((prev) =>
       prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx),
     );
 
-  const totalValue = detailRows.reduce((sum, r) => sum + toNum(r.value), 0);
+  const totalAmount = stockDetailRows.reduce(
+    (sum, r) => sum + toNum(r.amount),
+    0,
+  );
 
   const handleSummaryToggle = (name) =>
     setSummary((prev) => ({ ...prev, [name]: !prev[name] }));
-
-  const handleSummaryChange = (e) => {
-    const { name, value } = e.target;
-    setSummary((prev) => ({ ...prev, [name]: value }));
-  };
 
   /* ---------------------------------------------------------------------------- */
   /* Validation & Save                                                            */
@@ -672,33 +537,25 @@ const MTRNForm = ({ data, onBack }) => {
     const errors = {};
 
     if (!header.plantId) errors.plantId = "Plant ID is required";
-    if (!header.belongsTo) errors.belongsTo = "Belongs To is required";
-    if (!header.mtrnNo?.trim()) errors.mtrnNo = "MTRN No is required";
-    if (!header.mtrnDate) errors.mtrnDate = "MTRN Date is required";
-    if (!header.type) errors.type = "Type is required";
-    if (!header.fromLocation)
-      errors.fromLocation = "From Location is required";
-    if (!header.toLocation) errors.toLocation = "To Location is required";
-    if (!header.fgSfgPartNo)
-      errors.fgSfgPartNo = "FG/SFG Part No is required";
-    if (!header.subOrderNo) errors.subOrderNo = "Sub Order No is required";
-    if (!header.preparedBy) errors.preparedBy = "Prepared By is required";
+    if (!header.stockOrderNo?.trim())
+      errors.stockOrderNo = "Stock Order No is required";
+    if (!header.date) errors.date = "Date is required";
+    if (!header.itemCode) errors.itemCode = "Item Code is required";
 
-    const validRows = detailRows.some(
-      (r) => r.itemCode && r.unit && toNum(r.qty) > 0 && r.reason?.trim(),
+    const hasValidRow = stockDetailRows.some(
+      (r) => r.itemCode && r.unit && toNum(r.requiredQty) > 0 && toNum(r.rate) > 0,
     );
-    if (!validRows)
-      errors.itemTransferDetails =
-        "Add at least one Item Transfer Detail row with Item Code, Unit, Qty and Reason";
-
-    detailRows.forEach((r, i) => {
+    if (!hasValidRow)
+      errors.stockDetails =
+        "Add at least one Stock Details row with Item Code, Units, Required Qty and Rate";
+    stockDetailRows.forEach((r, i) => {
       if (!r.itemCode)
         errors[`detail.${i}.itemCode`] = "Item Code is required";
-      if (!r.unit) errors[`detail.${i}.unit`] = "Unit is required";
-      if (r.qty === "" || r.qty === null || r.qty === undefined)
-        errors[`detail.${i}.qty`] = "Qty is required";
-      if (!r.reason?.trim())
-        errors[`detail.${i}.reason`] = "Reason is required";
+      if (!r.unit) errors[`detail.${i}.unit`] = "Units is required";
+      if (r.requiredQty === "" || r.requiredQty === null || r.requiredQty === undefined)
+        errors[`detail.${i}.requiredQty`] = "Required Qty is required";
+      if (r.rate === "" || r.rate === null || r.rate === undefined)
+        errors[`detail.${i}.rate`] = "Rate is required";
     });
 
     setFieldErrors(errors);
@@ -717,28 +574,25 @@ const MTRNForm = ({ data, onBack }) => {
       orgId,
       branch,
       ...header,
-      totalValue,
-      itemTransferDetails: detailRows.filter((r) => r.itemCode),
+      totalAmount,
+      stockDetails: stockDetailRows.filter((r) => r.itemCode),
       summary: {
-        approvedByPM: summary.approvedByPM,
-        approvedByQC: summary.approvedByQC,
-        approvedByStores: summary.approvedByStores,
-        narration: summary.narration || "",
+        totalAmount: summary.totalAmount,
+        remarks: summary.remarks || "",
       },
       createdBy: isUpdate ? data?.createdBy || usersId : usersId,
       ...(isUpdate ? { updatedBy: usersId } : {}),
     };
 
     try {
-      const response =
-        await materialTransferReturnNoteAPI.createUpdate(payload);
+      const response = await stockOrderAPI.createUpdate(payload);
 
       if (response?.status) {
         addToast(
           response?.paramObjectsMap?.message ||
             (isUpdate
-              ? "Material Transfer/Return Note updated successfully!"
-              : "Material Transfer/Return Note created successfully!"),
+              ? "Stock Order updated successfully!"
+              : "Stock Order created successfully!"),
         );
         onBack?.();
       } else {
@@ -747,11 +601,11 @@ const MTRNForm = ({ data, onBack }) => {
             response?.errors?.[0]?.longMessage ||
             response?.message ||
             response?.paramObjectsMap?.message ||
-            "Failed to save Material Transfer/Return Note.",
+            "Failed to save Stock Order.",
         );
       }
     } catch (err) {
-      console.error("Save MTRN Error:", err);
+      console.error("Save Stock Order Error:", err);
       if (err.response?.data) {
         addToast(
           err.response.data.message ||
@@ -782,9 +636,7 @@ const MTRNForm = ({ data, onBack }) => {
           <ArrowLeft className="h-4 w-4" />
         </button>
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-          {data
-            ? "Edit Material Transfer/Return Note"
-            : "Add Material Transfer/Return Note"}
+          {data ? "Edit Stock Order" : "Add Stock Order"}
         </h2>
       </div>
 
@@ -792,7 +644,7 @@ const MTRNForm = ({ data, onBack }) => {
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
         {/* ---------------- Header Info ---------------- */}
         <div>
-          <SectionHeader>MTRN Header</SectionHeader>
+          <SectionHeader>Stock Order Header</SectionHeader>
           <div className={fieldGrid}>
             <Field
               type="select"
@@ -805,97 +657,30 @@ const MTRNForm = ({ data, onBack }) => {
               required
             />
             <Field
-              type="select"
-              label="Belongs To"
-              name="belongsTo"
-              value={header.belongsTo}
+              label="Stock Order No"
+              name="stockOrderNo"
+              value={header.stockOrderNo}
               onChange={handleHeaderChange}
-              error={fieldErrors.belongsTo}
-              options={departmentOptions}
-              required
-            />
-            <Field
-              label="MTRN No"
-              name="mtrnNo"
-              value={header.mtrnNo}
-              onChange={handleHeaderChange}
-              error={fieldErrors.mtrnNo}
+              error={fieldErrors.stockOrderNo}
               required
             />
             <Field
               type="date"
-              label="MTRN Date"
-              name="mtrnDate"
-              value={header.mtrnDate}
+              label="Date"
+              name="date"
+              value={header.date}
               onChange={handleHeaderChange}
-              error={fieldErrors.mtrnDate}
+              error={fieldErrors.date}
               required
             />
             <Field
               type="select"
-              label="Type"
-              name="type"
-              value={header.type}
+              label="Item Code"
+              name="itemCode"
+              value={data?.itemCode ?? ""}
               onChange={handleHeaderChange}
-              error={fieldErrors.type}
-              options={TYPE_OPTIONS}
-              required
-            />
-            <Field
-              type="select"
-              label="From Location"
-              name="fromLocation"
-              value={header.fromLocation}
-              onChange={handleHeaderChange}
-              error={fieldErrors.fromLocation}
-              options={locationOptions}
-              required
-            />
-            <Field
-              type="select"
-              label="To Location"
-              name="toLocation"
-              value={header.toLocation}
-              onChange={handleHeaderChange}
-              error={fieldErrors.toLocation}
-              options={locationOptions}
-              required
-            />
-            <Field
-              type="select"
-              label="FG/SFG Part No"
-              name="fgSfgPartNo"
-              value={header.fgSfgPartNo}
-              onChange={handleHeaderChange}
-              error={fieldErrors.fgSfgPartNo}
+              error={fieldErrors.itemCode}
               options={itemOptions}
-              required
-            />
-            <Field
-              type="select"
-              label="Sub Order No"
-              name="subOrderNo"
-              value={header.subOrderNo}
-              onChange={handleHeaderChange}
-              error={fieldErrors.subOrderNo}
-              options={subOrderOptions}
-              required
-            />
-            <Field
-              label="Time"
-              name="time"
-              value={header.time}
-              onChange={handleHeaderChange}
-              disabled
-            />
-            <Field
-              type="select"
-              label="Prepared By"
-              name="preparedBy"
-              value={header.preparedBy}
-              onChange={handleHeaderChange}
-              error={fieldErrors.preparedBy}
-              options={employeeOptions}
               required
             />
           </div>
@@ -933,8 +718,8 @@ const MTRNForm = ({ data, onBack }) => {
             )}
           </div>
 
-          {/* Tab 1: Item Transfer Details */}
-          {activeChildTab === "itemTransferDetails" && (
+          {/* Tab 1: Stock Details */}
+          {activeChildTab === "stockDetails" && (
             <div className="pt-3">
               <DynamicTable
                 columns={[
@@ -952,92 +737,72 @@ const MTRNForm = ({ data, onBack }) => {
                   },
                   {
                     key: "unit",
-                    label: "Unit",
+                    label: "Units",
                     type: "select",
                     options: unitOptions,
                   },
-                  { key: "availableQty", label: "Available Qty", type: "number" },
-                  { key: "qty", label: "Qty", type: "number" },
+                  { key: "requiredQty", label: "Required Qty", type: "number" },
                   { key: "rate", label: "Rate", type: "number" },
-                  { key: "value", label: "Value", type: "number", readOnly: true },
-                  {
-                    key: "reason",
-                    label: "Reason for Rejection/Transfer",
-                    type: "textarea",
-                  },
-                  {
-                    key: "supplierId",
-                    label: "Supplier ID",
-                    type: "select",
-                    options: supplierOptions,
-                  },
-                  {
-                    key: "supplierName",
-                    label: "Supplier Name",
-                    type: "text",
-                    readOnly: true,
-                  },
+                  { key: "amount", label: "Amount", type: "number", readOnly: true },
                 ]}
-                rows={detailRows}
-                onCellChange={handleCellChange}
+                rows={stockDetailRows}
+                onCellChange={handleStockDetailCellChange}
                 onRemoveRow={handleRemoveRow}
               />
-              {detailRows.some((r, i) => fieldErrors[`detail.${i}.itemCode`]) && (
+              {fieldErrors.stockDetails && (
+                <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
+                  {fieldErrors.stockDetails}
+                </p>
+              )}
+              {stockDetailRows.some(
+                (r, i) => fieldErrors[`detail.${i}.itemCode`],
+              ) && (
                 <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
                   Item Code is required in every row
                 </p>
               )}
-              {detailRows.some((r, i) => fieldErrors[`detail.${i}.unit`]) && (
+              {stockDetailRows.some(
+                (r, i) => fieldErrors[`detail.${i}.unit`],
+              ) && (
                 <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
-                  Unit is required in every row
+                  Units is required in every row
                 </p>
               )}
-              {detailRows.some((r, i) => fieldErrors[`detail.${i}.qty`]) && (
+              {stockDetailRows.some(
+                (r, i) => fieldErrors[`detail.${i}.requiredQty`],
+              ) && (
                 <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
-                  Qty is required in every row
+                  Required Qty is required in every row
                 </p>
               )}
-              {detailRows.some((r, i) => fieldErrors[`detail.${i}.reason`]) && (
+              {stockDetailRows.some(
+                (r, i) => fieldErrors[`detail.${i}.rate`],
+              ) && (
                 <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
-                  Reason is required in every row
+                  Rate is required in every row
                 </p>
               )}
             </div>
           )}
 
-          {/* Tab 2: Transfer/Return Summary */}
-          {activeChildTab === "summary" && (
+          {/* Tab 2: Charges Summary */}
+          {activeChildTab === "chargesSummary" && (
             <div className="pt-3 pb-1">
               <div className={fieldGrid}>
                 <Field
                   type="number"
-                  label="Total Value"
-                  name="totalValue"
-                  value={totalValue}
+                  label="Total Amount"
+                  name="totalAmount"
+                  value={totalAmount}
                   onChange={() => {}}
                   disabled
                 />
-                <ToggleField
-                  label="Approved By PM"
-                  checked={summary.approvedByPM}
-                  onChange={() => handleSummaryToggle("approvedByPM")}
-                />
-                <ToggleField
-                  label="Approved By Q/C"
-                  checked={summary.approvedByQC}
-                  onChange={() => handleSummaryToggle("approvedByQC")}
-                />
-                <ToggleField
-                  label="Approved By Stores"
-                  checked={summary.approvedByStores}
-                  onChange={() => handleSummaryToggle("approvedByStores")}
-                />
                 <Field
                   type="textarea"
-                  label="Narration"
-                  name="narration"
-                  value={summary.narration}
-                  onChange={handleSummaryChange}
+                  label="Remarks"
+                  name="remarks"
+                  value={summary.remarks}
+                  onChange={e => setSummary((s) => ({ ...s, remarks: e.target.value }))}
                 />
               </div>
             </div>
@@ -1055,4 +820,4 @@ const MTRNForm = ({ data, onBack }) => {
   );
 };
 
-export default MTRNForm;
+export default StockOrderForm;
