@@ -380,11 +380,7 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
 
 const PTYPE_OPTIONS = ["Local", "Import"];
 
-const BELONGS_TO = ["Domestic", "Import"];
-
 const YES_NO = ["Yes", "No"];
-
-const TAX_TYPES = ["GST", "IGST", "EXEMPT"];
 
 const ITEM_TYPES = ["Regular", "Consumables"];
 
@@ -622,7 +618,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
       ? editData.purchaseOrderLocalTaxDetailsDTO
       : [emptyTaxRow()],
   );
-
+  const [belongsToOptions, setBelongsToOptions] = useState([]);
   const [fileRows, setFileRows] = useState(
     editData?.purchaseOrderLocalFileUploadDetailsDTO?.length
       ? editData.purchaseOrderLocalFileUploadDetailsDTO.map((file) => ({
@@ -953,39 +949,82 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
   /* INDENT DROPDOWN                                                           */
   /* ========================================================================= */
 
-  const loadIndentItemOptions = useCallback(async () => {
+  // const loadIndentItemOptions = useCallback(async () => {
+  //   try {
+  //     if (!ORG_ID) return;
+
+  //     const response = await purchaseIndentAPI.getPurchaseIndentItemDropdown(
+  //       BRANCH_ID,
+  //       ORG_ID,
+  //     );
+
+  //     const list = response?.paramObjectsMap?.itemDropdown || [];
+
+  //     setIndentItemOptions(
+  //       list.map((row) => ({
+  //         value: row.itemId,
+
+  //         label: row.itemId != null ? String(row.itemId) : "",
+
+  //         itemCode: row.itemCode || "",
+
+  //         itemDescription: row.itemDescription || "",
+
+  //         purchaseUnit: row.purchaseUnit || "",
+
+  //         primaryUnit: row.primaryUnit || "",
+  //       })),
+  //     );
+  //   } catch (error) {
+  //     console.error("Failed to load purchase indent item dropdown:", error);
+
+  //     setIndentItemOptions([]);
+  //   }
+  // }, [ORG_ID, BRANCH_ID]);
+
+  const loadIndentDropdown = useCallback(async () => {
     try {
       if (!ORG_ID) return;
 
-      const response = await purchaseIndentAPI.getPurchaseIndentItemDropdown(
-        BRANCH_ID,
-        ORG_ID,
-      );
+      let list = [];
 
-      const list = response?.paramObjectsMap?.itemDropdown || [];
+      if (formData.poType === "Import") {
+        list = await purchaseOrderAPI.getIndentNoBasedImport(ORG_ID, "yes");
+      } else if (formData.poType === "Local") {
+        if (!formData.belongsTo) {
+          setIndentItemOptions([]);
+          return;
+        }
+        list = await purchaseOrderAPI.getIndentNoBasedLocal(
+          formData.belongsTo,
+          ORG_ID,
+          "yes",
+        );
+      }
 
       setIndentItemOptions(
-        list.map((row) => ({
-          value: row.itemId,
+        (Array.isArray(list) ? list : []).map((row) => ({
+          // docId is blank in your sample data, so fall back to indentBasicId for the visible label
+          value: row.indentDetailId,
+          label:
+            row.docId || String(row.indentBasicId ?? row.indentDetailId ?? ""),
 
-          label: row.itemId != null ? String(row.itemId) : "",
+          itemMasterId: row.itemMasterId,
+          itemId: row.itemId,
+          itemDescription: row.itemDesc || "",
 
-          itemCode: row.itemCode || "",
+          indentDate: row.docDate || "",
+          requiredDate: row.requiredDate || "",
 
-          itemDescription: row.itemDescription || "",
-
-          purchaseUnit: row.purchaseUnit || "",
-
-          primaryUnit: row.primaryUnit || "",
+          indentQty: row.qtyInPrimaryUnit ?? row.qtyInPurchaseUnit ?? 0,
+          pendingIndentQty: row.pndQty ?? 0,
         })),
       );
     } catch (error) {
-      console.error("Failed to load purchase indent item dropdown:", error);
-
+      console.error("Failed to load Indent No dropdown:", error);
       setIndentItemOptions([]);
     }
-  }, [ORG_ID, BRANCH_ID]);
-
+  }, [ORG_ID, formData.poType, formData.belongsTo]);
   /* ========================================================================= */
   /* ITEM DETAILS WHEN INDENT IS NOT REQUIRED                                 */
   /* ========================================================================= */
@@ -1247,7 +1286,38 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
     },
     [ORG_ID, BRANCH_ID, addToast],
   );
+  const loadBelongsTo = useCallback(async () => {
+    try {
+      if (!ORG_ID) return;
 
+      const response = await listOfValuesAPI.getListValuesGroup(
+        "BELONGS TO",
+        ORG_ID,
+      );
+
+      const list = Array.isArray(response) ? response : [];
+
+      setBelongsToOptions(
+        list.map((item) => ({
+          // "set same" -> value stored is the description itself, not the id
+          value:
+            item.valuesDescription ||
+            item.valueDescription ||
+            item.description ||
+            "",
+          label:
+            item.valuesDescription ||
+            item.valueDescription ||
+            item.description ||
+            "",
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to load Belongs To values:", error);
+
+      setBelongsToOptions([]);
+    }
+  }, [ORG_ID]);
   /* ========================================================================= */
   /* MASTER DATA USE EFFECT                                                    */
   /* ========================================================================= */
@@ -1259,9 +1329,9 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
     loadItemOptions();
     loadTaxDefinitions();
     loadSuppliers();
-    loadIndentItemOptions();
     loadCountries();
     loadShipModes();
+    loadBelongsTo();
   }, [
     loadBranches,
     loadCurrencies,
@@ -1269,9 +1339,9 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
     loadItemOptions,
     loadTaxDefinitions,
     loadSuppliers,
-    loadIndentItemOptions,
     loadCountries,
     loadShipModes,
+    loadBelongsTo,
   ]);
 
   /* ========================================================================= */
@@ -1411,6 +1481,30 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.poType, isEditMode]);
 
+  useEffect(() => {
+    if (!isIndentRequired) {
+      setIndentItemOptions([]);
+      return;
+    }
+    loadIndentDropdown();
+  }, [isIndentRequired, loadIndentDropdown]);
+
+  /* ========================================================================= */
+  /* LOCAL TAX TYPE SYNC (derived from Is IGST Appl)                          */
+  /* ========================================================================= */
+
+  useEffect(() => {
+    const derivedTaxType =
+      formData.isIgstApplicable === "Yes" ? "IGST" : "SGST";
+
+    setLocalDetailRows((previous) =>
+      previous.map((row) =>
+        row.taxType === derivedTaxType
+          ? row
+          : { ...row, taxType: derivedTaxType },
+      ),
+    );
+  }, [formData.isIgstApplicable]);
   /* ========================================================================= */
   /* FIELD CHANGE                                                              */
   /* ========================================================================= */
@@ -1598,7 +1692,13 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
   /* ========================================================================= */
 
   const addLocalRow = () => {
-    setLocalDetailRows((previous) => [...previous, emptyLocalDetailRow()]);
+    const derivedTaxType =
+      formData.isIgstApplicable === "Yes" ? "IGST" : "SGST";
+
+    setLocalDetailRows((previous) => [
+      ...previous,
+      { ...emptyLocalDetailRow(), taxType: derivedTaxType },
+    ]);
   };
 
   const removeLocalRow = (index) => {
@@ -1676,23 +1776,24 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
 
       if (selectedIndentItem) {
         const matchedItem = itemOptions.find(
-          (item) => String(item.label) === String(selectedIndentItem.itemCode),
+          (item) =>
+            String(item.value) === String(selectedIndentItem.itemMasterId),
         );
 
-        if (matchedItem) {
-          updated.item = matchedItem.value;
+        updated.item = selectedIndentItem.itemMasterId ?? updated.item;
+        updated.itemDescription =
+          matchedItem?.itemDescription ||
+          selectedIndentItem.itemDescription ||
+          "";
+        updated.hsnCode = matchedItem?.hsnCode || updated.hsnCode || "";
+        updated.purchaseUnit = matchedItem?.unit || updated.purchaseUnit || "";
+        updated.primaryUnit = matchedItem?.unit || updated.primaryUnit || "";
 
-          updated.itemDescription =
-            matchedItem.itemDescription ||
-            selectedIndentItem.itemDescription ||
-            "";
-
-          updated.hsnCode = matchedItem.hsnCode || updated.hsnCode || "";
-
-          updated.purchaseUnit = matchedItem.unit || updated.purchaseUnit || "";
-
-          updated.primaryUnit = matchedItem.unit || updated.primaryUnit || "";
-        }
+        updated.indentDate =
+          selectedIndentItem.indentDate || updated.indentDate;
+        updated.indentQty = selectedIndentItem.indentQty ?? updated.indentQty;
+        updated.pendingIndentQty =
+          selectedIndentItem.pendingIndentQty ?? updated.pendingIndentQty;
       }
     }
 
@@ -1741,17 +1842,28 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
 
     /* Item auto-fill */
 
-    if (changedKey === "item") {
-      const selectedItem = itemOptions.find(
-        (item) => String(item.value) === String(changedValue),
+    if (changedKey === "indentNo") {
+      const selectedIndentItem = indentItemOptions.find(
+        (option) => String(option.value) === String(changedValue),
       );
 
-      if (selectedItem) {
-        updated.itemDescription = selectedItem.itemDescription || "";
+      if (selectedIndentItem) {
+        const matchedItem = itemOptions.find(
+          (item) =>
+            String(item.value) === String(selectedIndentItem.itemMasterId),
+        );
 
-        updated.hsnCode = selectedItem.hsnCode || updated.hsnCode || "";
+        updated.item = selectedIndentItem.itemMasterId ?? updated.item;
+        updated.itemDescription =
+          matchedItem?.itemDescription ||
+          selectedIndentItem.itemDescription ||
+          "";
+        updated.hsnCode = matchedItem?.hsnCode || "";
+        updated.uom = matchedItem?.unit || "";
 
-        updated.uom = selectedItem.unit || updated.uom || "";
+        updated.indentDate =
+          selectedIndentItem.indentDate || updated.indentDate;
+        updated.indentQty = selectedIndentItem.indentQty ?? updated.indentQty;
       }
     }
 
@@ -2696,8 +2808,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
     {
       key: "taxType",
       label: "Tax Type",
-      type: "select",
-      options: TAX_TYPES,
+      type: "display",
     },
 
     {
@@ -2955,7 +3066,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
               name="belongsTo"
               value={formData.belongsTo}
               onChange={handleFieldChange}
-              options={BELONGS_TO}
+              options={belongsToOptions}
             />
 
             {/* PO Date */}
@@ -3157,6 +3268,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
                   value={formData.isIgstApplicable}
                   onChange={handleFieldChange}
                   options={YES_NO}
+                  disabled
                 />
 
                 <Field
