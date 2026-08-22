@@ -7,6 +7,7 @@ import ProcessValidationEntryMaster from "../components/Production/ProcessValida
 import ProductionEntry from "../components/Production/ProductionEntry/ProductionEntry";
 import ProductionScheduleOrder from "../components/Production/ProductionScheduleOrder/ProductionScheduleOrder";
 import ProductionTransferSlip from "../components/Production/ProductionTransferSlip/ProductionTransferSlip";
+import ScrapNoteMaster from "../components/Production/ScrapNote/ScrapNoteMaster";
 
 const productionRoutes = [
   {
@@ -53,6 +54,11 @@ const productionRoutes = [
     path: "/materialtransferreturnnote",
     label: "Material Transfer/Return Note",
     element: <MTRNMaster />,
+  },
+  {
+    path: "/scrapnote",
+    label: "Scrap Note",
+    element: <ScrapNoteMaster />,
   },
 ];
 

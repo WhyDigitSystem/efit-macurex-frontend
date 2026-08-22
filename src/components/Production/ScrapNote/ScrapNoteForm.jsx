@@ -2,15 +2,15 @@ import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import dayjs from "dayjs";
 import { useToast } from "../../Toast/ToastContext";
-import materialTransferReturnNoteAPI from "../../../api/Production/materialTransferReturnNoteAPI";
+import scrapNoteAPI from "../../../api/Production/scrapNoteAPI";
 import branchAPI from "../../../api/branchAPI";
 import locationMasterAPI from "../../../api/locationMasterAPI";
 import { departmentAPI } from "../../../api/departmentAPI";
 import { employeeAPI } from "../../../api/employeeAPI";
 import itemAPI from "../../../api/itemAPI";
-import partyMasterAPI from "../../../api/partyMasterAPI";
 import { unitMasterAPI } from "../../../api/unitAPI";
 import productionScheduleOrderAPI from "../../../api/Production/productionScheduleOrderAPI";
+import listOfValuesAPI from "../../../api/listOfValuesAPI";
 
 /* ---------------------------------------------------------------------------- */
 /* Shared design tokens                                                        */
@@ -150,8 +150,8 @@ const Field = ({
   );
 };
 
-/* Yes/No toggle matching the Field anatomy: label on top + h-[30px] control,
-   so it aligns perfectly with the neighbouring fields in the grid. */
+/* Yes/No toggle matching the Field anatomy: label on top + h-[30px] control.
+   Neutral styling in both states - only the switch indicator changes color. */
 const ToggleField = ({ label, checked, onChange }) => (
   <div className="w-full">
     <label className={labelClasses}>{label}</label>
@@ -337,39 +337,39 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
 /* Options                                                                      */
 
 const CHILD_TABS = [
-  { key: "itemTransferDetails", label: "Item Transfer Details", kind: "table" },
-  { key: "summary", label: "Transfer/Return Summary", kind: "fields" },
-];
-
-const TYPE_OPTIONS = [
-  { value: "Transfer", label: "Transfer" },
-  { value: "Return", label: "Return" },
+  { key: "scrapDetails", label: "Scrap Details", kind: "table" },
+  { key: "reasonDetails", label: "Reason Detail", kind: "table" },
+  { key: "summary", label: "Scrap Summary", kind: "fields" },
 ];
 
 const fmtDate = (value) => (value ? dayjs(value).format("YYYY-MM-DD") : "");
 
 const toNum = (v) => Number(v) || 0;
 
-const generateMTRNNo = () =>
-  `MTRN-${dayjs().format("YYYYMMDD")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
+const generateScrapNoteNo = () =>
+  `SN-${dayjs().format("YYYYMMDD")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
 
-const emptyDetailRow = () => ({
+const emptyScrapDetailRow = () => ({
   itemCode: "",
   itemDescription: "",
-  unit: "",
-  availableQty: "",
-  qty: "",
+  primaryUnit: "",
+  stock: "",
+  quantity: "",
+  weight: "",
   rate: "",
   value: "",
-  reason: "",
-  supplierId: "",
-  supplierName: "",
+});
+
+const emptyReasonDetailRow = () => ({
+  reasonCode: "",
+  reasonDescription: "",
+  rejectedQty: 0,
 });
 
 /* ---------------------------------------------------------------------------- */
-/* Material Transfer/Return Note Form                                             */
+/* Scrap Note Form                                                              */
 
-const MTRNForm = ({ data, onBack }) => {
+const ScrapNoteForm = ({ data, onBack }) => {
   const { addToast } = useToast();
   const orgId = Number(localStorage.getItem("orgId")) || 0;
   const branch = Number(localStorage.getItem("branchId")) || 0;
@@ -383,7 +383,7 @@ const MTRNForm = ({ data, onBack }) => {
   ).trim();
   const isMacurex = ["mecurex", "macurex"].includes(orgName.toLowerCase());
 
-  const [activeChildTab, setActiveChildTab] = useState("itemTransferDetails");
+  const [activeChildTab, setActiveChildTab] = useState("scrapDetails");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
 
@@ -392,48 +392,67 @@ const MTRNForm = ({ data, onBack }) => {
     const base = {
       plantId: data?.plantId?.id ?? data?.plantId ?? "",
       belongsTo: data?.belongsTo?.id ?? data?.belongsTo ?? "",
-      mtrnNo: data?.mtrnNo || data?.docNo || "",
-      mtrnDate: data?.mtrnDate ? fmtDate(data.mtrnDate) : fmtDate(dayjs()),
-      type: data?.type || "",
+      department: data?.department?.id ?? data?.department ?? "",
       fromLocation: data?.fromLocation?.id ?? data?.fromLocation ?? "",
       toLocation: data?.toLocation?.id ?? data?.toLocation ?? "",
-      fgSfgPartNo: data?.fgSfgPartNo?.id ?? data?.fgSfgPartNo ?? "",
-      subOrderNo: data?.subOrderNo?.id ?? data?.subOrderNo ?? "",
+      fgPartNo: data?.fgPartNo?.id ?? data?.fgPartNo ?? "",
+      scheduleOrderNo:
+        data?.scheduleOrderNo?.id ?? data?.scheduleOrderNo ?? "",
+      bomId: data?.bomId?.id ?? data?.bomId ?? "",
+      scrapPartNo: data?.scrapPartNo?.id ?? data?.scrapPartNo ?? "",
+      scrapNoteNo: data?.scrapNoteNo || data?.docNo || "",
+      scrapNoteDate: data?.scrapNoteDate
+        ? fmtDate(data.scrapNoteDate)
+        : fmtDate(dayjs()),
       time: data?.time || dayjs().format("HH:mm:ss"),
-      preparedBy: data?.preparedBy?.id ?? data?.preparedBy ?? "",
     };
-    if (!base.mtrnNo) base.mtrnNo = generateMTRNNo();
+    if (!base.scrapNoteNo) base.scrapNoteNo = generateScrapNoteNo();
     return base;
   });
 
-  const [detailRows, setDetailRows] = useState(() => {
-    const raw = data?.itemTransferDetails?.length
-      ? data.itemTransferDetails
-      : data?.details?.length
-        ? data.details
-        : [];
-    if (raw.length) {
+  const [scrapDetailRows, setScrapDetailRows] = useState(() => {
+    const raw = data?.scrapDetails;
+    if (raw?.length) {
       return raw.map((item) => ({
         itemCode: item.itemCode?.id ?? item.itemCode ?? "",
         itemDescription: item.itemDescription || item.itemName || "",
-        unit: item.unit?.id ?? item.unit ?? "",
-        availableQty: item.availableQty ?? "",
-        qty: item.qty ?? "",
+        primaryUnit: item.primaryUnit?.id ?? item.primaryUnit ?? "",
+        stock: item.stock ?? "",
+        quantity: item.quantity ?? "",
+        weight: item.weight ?? "",
         rate: item.rate ?? "",
         value: item.value ?? "",
-        reason: item.reason || "",
-        supplierId: item.supplierId?.id ?? item.supplierId ?? "",
-        supplierName: item.supplierName || "",
       }));
     }
-    return [emptyDetailRow()];
+    return [emptyScrapDetailRow()];
+  });
+
+  const [reasonDetailRows, setReasonDetailRows] = useState(() => {
+    const raw = data?.reasonDetails;
+    if (raw?.length) {
+      return raw.map((item) => ({
+        reasonCode: item.reasonCode?.id ?? item.reasonCode ?? "",
+        reasonDescription: item.reasonDescription || "",
+        rejectedQty: item.rejectedQty ?? 0,
+      }));
+    }
+    return [emptyReasonDetailRow()];
   });
 
   const [summary, setSummary] = useState({
-    approvedByPM: data?.approvedByPM ?? data?.summary?.approvedByPM ?? false,
-    approvedByQC: data?.approvedByQC ?? data?.summary?.approvedByQC ?? false,
-    approvedByStores:
-      data?.approvedByStores ?? data?.summary?.approvedByStores ?? false,
+    preparedBy: data?.preparedBy?.id ?? data?.preparedBy ?? "",
+    authorisedBy: data?.authorisedBy?.id ?? data?.authorisedBy ?? "",
+    scrapId:
+      data?.summary?.scrapId?.id ??
+      data?.summary?.scrapId ??
+      data?.scrapId?.id ??
+      data?.scrapId ??
+      "",
+    pmApproval: data?.pmApproval ?? data?.summary?.pmApproval ?? false,
+    qualityApproval:
+      data?.qualityApproval ?? data?.summary?.qualityApproval ?? false,
+    storeApproval:
+      data?.storeApproval ?? data?.summary?.storeApproval ?? false,
     narration: data?.narration || data?.summary?.narration || "",
   });
 
@@ -445,8 +464,10 @@ const MTRNForm = ({ data, onBack }) => {
   const [employeeOptions, setEmployeeOptions] = useState([]);
   const [itemOptions, setItemOptions] = useState([]);
   const [unitOptions, setUnitOptions] = useState([]);
-  const [supplierOptions, setSupplierOptions] = useState([]);
-  const [subOrderOptions, setSubOrderOptions] = useState([]);
+  const [bomOptions, setBomOptions] = useState([]);
+  const [scheduleOrderOptions, setScheduleOrderOptions] = useState([]);
+  const [reasonCodeOptions, setReasonCodeOptions] = useState([]);
+  const [scrapIdOptions, setScrapIdOptions] = useState([]);
 
   const loadPlants = useCallback(async () => {
     try {
@@ -550,26 +571,27 @@ const MTRNForm = ({ data, onBack }) => {
     }
   }, [orgId, branch]);
 
-  const loadSuppliers = useCallback(async () => {
+  const loadBOMs = useCallback(async () => {
     try {
-      const res = await partyMasterAPI.getPartyByOrgId(orgId, branch);
-      setSupplierOptions(
-        (res || []).map((c) => ({
-          value: c.id,
-          label: c.customerCode || c.docId || c.id,
-          supplierName: c.customerName || "",
-        })),
+      const res = await scrapNoteAPI.getBOMs(orgId, branch);
+      setBomOptions(
+        (res || [])
+          .filter((b) => b.id || b.bomId)
+          .map((b) => ({
+            value: b.id || b.bomId,
+            label: b.bomName || b.bomId || String(b.id),
+          })),
       );
     } catch (error) {
-      console.error("Failed to load supplier options:", error);
-      setSupplierOptions([]);
+      console.error("Failed to load BOM options:", error);
+      setBomOptions([]);
     }
   }, [orgId, branch]);
 
-  const loadSubOrders = useCallback(async () => {
+  const loadScheduleOrders = useCallback(async () => {
     try {
       const res = await productionScheduleOrderAPI.getByOrgId(orgId, branch);
-      setSubOrderOptions(
+      setScheduleOrderOptions(
         (res || [])
           .filter((o) => o.docId || o.subOrderNo || o.id)
           .map((o) => ({
@@ -578,8 +600,41 @@ const MTRNForm = ({ data, onBack }) => {
           })),
       );
     } catch (error) {
-      console.error("Failed to load sub order options:", error);
-      setSubOrderOptions([]);
+      console.error("Failed to load schedule order options:", error);
+      setScheduleOrderOptions([]);
+    }
+  }, [orgId, branch]);
+
+  const loadReasonCodes = useCallback(async () => {
+    try {
+      const res = await listOfValuesAPI.getListValuesGroup("REASON", orgId);
+      setReasonCodeOptions(
+        (res || []).map((r) => ({
+          value: r.id,
+          label: r.valuesDescription || r.id,
+          description: r.valuesDescription || "",
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to load reason code options:", error);
+      setReasonCodeOptions([]);
+    }
+  }, [orgId]);
+
+  const loadScrapIds = useCallback(async () => {
+    try {
+      const res = await scrapNoteAPI.getScrapMasters(orgId, branch);
+      setScrapIdOptions(
+        (res || [])
+          .filter((s) => s.id || s.scrapCode)
+          .map((s) => ({
+            value: s.id || s.scrapCode,
+            label: s.scrapName || s.scrapCode || String(s.id),
+          })),
+      );
+    } catch (error) {
+      console.error("Failed to load scrap id options:", error);
+      setScrapIdOptions([]);
     }
   }, [orgId, branch]);
 
@@ -591,8 +646,10 @@ const MTRNForm = ({ data, onBack }) => {
       loadEmployees();
       loadItems();
       loadUnits();
-      loadSuppliers();
-      loadSubOrders();
+      loadBOMs();
+      loadScheduleOrders();
+      loadReasonCodes();
+      loadScrapIds();
     }
   }, [
     orgId,
@@ -602,8 +659,10 @@ const MTRNForm = ({ data, onBack }) => {
     loadEmployees,
     loadItems,
     loadUnits,
-    loadSuppliers,
-    loadSubOrders,
+    loadBOMs,
+    loadScheduleOrders,
+    loadReasonCodes,
+    loadScrapIds,
   ]);
 
   /* ---------------------------------------------------------------------------- */
@@ -615,8 +674,8 @@ const MTRNForm = ({ data, onBack }) => {
     setHeader((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleCellChange = (idx, key, value) => {
-    setDetailRows((prev) =>
+  const handleScrapDetailCellChange = (idx, key, value) => {
+    setScrapDetailRows((prev) =>
       prev.map((row, i) => {
         if (i !== idx) return row;
         const next = { ...row, [key]: value };
@@ -628,15 +687,8 @@ const MTRNForm = ({ data, onBack }) => {
           next.itemDescription = item ? item.itemDescription || "" : "";
         }
 
-        if (key === "supplierId") {
-          const supplier = supplierOptions.find(
-            (s) => String(s.value) === String(value),
-          );
-          next.supplierName = supplier ? supplier.supplierName || "" : "";
-        }
-
-        if (key === "qty" || key === "rate") {
-          next.value = toNum(next.qty) * toNum(next.rate);
+        if (key === "quantity" || key === "rate") {
+          next.value = toNum(next.quantity) * toNum(next.rate);
         }
 
         return next;
@@ -647,21 +699,56 @@ const MTRNForm = ({ data, onBack }) => {
       setFieldErrors((prev) => ({ ...prev, [`detail.${idx}.${key}`]: "" }));
   };
 
-  const handleAddRow = () =>
-    setDetailRows((prev) => [...prev, emptyDetailRow()]);
+  const handleReasonDetailCellChange = (idx, key, value) => {
+    setReasonDetailRows((prev) =>
+      prev.map((row, i) => {
+        if (i !== idx) return row;
+        const next = { ...row, [key]: value };
 
-  const handleRemoveRow = (idx) =>
-    setDetailRows((prev) =>
-      prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx),
+        if (key === "reasonCode") {
+          const reason = reasonCodeOptions.find(
+            (r) => String(r.value) === String(value),
+          );
+          next.reasonDescription = reason ? reason.description || "" : "";
+        }
+
+        return next;
+      }),
     );
 
-  const totalValue = detailRows.reduce((sum, r) => sum + toNum(r.value), 0);
+    if (fieldErrors[`reason.${idx}.${key}`])
+      setFieldErrors((prev) => ({ ...prev, [`reason.${idx}.${key}`]: "" }));
+  };
+
+  const handleAddRow = () => {
+    if (activeChildTab === "scrapDetails")
+      setScrapDetailRows((prev) => [...prev, emptyScrapDetailRow()]);
+    else if (activeChildTab === "reasonDetails")
+      setReasonDetailRows((prev) => [...prev, emptyReasonDetailRow()]);
+  };
+
+  const handleRemoveRow = (idx) => {
+    if (activeChildTab === "scrapDetails")
+      setScrapDetailRows((prev) =>
+        prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx),
+      );
+    else if (activeChildTab === "reasonDetails")
+      setReasonDetailRows((prev) =>
+        prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx),
+      );
+  };
+
+  const totalScrapValue = scrapDetailRows.reduce(
+    (sum, r) => sum + toNum(r.value),
+    0,
+  );
 
   const handleSummaryToggle = (name) =>
     setSummary((prev) => ({ ...prev, [name]: !prev[name] }));
 
   const handleSummaryChange = (e) => {
     const { name, value } = e.target;
+    if (fieldErrors[name]) setFieldErrors((prev) => ({ ...prev, [name]: "" }));
     setSummary((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -672,34 +759,51 @@ const MTRNForm = ({ data, onBack }) => {
     const errors = {};
 
     if (!header.plantId) errors.plantId = "Plant ID is required";
-    if (!header.belongsTo) errors.belongsTo = "Belongs To is required";
-    if (!header.mtrnNo?.trim()) errors.mtrnNo = "MTRN No is required";
-    if (!header.mtrnDate) errors.mtrnDate = "MTRN Date is required";
-    if (!header.type) errors.type = "Type is required";
+    if (!header.department) errors.department = "Department is required";
     if (!header.fromLocation)
       errors.fromLocation = "From Location is required";
     if (!header.toLocation) errors.toLocation = "To Location is required";
-    if (!header.fgSfgPartNo)
-      errors.fgSfgPartNo = "FG/SFG Part No is required";
-    if (!header.subOrderNo) errors.subOrderNo = "Sub Order No is required";
-    if (!header.preparedBy) errors.preparedBy = "Prepared By is required";
+    if (!header.bomId) errors.bomId = "BOM ID is required";
+    if (!header.scrapNoteNo?.trim())
+      errors.scrapNoteNo = "Scrap Note No is required";
+    if (!header.scrapNoteDate)
+      errors.scrapNoteDate = "Scrap Note Date is required";
 
-    const validRows = detailRows.some(
-      (r) => r.itemCode && r.unit && toNum(r.qty) > 0 && r.reason?.trim(),
+    const hasValidScrapRow = scrapDetailRows.some(
+      (r) => r.itemCode && r.primaryUnit && toNum(r.quantity) > 0 && toNum(r.rate) > 0,
     );
-    if (!validRows)
-      errors.itemTransferDetails =
-        "Add at least one Item Transfer Detail row with Item Code, Unit, Qty and Reason";
-
-    detailRows.forEach((r, i) => {
+    if (!hasValidScrapRow)
+      errors.scrapDetails =
+        "Add at least one Scrap Details row with Item Code, Primary Unit, Quantity and Rate";
+    scrapDetailRows.forEach((r, i) => {
       if (!r.itemCode)
         errors[`detail.${i}.itemCode`] = "Item Code is required";
-      if (!r.unit) errors[`detail.${i}.unit`] = "Unit is required";
-      if (r.qty === "" || r.qty === null || r.qty === undefined)
-        errors[`detail.${i}.qty`] = "Qty is required";
-      if (!r.reason?.trim())
-        errors[`detail.${i}.reason`] = "Reason is required";
+      if (!r.primaryUnit)
+        errors[`detail.${i}.primaryUnit`] = "Primary Unit is required";
+      if (r.quantity === "" || r.quantity === null || r.quantity === undefined)
+        errors[`detail.${i}.quantity`] = "Quantity is required";
+      if (r.rate === "" || r.rate === null || r.rate === undefined)
+        errors[`detail.${i}.rate`] = "Rate is required";
     });
+
+    const hasValidReasonRow = reasonDetailRows.some(
+      (r) => r.reasonCode && r.reasonDescription?.trim(),
+    );
+    if (!hasValidReasonRow)
+      errors.reasonDetails =
+        "Add at least one Reason Detail row with Reason Code and Reason Description";
+    reasonDetailRows.forEach((r, i) => {
+      if (!r.reasonCode)
+        errors[`reason.${i}.reasonCode`] = "Reason Code is required";
+      if (!r.reasonDescription?.trim())
+        errors[`reason.${i}.reasonDescription`] =
+          "Reason Description is required";
+    });
+
+    if (!summary.preparedBy) errors.preparedBy = "Prepared By is required";
+    if (!summary.authorisedBy)
+      errors.authorisedBy = "Authorised By is required";
+    if (!summary.scrapId) errors.scrapId = "Scrap ID is required";
 
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
@@ -717,12 +821,16 @@ const MTRNForm = ({ data, onBack }) => {
       orgId,
       branch,
       ...header,
-      totalValue,
-      itemTransferDetails: detailRows.filter((r) => r.itemCode),
+      totalScrapValue,
+      scrapDetails: scrapDetailRows.filter((r) => r.itemCode),
+      reasonDetails: reasonDetailRows.filter((r) => r.reasonCode),
       summary: {
-        approvedByPM: summary.approvedByPM,
-        approvedByQC: summary.approvedByQC,
-        approvedByStores: summary.approvedByStores,
+        preparedBy: summary.preparedBy,
+        authorisedBy: summary.authorisedBy,
+        scrapId: summary.scrapId,
+        pmApproval: summary.pmApproval,
+        qualityApproval: summary.qualityApproval,
+        storeApproval: summary.storeApproval,
         narration: summary.narration || "",
       },
       createdBy: isUpdate ? data?.createdBy || usersId : usersId,
@@ -730,15 +838,14 @@ const MTRNForm = ({ data, onBack }) => {
     };
 
     try {
-      const response =
-        await materialTransferReturnNoteAPI.createUpdate(payload);
+      const response = await scrapNoteAPI.createUpdate(payload);
 
       if (response?.status) {
         addToast(
           response?.paramObjectsMap?.message ||
             (isUpdate
-              ? "Material Transfer/Return Note updated successfully!"
-              : "Material Transfer/Return Note created successfully!"),
+              ? "Scrap Note updated successfully!"
+              : "Scrap Note created successfully!"),
         );
         onBack?.();
       } else {
@@ -747,11 +854,11 @@ const MTRNForm = ({ data, onBack }) => {
             response?.errors?.[0]?.longMessage ||
             response?.message ||
             response?.paramObjectsMap?.message ||
-            "Failed to save Material Transfer/Return Note.",
+            "Failed to save Scrap Note.",
         );
       }
     } catch (err) {
-      console.error("Save MTRN Error:", err);
+      console.error("Save Scrap Note Error:", err);
       if (err.response?.data) {
         addToast(
           err.response.data.message ||
@@ -782,9 +889,7 @@ const MTRNForm = ({ data, onBack }) => {
           <ArrowLeft className="h-4 w-4" />
         </button>
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-          {data
-            ? "Edit Material Transfer/Return Note"
-            : "Add Material Transfer/Return Note"}
+          {data ? "Edit Scrap Note" : "Add Scrap Note"}
         </h2>
       </div>
 
@@ -792,7 +897,7 @@ const MTRNForm = ({ data, onBack }) => {
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
         {/* ---------------- Header Info ---------------- */}
         <div>
-          <SectionHeader>MTRN Header</SectionHeader>
+          <SectionHeader>Scrap Note Header</SectionHeader>
           <div className={fieldGrid}>
             <Field
               type="select"
@@ -812,33 +917,15 @@ const MTRNForm = ({ data, onBack }) => {
               onChange={handleHeaderChange}
               error={fieldErrors.belongsTo}
               options={departmentOptions}
-              required
-            />
-            <Field
-              label="MTRN No"
-              name="mtrnNo"
-              value={header.mtrnNo}
-              onChange={handleHeaderChange}
-              error={fieldErrors.mtrnNo}
-              required
-            />
-            <Field
-              type="date"
-              label="MTRN Date"
-              name="mtrnDate"
-              value={header.mtrnDate}
-              onChange={handleHeaderChange}
-              error={fieldErrors.mtrnDate}
-              required
             />
             <Field
               type="select"
-              label="Type"
-              name="type"
-              value={header.type}
+              label="Department"
+              name="department"
+              value={header.department}
               onChange={handleHeaderChange}
-              error={fieldErrors.type}
-              options={TYPE_OPTIONS}
+              error={fieldErrors.department}
+              options={departmentOptions}
               required
             />
             <Field
@@ -863,22 +950,56 @@ const MTRNForm = ({ data, onBack }) => {
             />
             <Field
               type="select"
-              label="FG/SFG Part No"
-              name="fgSfgPartNo"
-              value={header.fgSfgPartNo}
+              label="FG Part No"
+              name="fgPartNo"
+              value={header.fgPartNo}
               onChange={handleHeaderChange}
-              error={fieldErrors.fgSfgPartNo}
+              error={fieldErrors.fgPartNo}
               options={itemOptions}
+            />
+            <Field
+              type="select"
+              label="Schedule Order No"
+              name="scheduleOrderNo"
+              value={header.scheduleOrderNo}
+              onChange={handleHeaderChange}
+              error={fieldErrors.scheduleOrderNo}
+              options={scheduleOrderOptions}
+            />
+            <Field
+              type="select"
+              label="BOM ID"
+              name="bomId"
+              value={header.bomId}
+              onChange={handleHeaderChange}
+              error={fieldErrors.bomId}
+              options={bomOptions}
               required
             />
             <Field
               type="select"
-              label="Sub Order No"
-              name="subOrderNo"
-              value={header.subOrderNo}
+              label="Scrap Part No"
+              name="scrapPartNo"
+              value={header.scrapPartNo}
               onChange={handleHeaderChange}
-              error={fieldErrors.subOrderNo}
-              options={subOrderOptions}
+              error={fieldErrors.scrapPartNo}
+              options={itemOptions}
+            />
+            <Field
+              label="Scrap Note No"
+              name="scrapNoteNo"
+              value={header.scrapNoteNo}
+              onChange={handleHeaderChange}
+              error={fieldErrors.scrapNoteNo}
+              required
+            />
+            <Field
+              type="date"
+              label="Scrap Note Date"
+              name="scrapNoteDate"
+              value={header.scrapNoteDate}
+              onChange={handleHeaderChange}
+              error={fieldErrors.scrapNoteDate}
               required
             />
             <Field
@@ -887,16 +1008,6 @@ const MTRNForm = ({ data, onBack }) => {
               value={header.time}
               onChange={handleHeaderChange}
               disabled
-            />
-            <Field
-              type="select"
-              label="Prepared By"
-              name="preparedBy"
-              value={header.preparedBy}
-              onChange={handleHeaderChange}
-              error={fieldErrors.preparedBy}
-              options={employeeOptions}
-              required
             />
           </div>
         </div>
@@ -933,8 +1044,8 @@ const MTRNForm = ({ data, onBack }) => {
             )}
           </div>
 
-          {/* Tab 1: Item Transfer Details */}
-          {activeChildTab === "itemTransferDetails" && (
+          {/* Tab 1: Scrap Details */}
+          {activeChildTab === "scrapDetails" && (
             <div className="pt-3">
               <DynamicTable
                 columns={[
@@ -951,91 +1062,161 @@ const MTRNForm = ({ data, onBack }) => {
                     readOnly: true,
                   },
                   {
-                    key: "unit",
-                    label: "Unit",
+                    key: "primaryUnit",
+                    label: "Primary Unit",
                     type: "select",
                     options: unitOptions,
                   },
-                  { key: "availableQty", label: "Available Qty", type: "number" },
-                  { key: "qty", label: "Qty", type: "number" },
+                  { key: "stock", label: "Stock", type: "number" },
+                  { key: "quantity", label: "Quantity", type: "number" },
+                  { key: "weight", label: "Weight", type: "number" },
                   { key: "rate", label: "Rate", type: "number" },
                   { key: "value", label: "Value", type: "number", readOnly: true },
-                  {
-                    key: "reason",
-                    label: "Reason for Rejection/Transfer",
-                    type: "textarea",
-                  },
-                  {
-                    key: "supplierId",
-                    label: "Supplier ID",
-                    type: "select",
-                    options: supplierOptions,
-                  },
-                  {
-                    key: "supplierName",
-                    label: "Supplier Name",
-                    type: "text",
-                    readOnly: true,
-                  },
                 ]}
-                rows={detailRows}
-                onCellChange={handleCellChange}
+                rows={scrapDetailRows}
+                onCellChange={handleScrapDetailCellChange}
                 onRemoveRow={handleRemoveRow}
               />
-              {fieldErrors.itemTransferDetails && (
+              {fieldErrors.scrapDetails && (
                 <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
-                  {fieldErrors.itemTransferDetails}
+                  {fieldErrors.scrapDetails}
                 </p>
               )}
-              {detailRows.some((r, i) => fieldErrors[`detail.${i}.itemCode`]) && (
+              {scrapDetailRows.some(
+                (r, i) => fieldErrors[`detail.${i}.itemCode`],
+              ) && (
                 <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
                   Item Code is required in every row
                 </p>
               )}
-              {detailRows.some((r, i) => fieldErrors[`detail.${i}.unit`]) && (
+              {scrapDetailRows.some(
+                (r, i) => fieldErrors[`detail.${i}.primaryUnit`],
+              ) && (
                 <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
-                  Unit is required in every row
+                  Primary Unit is required in every row
                 </p>
               )}
-              {detailRows.some((r, i) => fieldErrors[`detail.${i}.qty`]) && (
+              {scrapDetailRows.some(
+                (r, i) => fieldErrors[`detail.${i}.quantity`],
+              ) && (
                 <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
-                  Qty is required in every row
+                  Quantity is required in every row
                 </p>
               )}
-              {detailRows.some((r, i) => fieldErrors[`detail.${i}.reason`]) && (
+              {scrapDetailRows.some(
+                (r, i) => fieldErrors[`detail.${i}.rate`],
+              ) && (
                 <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
-                  Reason is required in every row
+                  Rate is required in every row
                 </p>
               )}
             </div>
           )}
 
-          {/* Tab 2: Transfer/Return Summary */}
+          {/* Tab 2: Reason Detail */}
+          {activeChildTab === "reasonDetails" && (
+            <div className="pt-3">
+              <DynamicTable
+                columns={[
+                  {
+                    key: "reasonCode",
+                    label: "Reason Code",
+                    type: "select",
+                    options: reasonCodeOptions,
+                  },
+                  {
+                    key: "reasonDescription",
+                    label: "Reason Description",
+                    type: "textarea",
+                  },
+                  {
+                    key: "rejectedQty",
+                    label: "Rejected Qty",
+                    type: "number",
+                  },
+                ]}
+                rows={reasonDetailRows}
+                onCellChange={handleReasonDetailCellChange}
+                onRemoveRow={handleRemoveRow}
+              />
+              {fieldErrors.reasonDetails && (
+                <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
+                  {fieldErrors.reasonDetails}
+                </p>
+              )}
+              {reasonDetailRows.some(
+                (r, i) => fieldErrors[`reason.${i}.reasonCode`],
+              ) && (
+                <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
+                  Reason Code is required in every row
+                </p>
+              )}
+              {reasonDetailRows.some(
+                (r, i) => fieldErrors[`reason.${i}.reasonDescription`],
+              ) && (
+                <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
+                  Reason Description is required in every row
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Tab 3: Scrap Summary */}
           {activeChildTab === "summary" && (
             <div className="pt-3 pb-1">
               <div className={fieldGrid}>
                 <Field
+                  type="select"
+                  label="Prepared By"
+                  name="preparedBy"
+                  value={summary.preparedBy}
+                  onChange={handleSummaryChange}
+                  error={fieldErrors.preparedBy}
+                  options={employeeOptions}
+                  required
+                />
+                <Field
+                  type="select"
+                  label="Authorised By"
+                  name="authorisedBy"
+                  value={summary.authorisedBy}
+                  onChange={handleSummaryChange}
+                  error={fieldErrors.authorisedBy}
+                  options={employeeOptions}
+                  required
+                />
+                <Field
+                  type="select"
+                  label="Scrap ID"
+                  name="scrapId"
+                  value={summary.scrapId}
+                  onChange={handleSummaryChange}
+                  error={fieldErrors.scrapId}
+                  options={scrapIdOptions}
+                  required
+                />
+                <Field
                   type="number"
-                  label="Total Value"
-                  name="totalValue"
-                  value={totalValue}
+                  label="Total Scrap Value"
+                  name="totalScrapValue"
+                  value={totalScrapValue}
                   onChange={() => {}}
                   disabled
                 />
                 <ToggleField
-                  label="Approved By PM"
-                  checked={summary.approvedByPM}
-                  onChange={() => handleSummaryToggle("approvedByPM")}
+                  label="PM Approval"
+                  checked={summary.pmApproval}
+                  onChange={() => handleSummaryToggle("pmApproval")}
                 />
                 <ToggleField
-                  label="Approved By Q/C"
-                  checked={summary.approvedByQC}
-                  onChange={() => handleSummaryToggle("approvedByQC")}
+                  label="Quality Approval"
+                  checked={summary.qualityApproval}
+                  onChange={() => handleSummaryToggle("qualityApproval")}
                 />
                 <ToggleField
-                  label="Approved By Stores"
-                  checked={summary.approvedByStores}
-                  onChange={() => handleSummaryToggle("approvedByStores")}
+                  label="Store Approval"
+                  checked={summary.storeApproval}
+                  onChange={() => handleSummaryToggle("storeApproval")}
                 />
                 <Field
                   type="textarea"
@@ -1060,4 +1241,4 @@ const MTRNForm = ({ data, onBack }) => {
   );
 };
 
-export default MTRNForm;
+export default ScrapNoteForm;
