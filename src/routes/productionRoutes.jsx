@@ -2,6 +2,7 @@ import BulkIssueIndentMaster from "../components/Production/BulkIssueIndent/Bulk
 import ConsumptionEntryMaster from "../components/Production/ConsumptionEntry/ConsumptionEntryMaster";
 import FGTransferSlipMaster from "../components/Production/FGTransferSlip/FGTransferSlipMaster";
 import MaterialIndentForProduction from "../components/Production/MaterialIndentForProduction/MaterialIndentForProduction";
+import MTRNMaster from "../components/Production/MaterialTransferReturnNote/MTRNMaster";
 import ProcessValidationEntryMaster from "../components/Production/ProcessValidationEntry/ProcessValidationEntryMaster";
 import ProductionEntry from "../components/Production/ProductionEntry/ProductionEntry";
 import ProductionScheduleOrder from "../components/Production/ProductionScheduleOrder/ProductionScheduleOrder";
@@ -47,6 +48,11 @@ const productionRoutes = [
     path: "/bulkissueindent",
     label: "Bulk Issue Indent",
     element: <BulkIssueIndentMaster />,
+  },
+  {
+    path: "/materialtransferreturnnote",
+    label: "Material Transfer/Return Note",
+    element: <MTRNMaster />,
   },
 ];
 
