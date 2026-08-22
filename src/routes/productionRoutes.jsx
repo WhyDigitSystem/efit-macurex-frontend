@@ -7,6 +7,7 @@ import ProcessValidationEntryMaster from "../components/Production/ProcessValida
 import ProductionEntry from "../components/Production/ProductionEntry/ProductionEntry";
 import ProductionScheduleOrder from "../components/Production/ProductionScheduleOrder/ProductionScheduleOrder";
 import ProductionTransferSlip from "../components/Production/ProductionTransferSlip/ProductionTransferSlip";
+import ScheduleOrderShortCloseMaster from "../components/Production/ScheduleOrderShortClose/ScheduleOrderShortCloseMaster";
 import ScrapNoteMaster from "../components/Production/ScrapNote/ScrapNoteMaster";
 
 const productionRoutes = [
@@ -59,6 +60,11 @@ const productionRoutes = [
     path: "/scrapnote",
     label: "Scrap Note",
     element: <ScrapNoteMaster />,
+  },
+  {
+    path: "/productionscheduleordershortclosed",
+    label: "Production Sch. Order ShortClosed",
+    element: <ScheduleOrderShortCloseMaster />,
   },
 ];
 
