@@ -8,6 +8,7 @@ import ProcessValidationEntryMaster from "../components/Production/ProcessValida
 import ProductionEntry from "../components/Production/ProductionEntry/ProductionEntry";
 import ProductionScheduleOrder from "../components/Production/ProductionScheduleOrder/ProductionScheduleOrder";
 import ProductionTransferSlip from "../components/Production/ProductionTransferSlip/ProductionTransferSlip";
+import ProductionIssueMaster from "../components/Production/ProductionIssue/ProductionIssueMaster";
 import ScheduleOrderShortCloseMaster from "../components/Production/ScheduleOrderShortClose/ScheduleOrderShortCloseMaster";
 import ReconcileConsumptionStock from "../components/Production/ReconcileConsumptionStock/reconcileConsumptionStock";
 import ScrapNoteMaster from "../components/Production/ScrapNote/ScrapNoteMaster";
@@ -83,6 +84,11 @@ const productionRoutes = [
     path: "/machinesettingplan",
     label: "Machine Setting Plan",
     element: <MachineSettingPlan />,
+  },
+  {
+    path: "/productionissues",
+    label: "Production Issues",
+    element: <ProductionIssueMaster />,
   },
 ];
 
