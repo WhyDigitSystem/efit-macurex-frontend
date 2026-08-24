@@ -755,32 +755,6 @@ const ScheduleOrderShortCloseForm = ({ data, onBack }) => {
                 onCellChange={handleCellChange}
                 onRemoveRow={handleRemoveRow}
               />
-              {fieldErrors.productionOrderDetails && (
-                <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
-                  {fieldErrors.productionOrderDetails}
-                </p>
-              )}
-              {detailRows.some(
-                (r, i) => fieldErrors[`detail.${i}.scheduleOrderNo`],
-              ) && (
-                <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
-                  Schedule Order No is required in every row
-                </p>
-              )}
-              {detailRows.some(
-                (r, i) => fieldErrors[`detail.${i}.shortClosedQty`],
-              ) && (
-                <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
-                  Short Closed Qty is required in every row
-                </p>
-              )}
-              {detailRows.some(
-                (r, i) => fieldErrors[`detail.${i}.reason`],
-              ) && (
-                <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
-                  Reason is required in every row
-                </p>
-              )}
             </div>
           )}
 

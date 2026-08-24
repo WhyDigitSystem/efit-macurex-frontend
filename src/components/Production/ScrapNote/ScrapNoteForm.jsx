@@ -1082,34 +1082,6 @@ const ScrapNoteForm = ({ data, onBack }) => {
                   {fieldErrors.scrapDetails}
                 </p>
               )}
-              {scrapDetailRows.some(
-                (r, i) => fieldErrors[`detail.${i}.itemCode`],
-              ) && (
-                <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
-                  Item Code is required in every row
-                </p>
-              )}
-              {scrapDetailRows.some(
-                (r, i) => fieldErrors[`detail.${i}.primaryUnit`],
-              ) && (
-                <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
-                  Primary Unit is required in every row
-                </p>
-              )}
-              {scrapDetailRows.some(
-                (r, i) => fieldErrors[`detail.${i}.quantity`],
-              ) && (
-                <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
-                  Quantity is required in every row
-                </p>
-              )}
-              {scrapDetailRows.some(
-                (r, i) => fieldErrors[`detail.${i}.rate`],
-              ) && (
-                <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
-                  Rate is required in every row
-                </p>
-              )}
             </div>
           )}
 
@@ -1142,20 +1114,6 @@ const ScrapNoteForm = ({ data, onBack }) => {
               {fieldErrors.reasonDetails && (
                 <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
                   {fieldErrors.reasonDetails}
-                </p>
-              )}
-              {reasonDetailRows.some(
-                (r, i) => fieldErrors[`reason.${i}.reasonCode`],
-              ) && (
-                <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
-                  Reason Code is required in every row
-                </p>
-              )}
-              {reasonDetailRows.some(
-                (r, i) => fieldErrors[`reason.${i}.reasonDescription`],
-              ) && (
-                <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
-                  Reason Description is required in every row
                 </p>
               )}
             </div>

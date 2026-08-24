@@ -982,26 +982,6 @@ const MTRNForm = ({ data, onBack }) => {
                 onCellChange={handleCellChange}
                 onRemoveRow={handleRemoveRow}
               />
-              {detailRows.some((r, i) => fieldErrors[`detail.${i}.itemCode`]) && (
-                <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
-                  Item Code is required in every row
-                </p>
-              )}
-              {detailRows.some((r, i) => fieldErrors[`detail.${i}.unit`]) && (
-                <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
-                  Unit is required in every row
-                </p>
-              )}
-              {detailRows.some((r, i) => fieldErrors[`detail.${i}.qty`]) && (
-                <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
-                  Qty is required in every row
-                </p>
-              )}
-              {detailRows.some((r, i) => fieldErrors[`detail.${i}.reason`]) && (
-                <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
-                  Reason is required in every row
-                </p>
-              )}
             </div>
           )}
 

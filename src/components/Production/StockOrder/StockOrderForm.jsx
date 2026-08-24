@@ -749,40 +749,7 @@ const StockOrderForm = ({ data, onBack }) => {
                 onCellChange={handleStockDetailCellChange}
                 onRemoveRow={handleRemoveRow}
               />
-              {fieldErrors.stockDetails && (
-                <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
-                  {fieldErrors.stockDetails}
-                </p>
-              )}
-              {stockDetailRows.some(
-                (r, i) => fieldErrors[`detail.${i}.itemCode`],
-              ) && (
-                <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
-                  Item Code is required in every row
-                </p>
-              )}
-              {stockDetailRows.some(
-                (r, i) => fieldErrors[`detail.${i}.unit`],
-              ) && (
-                <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
-                  Units is required in every row
-                </p>
-              )}
-              {stockDetailRows.some(
-                (r, i) => fieldErrors[`detail.${i}.requiredQty`],
-              ) && (
-                <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
-                  Required Qty is required in every row
-                </p>
-              )}
-              {stockDetailRows.some(
-                (r, i) => fieldErrors[`detail.${i}.rate`],
-              ) && (
-                <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
-                  Rate is required in every row
-                </p>
-              )}
-            </div>
+              </div>
           )}
 
           {/* Tab 2: Charges Summary */}
