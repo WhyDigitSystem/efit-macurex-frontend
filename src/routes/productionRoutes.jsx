@@ -9,8 +9,6 @@ import ProductionEntry from "../components/Production/ProductionEntry/Production
 import ProductionScheduleOrder from "../components/Production/ProductionScheduleOrder/ProductionScheduleOrder";
 import ProductionTransferSlip from "../components/Production/ProductionTransferSlip/ProductionTransferSlip";
 import ProductionIssueMaster from "../components/Production/ProductionIssue/ProductionIssueMaster";
-import ProductionBulkIssueMaster from "../components/Production/ProductionBulkIssue/ProductionBulkIssueMaster";
-import ProductionScheduleMaster from "../components/Production/ProductionSchedule/ProductionScheduleMaster";
 import ScheduleOrderShortCloseMaster from "../components/Production/ScheduleOrderShortClose/ScheduleOrderShortCloseMaster";
 import ReconcileConsumptionStock from "../components/Production/ReconcileConsumptionStock/reconcileConsumptionStock";
 import ScrapNoteMaster from "../components/Production/ScrapNote/ScrapNoteMaster";
@@ -91,16 +89,6 @@ const productionRoutes = [
     path: "/productionissues",
     label: "Production Issues",
     element: <ProductionIssueMaster />,
-  },
-  {
-    path: "/productionbulkissues",
-    label: "Production (Bulk) Issues",
-    element: <ProductionBulkIssueMaster />,
-  },
-  {
-    path: "/productionschedule3months",
-    label: "Production Schedule (for next 3 months)",
-    element: <ProductionScheduleMaster />,
   },
 ];
 
