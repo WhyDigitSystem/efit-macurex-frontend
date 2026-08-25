@@ -10,6 +10,7 @@ import {
   Zap,
   Trash2,
   LifeBuoy,
+  BookOpen,
 } from "lucide-react";
 import { hasScreenAccess } from "../../utils/accessControl";
 
@@ -32,6 +33,12 @@ const SECTIONS = [
         icon: Settings2,
         path: "/categorymaster",
         screenCode: "CATEGORY_MASTER",
+      },
+      {
+        name: "Activity Master",
+        icon: BookOpen,
+        path: "/activitymaster",
+        screenCode: "ACTIVITY_MASTER",
       },
     ],
   },

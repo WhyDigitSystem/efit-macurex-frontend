@@ -57,6 +57,7 @@ import UnitConversionMaster from "../components/masters/unitConversion/UnitConve
 import UserCreation from "../components/masters/userCreation/UserCreationMaster";
 import PlantMaintenanceList from "../components/plantMaintenance/PlantMaintenanceList";
 import CategoryMaster from "../components/plantMaintenance/CategoryMaster/CategoryMaster";
+import ActivityMaster from "../components/plantMaintenance/ActivityMaster/ActivityMaster";
 import PurchaseContractAmendment from "../components/purchase/PurchaseContractAmendment/PurchaseContractAmendmentMaster";
 import PurchaseOrderAmendment from "../components/purchase/PurchaseOrderAmendment/PurchaseOrderAmendmentMaster";
 import PurchaseList from "../components/purchase/purchaseList";
@@ -269,6 +270,11 @@ export const routesConfig = [
     path: "/categorymaster",
     label: "Category Master",
     element: <CategoryMaster />,
+  },
+  {
+    path: "/activitymaster",
+    label: "Activity Master",
+    element: <ActivityMaster />,
   },
   {
     path: "/quality",
