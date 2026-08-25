@@ -35,6 +35,12 @@ const SECTIONS = [
         screenCode: "CATEGORY_MASTER",
       },
       {
+        name: "Cause Master",
+        icon: Settings2,
+        path: "/causemaster",
+        screenCode: "CAUSE_MASTER",
+      },
+      {
         name: "Activity Master",
         icon: BookOpen,
         path: "/activitymaster",
