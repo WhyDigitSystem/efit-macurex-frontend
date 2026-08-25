@@ -55,9 +55,10 @@ import TransportMaster from "../components/masters/transport/TransportMaster";
 import UnitMaster from "../components/masters/unit/UnitMaster";
 import UnitConversionMaster from "../components/masters/unitConversion/UnitConversionMaster";
 import UserCreation from "../components/masters/userCreation/UserCreationMaster";
-import PlantMaintenanceList from "../components/plantMaintenance/PlantMaintenanceList";
+import BranchMaintenanceList from "../components/plantMaintenance/PlantMaintenanceList";
 import CategoryMaster from "../components/plantMaintenance/CategoryMaster/CategoryMaster";
 import CauseMaster from "../components/plantMaintenance/CauseMaster/CauseMaster";
+import PMChecklistMaster from "../components/plantMaintenance/PMChecklistMaster/PMChecklistMaster";
 import ActivityMaster from "../components/plantMaintenance/ActivityMaster/ActivityMaster";
 import PurchaseContractAmendment from "../components/purchase/PurchaseContractAmendment/PurchaseContractAmendmentMaster";
 import PurchaseOrderAmendment from "../components/purchase/PurchaseOrderAmendment/PurchaseOrderAmendmentMaster";
@@ -263,9 +264,9 @@ export const routesConfig = [
   },
   { path: "/production", label: "Production", element: <ProductionList /> },
   {
-    path: "/plantmaintenance",
-    label: "Plant Maintenance",
-    element: <PlantMaintenanceList />,
+    path: "/branchmaintenance",
+    label: "Branch Maintenance",
+    element: <BranchMaintenanceList />,
   },
   {
     path: "/categorymaster",
@@ -276,6 +277,11 @@ export const routesConfig = [
     path: "/causemaster",
     label: "Cause Master",
     element: <CauseMaster />,
+  },
+  {
+    path: "/pmchecklistmaster",
+    label: "PM Checklist Master",
+    element: <PMChecklistMaster />,
   },
   {
     path: "/activitymaster",

@@ -15,14 +15,14 @@ import {
 import { hasScreenAccess } from "../../utils/accessControl";
 
 // ============================================================
-// PLANT MAINTENANCE SECTIONS
+// Branch MAINTENANCE SECTIONS
 // ============================================================
 
 const SECTIONS = [
   // 1. MASTERS
   {
     title: "Masters",
-    description: "Manage plant maintenance master data",
+    description: "Manage Branch maintenance master data",
     icon: Settings2,
     gradient: "from-purple-600 to-indigo-500",
     color: "purple",
@@ -39,6 +39,12 @@ const SECTIONS = [
         icon: Settings2,
         path: "/causemaster",
         screenCode: "CAUSE_MASTER",
+      },
+      {
+        name: "PM Checklist Master",
+        icon: ClipboardCheck,
+        path: "/pmchecklistmaster",
+        screenCode: "PM_CHECKLIST_MASTER",
       },
       {
         name: "Activity Master",
@@ -82,18 +88,18 @@ const SECTIONS = [
         path: "/authorizationforbreakdown",
         screenCode: "AUTHORIZATION_FOR_BREAKDOWN",
       },
-      {
-        name: "EBill",
-        icon: Receipt,
-        path: "/ebill",
-        screenCode: "EBILL",
-      },
-      {
-        name: "Generator Details",
-        icon: Zap,
-        path: "/generatordetails",
-        screenCode: "GENERATOR_DETAILS",
-      },
+      // {
+      //   name: "EBill",
+      //   icon: Receipt,
+      //   path: "/ebill",
+      //   screenCode: "EBILL",
+      // },
+      // {
+      //   name: "Generator Details",
+      //   icon: Zap,
+      //   path: "/generatordetails",
+      //   screenCode: "GENERATOR_DETAILS",
+      // },
       {
         name: "Machine Tools Scrap Note",
         icon: Trash2,
@@ -272,10 +278,10 @@ const ITEM_COLOR_PALETTE = [
 ];
 
 // ============================================================
-// PLANT MAINTENANCE LIST
+// Branch MAINTENANCE LIST
 // ============================================================
 
-const PlantMaintenanceList = () => {
+const BranchMaintenanceList = () => {
   const navigate = useNavigate();
 
   const userType = localStorage.getItem("userType")?.toUpperCase();
@@ -316,13 +322,13 @@ const PlantMaintenanceList = () => {
               MAIN HEADING
           ====================================================== */}
 
-          <div className="flex items-center gap-2 mb-5">
+          {/* <div className="flex items-center gap-2 mb-5">
             <div className="p-1.5 rounded-lg bg-gradient-to-br from-slate-600 to-gray-500 shadow-sm">
               <Wrench className="h-4 w-4 text-white" />
             </div>
 
             <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-              Plant Maintenance
+              Branch Maintenance
             </h2>
 
             <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
@@ -331,7 +337,7 @@ const PlantMaintenanceList = () => {
             </span>
 
             <div className="flex-1 h-px bg-gradient-to-r from-gray-200 to-transparent dark:from-gray-700"></div>
-          </div>
+          </div> */}
 
           {/* ======================================================
               MASTERS + TRANSACTION SECTIONS
@@ -458,11 +464,11 @@ const PlantMaintenanceList = () => {
         <div className="flex items-center justify-center h-[50vh]">
           <div className="text-center">
             <h2 className="text-base font-semibold text-gray-800 dark:text-white">
-              No plant maintenance modules available
+              No Branch maintenance modules available
             </h2>
 
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              You do not have access to any plant maintenance module.
+              You do not have access to any Branch maintenance module.
             </p>
           </div>
         </div>
@@ -516,4 +522,4 @@ if (typeof document !== "undefined") {
   document.head.appendChild(styleSheet);
 }
 
-export default PlantMaintenanceList;
+export default BranchMaintenanceList;

@@ -34,7 +34,7 @@ const productionRoutes = [
   },
   {
     path: "/productiontransferslip",
-    label: "Production Transfet Slip",
+    label: "Production Transfer Slip",
     element: <ProductionTransferSlip />,
   },
   {

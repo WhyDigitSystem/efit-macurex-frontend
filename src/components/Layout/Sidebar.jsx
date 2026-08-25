@@ -124,12 +124,12 @@ const Sidebar = () => {
           screenCode: "PRODUCTION",
         },
         {
-          name: "Plant Maintenance",
-          href: "/plantmaintenance",
+          name: "Branch Maintenance",
+          href: "/branchmaintenance",
           icon: Wrench,
           bgColor:
             "bg-gradient-to-br from-slate-600 to-gray-500 dark:from-slate-500 dark:to-gray-400",
-          screenCode: "PLANT_MAINTENANCE",
+          screenCode: "BRANCH_MAINTENANCE",
         },
         {
           name: "Quality",
