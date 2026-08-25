@@ -120,6 +120,8 @@ import TransportBillMaster from "../components/sales/transportBill/TransportBill
 import salesRoutes from "./salesRoutes";
 import securityRoutes from "./securityRoutes";
 import productionRoutes from "./productionRoutes";
+import PlantMainten from "./plantMaintenanceRoutes";
+import plantMaintenanceRoutes from "./plantMaintenanceRoutes";
 export const routesConfig = [
   { path: "/", label: "Dashboard", element: <Dashboard /> },
 
@@ -637,5 +639,6 @@ export const routesConfig = [
   ...inventoryRoutes,
   ...salesRoutes,
   ...securityRoutes,
-  ...productionRoutes
+  ...productionRoutes,
+  ...plantMaintenanceRoutes,
 ];
