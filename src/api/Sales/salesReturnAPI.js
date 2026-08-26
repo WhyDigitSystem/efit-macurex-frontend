@@ -1,6 +1,7 @@
 import apiClient from "../apiClient";
 
 const salesReturnAPI = {
+  /* ---- List / CRUD ---- */
   getSalesReturnByOrgId: async (orgId, branchId) => {
     try {
       const response = await apiClient.get(
@@ -50,6 +51,7 @@ const salesReturnAPI = {
     }
   },
 
+  /* ---- Lookups ---- */
   getCustomerDetails: async (orgId, branchId) => {
     try {
       const response = await apiClient.get(
@@ -70,6 +72,30 @@ const salesReturnAPI = {
       return response?.paramObjectsMap?.itemDetailsList || [];
     } catch (error) {
       console.error("Error fetching item details:", error);
+      throw error;
+    }
+  },
+
+  getInvoiceDetailsByCustomer: async (orgId, branchId, customerId) => {
+    try {
+      const response = await apiClient.get(
+        `/api/transaction/getInvoiceDetailsForSalesReturn?orgId=${orgId}&branchId=${branchId}&customerId=${customerId}`,
+      );
+      return response?.paramObjectsMap?.invoiceDetailsList || [];
+    } catch (error) {
+      console.error("Error fetching invoice details:", error);
+      throw error;
+    }
+  },
+
+  getGatePassByOrgId: async (orgId, branchId) => {
+    try {
+      const response = await apiClient.get(
+        `/api/transaction/getGatePassByOrgId?orgId=${orgId}&branchId=${branchId}`,
+      );
+      return response?.paramObjectsMap?.gatePassList || [];
+    } catch (error) {
+      console.error("Error fetching gate pass list:", error);
       throw error;
     }
   },

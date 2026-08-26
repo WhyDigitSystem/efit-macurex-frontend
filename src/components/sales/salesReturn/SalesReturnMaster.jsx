@@ -1,18 +1,17 @@
 import { useCallback, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import SalesReturnList from "./SalesReturnList";
 import SalesReturnForm from "./SalesReturnForm";
 import salesReturnAPI from "../../../api/Sales/salesReturnAPI";
 import { useToast } from "../../Toast/ToastContext";
 
 const SalesReturnMaster = () => {
+  const navigate = useNavigate();
   const [view, setView] = useState("list");
   const [editData, setEditData] = useState(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [loadingEdit, setLoadingEdit] = useState(false);
   const { addToast } = useToast();
-
-  const ORG_ID = localStorage.getItem("orgId");
-  const BRANCH_ID = localStorage.getItem("branchId");
 
   const handleAddNew = () => {
     setEditData(null);
@@ -34,13 +33,17 @@ const SalesReturnMaster = () => {
         setLoadingEdit(false);
       }
     },
-    [ORG_ID],
+    [],
   );
 
   const handleBack = () => {
     setEditData(null);
     setView("list");
     setRefreshTrigger((prev) => prev + 1);
+  };
+
+  const handleNavigateHome = () => {
+    navigate("/Sales");
   };
 
   if (view === "form") {
@@ -51,7 +54,7 @@ const SalesReturnMaster = () => {
     <SalesReturnList
       onAddNew={handleAddNew}
       onEdit={handleEdit}
-      onBack={handleBack}
+      onBack={handleNavigateHome}
       refreshTrigger={refreshTrigger}
     />
   );

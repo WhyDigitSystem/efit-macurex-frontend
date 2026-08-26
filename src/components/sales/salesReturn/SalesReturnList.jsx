@@ -17,10 +17,7 @@ const SalesReturnList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   const loadItems = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await salesReturnAPI.getSalesReturnByOrgId(
-        ORG_ID,
-        BRANCH_ID,
-      );
+      const response = await salesReturnAPI.getSalesReturnByOrgId(ORG_ID, BRANCH_ID);
 
       const list =
         response?.paramObjectsMap?.salesReturnList ||
@@ -30,14 +27,15 @@ const SalesReturnList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
       const transformed = Array.isArray(list)
         ? list.map((item) => ({
             id: item.id,
-            salesReturnNo: item.salesReturnNo || item.docId || "",
-            salesReturnDate: item.salesReturnDate || item.docDate || "",
+            docNo: item.docNo || item.salesReturnNo || item.docId || "",
+            date: item.date || item.salesReturnDate || item.docDate || "",
             customerName: item.customerName || item.customer?.customerName || "",
             customerCode: item.customerCode || item.customer?.customerCode || "",
             plantName: item.branchName || item.branch?.branchName || "",
+            returnType: item.returnType || "",
             invoiceNo: item.invoiceNo || "",
-            invoiceDate: item.invoiceDate || "",
-            totalAmount: item.totalAmount || 0,
+            currency: item.currency || "INR",
+            netAmount: item.netAmount || item.totalAmount || 0,
             active: item.active,
             _raw: item,
           }))
@@ -48,7 +46,6 @@ const SalesReturnList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     } catch (error) {
       console.error("Error loading sales returns:", error);
       setItemData([]);
-      addToast("Failed to fetch Sales Returns", "error");
     } finally {
       setLoading(false);
     }
@@ -58,46 +55,52 @@ const SalesReturnList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     loadItems();
   }, [loadItems, refreshTrigger]);
 
-  const handleDownloadPDF = (row) => {
+  const handleDownloadPDF = async (row) => {
     try {
       const raw = row._raw || {};
 
-      const items = (
-        raw.salesReturnItemDetailsDTO ||
-        raw.salesReturnDetails ||
-        []
-      ).map((item) => ({
-        itemCode: item.itemCode || item.item?.itemCode || "",
-        itemDescription: item.itemDescription || item.item?.itemDescription || "",
+      const items = (raw.salesReturnItemDetailsDTO || []).map((item) => ({
+        itemCode: item.item?.itemCode || item.itemCode || "",
+        itemDescription: item.item?.itemDescription || item.itemDescription || "",
+        hsCode: item.hsnCode || item.hsCode || "",
+        taxType: item.taxType || "",
+        taxPercentage: item.taxPercentage || "",
         unit: item.unit || "",
-        qty: item.qty || 0,
+        stock: item.stock || 0,
+        qtySold: item.qtySold || 0,
+        receivedQty: item.receivedQty || item.qty || 0,
         rate: item.rate || 0,
+        rateInCurrency: item.rateInCurrency || 0,
+        amountInCurrency: item.amountInCurrency || 0,
         amount: item.amount || 0,
-        returnReason: item.returnReason || "",
       }));
 
-      const taxDetails = (
-        raw.salesReturnTaxDetailsDTO ||
-        raw.taxDetails ||
-        []
-      ).map((tax) => ({
-        particulars: tax.particulars || "",
-        amount: tax.amount || 0,
+      const taxDetails = (raw.salesReturnTaxDetailsDTO || []).map((tax) => ({
+        sgstRate: tax.sgstRate || 0,
+        sgstAmount: tax.sgstAmount || 0,
+        cgstRate: tax.cgstRate || 0,
+        cgstAmount: tax.cgstAmount || 0,
+        igstRate: tax.igstRate || 0,
+        igstAmount: tax.igstAmount || 0,
       }));
 
       const result = generateSalesReturnPDF({
         company: { name: row.plantName || "Company Name" },
         salesReturn: {
-          salesReturnNo: row.salesReturnNo || "",
-          salesReturnDate: row.salesReturnDate || "",
+          docNo: row.docNo || "",
+          date: row.date || "",
           customerName: row.customerName || "",
           customerCode: row.customerCode || "",
           plantName: row.plantName || "",
+          returnType: row.returnType || "",
           invoiceNo: row.invoiceNo || "",
-          invoiceDate: row.invoiceDate || "",
-          totalAmount: row.totalAmount || 0,
-          remarks: raw.remarks || "",
-          preparedBy: raw.preparedBy || "",
+          currency: row.currency || "INR",
+          netAmount: row.netAmount || 0,
+          belongsTo: raw.belongsTo || "",
+          partyGSTState: raw.partyGSTState || "",
+          isIGSTApplicable: raw.isIgstApplicable || raw.isIGSTApplicable || "No",
+          amountInWords: raw.amountInWords || "",
+          narration: raw.narration || "",
         },
         items,
         taxDetails,
@@ -116,27 +119,23 @@ const SalesReturnList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
 
   const columns = [
     {
-      key: "salesReturnNo",
-      label: "Sales Return No",
-      accessor: "salesReturnNo",
+      key: "docNo",
+      label: "Doc No",
+      accessor: "docNo",
       type: "text",
+      noWrap: true,
     },
     {
-      key: "salesReturnDate",
+      key: "date",
       label: "Date",
-      accessor: "salesReturnDate",
+      accessor: "date",
       type: "date",
+      noWrap: true,
     },
     {
       key: "customerName",
       label: "Customer",
       accessor: "customerName",
-      type: "text",
-    },
-    {
-      key: "customerCode",
-      label: "Customer Code",
-      accessor: "customerCode",
       type: "text",
     },
     {
@@ -146,16 +145,29 @@ const SalesReturnList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
       type: "text",
     },
     {
+      key: "returnType",
+      label: "Return Type",
+      accessor: "returnType",
+      type: "text",
+    },
+    {
       key: "invoiceNo",
       label: "Invoice No",
       accessor: "invoiceNo",
       type: "text",
     },
     {
-      key: "totalAmount",
-      label: "Total Amount",
-      accessor: "totalAmount",
+      key: "currency",
+      label: "Currency",
+      accessor: "currency",
+      type: "text",
+    },
+    {
+      key: "netAmount",
+      label: "Net Amount",
+      accessor: "netAmount",
       type: "currency",
+      noWrap: true,
     },
     {
       key: "active",
@@ -163,16 +175,8 @@ const SalesReturnList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
       accessor: "active",
       type: "status",
       statusVariants: {
-        Active: {
-          label: "Active",
-          className:
-            "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
-        },
-        Inactive: {
-          label: "Inactive",
-          className:
-            "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
-        },
+        Active: { label: "Active", className: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300" },
+        Inactive: { label: "Inactive", className: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300" },
       },
     },
     {
@@ -184,30 +188,12 @@ const SalesReturnList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     },
   ];
 
-  const searchFields = [
-    "salesReturnNo",
-    "customerName",
-    "customerCode",
-    "plantName",
-    "invoiceNo",
-  ];
+  const searchFields = ["docNo", "customerName", "customerCode", "plantName", "invoiceNo", "returnType"];
 
   const filterOptions = [
     { value: "all", label: "All", field: null },
-    {
-      value: "active",
-      label: "Active",
-      field: "active",
-      filterValue: "active",
-      activeValue: "Active",
-    },
-    {
-      value: "inactive",
-      label: "Inactive",
-      field: "active",
-      filterValue: "inactive",
-      activeValue: "Active",
-    },
+    { value: "active", label: "Active", field: "active", filterValue: "active", activeValue: "Active" },
+    { value: "inactive", label: "Inactive", field: "active", filterValue: "inactive", activeValue: "Active" },
   ];
 
   return (
