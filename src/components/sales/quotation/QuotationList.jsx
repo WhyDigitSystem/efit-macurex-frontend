@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import quotationAPI from "../../../api/Sales/quotationAPI";
 import { useToast } from "../../Toast/ToastContext";
+import generateQuotationPDF from "../../../utils/generateQuotationPDF";
+import PDFPreviewModal from "../../../utils/PDFPreviewModal";
 
 const QuotationList = ({ onAddNew, onEdit, onBack }) => {
   const [itemData, setItemData] = useState([]);
@@ -9,6 +11,7 @@ const QuotationList = ({ onAddNew, onEdit, onBack }) => {
   const [orgId] = useState(localStorage.getItem("orgId"));
   const [branchId] = useState(localStorage.getItem("branchId"));
   const { addToast } = useToast();
+  const [pdfPreview, setPdfPreview] = useState(null);
 
   const loadItems = async () => {
     setLoading(true);
@@ -70,8 +73,69 @@ const QuotationList = ({ onAddNew, onEdit, onBack }) => {
   }, []);
 
   const handleEdit = (item) => {
-    // Pass the full data for editing
     onEdit(item._raw || item);
+  };
+
+  const handleDownloadPDF = (row) => {
+    try {
+      const raw = row._raw || {};
+
+      const items = (raw.quotationItemDetailsResponseDTO || []).map((item) => ({
+        itemCode: item.itemCodes?.itemCode || item.itemCode || "",
+        itemDescription: item.itemCodes?.itemDescription || item.itemDescription || "",
+        unit: item.unit || "",
+        qtyOffered: item.qtyOffered || 0,
+        basicPrice: item.basicPrice || 0,
+        discPercent: item.discountPercentage || 0,
+        discountAmount: item.discountAmount || 0,
+        quotAmount: item.quotationAmount || 0,
+        qty: item.qtyOffered || 0,
+        currencyName: item.currency?.currency || "",
+        date: item.deliveryDate || "",
+      }));
+
+      const taxDetails = (raw.quotationItemTaxDetailsDTO || []).map((tax) => ({
+        particulars: tax.particulars || "",
+        amount: tax.amount || 0,
+      }));
+
+      const result = generateQuotationPDF({
+        company: { name: row.branchName || "Company Name" },
+        quotation: {
+          plantId: row.branchName || "",
+          quotationNo: row.quotationNo || "",
+          serialNo: row.quotationSerialNo || "",
+          date: row.date || "",
+          withEnquiry: row.withEnquiry || "",
+          enquiryNo: row.enquiryNo || "",
+          enquiryDate: row.enquiryDate || "",
+          validTill: row.validTill || "",
+          kindAttention: raw.kindAttention || "",
+          customerEnquiryNo: row.customerEnquiryNo || "",
+          customerEnquiryDate: row.customerEnquiryDate || "",
+          partyName: row.partyName || "",
+          branchName: row.branchName || "",
+          preparedBy: row.preparedBy || "",
+          amount: row.amount || 0,
+          freight: row.freight || 0,
+          freightBy: raw.freightBy || "",
+          totalAmount: row.totalAmount || 0,
+          terms: raw.terms || "",
+          remarks: raw.remarks || "",
+        },
+        items,
+        taxDetails,
+      });
+
+      if (result && result.blobUrl) {
+        setPdfPreview(result);
+      } else {
+        addToast("Failed to generate PDF preview", "error");
+      }
+    } catch (error) {
+      console.error("PDF generation failed:", error);
+      addToast("Failed to generate PDF: " + error.message, "error");
+    }
   };
 
   // Define columns for the table
@@ -192,6 +256,7 @@ const QuotationList = ({ onAddNew, onEdit, onBack }) => {
   ];
 
   return (
+    <>
     <CommonListViewTable
       title="Quotation List"
       data={itemData}
@@ -203,6 +268,7 @@ const QuotationList = ({ onAddNew, onEdit, onBack }) => {
       onBack={onBack}
       onAddNew={onAddNew}
       onEdit={handleEdit}
+      onDownload={handleDownloadPDF}
       onView={false}
       showSerialNumber={true}
       itemsPerPageOptions={[5, 10, 20, 50, 100]}
@@ -214,6 +280,18 @@ const QuotationList = ({ onAddNew, onEdit, onBack }) => {
       enableExport={true}
       exportFileName="Quotations"
     />
+
+      {pdfPreview && (
+        <PDFPreviewModal
+          blobUrl={pdfPreview.blobUrl}
+          fileName={pdfPreview.fileName}
+          onClose={() => {
+            if (pdfPreview.blobUrl) URL.revokeObjectURL(pdfPreview.blobUrl);
+            setPdfPreview(null);
+          }}
+        />
+      )}
+    </>
   );
 };
 
