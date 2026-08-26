@@ -159,8 +159,9 @@ const CurrencyForm = ({ data, onBack, onSave }) => {
   const [countryLoading, setCountryLoading] = useState(false);
 
   // Sample options for dropdowns not yet backed by a real API
-  const currencySymbolOptions = ["$", "€", "£", "₹", "A$", "C$", "¥", "Fr"];
-  const currencyRepresentationOptions = ["Symbol", "Code", "Name"];
+  const currencySymbolOptions = ["$", "€", "£", "₹", "A$", "C$", "¥", "Fr", "PS", "Rs.", "SGD"];
+  const currencySubSymbolOptions = ["Yen", "Ps.", "Ct"];
+  const currencyRepresentationOptions = ["Hundred", "Million", "Lakhs", "Crores"];
 
   const {
     control,
@@ -333,7 +334,7 @@ const CurrencyForm = ({ data, onBack, onSave }) => {
               control={control}
               name="subSymbol"
               label="Sub Symbol"
-              options={currencySymbolOptions}
+              options={currencySubSymbolOptions}
               errors={errors}
             />
 

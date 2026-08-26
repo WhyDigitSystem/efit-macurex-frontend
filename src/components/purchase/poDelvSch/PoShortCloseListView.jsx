@@ -1,61 +1,83 @@
-import React, { useEffect, useState } from "react";
+// PoShortCloseListView.jsx
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
+import poDelScheduleAPI from "../../../api/Purchase/poDeliverySchShortClose";
 
 const PoShortCloseListView = ({ onAddNew, onEdit, onBack }) => {
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(false);
+    const dataLoadedRef = useRef(false);
 
-    const loadData = async () => {
+    const ORG_ID = localStorage.getItem("orgId");
+    const BRANCH_ID = localStorage.getItem("branchId");
+
+    const loadData = useCallback(async () => {
+        if (!ORG_ID || !BRANCH_ID) {
+            console.error("OrgId or BranchId not found in localStorage");
+            return;
+        }
+
+        if (dataLoadedRef.current) return;
+
         setLoading(true);
-        // Dummy Data
-        const dummyData = [
-            {
-                id: 1,
-                shortCloseNo: "SC001",
-                plantId: "Plant 001",
-                supplierCode: "SUP001",
-                supplierName: "ABC Suppliers",
-                poNo: "PO001",
-                shortCloseDate: "27/07/2026",
-                orderStatus: "Pending",
-                totalPendingQty: "150.000",
-                active: true,
-            },
-            {
-                id: 2,
-                shortCloseNo: "SC002",
-                plantId: "Plant 002",
-                supplierCode: "SUP002",
-                supplierName: "XYZ Traders",
-                poNo: "PO002",
-                shortCloseDate: "27/07/2026",
-                orderStatus: "Approved",
-                totalPendingQty: "75.500",
-                active: true,
-            },
-            {
-                id: 3,
-                shortCloseNo: "SC003",
-                plantId: "Plant 001",
-                supplierCode: "SUP003",
-                supplierName: "PQR Enterprises",
-                poNo: "PO003",
-                shortCloseDate: "27/07/2026",
-                orderStatus: "Closed",
-                totalPendingQty: "0.000",
-                active: false,
-            },
-        ];
-        dummyData.sort((a, b) => b.id - a.id);
-        setData(dummyData);
-        setLoading(false);
-    };
+        try {
+            const response = await poDelScheduleAPI.getPurchaseOrderDeliveryScheduleShortCloseByOrgId(
+                BRANCH_ID,
+                ORG_ID
+            );
+
+            console.log("API Response:", response);
+
+            let records = [];
+
+            if (response?.status && response?.paramObjectsMap?.purchaseOrderDeliveryScheduleShortCloseVO) {
+                records = response.paramObjectsMap.purchaseOrderDeliveryScheduleShortCloseVO;
+            } else if (Array.isArray(response)) {
+                records = response;
+            } else if (response?.purchaseOrderDeliveryScheduleShortCloseVO) {
+                records = response.purchaseOrderDeliveryScheduleShortCloseVO;
+            }
+
+            // Transform the data for the table
+            const transformedData = records.map((item) => ({
+                id: item.id,
+                shortCloseNo: item.docId || "",
+                plantId: item.branch?.branchName || item.branch?.branchCode || item.branch?.id || "",
+                supplierCode: item.supplierCode?.supplierCode || "",
+                supplierName: item.supplierCode?.supplierName || "",
+                poNo: item.purchaseOrderScheduleNo || "",
+                shortCloseDate: item.docDate || "",
+                totalPendingQty: item.purchaseOrderDeliveryScheduleShortCloseDetailsResponseDTO?.reduce(
+                    (total, detail) => total + (detail.pendingQty || 0), 0
+                ).toFixed(3) || "0.000",
+                orderStatus: item.active === "Active" ? "Approved" : "Pending",
+                active: item.active === "Active",
+                narration: item.narration || "",
+                referenceForShortClose: item.referenceForShortClose || "",
+                type: item.type || "",
+                belongsTo: item.belongsTo || "",
+                details: item.purchaseOrderDeliveryScheduleShortCloseDetailsResponseDTO || [],
+            }));
+
+            // Sort by id descending (newest first)
+            transformedData.sort((a, b) => (b.id || 0) - (a.id || 0));
+
+            setData(transformedData);
+            dataLoadedRef.current = true;
+        } catch (error) {
+            console.error("Failed to load PO Short Close records:", error);
+            setData([]);
+        } finally {
+            setLoading(false);
+        }
+    }, [ORG_ID, BRANCH_ID]);
 
     useEffect(() => {
         loadData();
-    }, []);
+    }, [loadData]);
 
     const handleEdit = (row) => {
+        // Pass the full row data for editing
         onEdit(row);
     };
 
@@ -106,34 +128,6 @@ const PoShortCloseListView = ({ onAddNew, onEdit, onBack }) => {
             accessor: "totalPendingQty",
             type: "text",
             align: "right",
-        },
-        {
-            key: "orderStatus",
-            label: "Order Status",
-            accessor: "orderStatus",
-            type: "status",
-            statusVariants: {
-                "Pending": {
-                    label: "Pending",
-                    className: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300",
-                },
-                "Approved": {
-                    label: "Approved",
-                    className: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
-                },
-                "Rejected": {
-                    label: "Rejected",
-                    className: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
-                },
-                "Closed": {
-                    label: "Closed",
-                    className: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
-                },
-                "Partial": {
-                    label: "Partial",
-                    className: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300",
-                },
-            },
         },
         {
             key: "active",

@@ -13,17 +13,61 @@ const PurchaseDeliveryScheduleList = ({
   const [loading, setLoading] = useState(false);
 
   const ORG_ID = localStorage.getItem("orgId");
+  const BRANCH_ID = localStorage.getItem("branchId");
 
   const loadSchedules = useCallback(async () => {
+    if (!ORG_ID || !BRANCH_ID) {
+      console.error("OrgId or BranchId not found in localStorage");
+      return;
+    }
+
     try {
       setLoading(true);
 
-      const schedules =
-        await purchaseDeliveryScheduleAPI.getScheduleByOrgId(ORG_ID);
+      const response = await purchaseDeliveryScheduleAPI.getScheduleByOrgId(
+        BRANCH_ID,
+        ORG_ID
+      );
 
-      schedules.sort((a, b) => (b.id || 0) - (a.id || 0));
+      console.log("API Response:", response);
 
-      setScheduleData(schedules);
+      // Extract the purchaseDeliveryScheduleVO array from the response
+      let schedules = [];
+
+      if (response?.status && response?.paramObjectsMap?.purchaseDeliveryScheduleVO) {
+        schedules = response.paramObjectsMap.purchaseDeliveryScheduleVO;
+      } else if (Array.isArray(response)) {
+        schedules = response;
+      } else if (response?.purchaseDeliveryScheduleVO) {
+        schedules = response.purchaseDeliveryScheduleVO;
+      }
+
+      // Transform the data for the table
+      const transformedData = schedules.map((item) => ({
+        id: item.id,
+        docNo: item.docId || "",
+        docDate: item.docDate || "",
+        plantId: item.branch?.branchName || item.branch?.id || "",
+        belongsTo: item.belongsTo || "",
+        supplierCode: item.supplier?.supplierCode || "",
+        supplierName: item.supplier?.supplierName || "",
+        poNo: item.purchaseOrderNo || "",
+        schStartDate: item.scheduleStartDate || "",
+        schEndDate: item.scheduleEndDate || "",
+        active: item.active || "Inactive",
+        scheduleDetails: item.scheduleDetails || [],
+        orgId: item.orgId,
+        branch: item.branch,
+        supplier: item.supplier,
+        financialYear: item.financialYear,
+        cancelRemarks: item.cancelRemarks,
+        createdBy: item.createdBy,
+      }));
+
+      // Sort by id descending (newest first)
+      transformedData.sort((a, b) => (b.id || 0) - (a.id || 0));
+
+      setScheduleData(transformedData);
     } catch (error) {
       console.error("Failed to load purchase delivery schedules:", error);
       setScheduleData([]);
@@ -31,7 +75,7 @@ const PurchaseDeliveryScheduleList = ({
     } finally {
       setLoading(false);
     }
-  }, [ORG_ID]);
+  }, [ORG_ID, BRANCH_ID]);
 
   useEffect(() => {
     loadSchedules();

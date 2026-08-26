@@ -1,4 +1,6 @@
+import ActivitiesCarriedOutMaster from "../components/plantMaintenance/ActivitiesCarriedOut/ActivitiesCarriedOutMaster";
 import BreakdownAuthorizationMaster from "../components/plantMaintenance/BreakdownAuthorization/BreakdownAuthorizationMaster";
+import MachineToolBreakdownMaster from "../components/plantMaintenance/MachineToolBreakdown/MachineToolBreakdownMaster";
 import MachineToolRectificationMaster from "../components/plantMaintenance/MachineToolRectification/MachineToolRectificationMaster ";
 import MachineToolsScrapNoteMaster from "../components/plantMaintenance/MachineToolsScrapNote/MachineToolsScrapNoteMaster";
 import MaintenanceServiceRequestMaster from "../components/plantMaintenance/MaintenanceServiceRequest/MaintenanceServiceRequestMaster";
@@ -23,6 +25,16 @@ const plantMaintenanceRoutes = [
     path: "/maintenanceservicerequest",
     label: "Maintenance Service Request",
     element: <MaintenanceServiceRequestMaster />,
+  },
+  {
+    path: "/activitiescarriedout",
+    label: "Activities carried Out",
+    element: <ActivitiesCarriedOutMaster />,
+  },
+  {
+    path: "/machinetoolbreakdown",
+    label: "Machine Tool Breakdown",
+    element: <MachineToolBreakdownMaster />,
   },
 ];
 

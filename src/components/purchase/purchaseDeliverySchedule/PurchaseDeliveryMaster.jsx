@@ -1,3 +1,4 @@
+// PurchaseDeliveryPage.jsx
 import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import PurchaseDeliveryScheduleList from "./PurchaseDeliveryScheduleList";
@@ -12,30 +13,33 @@ const PurchaseDeliveryPage = () => {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const ORG_ID = localStorage.getItem("orgId");
+  const BRANCH_ID = localStorage.getItem("branchId");
 
   const handleAddNew = () => {
     setEditData(null);
     setView("form");
   };
 
-  //  Pencil icon click -> fetch fresh data by orgId, find the matching schedule, open form
+  // Pencil icon click -> fetch data by ID, open form
   const handleEdit = useCallback(
     async (row) => {
       try {
-        const schedules =
-          await purchaseDeliveryScheduleAPI.getScheduleByOrgId(ORG_ID);
-        const fresh = schedules.find((s) => s.id === row.id) || row;
-        setEditData(fresh);
+        // Use the get by ID API instead of fetching all schedules
+        const response = await purchaseDeliveryScheduleAPI.getPurchaseDeliveryScheduleById(row.id);
+
+        console.log("Edit API Response:", response);
+
+        // Extract the data from the response
+        const scheduleData = response?.paramObjectsMap?.purchaseDeliveryScheduleVO || row;
+
+        setEditData(scheduleData);
         setView("form");
       } catch (error) {
-        console.error(
-          "Failed to fetch purchase delivery schedule for edit:",
-          error,
-        );
+        console.error("Failed to fetch purchase delivery schedule for edit:", error);
         toast.error("Failed to load Purchase Delivery Schedule details");
       }
     },
-    [ORG_ID],
+    []
   );
 
   const handleBack = () => {

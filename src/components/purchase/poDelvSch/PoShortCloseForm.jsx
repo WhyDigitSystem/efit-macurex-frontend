@@ -1,5 +1,10 @@
-import React, { useState } from "react";
+// PoShortCloseForm.jsx
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
+import { useToast } from "../../Toast/ToastContext";
+import branchAPI from "../../../api/branchAPI";
+import listOfValuesAPI from "../../../api/listOfValuesAPI";
+import poDelScheduleAPI from "../../../api/Purchase/poDeliverySchShortClose";
 
 const controlClasses =
     "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -123,63 +128,48 @@ const Field = ({
 
 const fieldGrid = "grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-x-3 gap-y-2 items-start";
 
-// Dummy data for dropdowns
-const PLANT_OPTIONS = [
-    { value: "plant_001", label: "Plant 001" },
-    { value: "plant_002", label: "Plant 002" },
-    { value: "plant_003", label: "Plant 003" },
-];
+const BELONGS_TO = ["APPLIANCES", "BOSCH"];
 
-const BELONGS_TO_OPTIONS = [
-    { value: "company", label: "Company" },
-    { value: "individual", label: "Individual" },
-    { value: "other", label: "Other" },
-];
+// Helper function to get financial year
+const getFinancialYear = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    if (month >= 0 && month <= 2) {
+        return `${year - 1}-${year}`;
+    }
+    return `${year}`;
+};
 
-const TYPE_OPTIONS = [
-    { value: "po", label: "PO" },
-    { value: "delivery_schedule", label: "Delivery Schedule" },
-];
-
-const SUPPLIER_CODE_OPTIONS = [
-    { value: "sup_001", label: "SUP001 - ABC Suppliers" },
-    { value: "sup_002", label: "SUP002 - XYZ Traders" },
-    { value: "sup_003", label: "SUP003 - PQR Enterprises" },
-];
-
-const PO_OPTIONS = [
-    { value: "po_001", label: "PO001" },
-    { value: "po_002", label: "PO002" },
-    { value: "po_003", label: "PO003" },
-];
-
-const ITEM_CODE_OPTIONS = [
-    { value: "item_001", label: "ITEM001" },
-    { value: "item_002", label: "ITEM002" },
-    { value: "item_003", label: "ITEM003" },
-    { value: "item_004", label: "ITEM004" },
-];
-
-const UNIT_OPTIONS = [
-    { value: "nos", label: "Nos" },
-    { value: "kg", label: "KG" },
-    { value: "gms", label: "GMS" },
-    { value: "ltr", label: "LTR" },
-    { value: "mtr", label: "MTR" },
-];
-
-const ORDER_STATUS_OPTIONS = [
-    { value: "pending", label: "Pending" },
-    { value: "approved", label: "Approved" },
-    { value: "rejected", label: "Rejected" },
-    { value: "closed", label: "Closed" },
-    { value: "partial", label: "Partial" },
-];
-
+// Main Component
 const PoShortCloseForm = ({ data, onBack }) => {
+    const [orgId] = useState(localStorage.getItem("orgId"));
+    const [branchId] = useState(localStorage.getItem("branchId"));
+    const { addToast } = useToast();
+
     const [activeTab, setActiveTab] = useState("orderClosedDetail");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [fieldErrors, setFieldErrors] = useState({});
+    const [loading, setLoading] = useState(false);
+
+    // Refs to prevent multiple API calls
+    const branchesLoadedRef = useRef(false);
+    const typeLoadedRef = useRef(false);
+    const suppliersLoadedRef = useRef(false);
+    const poLoadedRef = useRef(false);
+    const docIdLoadedRef = useRef(false);
+    const poDetailsLoadedRef = useRef(false);
+    const isMounted = useRef(true);
+    const dataLoadedRef = useRef(false);
+
+    // Dropdown options
+    const [plantOptions, setPlantOptions] = useState([]);
+    const [belongsToOptions, setBelongsToOptions] = useState([]);
+    const [typeOptions, setTypeOptions] = useState([]);
+    const [supplierOptions, setSupplierOptions] = useState([]);
+    const [poOptions, setPoOptions] = useState([]);
+    const [itemOptions, setItemOptions] = useState([]);
+    const [unitOptions, setUnitOptions] = useState([]);
 
     const [form, setForm] = useState({
         plantId: data?.plantId || "",
@@ -204,16 +194,391 @@ const PoShortCloseForm = ({ data, onBack }) => {
             orderedQty: "",
             suppliedQty: "",
             pendingQty: "",
-            newRequiredQty: "",
             shortCloseQty: "",
+            newRequiredQty: "",
         },
     ]);
+
+    const loadBranches = useCallback(async () => {
+        if (branchesLoadedRef.current || !isMounted.current) return;
+
+        try {
+            const response = await branchAPI.getBranchByOrgId(orgId);
+            const options = (response || []).map(branch => ({
+                value: branch.id,
+                label: branch.branchName || branch.branchCode || branch.id,
+            }));
+            setPlantOptions(options);
+            branchesLoadedRef.current = true;
+        } catch (error) {
+            console.error("Failed to load branches:", error);
+            setPlantOptions([]);
+        }
+    }, [orgId]);
+
+    const loadType = useCallback(async () => {
+        if (typeLoadedRef.current || !isMounted.current) return;
+
+        try {
+            const response = await listOfValuesAPI.getListValuesGroup("PO SHORTCLOSE TYPE", orgId);
+            const options = (response || []).map(item => ({
+                value: item.id,
+                label: item.valuesDescription,
+            }));
+            setTypeOptions(options);
+            typeLoadedRef.current = true;
+        } catch (error) {
+            console.error("Failed to load type options:", error);
+            setTypeOptions([]);
+        }
+    }, [orgId]);
+
+    const loadSuppliers = useCallback(async () => {
+        if (suppliersLoadedRef.current || !orgId || !branchId || !isMounted.current) return;
+
+        setLoading(true);
+        try {
+            const response = await poDelScheduleAPI.getSupplierDetailsShortClose(branchId, orgId);
+            console.log("Supplier Response:", response);
+
+            const supplierList = response?.paramObjectsMap?.mapp || [];
+            const options = supplierList.map(supplier => ({
+                value: supplier.supplierId,
+                label: `${supplier.supplierCode} - ${supplier.supplierName}`,
+                supplierName: supplier.supplierName,
+                supplierCode: supplier.supplierCode,
+            }));
+            setSupplierOptions(options);
+            suppliersLoadedRef.current = true;
+        } catch (error) {
+            console.error("Failed to load suppliers:", error);
+            setSupplierOptions([]);
+            addToast("Failed to load suppliers", "error");
+        } finally {
+            setLoading(false);
+        }
+    }, [orgId, branchId, addToast]);
+
+    const loadPOOptions = useCallback(async () => {
+        if (!form.supplierCode || !orgId || !branchId || !isMounted.current) {
+            setPoOptions([]);
+            return;
+        }
+
+        if (poLoadedRef.current) return;
+
+        setLoading(true);
+        try {
+            const response = await poDelScheduleAPI.getPurchaseOrderNoBasedSchedule(
+                branchId,
+                orgId,
+                form.supplierCode
+            );
+            console.log("PO Response:", response);
+
+            const poList = response?.paramObjectsMap?.mapp || [];
+            const options = poList.map(po => ({
+                value: po.purchaseId,
+                label: po.docId,
+                docId: po.docId,
+                docDate: po.docDate,
+            }));
+            setPoOptions(options);
+            poLoadedRef.current = true;
+        } catch (error) {
+            console.error("Failed to load PO options:", error);
+            setPoOptions([]);
+            addToast("Failed to load Purchase Orders", "error");
+        } finally {
+            setLoading(false);
+        }
+    }, [form.supplierCode, orgId, branchId, addToast]);
+
+    // Load PO Details (Items) based on selected PO
+    const loadPODetails = useCallback(async () => {
+        if (!form.poNo || !form.supplierCode || !orgId || !branchId || !isMounted.current) {
+            return;
+        }
+
+        if (poDetailsLoadedRef.current) return;
+
+        setLoading(true);
+        try {
+            // Find the selected PO to get the docId
+            const selectedPO = poOptions.find(
+                (opt) => String(opt.value) === String(form.poNo)
+            );
+
+            // Use the docId (docId or label) for the API call, not the purchaseId (value)
+            const purchaseOrderNo = selectedPO?.docId || selectedPO?.label || form.poNo;
+
+            console.log("Fetching details for PO DocId:", purchaseOrderNo);
+
+            const response = await poDelScheduleAPI.getPurchaseOrderNoBasedScheduleDetails(
+                branchId,
+                orgId,
+                purchaseOrderNo,
+                form.supplierCode
+            );
+            console.log("PO Details Response:", response);
+
+            const itemList = response?.paramObjectsMap?.mapp || [];
+
+            if (itemList.length > 0 && isMounted.current) {
+                // Create item options from the response
+                const options = itemList.map(item => ({
+                    value: item.itemId,
+                    label: `${item.itemCode} - ${item.itemDescription || ''}`,
+                    itemCode: item.itemCode,
+                    itemDescription: item.itemDescription,
+                    unit: item.unitDescription || item.uom || "",
+                    orderQty: item.orderQty,
+                    suppliedQty: item.suppliedQty,
+                    pendingQty: item.pendingQty,
+                }));
+                setItemOptions(options);
+
+                // Populate the order rows with the items
+                const newOrderRows = itemList.map((item, index) => ({
+                    id: Date.now() + index,
+                    itemCode: item.itemId,
+                    itemDescription: item.itemDescription || "",
+                    unit: item.unitDescription || item.uom || "",
+                    orderedQty: item.orderQty || "",
+                    suppliedQty: item.suppliedQty || "",
+                    pendingQty: item.pendingQty || "",
+                    shortCloseQty: "",
+                    newRequiredQty: "",
+                }));
+
+                setOrderRows(newOrderRows);
+                poDetailsLoadedRef.current = true;
+            } else if (isMounted.current) {
+                setItemOptions([]);
+                // Reset to default row if no items
+                setOrderRows([
+                    {
+                        id: Date.now(),
+                        itemCode: "",
+                        itemDescription: "",
+                        unit: "",
+                        orderedQty: "",
+                        suppliedQty: "",
+                        pendingQty: "",
+                        shortCloseQty: "",
+                        newRequiredQty: "",
+                    },
+                ]);
+            }
+        } catch (error) {
+            console.error("Failed to load PO details:", error);
+            setItemOptions([]);
+            addToast("Failed to load Items", "error");
+        } finally {
+            setLoading(false);
+        }
+    }, [form.poNo, form.supplierCode, orgId, branchId, poOptions, addToast]);
+
+    // Load Doc ID for new form
+    const loadDocId = useCallback(async () => {
+        if (docIdLoadedRef.current || data?.id || !isMounted.current) return;
+
+        setLoading(true);
+        try {
+            const financialYear = getFinancialYear();
+            const response = await poDelScheduleAPI.getPurchaseOrderDeliveryScheduleShortCloseDocId(
+                financialYear,
+                orgId
+            );
+
+            console.log("Doc ID Response:", response);
+
+            if (response?.status && response?.paramObjectsMap?.invoiceDocId && isMounted.current) {
+                const docId = response.paramObjectsMap.invoiceDocId;
+                setForm(prev => ({
+                    ...prev,
+                    shortCloseNo: docId,
+                }));
+                docIdLoadedRef.current = true;
+            } else if (isMounted.current) {
+                setForm(prev => ({
+                    ...prev,
+                    shortCloseNo: "Auto-generated",
+                }));
+            }
+        } catch (error) {
+            console.error("Failed to load Doc ID:", error);
+            if (isMounted.current) {
+                setForm(prev => ({
+                    ...prev,
+                    shortCloseNo: "Auto-generated",
+                }));
+                addToast("Failed to generate document number", "warning");
+            }
+        } finally {
+            setLoading(false);
+        }
+    }, [orgId, data?.id, addToast]);
+
+    // Load edit data when editing
+    const loadEditData = useCallback(async () => {
+        if (!data?.id || dataLoadedRef.current) return;
+
+        setLoading(true);
+        try {
+            const response = await poDelScheduleAPI.getPurchaseOrderDeliveryScheduleShortCloseById(data.id);
+
+            console.log("Get By ID Response:", response);
+
+            const recordData = response?.paramObjectsMap?.purchaseOrderDeliveryScheduleShortCloseVO;
+
+            if (!recordData) {
+                console.error("Purchase Order Delivery Schedule Short Close data not found");
+                return;
+            }
+
+            console.log("Record Data:", recordData);
+
+            // Map the data to form fields
+            const formData = {
+                plantId: recordData.branch?.id?.toString() || "",
+                belongsTo: recordData.belongsTo || "",
+                type: recordData.type || "",
+                supplierCode: recordData.supplierCode?.id?.toString() || "",
+                supplierName: recordData.supplierCode?.supplierName || "",
+                poNo: recordData.purchaseOrderScheduleNo || "",
+                shortCloseNo: recordData.docId || "",
+                shortCloseDate: recordData.docDate || new Date().toISOString().split('T')[0],
+                reference: recordData.referenceForShortClose || recordData.narration || "",
+                orderStatus: recordData.active === "Active" ? "Approved" : "Pending",
+            };
+
+            console.log("Populated Form Data:", formData);
+
+            // Set form values
+            setForm(formData);
+
+            // Populate order rows with details
+            const details = recordData.purchaseOrderDeliveryScheduleShortCloseDetailsResponseDTO || [];
+            if (details.length > 0) {
+                const newOrderRows = details.map((detail, index) => ({
+                    id: Date.now() + index,
+                    itemCode: detail.item?.id?.toString() || "",
+                    itemDescription: detail.item?.itemDescription || "",
+                    unit: detail.item?.unit?.unitId || detail.item?.unit?.id?.toString() || "",
+                    orderedQty: detail.orderedQty?.toString() || "",
+                    suppliedQty: detail.suppliedQty?.toString() || "",
+                    pendingQty: detail.pendingQty?.toString() || "",
+                    shortCloseQty: detail.shortCloseQty?.toString() || "",
+                    newRequiredQty: detail.newRequiredQty?.toString() || "",
+                }));
+                setOrderRows(newOrderRows);
+
+                // Create item options from details
+                const options = details.map(detail => ({
+                    value: detail.item?.id?.toString() || "",
+                    label: `${detail.item?.itemCode || ''} - ${detail.item?.itemDescription || ''}`,
+                    itemCode: detail.item?.itemCode || "",
+                    itemDescription: detail.item?.itemDescription || "",
+                    unit: detail.item?.unit?.unitId || "",
+                    orderQty: detail.orderedQty || 0,
+                    suppliedQty: detail.suppliedQty || 0,
+                    pendingQty: detail.pendingQty || 0,
+                }));
+                setItemOptions(options);
+            }
+
+            // Set the PO loaded ref to true to prevent reloading
+            poLoadedRef.current = true;
+            poDetailsLoadedRef.current = true;
+            dataLoadedRef.current = true;
+
+        } catch (error) {
+            console.error("Failed to load edit data:", error);
+            addToast("Failed to load Purchase Order Delivery Schedule Short Close data", "error");
+        } finally {
+            setLoading(false);
+        }
+    }, [data?.id, addToast]);
+
+    // Auto-fill supplier name when supplier is selected
+    useEffect(() => {
+        if (form.supplierCode && supplierOptions.length > 0) {
+            const selectedSupplier = supplierOptions.find(
+                (opt) => String(opt.value) === String(form.supplierCode)
+            );
+            if (selectedSupplier) {
+                setForm(prev => ({
+                    ...prev,
+                    supplierName: selectedSupplier.supplierName || "",
+                }));
+            }
+        } else if (!form.supplierCode) {
+            setForm(prev => ({
+                ...prev,
+                supplierName: "",
+            }));
+        }
+    }, [form.supplierCode, supplierOptions]);
+
+    // Load PO options when supplier changes
+    useEffect(() => {
+        if (form.supplierCode && !data?.id) {
+            poLoadedRef.current = false; // Reset ref when supplier changes
+            loadPOOptions();
+        } else if (!form.supplierCode) {
+            setPoOptions([]);
+        }
+        // Reset PO details when supplier changes
+        if (!data?.id) {
+            poDetailsLoadedRef.current = false;
+        }
+    }, [form.supplierCode, loadPOOptions, data?.id]);
+
+    // Load PO Details when PO changes
+    useEffect(() => {
+        if (form.poNo && form.supplierCode && !data?.id) {
+            poDetailsLoadedRef.current = false; // Reset ref when PO changes
+            loadPODetails();
+        }
+    }, [form.poNo, form.supplierCode, loadPODetails, data?.id]);
+
+    // Load Doc ID for new form (only if no data is passed)
+    useEffect(() => {
+        if (orgId && !data?.id && !docIdLoadedRef.current) {
+            loadDocId();
+        }
+    }, [orgId, data?.id, loadDocId]);
+
+    // Load edit data when data prop is provided
+    useEffect(() => {
+        if (data?.id && !dataLoadedRef.current) {
+            loadEditData();
+        }
+    }, [data?.id, loadEditData]);
+
+    // Load all dropdowns on mount
+    useEffect(() => {
+        isMounted.current = true;
+        loadBranches();
+        loadType();
+        loadSuppliers();
+
+        return () => {
+            isMounted.current = false;
+        };
+    }, []);
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
 
         if (fieldErrors[name]) {
             setFieldErrors((prev) => ({ ...prev, [name]: "" }));
+        }
+
+        // Reset PO details when PO changes
+        if (name === "poNo") {
+            poDetailsLoadedRef.current = false;
         }
 
         setForm((prev) => ({
@@ -233,6 +598,15 @@ const PoShortCloseForm = ({ data, onBack }) => {
             updatedRows[index].pendingQty = (ordered - supplied).toFixed(3);
         }
 
+        // Calculate New Required Qty = Supplied Qty - Pending Qty - Short Close Qty
+        if (field === "shortCloseQty" || field === "suppliedQty" || field === "pendingQty") {
+            const supplied = parseFloat(updatedRows[index].suppliedQty) || 0;
+            const pending = parseFloat(updatedRows[index].pendingQty) || 0;
+            const shortClose = parseFloat(updatedRows[index].shortCloseQty) || 0;
+            const newRequired = supplied - pending - shortClose;
+            updatedRows[index].newRequiredQty = newRequired.toFixed(3);
+        }
+
         setOrderRows(updatedRows);
     };
 
@@ -247,8 +621,8 @@ const PoShortCloseForm = ({ data, onBack }) => {
                 orderedQty: "",
                 suppliedQty: "",
                 pendingQty: "",
-                newRequiredQty: "",
                 shortCloseQty: "",
+                newRequiredQty: "",
             },
         ]);
     };
@@ -274,25 +648,101 @@ const PoShortCloseForm = ({ data, onBack }) => {
         if (!validate()) return;
         setIsSubmitting(true);
 
-        const payload = {
-            ...form,
-            orderRows,
-        };
-        console.log("Saving payload:", payload);
+        try {
+            const isUpdate = Boolean(data?.id);
 
-        setTimeout(() => {
-            alert(data ? "PO Short Close Updated Successfully!" : "PO Short Close Saved Successfully!");
+            // Get the selected PO docId
+            const selectedPO = poOptions.find(
+                (opt) => String(opt.value) === String(form.poNo)
+            );
+            const purchaseOrderScheduleNo = selectedPO?.docId || form.poNo;
+
+            // Get supplier code from selected supplier
+            const selectedSupplier = supplierOptions.find(
+                (opt) => String(opt.value) === String(form.supplierCode)
+            );
+            const supplierCode = selectedSupplier?.supplierCode || form.supplierCode;
+
+            const payload = {
+                ...(isUpdate ? { id: data.id } : {}),
+                active: true,
+                belongsTo: form.belongsTo || "",
+                branch: Number(branchId),
+                cancel: false,
+                cancelRemarks: "",
+                createdBy: localStorage.getItem("usersId") || "",
+                financialYear: getFinancialYear(),
+                narration: form.reference || "",
+                orgId: Number(orgId),
+                purchaseOrderDeliveryScheduleShortCloseDetailsDTO: orderRows.map(row => ({
+                    item: Number(row.itemCode) || 0,
+                    orderedQty: Number(row.orderedQty) || 0,
+                    pendingQty: Number(row.pendingQty) || 0,
+                    shortCloseQty: Number(row.shortCloseQty) || 0,
+                    suppliedQty: Number(row.suppliedQty) || 0,
+                    unit: Number(row.unit) || 0,
+                })),
+                purchaseOrderScheduleNo: purchaseOrderScheduleNo,
+                referenceForShortClose: form.reference || "",
+                supplierCode: Number(form.supplierCode) || 0,
+                type: form.type || "",
+            };
+
+            console.log("Submit Payload:", payload);
+
+            const response = await poDelScheduleAPI.createUpdateShortClose(payload);
+
+            if (response?.status) {
+                addToast(
+                    response?.paramObjectsMap?.message ||
+                    (isUpdate
+                        ? "PO Short Close updated successfully!"
+                        : "PO Short Close created successfully!"),
+                    "success"
+                );
+                onBack();
+            } else {
+                addToast(
+                    response?.errors?.[0]?.shortMessage ||
+                    response?.message ||
+                    "Failed to save PO Short Close.",
+                    "error"
+                );
+            }
+        } catch (err) {
+            console.error("Save PO Short Close Error:", err);
+            if (err.response?.data) {
+                addToast(
+                    err.response.data.message ||
+                    err.response.data.statusMessage ||
+                    JSON.stringify(err.response.data),
+                    "error"
+                );
+            } else {
+                addToast("Something went wrong.", "error");
+            }
+        } finally {
             setIsSubmitting(false);
-            onBack();
-        }, 1000);
+        }
     };
 
+    // Get available items for dropdown (excluding already selected ones)
     const getAvailableItems = (currentIndex) => {
         const selectedItems = orderRows
             .filter((_, index) => index !== currentIndex)
             .map((row) => row.itemCode);
-        return ITEM_CODE_OPTIONS.filter((item) => !selectedItems.includes(item.value));
+        return itemOptions.filter((item) => !selectedItems.includes(item.value));
     };
+
+    if (loading && data?.id) {
+        return (
+            <div className="p-2 max-w-7xl">
+                <div className="flex items-center justify-center h-64">
+                    <div className="text-gray-500 dark:text-gray-400">Loading...</div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="p-2 max-w-7xl">
@@ -305,7 +755,7 @@ const PoShortCloseForm = ({ data, onBack }) => {
                     <ArrowLeft className="h-4 w-4" />
                 </button>
                 <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-                    {data ? "Edit PO/Delv.Sch. Shortclose" : "Add PO/Delv.Sch. Shortclose"}
+                    {data?.id ? "Edit PO/Delv.Sch. Shortclose" : "Add PO/Delv.Sch. Shortclose"}
                 </h2>
             </div>
 
@@ -322,23 +772,25 @@ const PoShortCloseForm = ({ data, onBack }) => {
                         onChange={handleChange}
                         error={fieldErrors.plantId}
                         required
-                        options={PLANT_OPTIONS}
+                        options={plantOptions}
                     />
                     <Field
                         label="Short Close No."
                         name="shortCloseNo"
                         value={form.shortCloseNo}
                         onChange={handleChange}
-                        placeholder="Auto"
+                        placeholder={loading ? "Generating..." : "Auto"}
                         disabled={true}
                     />
-                    
+
                     <Field
                         label="Short Close Date"
                         name="shortCloseDate"
                         type="date"
-                        value={form.shortClosedate}
+                        value={form.shortCloseDate}
                         onChange={handleChange}
+                        required
+                        error={fieldErrors.shortCloseDate}
                     />
 
                     <Field
@@ -347,7 +799,7 @@ const PoShortCloseForm = ({ data, onBack }) => {
                         name="belongsTo"
                         value={form.belongsTo}
                         onChange={handleChange}
-                        options={BELONGS_TO_OPTIONS}
+                        options={belongsToOptions.length > 0 ? belongsToOptions : BELONGS_TO.map(item => ({ value: item, label: item }))}
                     />
 
                     <Field
@@ -358,7 +810,7 @@ const PoShortCloseForm = ({ data, onBack }) => {
                         onChange={handleChange}
                         error={fieldErrors.type}
                         required
-                        options={TYPE_OPTIONS}
+                        options={typeOptions}
                     />
 
                     <Field
@@ -369,7 +821,8 @@ const PoShortCloseForm = ({ data, onBack }) => {
                         onChange={handleChange}
                         error={fieldErrors.supplierCode}
                         required
-                        options={SUPPLIER_CODE_OPTIONS}
+                        options={supplierOptions}
+                        disabled={loading}
                     />
 
                     <Field
@@ -377,6 +830,7 @@ const PoShortCloseForm = ({ data, onBack }) => {
                         name="supplierName"
                         value={form.supplierName}
                         onChange={handleChange}
+                        disabled={true}
                     />
 
                     <Field
@@ -387,7 +841,9 @@ const PoShortCloseForm = ({ data, onBack }) => {
                         onChange={handleChange}
                         error={fieldErrors.poNo}
                         required
-                        options={PO_OPTIONS}
+                        options={poOptions}
+                        disabled={loading || !form.supplierCode}
+                        placeholder={loading ? "Loading PO numbers..." : poOptions.length === 0 && form.supplierCode ? "No PO available" : "Select an option"}
                     />
                 </div>
 
@@ -397,8 +853,8 @@ const PoShortCloseForm = ({ data, onBack }) => {
                         type="button"
                         onClick={() => setActiveTab("orderClosedDetail")}
                         className={`px-4 py-1.5 text-xs font-semibold rounded-t transition-colors ${activeTab === "orderClosedDetail"
-                                ? "bg-blue-600 text-white"
-                                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                            ? "bg-blue-600 text-white"
+                            : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                             }`}
                     >
                         Order Closed Detail
@@ -407,8 +863,8 @@ const PoShortCloseForm = ({ data, onBack }) => {
                         type="button"
                         onClick={() => setActiveTab("summary")}
                         className={`px-4 py-1.5 text-xs font-semibold rounded-t transition-colors ${activeTab === "summary"
-                                ? "bg-blue-600 text-white"
-                                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                            ? "bg-blue-600 text-white"
+                            : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                             }`}
                     >
                         Summary
@@ -442,8 +898,8 @@ const PoShortCloseForm = ({ data, onBack }) => {
                                         <th className="p-1 text-left min-w-[100px] dark:text-gray-200">Ordered Qty</th>
                                         <th className="p-1 text-left min-w-[100px] dark:text-gray-200">Supplied Qty</th>
                                         <th className="p-1 text-left min-w-[100px] dark:text-gray-200">Pending Qty</th>
-                                        <th className="p-1 text-left min-w-[100px] dark:text-gray-200">New Required Qty</th>
                                         <th className="p-1 text-left min-w-[100px] dark:text-gray-200">Short Close Qty</th>
+                                        <th className="p-1 text-left min-w-[100px] dark:text-gray-200">New Required Qty</th>
                                         <th className="p-1 text-center w-10 dark:text-gray-200">Action</th>
                                     </tr>
                                 </thead>
@@ -477,18 +933,13 @@ const PoShortCloseForm = ({ data, onBack }) => {
                                                 />
                                             </td>
                                             <td className="p-1">
-                                                <select
+                                                <input
+                                                    type="text"
                                                     value={row.unit}
                                                     onChange={(e) => handleOrderRowChange(index, "unit", e.target.value)}
-                                                    className={`${controlClasses} h-8 text-xs w-full min-w-[70px]`}
-                                                >
-                                                    <option value="">Select</option>
-                                                    {UNIT_OPTIONS.map((unit) => (
-                                                        <option key={unit.value} value={unit.value}>
-                                                            {unit.label}
-                                                        </option>
-                                                    ))}
-                                                </select>
+                                                    className={`${controlClasses} h-8 text-xs w-full min-w-[80px]`}
+                                                    placeholder="Unit"
+                                                />
                                             </td>
                                             <td className="p-1">
                                                 <input
@@ -498,6 +949,7 @@ const PoShortCloseForm = ({ data, onBack }) => {
                                                     className={`${controlClasses} h-8 text-xs w-full min-w-[90px]`}
                                                     placeholder="0.000"
                                                     step="0.001"
+                                                    disabled={true}
                                                 />
                                             </td>
                                             <td className="p-1">
@@ -508,6 +960,7 @@ const PoShortCloseForm = ({ data, onBack }) => {
                                                     className={`${controlClasses} h-8 text-xs w-full min-w-[90px]`}
                                                     placeholder="0.000"
                                                     step="0.001"
+                                                    disabled={true}
                                                 />
                                             </td>
                                             <td className="p-1">
@@ -515,6 +968,17 @@ const PoShortCloseForm = ({ data, onBack }) => {
                                                     type="number"
                                                     value={row.pendingQty}
                                                     onChange={(e) => handleOrderRowChange(index, "pendingQty", e.target.value)}
+                                                    className={`${controlClasses} h-8 text-xs w-full min-w-[90px]`}
+                                                    placeholder="0.000"
+                                                    step="0.001"
+                                                    disabled={true}
+                                                />
+                                            </td>
+                                            <td className="p-1">
+                                                <input
+                                                    type="number"
+                                                    value={row.shortCloseQty}
+                                                    onChange={(e) => handleOrderRowChange(index, "shortCloseQty", e.target.value)}
                                                     className={`${controlClasses} h-8 text-xs w-full min-w-[90px]`}
                                                     placeholder="0.000"
                                                     step="0.001"
@@ -528,16 +992,7 @@ const PoShortCloseForm = ({ data, onBack }) => {
                                                     className={`${controlClasses} h-8 text-xs w-full min-w-[90px]`}
                                                     placeholder="0.000"
                                                     step="0.001"
-                                                />
-                                            </td>
-                                            <td className="p-1">
-                                                <input
-                                                    type="number"
-                                                    value={row.shortCloseQty}
-                                                    onChange={(e) => handleOrderRowChange(index, "shortCloseQty", e.target.value)}
-                                                    className={`${controlClasses} h-8 text-xs w-full min-w-[90px]`}
-                                                    placeholder="0.000"
-                                                    step="0.001"
+                                                    disabled={true}
                                                 />
                                             </td>
                                             <td className="p-1 text-center">
@@ -546,8 +1001,8 @@ const PoShortCloseForm = ({ data, onBack }) => {
                                                     onClick={() => handleRemoveOrderRow(index)}
                                                     disabled={orderRows.length <= 1}
                                                     className={`h-5 w-5 rounded text-white flex items-center justify-center transition-colors ${orderRows.length <= 1
-                                                            ? "bg-gray-400 dark:bg-gray-600 cursor-not-allowed"
-                                                            : "bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800"
+                                                        ? "bg-gray-400 dark:bg-gray-600 cursor-not-allowed"
+                                                        : "bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800"
                                                         }`}
                                                 >
                                                     <Trash2 size={10} />
@@ -594,7 +1049,7 @@ const PoShortCloseForm = ({ data, onBack }) => {
                         className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
                     >
                         <Save className="h-3 w-3" />
-                        {isSubmitting ? "Saving..." : data ? "Update" : "Save"}
+                        {isSubmitting ? "Saving..." : data?.id ? "Update" : "Save"}
                     </button>
                 </div>
             </div>
