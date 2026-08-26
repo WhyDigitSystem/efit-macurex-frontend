@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import proformaInvoiceAPI from "../../../api/Sales/proformaInvoiceAPI";
-import { toast } from "../../../utils/toast";
+import { useToast } from "../../Toast/ToastContext";
+import generateProformaInvoicePDF from "../../../utils/generateProformaInvoicePDF";
+import PDFPreviewModal from "../../../utils/PDFPreviewModal";
 
 const ProformaInvoiceList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [pdfPreview, setPdfPreview] = useState(null);
+  const { addToast } = useToast();
 
   const ORG_ID = localStorage.getItem("orgId");
   const BRANCH_ID = localStorage.getItem("branchId");
@@ -32,6 +36,86 @@ const ProformaInvoiceList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   useEffect(() => {
     loadRecords();
   }, [loadRecords, refreshTrigger]);
+
+  const handleDownloadPDF = async (row) => {
+    try {
+      const full = await proformaInvoiceAPI.getProformaInvoiceById(row.id);
+      if (!full) {
+        addToast("Invoice data not found", "error");
+        return;
+      }
+
+      const items = (full.proformaInvoiceDetailsResponseDTO || []).map((item) => ({
+        itemCode: item.item?.itemCode || "",
+        customerPartNo: item.item?.customerPoNo || "",
+        itemDescription: item.item?.itemDescription || "",
+        hsCode: item.hsnCode || "",
+        taxType: item.taxType || "",
+        taxPercentage: item.taxPercentage || "",
+        dispatchQty: item.despatchQty || "",
+        unit: item.item?.unit?.unitId || "",
+        orderRate: item.orderRate || "",
+        amount: item.amount || "",
+        sgstRate: item.sgstRate || "",
+        sgstAmount: item.sgstAmount || "",
+        cgstRate: item.cgstRate || "",
+        cgstAmount: item.cgstAmount || "",
+        igstRate: item.igstRate || "",
+        igstAmount: item.igstAmount || "",
+      }));
+
+      const taxDetails = (full.proformaInvoiceTaxDetailsResponseDTO || []).map((tax) => ({
+        particulars: tax.particulars || "",
+        amount: tax.amount || 0,
+      }));
+
+      const result = generateProformaInvoicePDF({
+        company: { name: full.branch?.branchName || row.branch || "Company Name" },
+        invoice: {
+          plantName: full.branch?.branchName || "",
+          invoiceNo: full.docId || "",
+          invoiceDate: full.docDate || "",
+          customerName: full.customer?.customerName || "",
+          customerCode: full.customer?.customerCode || "",
+          belongsTo: full.belongsTo || "",
+          poNo: full.purchaseOrderNo || "",
+          poDate: full.purchaseOrderDate || "",
+          gstnNo: full.customer?.customerGstNo || "",
+          grossAmount: full.grossAmount || 0,
+          kindAttention: full.kindAttention || "",
+          designation: full.designation || "",
+          isIgstApplicable: full.isIgstApplicable || "No",
+        },
+        items,
+        taxDetails,
+        terms: {
+          insurance: full.insurance === 1 ? "Yes" : "No",
+          freight: full.freight === 1 ? "Yes" : "No",
+          noOfPkg: full.noOfPkg || "",
+          pkgType: full.pkgType || "",
+          modeOfTransport: full.modeOfTransport || "",
+          rateOfDuty: full.rateOfDuty || "",
+          tariffNo: full.tariffNo || "",
+          basicValue: full.basicValue || 0,
+          grossAmount: full.grossAmount || 0,
+          amountInWords: full.amountInWords || "",
+          deliveryTo: full.deliveryTo || "",
+          paymentTerms: full.paymentTerms || "",
+          paymentPercentage: full.paymentPercentage || "",
+          narration: full.narration || "",
+        },
+      });
+
+      if (result && result.blobUrl) {
+        setPdfPreview(result);
+      } else {
+        addToast("Failed to generate PDF preview", "error");
+      }
+    } catch (error) {
+      console.error("PDF generation failed:", error);
+      addToast("Failed to generate PDF: " + error.message, "error");
+    }
+  };
 
   const columns = [
     {
@@ -135,6 +219,7 @@ const ProformaInvoiceList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   ];
 
   return (
+    <>
     <CommonListViewTable
       title="Proforma Invoice"
       subtitle="Manage Proforma Invoices"
@@ -157,8 +242,20 @@ const ProformaInvoiceList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
       onRefresh={loadRecords}
       enableExport={true}
       exportFileName="ProformaInvoices"
+      onDownload={handleDownloadPDF}
     />
-  );
-};
 
+    {pdfPreview && (
+      <PDFPreviewModal
+        blobUrl={pdfPreview.blobUrl}
+        fileName={pdfPreview.fileName}
+        onClose={() => {
+          URL.revokeObjectURL(pdfPreview.blobUrl);
+          setPdfPreview(null);
+        }}
+      />
+    )}
+  </>
+);
+}
 export default ProformaInvoiceList;
