@@ -1,18 +1,7 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { formatDateForDisplay } from "./dateFormatter";
-
-/* -------------------------------------------------------------------------- */
-/* Fixed company letterhead (same on every PO)                                */
-/* -------------------------------------------------------------------------- */
-const COMPANY = {
-  name: "Macurex Sensors Pvt.Ltd.",
-  legalName: "MACUREX SENSORS PVT LTD",
-  addressLines: ["NO.21/B, KIADB INDUSTRIAL AREA, 1ST PHASE,", "KUMBALGODU"],
-  gstin: "29AABCM1363N1Z6",
-  pan: "AABCM1363N",
-  cin: "U32109KA1992PTC013678",
-};
+import { companySetupAPI } from "../api/companySetupApi";
 
 const NOTES = [
   "1.PLEASE MENTION OUR PART NAME, PART NUMBER AND PO NUMBER, DELIVERY SCHEDULE IN YOUR INVOICE",
@@ -119,6 +108,41 @@ const fmtAmount = (n) =>
     maximumFractionDigits: 2,
   });
 
+/** Title-case a string like "BENGALURU" -> "Bengaluru" */
+const titleCase = (str = "") =>
+  str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+
+/** Build the address lines array from the company object's location fields */
+const buildAddressLines = (company) => {
+  const lines = [];
+  if (company.registeredAddress) lines.push(company.registeredAddress);
+
+  const cityName =
+    company.city && typeof company.city === "object"
+      ? company.city.cityName
+      : company.city;
+  const stateName =
+    company.state && typeof company.state === "object"
+      ? company.state.stateName
+      : company.state;
+  const countryName =
+    company.country && typeof company.country === "object"
+      ? company.country.countryName
+      : company.country;
+
+  const cityStateLine = [
+    titleCase(cityName),
+    titleCase(stateName),
+    company.pincode,
+  ]
+    .filter(Boolean)
+    .join(", ");
+  if (cityStateLine) lines.push(cityStateLine);
+  if (countryName) lines.push(titleCase(countryName));
+
+  return lines;
+};
+
 /* -------------------------------------------------------------------------- */
 /* Main generator                                                             */
 /* -------------------------------------------------------------------------- */
@@ -126,7 +150,18 @@ const fmtAmount = (n) =>
  * @param {Object} po - a row from PurchaseOrderList's itemData (already transformed),
  *                       OR a fresh object from getPurchaseOrderById if you fetch full detail on click.
  */
-export function generatePurchaseOrderPdf(po) {
+export async function generatePurchaseOrderPdf(po) {
+  const orgId = localStorage.getItem("orgId");
+  let company = {};
+
+  try {
+    company = (await companySetupAPI.getCompanyById(orgId)) || {};
+  } catch (err) {
+    console.error("Error loading company for PDF:", err);
+  }
+
+  const addressLines = buildAddressLines(company);
+
   const doc = new jsPDF({ unit: "pt", format: "a4" }); // 595 x 842 pt
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 30;
@@ -149,17 +184,28 @@ export function generatePurchaseOrderPdf(po) {
   let ly = y + 18;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
-  doc.text(COMPANY.name, margin + 8, ly);
-  ly += 14;
-  doc.text(COMPANY.legalName, margin + 8, ly);
+  doc.text(company.companyName || "", margin + 8, ly);
   ly += 14;
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
-  COMPANY.addressLines.forEach((line) => {
+  addressLines.forEach((line) => {
     doc.text(line, margin + 8, ly);
     ly += 12;
   });
   ly += 6;
+  if (company.gst) {
+    doc.text(`GSTIN: ${company.gst}`, margin + 8, ly);
+    ly += 12;
+  }
+  if (company.panNo) {
+    doc.text(`PAN: ${company.panNo}`, margin + 8, ly);
+    ly += 12;
+  }
+  if (company.cin) {
+    doc.text(`CIN: ${company.cin}`, margin + 8, ly);
+    ly += 12;
+  }
+  ly += 4;
   doc.setFont("helvetica", "bold");
   doc.text("To :", margin + 8, ly);
   doc.setFont("helvetica", "normal");
@@ -344,7 +390,7 @@ export function generatePurchaseOrderPdf(po) {
   doc.text("Prepared By", margin + 8, y + 20);
   doc.text(po.preparedBy || "", margin + 8, y + 32 > y + 30 ? y + 20 : y + 20);
   doc.text("Checked By", pageWidth / 2 - 20, y + 20);
-  doc.text(`For ${COMPANY.legalName}`, pageWidth - margin - 8, y + 20, {
+  doc.text(`For ${company.companyName || ""}`, pageWidth - margin - 8, y + 20, {
     align: "right",
   });
 

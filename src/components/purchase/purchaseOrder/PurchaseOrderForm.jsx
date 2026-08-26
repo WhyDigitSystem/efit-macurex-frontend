@@ -598,8 +598,12 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
 
   const [formData, setFormData] = useState(() => ({
     ...getDefaultValues(),
+    branch: String(editData?.branch ?? BRANCH_ID ?? ""),
     ...(editData || {}),
   }));
+
+  // The selected Plant/Branch drives every branch-dependent API.
+  const effectiveBranchId = toInteger(formData.branch || BRANCH_ID);
 
   const [localDetailRows, setLocalDetailRows] = useState(
     editData?.purchaseOrderLocalDetailsDTO?.length
@@ -792,7 +796,10 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
     try {
       if (!ORG_ID) return;
 
-      const response = await departmentAPI.getAllDepartments(ORG_ID, BRANCH_ID);
+      const response = await departmentAPI.getAllDepartments(
+        ORG_ID,
+        effectiveBranchId,
+      );
 
       const list =
         response?.paramObjectsMap?.departmentVO ||
@@ -814,13 +821,13 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
 
       setDepartmentOptions([]);
     }
-  }, [ORG_ID, BRANCH_ID]);
+  }, [ORG_ID, effectiveBranchId]);
 
   const loadItemOptions = useCallback(async () => {
     try {
       if (!ORG_ID) return;
 
-      const response = await itemAPI.getItems(ORG_ID, BRANCH_ID);
+      const response = await itemAPI.getItems(ORG_ID, effectiveBranchId);
 
       const list = Array.isArray(response)
         ? response
@@ -830,19 +837,22 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
 
       setItemOptions(
         list.map((item) => ({
-          value: item.id,
+          value: item.itemId ?? item.id,
 
-          label: item.itemCode || item.code || `Item ${item.id}`,
+          label: item.itemCode || item.code || `Item ${item.itemId ?? item.id}`,
 
-          itemDescription: item.itemDescription || item.description || "",
+          itemDescription:
+            item.itemDescription || item.itemDesc || item.description || "",
 
           hsnCode: item.hsnCode || item.hsnSacCode || item.hsn || "",
 
           unit:
-            item.primaryUnits?.id ||
-            item.primaryUnit?.id ||
-            item.unit?.id ||
-            item.primaryUnit ||
+            item.uom ??
+            item.unitId ??
+            item.primaryUnits?.id ??
+            item.primaryUnit?.id ??
+            item.unit?.id ??
+            item.primaryUnit ??
             "",
         })),
       );
@@ -851,14 +861,14 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
 
       setItemOptions([]);
     }
-  }, [ORG_ID, BRANCH_ID]);
+  }, [ORG_ID, effectiveBranchId]);
 
   const loadTaxDefinitions = useCallback(async () => {
     try {
       if (!ORG_ID) return;
 
       const response = await taxDefinitionAPI.getTaxDefinitionByOrgId(
-        BRANCH_ID,
+        effectiveBranchId,
         ORG_ID,
       );
 
@@ -888,7 +898,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
 
       setTaxDefinitionOptions([]);
     }
-  }, [ORG_ID, BRANCH_ID]);
+  }, [ORG_ID, effectiveBranchId]);
 
   /* ========================================================================= */
   /* SUPPLIER DROPDOWN                                                         */
@@ -900,16 +910,17 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
 
       const response = await purchaseOrderAPI.getSupplierDetails(
         ORG_ID,
-        BRANCH_ID,
+        effectiveBranchId,
       );
 
       console.log("Supplier API Response:", response);
 
+      const data = response?.data ?? response;
       const list =
-        response?.paramObjectsMap?.mapp ||
-        response?.paramObjectsMap?.supplierVO ||
-        response?.paramObjectsMap?.suppliers ||
-        [];
+        data?.paramObjectsMap?.mapp ||
+        data?.paramObjectsMap?.supplierVO ||
+        data?.paramObjectsMap?.suppliers ||
+        (Array.isArray(data) ? data : []);
 
       setSupplierOptions(
         list.map((supplier) => ({
@@ -941,7 +952,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
 
       setSupplierOptions([]);
     }
-  }, [ORG_ID, BRANCH_ID]);
+  }, [ORG_ID, effectiveBranchId]);
 
   /* ========================================================================= */
   /* INDENT DROPDOWN                                                           */
@@ -1030,12 +1041,12 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
   const loadItemDetailsWithoutIndent = useCallback(
     async (poType) => {
       try {
-        if (!ORG_ID || !BRANCH_ID) {
+        if (!ORG_ID || !effectiveBranchId) {
           console.warn(
-            "Cannot load item details. ORG_ID or BRANCH_ID missing",
+            "Cannot load item details. ORG_ID or Branch is missing",
             {
               ORG_ID,
-              BRANCH_ID,
+              branch: effectiveBranchId,
             },
           );
 
@@ -1047,7 +1058,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
         console.log("Loading item details because Indent Required = NO");
 
         console.log("PO Type:", poType);
-        console.log("Branch:", BRANCH_ID);
+        console.log("Branch:", effectiveBranchId);
         console.log("Org:", ORG_ID);
 
         /* ================================================================
@@ -1057,7 +1068,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
         if (poType === "Local") {
           const response =
             await purchaseOrderAPI.getItemDetailsResponsePurchaseLocal(
-              BRANCH_ID,
+              effectiveBranchId,
               ORG_ID,
             );
 
@@ -1178,7 +1189,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
         if (poType === "Import") {
           const response =
             await purchaseOrderAPI.getItemDetailsResponsePurchaseImport(
-              BRANCH_ID,
+              effectiveBranchId,
               ORG_ID,
             );
 
@@ -1282,7 +1293,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
         addToast("Failed to load item details", "error");
       }
     },
-    [ORG_ID, BRANCH_ID, addToast],
+    [ORG_ID, effectiveBranchId, addToast],
   );
   const loadBelongsTo = useCallback(async () => {
     try {
@@ -1389,12 +1400,12 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
   const loadExchangeRate = useCallback(
     async (currencyId) => {
       try {
-        if (!ORG_ID || !BRANCH_ID || !currencyId) {
+        if (!ORG_ID || !effectiveBranchId || !currencyId) {
           return;
         }
 
         const response = await purchaseOrderAPI.getExchangeRateDetails(
-          BRANCH_ID,
+          effectiveBranchId,
           currencyId,
           ORG_ID,
         );
@@ -1423,7 +1434,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
         addToast("Failed to fetch exchange rate", "error");
       }
     },
-    [ORG_ID, BRANCH_ID, addToast],
+    [ORG_ID, effectiveBranchId, addToast],
   );
 
   /* ========================================================================= */
@@ -1515,6 +1526,29 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
         ...previous,
         [name]: "",
       }));
+    }
+
+    /* --------------------------------------------------------------------- */
+    /* PLANT / BRANCH CHANGE                                                 */
+    /* --------------------------------------------------------------------- */
+
+    if (name === "branch") {
+      setFormData((previous) => ({
+        ...previous,
+        branch: value,
+        supplierCode: "",
+        supplierName: "",
+        supplierAddress: "",
+        supplierState: "",
+        supplierPinCode: "",
+        gstnNo: "",
+      }));
+
+      setSupplierOptions([]);
+      setLocalDetailRows([emptyLocalDetailRow()]);
+      setImportDetailRows([emptyImportDetailRow()]);
+      setIndentItemOptions([]);
+      return;
     }
 
     /* --------------------------------------------------------------------- */
@@ -2737,7 +2771,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
     if (!exists) {
       setActiveTab(activeTabs[0].key);
     }
-  }, [activeTabs, activeTab]);
+  }, [isLocal, activeTab]);
 
   /* ========================================================================= */
   /* LOCAL DETAIL COLUMNS                                                      */

@@ -1,13 +1,5 @@
 import jsPDF from "jspdf";
-
-const COMPANY = {
-  name: "Macurex Sensors Pvt.Ltd.",
-  legalName: "MACUREX SENSORS PVT LTD",
-  addressLines: ["NO.21/B, KIADB INDUSTRIAL AREA, 1ST PHASE,", "KUMBALGODU"],
-  gstin: "29AABCM1363N1Z6",
-  pan: "AABCM1363N",
-  cin: "U32109KA1992PTC013678",
-};
+import { companySetupAPI } from "../api/companySetupApi";
 
 const fmtAmount = (n) =>
   (Number(n) || 0).toLocaleString("en-IN", {
@@ -15,11 +7,57 @@ const fmtAmount = (n) =>
     maximumFractionDigits: 2,
   });
 
+/** Title-case a string like "BENGALURU" -> "Bengaluru" */
+const titleCase = (str = "") =>
+  str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+
+/** Build the address lines array from the company object's location fields */
+const buildAddressLines = (company) => {
+  const lines = [];
+  if (company.registeredAddress) lines.push(company.registeredAddress);
+
+  const cityName =
+    company.city && typeof company.city === "object"
+      ? company.city.cityName
+      : company.city;
+  const stateName =
+    company.state && typeof company.state === "object"
+      ? company.state.stateName
+      : company.state;
+  const countryName =
+    company.country && typeof company.country === "object"
+      ? company.country.countryName
+      : company.country;
+
+  const cityStateLine = [
+    titleCase(cityName),
+    titleCase(stateName),
+    company.pincode,
+  ]
+    .filter(Boolean)
+    .join(", ");
+  if (cityStateLine) lines.push(cityStateLine);
+  if (countryName) lines.push(titleCase(countryName));
+
+  return lines;
+};
+
 /**
+ * Fetches the current org's company details and generates the Purchase Bill PDF.
  * @param {Object} bill - a row from PurchaseBillList's purchaseData
- *                        (extend with more fields once real API data is wired up)
  */
-export function generatePurchaseBillPdf(bill) {
+export async function generatePurchaseBillPdf(bill) {
+  const orgId = localStorage.getItem("orgId");
+  let company = {};
+
+  try {
+    company = (await companySetupAPI.getCompanyById(orgId)) || {};
+  } catch (err) {
+    console.error("Error loading company for PDF:", err);
+  }
+
+  const addressLines = buildAddressLines(company);
+
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 30;
@@ -41,20 +79,27 @@ export function generatePurchaseBillPdf(bill) {
 
   let ly = y + 18;
   doc.setFontSize(11);
-  doc.text(COMPANY.name, margin + 8, ly);
-  ly += 14;
-  doc.text(COMPANY.legalName, margin + 8, ly);
+  doc.setFont("helvetica", "bold");
+  doc.text(company.companyName || "", margin + 8, ly);
   ly += 14;
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
-  COMPANY.addressLines.forEach((line) => {
+  addressLines.forEach((line) => {
     doc.text(line, margin + 8, ly);
     ly += 12;
   });
   ly += 6;
-  doc.text(`GSTIN: ${COMPANY.gstin}`, margin + 8, ly);
-  ly += 12;
-  doc.text(`PAN: ${COMPANY.pan}`, margin + 8, ly);
+  if (company.gst) {
+    doc.text(`GSTIN: ${company.gst}`, margin + 8, ly);
+    ly += 12;
+  }
+  if (company.panNo) {
+    doc.text(`PAN: ${company.panNo}`, margin + 8, ly);
+    ly += 12;
+  }
+  if (company.cin) {
+    doc.text(`CIN: ${company.cin}`, margin + 8, ly);
+  }
 
   let ry = y + 20;
   const rx = pageWidth / 2 + 30;
@@ -100,7 +145,7 @@ export function generatePurchaseBillPdf(bill) {
   doc.setFontSize(9);
   doc.text("Prepared By", margin + 8, y + 20);
   doc.text("Checked By", pageWidth / 2 - 20, y + 20);
-  doc.text(`For ${COMPANY.legalName}`, pageWidth - margin - 8, y + 20, {
+  doc.text(`For ${company.companyName || ""}`, pageWidth - margin - 8, y + 20, {
     align: "right",
   });
 

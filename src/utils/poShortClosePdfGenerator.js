@@ -1,18 +1,59 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { formatDateForDisplay } from "./dateFormatter";
+import { companySetupAPI } from "../api/companySetupApi";
 
-const COMPANY = {
-  name: "Macurex Sensors Pvt.Ltd.",
-  legalName: "MACUREX SENSORS PVT LTD",
-  addressLines: ["NO.21/B, KIADB INDUSTRIAL AREA, 1ST PHASE,", "KUMBALGODU"],
-  gstin: "29AABCM1363N1Z6",
+/** Title-case a string like "BENGALURU" -> "Bengaluru" */
+const titleCase = (str = "") =>
+  str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+
+/** Build the address lines array from the company object's location fields */
+const buildAddressLines = (company) => {
+  const lines = [];
+  if (company.registeredAddress) lines.push(company.registeredAddress);
+
+  const cityName =
+    company.city && typeof company.city === "object"
+      ? company.city.cityName
+      : company.city;
+  const stateName =
+    company.state && typeof company.state === "object"
+      ? company.state.stateName
+      : company.state;
+  const countryName =
+    company.country && typeof company.country === "object"
+      ? company.country.countryName
+      : company.country;
+
+  const cityStateLine = [
+    titleCase(cityName),
+    titleCase(stateName),
+    company.pincode,
+  ]
+    .filter(Boolean)
+    .join(", ");
+  if (cityStateLine) lines.push(cityStateLine);
+  if (countryName) lines.push(titleCase(countryName));
+
+  return lines;
 };
 
 /**
  * @param {Object} record - a row from PoShortCloseListView's data
  *                          (has `details` = purchaseOrderDeliveryScheduleShortCloseDetailsResponseDTO)
  */
-export function generatePoShortClosePdf(record) {
+export async function generatePoShortClosePdf(record) {
+  const orgId = localStorage.getItem("orgId");
+  let company = {};
+
+  try {
+    company = (await companySetupAPI.getCompanyById(orgId)) || {};
+  } catch (err) {
+    console.error("Error loading company for PDF:", err);
+  }
+
+  const addressLines = buildAddressLines(company);
+
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 30;
@@ -30,22 +71,39 @@ export function generatePoShortClosePdf(record) {
   y += 40;
 
   /* ---- Company header ---- */
-  const headerHeight = 90;
+  const headerHeight = 130;
   doc.rect(margin, y, pageWidth - margin * 2, headerHeight);
   doc.line(pageWidth / 2 + 20, y, pageWidth / 2 + 20, y + headerHeight);
 
   let ly = y + 18;
+  doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
-  doc.text(COMPANY.name, margin + 8, ly);
+  doc.text(company.companyName || "", margin + 8, ly);
   ly += 14;
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
-  COMPANY.addressLines.forEach((line) => {
+  addressLines.forEach((line) => {
     doc.text(line, margin + 8, ly);
     ly += 12;
   });
   ly += 6;
-  doc.text(`Plant : ${record.plantId || ""}`, margin + 8, ly);
+  if (company.gst) {
+    doc.text(`GSTIN: ${company.gst}`, margin + 8, ly);
+    ly += 12;
+  }
+  if (company.panNo) {
+    doc.text(`PAN: ${company.panNo}`, margin + 8, ly);
+    ly += 12;
+  }
+  if (company.cin) {
+    doc.text(`CIN: ${company.cin}`, margin + 8, ly);
+    ly += 12;
+  }
+  ly += 4;
+  doc.setFont("helvetica", "bold");
+  doc.text("Plant :", margin + 8, ly);
+  doc.setFont("helvetica", "normal");
+  doc.text(String(record.plantId || ""), margin + 60, ly);
 
   let ry = y + 20;
   const rx = pageWidth / 2 + 30;
@@ -58,7 +116,10 @@ export function generatePoShortClosePdf(record) {
     ry += 15;
   };
   rightRow("Short Close No :", record.shortCloseNo || "");
-  rightRow("Short Close Date :", record.shortCloseDate || "");
+  rightRow(
+    "Short Close Date :",
+    formatDateForDisplay(record.shortCloseDate) || "",
+  );
   rightRow("PO/Del.Sch.No :", record.poNo || "");
   rightRow("Status :", record.orderStatus || "");
 
@@ -141,12 +202,15 @@ export function generatePoShortClosePdf(record) {
 
   /* ---- Signature row ---- */
   doc.rect(margin, y, pageWidth - margin * 2, 30);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
   doc.text("Prepared By", margin + 8, y + 20);
   doc.text("Checked By", pageWidth / 2 - 20, y + 20);
-  doc.text(`For ${COMPANY.legalName}`, pageWidth - margin - 8, y + 20, {
+  doc.text(`For ${company.companyName || ""}`, pageWidth - margin - 8, y + 20, {
     align: "right",
   });
 
+  /* ---- Save ---- */
   const fileName = (record.shortCloseNo || "PoShortClose").replace(/\//g, "-");
   doc.save(`${fileName}.pdf`);
 }
