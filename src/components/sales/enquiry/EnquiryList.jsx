@@ -1,10 +1,15 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import enquiryAPI from "../../../api/Sales/enquiryAPI";
+import generateEnquiryReportPDF from "../../../utils/generateEnquiryReportPDF";
+import PDFPreviewModal from "../../../utils/PDFPreviewModal";
+import { useToast } from "../../Toast/ToastContext";
 
 const EnquiryList = ({ onAddNew, onEdit, onBack }) => {
   const [itemData, setItemData] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [pdfPreview, setPdfPreview] = useState(null);
+  const { addToast } = useToast();
 
   const loadItems = async () => {
     setLoading(true);
@@ -20,10 +25,7 @@ const EnquiryList = ({ onAddNew, onEdit, onBack }) => {
       }
 
       const response = await enquiryAPI.getEnquiryByOrgId(orgId, branchId);
-      
-      console.log("API Response:", response);
 
-      // Extract the enquiry list from the response
       let enquiries = [];
       if (response?.paramObjectsMap?.enquiryList) {
         enquiries = response.paramObjectsMap.enquiryList;
@@ -31,7 +33,6 @@ const EnquiryList = ({ onAddNew, onEdit, onBack }) => {
         enquiries = response;
       }
 
-      // Transform the data for the table
       const transformedData = enquiries.map((enquiry) => ({
         id: enquiry.id,
         enquiryNo: enquiry.enquiryNo || "",
@@ -50,14 +51,13 @@ const EnquiryList = ({ onAddNew, onEdit, onBack }) => {
         createdBy: enquiry.createdBy || "",
         orgId: enquiry.orgId || "",
         cancelRemarks: enquiry.cancelRemarks || "",
+        plantId: enquiry.branch?.branchName || "",
         enquiryDetails: enquiry.enquiryDetails || [],
         enquiryTermsandCond: enquiry.enquiryTermsandCond || [],
         enquiryAttachmentDTO: enquiry.enquiryAttachmentDTO || [],
       }));
 
-      // Sort by id descending (newest first)
       transformedData.sort((a, b) => b.id - a.id);
-
       setItemData(transformedData);
     } catch (error) {
       console.error("Error loading enquiries:", error);
@@ -73,6 +73,64 @@ const EnquiryList = ({ onAddNew, onEdit, onBack }) => {
 
   const handleEdit = (item) => {
     onEdit(item);
+  };
+
+  const handleDownloadPDF = (row) => {
+    try {
+      const items = (row.enquiryDetails || []).map((detail) => ({
+        contactPartNo: detail.itemCode || "",
+        itemDescription: detail.itemDescription || "",
+        annualQty: detail.annualquantity || 0,
+        dlryDate: detail.dlrydate || "",
+        needApproval: detail.needrdapproval || "",
+        quoteDueDate: detail.quoteduedate || "",
+        remarks: detail.remarks || "",
+      }));
+
+      const termsData = (row.enquiryTermsandCond || [])[0] || {};
+
+      const result = generateEnquiryReportPDF({
+        company: {
+          name: row.branchName || "Company Name",
+        },
+        enquiry: {
+          plantId: row.plantId || "",
+          enquiryType: row.enquiryType || "",
+          enquiryNo: row.enquiryNo || "",
+          enquiryDate: row.enquiryDate || "",
+          partyId: row.partyName || "",
+          partyName: row.partyName || "",
+          partyRefNo: row.partyRefNo || "",
+          partyRefDate: row.partyRefDate || "",
+          enquiryDueDate: row.enquiryDueDate || "",
+          contactName: row.contactName || "",
+        },
+        items,
+        terms: {
+          additionalInvestment: termsData.additionalInvestment || "",
+          additionalManPower: termsData.additionalManPower || "",
+          timeFrame: termsData.likelyTimeFrame || "",
+          expectedTime: termsData.expectedDeliverySample || "",
+          pilotBatch: termsData.pilotBatch || "",
+          regularProduction: termsData.regularProduction || "",
+          reviewComments: termsData.initialReviewComments || "",
+          detailReview: termsData.detailDelivery || "",
+          statutory: termsData.statutoryRegulatoryReq || "",
+          followUp: termsData.followUp || "",
+          remarks: termsData.remarks || "",
+          conclusion: termsData.conclusion || "",
+        },
+      });
+
+      if (result && result.blobUrl) {
+        setPdfPreview(result);
+      } else {
+        addToast("Failed to generate PDF preview", "error");
+      }
+    } catch (error) {
+      console.error("PDF generation failed:", error);
+      addToast("Failed to generate PDF: " + error.message, "error");
+    }
   };
 
   const columns = [
@@ -154,7 +212,7 @@ const EnquiryList = ({ onAddNew, onEdit, onBack }) => {
       label: "Actions",
       type: "actions",
       align: "center",
-      width: "90px",
+      width: "110px",
     },
   ];
 
@@ -193,28 +251,43 @@ const EnquiryList = ({ onAddNew, onEdit, onBack }) => {
   ];
 
   return (
-    <CommonListViewTable
-      title="Enquiry"
-      data={itemData}
-      loading={loading}
-      columns={columns}
-      searchFields={searchFields}
-      filterOptions={filterOptions}
-      defaultFilter="all"
-      onBack={onBack}
-      onAddNew={onAddNew}
-      onEdit={handleEdit}
-      onView={false}
-      showSerialNumber={true}
-      itemsPerPageOptions={[5, 10, 20, 50, 100]}
-      defaultItemsPerPage={10}
-      emptyMessage="No Enquiries found"
-      loadingMessage="Loading Enquiries..."
-      enableRefresh={true}
-      onRefresh={loadItems}
-      enableExport={true}
-      exportFileName="Enquiries"
-    />
+    <>
+      <CommonListViewTable
+        title="Enquiry Report"
+        subtitle="Sales - Manage enquiries and download reports"
+        data={itemData}
+        loading={loading}
+        columns={columns}
+        searchFields={searchFields}
+        filterOptions={filterOptions}
+        defaultFilter="all"
+        onBack={onBack}
+        onAddNew={onAddNew}
+        onEdit={handleEdit}
+        onDownload={handleDownloadPDF}
+        onView={false}
+        showSerialNumber={true}
+        itemsPerPageOptions={[5, 10, 20, 50, 100]}
+        defaultItemsPerPage={10}
+        emptyMessage="No Enquiries found"
+        loadingMessage="Loading Enquiries..."
+        enableRefresh={true}
+        onRefresh={loadItems}
+        enableExport={true}
+        exportFileName="Enquiries"
+      />
+
+      {pdfPreview && (
+        <PDFPreviewModal
+          blobUrl={pdfPreview.blobUrl}
+          fileName={pdfPreview.fileName}
+          onClose={() => {
+            if (pdfPreview.blobUrl) URL.revokeObjectURL(pdfPreview.blobUrl);
+            setPdfPreview(null);
+          }}
+        />
+      )}
+    </>
   );
 };
 
