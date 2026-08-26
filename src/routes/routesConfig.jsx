@@ -117,6 +117,7 @@ import SalesContract from "../components/sales/salescontract/SalesContract";
 import SalesDelivery from "../components/sales/salesdeliveryschedule/SalesDelivery";
 import StockTransferChallanMaster from "../components/sales/stockTransferChallan/StockTransferChallanMaster";
 import TransportBillMaster from "../components/sales/transportBill/TransportBillMaster";
+import SalesReturnMaster from "../components/sales/salesReturn/SalesReturnMaster";
 import salesRoutes from "./salesRoutes";
 import securityRoutes from "./securityRoutes";
 import productionRoutes from "./productionRoutes";
@@ -610,6 +611,12 @@ export const routesConfig = [
     label: "Proforma Invoice",
     keywords: ["proformainvoice"],
     element: <ProformaInvoice />,
+  },
+  {
+    path: "/sales/salesreturn",
+    label: "Sales Return",
+    keywords: ["salesreturn", "sales return"],
+    element: <SalesReturnMaster />,
   },
   {
     path: "/stocktransferchallan",
