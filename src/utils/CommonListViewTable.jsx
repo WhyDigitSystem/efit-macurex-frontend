@@ -6,7 +6,9 @@ import {
   ChevronUp,
   Filter,
   ArrowLeft,
+  FileDown,
 } from "lucide-react";
+
 import { formatDateForDisplay } from "./dateFormatter";
 
 const CommonListViewTable = ({
@@ -29,6 +31,7 @@ const CommonListViewTable = ({
   onView,
   onCustomAction,
   onBack,
+  onDownload,
 
   // Custom renderers
   customCellRenderers = {},
@@ -285,6 +288,15 @@ const CommonListViewTable = ({
             </svg>
           </button>
         )}
+        {onDownload && (
+          <button
+            onClick={() => onDownload(row)}
+            className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 transition-colors"
+            title="Download PDF"
+          >
+            <FileDown className="h-4 w-4" />
+          </button>
+        )}
         {onCustomAction && onCustomAction(row)}
       </div>
     ),
@@ -381,14 +393,13 @@ const CommonListViewTable = ({
 
   return (
     <div className="p-3">
-    
       <div className="mb-4 flex items-center justify-between">
         {/* Left */}
-       <div className="flex items-center gap-3">
-  {onBack && (
-    <button
-      onClick={onBack}
-      className="
+        <div className="flex items-center gap-3">
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="
         flex items-center justify-center
         h-8 w-8
         rounded-full
@@ -399,24 +410,24 @@ const CommonListViewTable = ({
         transition
         flex-shrink-0
       "
-      title="Back"
-    >
-      <ArrowLeft className="h-5 w-5" />
-    </button>
-  )}
+              title="Back"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+          )}
 
-  <div>
-    <h1 className="text-xl font-bold tracking-tight text-gray-700 dark:text-gray-200">
-      {title}
-    </h1>
+          <div>
+            <h1 className="text-xl font-bold tracking-tight text-gray-700 dark:text-gray-200">
+              {title}
+            </h1>
 
-    {subtitle && (
-      <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-        {subtitle}
-      </p>
-    )}
-  </div>
-</div>
+            {subtitle && (
+              <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                {subtitle}
+              </p>
+            )}
+          </div>
+        </div>
 
         {/* Right */}
         {onAddNew && (

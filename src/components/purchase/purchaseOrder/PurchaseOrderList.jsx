@@ -2,16 +2,25 @@ import React, { useCallback, useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import purchaseOrderAPI from "../../../api/Purchase/purchaseOrderAPI";
 import { useToast } from "../../Toast/ToastContext";
+import { generatePurchaseOrderPdf } from "../../../utils/purchaseOrderPdfGenerator";
 
 const PurchaseOrderList = ({ onAddNew, onEdit, onBack }) => {
   const [itemData, setItemData] = useState([]);
   const [loading, setLoading] = useState(false);
-
   const { addToast } = useToast();
 
   /* -------------------------------------------------------------------------- */
   /* Load Purchase Orders                                                       */
   /* -------------------------------------------------------------------------- */
+
+  const handleDownload = (item) => {
+    try {
+      generatePurchaseOrderPdf(item);
+    } catch (error) {
+      console.error("Error generating PO PDF:", error);
+      addToast("Failed to generate PDF", "error");
+    }
+  };
 
   const loadItems = useCallback(async () => {
     setLoading(true);
@@ -505,6 +514,7 @@ const PurchaseOrderList = ({ onAddNew, onEdit, onBack }) => {
       onBack={onBack}
       onAddNew={onAddNew}
       onEdit={handleEdit}
+      onDownload={handleDownload}
       onView={false}
       showSerialNumber={true}
       itemsPerPageOptions={[5, 10, 20, 50, 100]}
