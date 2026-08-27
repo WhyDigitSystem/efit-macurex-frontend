@@ -3,22 +3,30 @@ import CommonListViewTable from "../../../utils/CommonListViewTable";
 import purchaseOrderAPI from "../../../api/Purchase/purchaseOrderAPI";
 import { useToast } from "../../Toast/ToastContext";
 import { generatePurchaseOrderPdf } from "../../../utils/purchaseOrderPdfGenerator";
+import PDFPreviewModal from "../../../utils/PDFPreviewModal";
 
 const PurchaseOrderList = ({ onAddNew, onEdit, onBack }) => {
   const [itemData, setItemData] = useState([]);
   const [loading, setLoading] = useState(false);
   const { addToast } = useToast();
+  const [pdfPreview, setPdfPreview] = useState(null);
 
   /* -------------------------------------------------------------------------- */
   /* Load Purchase Orders                                                       */
   /* -------------------------------------------------------------------------- */
 
-  const handleDownload = (item) => {
+  const handleDownload = async (item) => {
     try {
-      generatePurchaseOrderPdf(item);
+      const result = await generatePurchaseOrderPdf(item);
+
+      if (result && result.blobUrl) {
+        setPdfPreview(result);
+      } else {
+        addToast("Failed to generate PDF preview", "error");
+      }
     } catch (error) {
       console.error("Error generating PO PDF:", error);
-      addToast("Failed to generate PDF", "error");
+      addToast("Failed to generate PDF: " + error.message, "error");
     }
   };
 
@@ -503,29 +511,42 @@ const PurchaseOrderList = ({ onAddNew, onEdit, onBack }) => {
   /* -------------------------------------------------------------------------- */
 
   return (
-    <CommonListViewTable
-      title="Purchase Order"
-      data={itemData}
-      loading={loading}
-      columns={columns}
-      searchFields={searchFields}
-      filterOptions={filterOptions}
-      defaultFilter="all"
-      onBack={onBack}
-      onAddNew={onAddNew}
-      onEdit={handleEdit}
-      onDownload={handleDownload}
-      onView={false}
-      showSerialNumber={true}
-      itemsPerPageOptions={[5, 10, 20, 50, 100]}
-      defaultItemsPerPage={10}
-      emptyMessage="No Purchase Orders found"
-      loadingMessage="Loading Purchase Orders..."
-      enableRefresh={true}
-      onRefresh={loadItems}
-      enableExport={true}
-      exportFileName="PurchaseOrders"
-    />
+    <>
+      <CommonListViewTable
+        title="Purchase Order"
+        data={itemData}
+        loading={loading}
+        columns={columns}
+        searchFields={searchFields}
+        filterOptions={filterOptions}
+        defaultFilter="all"
+        onBack={onBack}
+        onAddNew={onAddNew}
+        onEdit={handleEdit}
+        onDownload={handleDownload}
+        onView={false}
+        showSerialNumber={true}
+        itemsPerPageOptions={[5, 10, 20, 50, 100]}
+        defaultItemsPerPage={10}
+        emptyMessage="No Purchase Orders found"
+        loadingMessage="Loading Purchase Orders..."
+        enableRefresh={true}
+        onRefresh={loadItems}
+        enableExport={true}
+        exportFileName="PurchaseOrders"
+      />
+
+      {pdfPreview && (
+        <PDFPreviewModal
+          blobUrl={pdfPreview.blobUrl}
+          fileName={pdfPreview.fileName}
+          onClose={() => {
+            if (pdfPreview.blobUrl) URL.revokeObjectURL(pdfPreview.blobUrl);
+            setPdfPreview(null);
+          }}
+        />
+      )}
+    </>
   );
 };
 

@@ -1,10 +1,14 @@
 import React, { useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import purchaseIndentAPI from "../../../api/Purchase/purchaseIndentAPI";
+import { toast } from "../../../utils/toast";
+import generatePurchaseIndentPDF from "../../../utils/generatePurchaseIndentPDF";
+import PDFPreviewModal from "../../../utils/PDFPreviewModal";
 
 const PurchaseIndentList = ({ onAddNew, onEdit, onBack }) => {
   const [itemData, setItemData] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [pdfPreview, setPdfPreview] = useState(null);
 
   const loadItems = async () => {
     setLoading(true);
@@ -39,6 +43,7 @@ const PurchaseIndentList = ({ onAddNew, onEdit, onBack }) => {
       // nested objects depending on your service layer; handle both.
       const transformedData = indents.map((indent) => ({
         id: indent.id,
+        indentNo: indent.indentNo || indent.id,
         belongsTo: indent.belongsTo || "",
         branch: indent.branch?.branchName || indent.branch || "",
         branchCode: indent.branch?.branchCode || "",
@@ -46,6 +51,7 @@ const PurchaseIndentList = ({ onAddNew, onEdit, onBack }) => {
           indent.department?.departmentName || indent.department || "",
         preparedBy: indent.preparedBy?.employeeName || indent.preparedBy || "",
         byWhom: indent.byWhom?.employeeName || indent.byWhom || "",
+        indentDate: indent.indentDate || "",
         remarks: indent.remarks || "",
         cancelRemarks: indent.cancelRemarks || "",
         approved: Boolean(indent.approved),
@@ -74,6 +80,59 @@ const PurchaseIndentList = ({ onAddNew, onEdit, onBack }) => {
 
   const handleEdit = (item) => {
     onEdit(item);
+  };
+
+  const handleDownloadPDF = (row) => {
+    try {
+      // NOTE: detail rows on the list record only carry item/unit IDs
+      // (see PurchaseIndentForm's detail shape) unless your API already
+      // resolves them to nested objects. Adjust the fallbacks below to
+      // match whatever shape purchaseIndentAPI.getPurchaseIndentByOrgId
+      // actually returns for `details`.
+      const items = (row.details || []).map((detail) => ({
+        itemCode:
+          detail.item?.itemCode || detail.itemCode || String(detail.item ?? ""),
+        itemDescription:
+          detail.itemDescription || detail.item?.itemDescription || "",
+        primaryUnitLabel:
+          detail.primaryUnitLabel || detail.primaryUnit?.primaryUnit || "",
+        purchaseUnitLabel:
+          detail.purchaseUnitLabel || detail.purchaseUnit?.primaryUnit || "",
+        qtyInPrimaryUnit: detail.qtyInPrimaryUnit || 0,
+        conversionFactor: detail.conversionFactor || 0,
+        qtyInPurchaseUnit: detail.qtyInPurchaseUnit || 0,
+        requiredDate: detail.requiredDate || "",
+        purpose: detail.purpose || "",
+      }));
+
+      const result = generatePurchaseIndentPDF({
+        company: { name: row.branch || "Company Name" },
+        indent: {
+          id: row.id,
+          indentNo: row.indentNo || row.id,
+          plantId: row.branch || "",
+          belongsTo: row.belongsTo || "",
+          indentDate: row.indentDate || "",
+          department: row.department || "",
+          preparedBy: row.preparedBy || "",
+          byWhom: row.byWhom || "",
+          approved: row.approved,
+          active: row.active,
+          remarks: row.remarks || "",
+          cancelRemarks: row.cancelRemarks || "",
+        },
+        items,
+      });
+
+      if (result && result.blobUrl) {
+        setPdfPreview(result);
+      } else {
+        toast.error("Failed to generate PDF preview");
+      }
+    } catch (error) {
+      console.error("PDF generation failed:", error);
+      toast.error("Failed to generate PDF: " + error.message);
+    }
   };
 
   const columns = [
@@ -190,28 +249,42 @@ const PurchaseIndentList = ({ onAddNew, onEdit, onBack }) => {
   ];
 
   return (
-    <CommonListViewTable
-      title="Purchase Indent"
-      data={itemData}
-      loading={loading}
-      columns={columns}
-      searchFields={searchFields}
-      filterOptions={filterOptions}
-      defaultFilter="all"
-      onBack={onBack}
-      onAddNew={onAddNew}
-      onEdit={handleEdit}
-      onView={false}
-      showSerialNumber={true}
-      itemsPerPageOptions={[5, 10, 20, 50, 100]}
-      defaultItemsPerPage={10}
-      emptyMessage="No Purchase Indents found"
-      loadingMessage="Loading Purchase Indents..."
-      enableRefresh={true}
-      onRefresh={loadItems}
-      enableExport={true}
-      exportFileName="PurchaseIndents"
-    />
+    <>
+      <CommonListViewTable
+        title="Purchase Indent"
+        data={itemData}
+        loading={loading}
+        columns={columns}
+        searchFields={searchFields}
+        filterOptions={filterOptions}
+        defaultFilter="all"
+        onBack={onBack}
+        onAddNew={onAddNew}
+        onEdit={handleEdit}
+        onDownload={handleDownloadPDF}
+        onView={false}
+        showSerialNumber={true}
+        itemsPerPageOptions={[5, 10, 20, 50, 100]}
+        defaultItemsPerPage={10}
+        emptyMessage="No Purchase Indents found"
+        loadingMessage="Loading Purchase Indents..."
+        enableRefresh={true}
+        onRefresh={loadItems}
+        enableExport={true}
+        exportFileName="PurchaseIndents"
+      />
+
+      {pdfPreview && (
+        <PDFPreviewModal
+          blobUrl={pdfPreview.blobUrl}
+          fileName={pdfPreview.fileName}
+          onClose={() => {
+            if (pdfPreview.blobUrl) URL.revokeObjectURL(pdfPreview.blobUrl);
+            setPdfPreview(null);
+          }}
+        />
+      )}
+    </>
   );
 };
 

@@ -1,10 +1,20 @@
 import { useState, useEffect, useCallback } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import purchaseOrderAmendmentAPI from "../../../api/Purchase/purchaseOrderAmendmentAPI";
+import { generatePurchaseOrderAmendmentPdf } from "../../../utils/generatePurchaseOrderAmendmentPdf";
+import PDFPreviewModal from "../../../utils/PDFPreviewModal";
+import { useToast } from "../../Toast/ToastContext";
 
-const PurchaseOrderAmendmentList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
+const PurchaseOrderAmendmentList = ({
+  onAddNew,
+  onEdit,
+  onBack,
+  refreshTrigger,
+}) => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [pdfPreview, setPdfPreview] = useState(null);
+  const { addToast } = useToast();
 
   const orgId = Number(localStorage.getItem("orgId")) || 0;
   const branch = Number(localStorage.getItem("branchId")) || 1000000001;
@@ -26,21 +36,63 @@ const PurchaseOrderAmendmentList = ({ onAddNew, onEdit, onBack, refreshTrigger }
     loadData();
   }, [loadData, refreshTrigger]);
 
+  const handleDownload = async (row) => {
+    try {
+      const result = await generatePurchaseOrderAmendmentPdf(row);
+
+      if (result && result.blobUrl) {
+        setPdfPreview(result);
+      } else {
+        addToast("Failed to generate PDF preview", "error");
+      }
+    } catch (error) {
+      console.error("Error generating PO Amendment PDF:", error);
+      addToast("Failed to generate PDF: " + error.message, "error");
+    }
+  };
+
   const columns = [
     { key: "sno", label: "#", type: "text" },
-    { key: "amendmentNo", label: "Amendment No", type: "text", accessor: (row) => row.amendmentNo || "" },
-    { key: "amendmentDate", label: "Amendment Date", type: "text", accessor: (row) => row.amendmentDate || "" },
-    { key: "poNo", label: "PO No", type: "text", accessor: (row) => row.poNo || "" },
-    { key: "partyName", label: "Party Name", type: "text", accessor: (row) => row.partyName || "" },
-    { key: "revisionNo", label: "Revision", type: "text", accessor: (row) => row.revisionNo || "" },
+    {
+      key: "amendmentNo",
+      label: "Amendment No",
+      type: "text",
+      accessor: (row) => row.amendmentNo || "",
+    },
+    {
+      key: "amendmentDate",
+      label: "Amendment Date",
+      type: "text",
+      accessor: (row) => row.amendmentDate || "",
+    },
+    {
+      key: "poNo",
+      label: "PO No",
+      type: "text",
+      accessor: (row) => row.poNo || "",
+    },
+    {
+      key: "partyName",
+      label: "Party Name",
+      type: "text",
+      accessor: (row) => row.partyName || "",
+    },
+    {
+      key: "revisionNo",
+      label: "Revision",
+      type: "text",
+      accessor: (row) => row.revisionNo || "",
+    },
     {
       key: "status",
       label: "Status",
       type: "status",
       accessor: (row) => (row.active !== false ? "Active" : "Inactive"),
       statusVariants: {
-        Active: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
-        Inactive: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+        Active:
+          "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+        Inactive:
+          "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
       },
     },
     {
@@ -54,18 +106,32 @@ const PurchaseOrderAmendmentList = ({ onAddNew, onEdit, onBack, refreshTrigger }
   const searchFields = ["amendmentNo", "poNo", "partyName"];
 
   return (
-    <CommonListViewTable
-      title="Purchase Order Amendment"
-      subtitle="Manage purchase order amendments and revisions"
-      data={data}
-      loading={loading}
-      columns={columns}
-      searchFields={searchFields}
-      onAddNew={onAddNew}
-      onEdit={onEdit}
-      onBack={onBack}
-      emptyMessage="No PO amendments found"
-    />
+    <>
+      <CommonListViewTable
+        title="Purchase Order Amendment"
+        subtitle="Manage purchase order amendments and revisions"
+        data={data}
+        loading={loading}
+        columns={columns}
+        searchFields={searchFields}
+        onAddNew={onAddNew}
+        onEdit={onEdit}
+        onBack={onBack}
+        onDownload={handleDownload}
+        emptyMessage="No PO amendments found"
+      />
+
+      {pdfPreview && (
+        <PDFPreviewModal
+          blobUrl={pdfPreview.blobUrl}
+          fileName={pdfPreview.fileName}
+          onClose={() => {
+            if (pdfPreview.blobUrl) URL.revokeObjectURL(pdfPreview.blobUrl);
+            setPdfPreview(null);
+          }}
+        />
+      )}
+    </>
   );
 };
 

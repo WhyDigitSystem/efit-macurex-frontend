@@ -8,7 +8,6 @@ import { departmentAPI } from "../../../api/departmentAPI";
 import { designationAPI } from "../../../api/designationAPI";
 import { useToast } from "../../Toast/ToastContext";
 import branchAPI from "../../../api/branchAPI";
-
 const UPPERCASE_FIELDS = ["employeeId"];
 
 const controlClasses =
@@ -106,7 +105,6 @@ const Field = ({
         value={value}
         onChange={onChange}
         disabled={disabled}
-        className={controlClasses}
         placeholder={placeholder}
       />
       {error && (
@@ -257,14 +255,14 @@ const EmployeeMasterForm = ({ data, onBack }) => {
     if (orgId) fetchCountries();
   }, [orgId]);
 
-   useEffect(() => {
-      loadBranches();
-    }, []);
+  useEffect(() => {
+    loadBranches();
+  }, []);
 
   const loadBranches = useCallback(async () => {
     try {
       const response = await branchAPI.getBranchByOrgId(orgId);
-      const options = (response || []).map(branch => ({
+      const options = (response || []).map((branch) => ({
         value: branch.id,
         label: branch.branchName,
       }));
@@ -756,20 +754,22 @@ const EmployeeMasterForm = ({ data, onBack }) => {
           <button
             type="button"
             onClick={() => setActiveTab("official")}
-            className={`px-4 py-1.5 text-xs font-semibold rounded-t ${activeTab === "official"
-              ? "bg-blue-600 text-white"
-              : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-              } transition-colors`}
+            className={`px-4 py-1.5 text-xs font-semibold rounded-t ${
+              activeTab === "official"
+                ? "bg-blue-600 text-white"
+                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+            } transition-colors`}
           >
             Official Information
           </button>
           <button
             type="button"
             onClick={() => setActiveTab("personal")}
-            className={`px-4 py-1.5 text-xs font-semibold rounded-t ${activeTab === "personal"
-              ? "bg-blue-600 text-white"
-              : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-              } transition-colors`}
+            className={`px-4 py-1.5 text-xs font-semibold rounded-t ${
+              activeTab === "personal"
+                ? "bg-blue-600 text-white"
+                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+            } transition-colors`}
           >
             Personal Information
           </button>
@@ -877,15 +877,15 @@ const EmployeeMasterForm = ({ data, onBack }) => {
                   onChange={handleTempCountryChange}
                   options={[
                     ...(form.tempCountry &&
-                      !countries.some(
-                        (c) => String(c.id) === String(form.tempCountry),
-                      )
+                    !countries.some(
+                      (c) => String(c.id) === String(form.tempCountry),
+                    )
                       ? [
-                        {
-                          id: form.tempCountry,
-                          countryName: form.tempCountryName,
-                        },
-                      ]
+                          {
+                            id: form.tempCountry,
+                            countryName: form.tempCountryName,
+                          },
+                        ]
                       : []),
                     ...countries,
                   ].map((c) => ({ value: c.id, label: c.countryName }))}
@@ -899,9 +899,9 @@ const EmployeeMasterForm = ({ data, onBack }) => {
                   disabled={!form.tempCountry}
                   options={[
                     ...(form.tempState &&
-                      !tempStates.some(
-                        (s) => String(s.id) === String(form.tempState),
-                      )
+                    !tempStates.some(
+                      (s) => String(s.id) === String(form.tempState),
+                    )
                       ? [{ id: form.tempState, stateName: form.tempStateName }]
                       : []),
                     ...tempStates,
@@ -916,9 +916,9 @@ const EmployeeMasterForm = ({ data, onBack }) => {
                   disabled={!form.tempState}
                   options={[
                     ...(form.tempCity &&
-                      !tempCities.some(
-                        (c) => String(c.id) === String(form.tempCity),
-                      )
+                    !tempCities.some(
+                      (c) => String(c.id) === String(form.tempCity),
+                    )
                       ? [{ id: form.tempCity, cityName: form.tempCityName }]
                       : []),
                     ...tempCities,
@@ -1027,15 +1027,15 @@ const EmployeeMasterForm = ({ data, onBack }) => {
                   required
                   options={[
                     ...(form.permCountry &&
-                      !countries.some(
-                        (c) => String(c.id) === String(form.permCountry),
-                      )
+                    !countries.some(
+                      (c) => String(c.id) === String(form.permCountry),
+                    )
                       ? [
-                        {
-                          id: form.permCountry,
-                          countryName: form.permCountryName,
-                        },
-                      ]
+                          {
+                            id: form.permCountry,
+                            countryName: form.permCountryName,
+                          },
+                        ]
                       : []),
                     ...countries,
                   ].map((c) => ({ value: c.id, label: c.countryName }))}
@@ -1051,9 +1051,9 @@ const EmployeeMasterForm = ({ data, onBack }) => {
                   disabled={!form.permCountry}
                   options={[
                     ...(form.permState &&
-                      !permStates.some(
-                        (s) => String(s.id) === String(form.permState),
-                      )
+                    !permStates.some(
+                      (s) => String(s.id) === String(form.permState),
+                    )
                       ? [{ id: form.permState, stateName: form.permStateName }]
                       : []),
                     ...permStates,
@@ -1070,9 +1070,9 @@ const EmployeeMasterForm = ({ data, onBack }) => {
                   disabled={!form.permState}
                   options={[
                     ...(form.permCity &&
-                      !permCities.some(
-                        (c) => String(c.id) === String(form.permCity),
-                      )
+                    !permCities.some(
+                      (c) => String(c.id) === String(form.permCity),
+                    )
                       ? [{ id: form.permCity, cityName: form.permCityName }]
                       : []),
                     ...permCities,
@@ -1139,15 +1139,15 @@ const EmployeeMasterForm = ({ data, onBack }) => {
                   disabled={!form.plantId}
                   options={[
                     ...(form.departmentId &&
-                      !departments.some(
-                        (d) => String(d.id) === String(form.departmentId),
-                      )
+                    !departments.some(
+                      (d) => String(d.id) === String(form.departmentId),
+                    )
                       ? [
-                        {
-                          id: form.departmentId,
-                          departmentName: form.department,
-                        },
-                      ]
+                          {
+                            id: form.departmentId,
+                            departmentName: form.department,
+                          },
+                        ]
                       : []),
                     ...departments,
                   ].map((d) => ({ value: d.id, label: d.departmentName }))}
@@ -1163,15 +1163,15 @@ const EmployeeMasterForm = ({ data, onBack }) => {
                   disabled={!form.departmentId}
                   options={[
                     ...(form.designationId &&
-                      !designations.some(
-                        (d) => String(d.id) === String(form.designationId),
-                      )
+                    !designations.some(
+                      (d) => String(d.id) === String(form.designationId),
+                    )
                       ? [
-                        {
-                          id: form.designationId,
-                          designationName: form.designation,
-                        },
-                      ]
+                          {
+                            id: form.designationId,
+                            designationName: form.designation,
+                          },
+                        ]
                       : []),
                     ...designations,
                   ].map((d) => ({

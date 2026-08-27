@@ -3,21 +3,31 @@ import React, { useEffect, useState, useCallback, useRef } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import poDelScheduleAPI from "../../../api/Purchase/poDeliverySchShortClose";
 import { generatePoShortClosePdf } from "../../../utils/poShortClosePdfGenerator";
+import PDFPreviewModal from "../../../utils/PDFPreviewModal";
 
 const PoShortCloseListView = ({ onAddNew, onEdit, onBack }) => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [pdfPreview, setPdfPreview] = useState(null);
   const dataLoadedRef = useRef(false);
 
   const ORG_ID = localStorage.getItem("orgId");
   const BRANCH_ID = localStorage.getItem("branchId");
-  const handleDownload = (row) => {
+
+  const handleDownload = async (row) => {
     try {
-      generatePoShortClosePdf(row);
+      const result = await generatePoShortClosePdf(row);
+
+      if (result && result.blobUrl) {
+        setPdfPreview(result);
+      } else {
+        console.error("Failed to generate PDF preview");
+      }
     } catch (error) {
       console.error("Error generating PO Short Close PDF:", error);
     }
   };
+
   const loadData = useCallback(async () => {
     if (!ORG_ID || !BRANCH_ID) {
       console.error("OrgId or BranchId not found in localStorage");
@@ -226,29 +236,42 @@ const PoShortCloseListView = ({ onAddNew, onEdit, onBack }) => {
   ];
 
   return (
-    <CommonListViewTable
-      title="PO/Delv.Sch. Shortclose"
-      data={data}
-      loading={loading}
-      columns={columns}
-      searchFields={searchFields}
-      filterOptions={filterOptions}
-      defaultFilter="all"
-      onBack={onBack}
-      onAddNew={onAddNew}
-      onEdit={handleEdit}
-      onDownload={handleDownload}
-      onView={false}
-      showSerialNumber={true}
-      itemsPerPageOptions={[5, 10, 20, 50, 100]}
-      defaultItemsPerPage={10}
-      emptyMessage="No PO Short Close records found"
-      loadingMessage="Loading PO Short Close records..."
-      enableRefresh={true}
-      onRefresh={loadData}
-      enableExport={true}
-      exportFileName="PO_Short_Close"
-    />
+    <>
+      <CommonListViewTable
+        title="PO/Delv.Sch. Shortclose"
+        data={data}
+        loading={loading}
+        columns={columns}
+        searchFields={searchFields}
+        filterOptions={filterOptions}
+        defaultFilter="all"
+        onBack={onBack}
+        onAddNew={onAddNew}
+        onEdit={handleEdit}
+        onDownload={handleDownload}
+        onView={false}
+        showSerialNumber={true}
+        itemsPerPageOptions={[5, 10, 20, 50, 100]}
+        defaultItemsPerPage={10}
+        emptyMessage="No PO Short Close records found"
+        loadingMessage="Loading PO Short Close records..."
+        enableRefresh={true}
+        onRefresh={loadData}
+        enableExport={true}
+        exportFileName="PO_Short_Close"
+      />
+
+      {pdfPreview && (
+        <PDFPreviewModal
+          blobUrl={pdfPreview.blobUrl}
+          fileName={pdfPreview.fileName}
+          onClose={() => {
+            if (pdfPreview.blobUrl) URL.revokeObjectURL(pdfPreview.blobUrl);
+            setPdfPreview(null);
+          }}
+        />
+      )}
+    </>
   );
 };
 

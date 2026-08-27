@@ -1,14 +1,22 @@
 import React, { useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import { generatePurchaseBillPdf } from "../../../utils/purchaseBillPdfGenerator";
+import PDFPreviewModal from "../../../utils/PDFPreviewModal";
 
 const PurchaseBillList = ({ onAddNew, onEdit, onBack }) => {
   const [purchaseData, setPurchaseData] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [pdfPreview, setPdfPreview] = useState(null);
 
-  const handleDownload = (purchase) => {
+  const handleDownload = async (purchase) => {
     try {
-      generatePurchaseBillPdf(purchase);
+      const result = await generatePurchaseBillPdf(purchase);
+
+      if (result && result.blobUrl) {
+        setPdfPreview(result);
+      } else {
+        console.error("Failed to generate PDF preview");
+      }
     } catch (error) {
       console.error("Error generating Purchase Bill PDF:", error);
     }
@@ -181,29 +189,42 @@ const PurchaseBillList = ({ onAddNew, onEdit, onBack }) => {
   ];
 
   return (
-    <CommonListViewTable
-      title="Purchase Bill"
-      data={purchaseData}
-      loading={loading}
-      columns={columns}
-      searchFields={searchFields}
-      filterOptions={filterOptions}
-      defaultFilter="all"
-      onBack={onBack}
-      onAddNew={onAddNew}
-      onEdit={handleEdit}
-      onDownload={handleDownload}
-      onView={false}
-      showSerialNumber={true}
-      itemsPerPageOptions={[5, 10, 20, 50, 100]}
-      defaultItemsPerPage={10}
-      emptyMessage="No Purchase Bills found"
-      loadingMessage="Loading Purchase Bills..."
-      enableRefresh={true}
-      onRefresh={loadPurchaseBills}
-      enableExport={true}
-      exportFileName="Purchase_Bills"
-    />
+    <>
+      <CommonListViewTable
+        title="Purchase Bill"
+        data={purchaseData}
+        loading={loading}
+        columns={columns}
+        searchFields={searchFields}
+        filterOptions={filterOptions}
+        defaultFilter="all"
+        onBack={onBack}
+        onAddNew={onAddNew}
+        onEdit={handleEdit}
+        onDownload={handleDownload}
+        onView={false}
+        showSerialNumber={true}
+        itemsPerPageOptions={[5, 10, 20, 50, 100]}
+        defaultItemsPerPage={10}
+        emptyMessage="No Purchase Bills found"
+        loadingMessage="Loading Purchase Bills..."
+        enableRefresh={true}
+        onRefresh={loadPurchaseBills}
+        enableExport={true}
+        exportFileName="Purchase_Bills"
+      />
+
+      {pdfPreview && (
+        <PDFPreviewModal
+          blobUrl={pdfPreview.blobUrl}
+          fileName={pdfPreview.fileName}
+          onClose={() => {
+            if (pdfPreview.blobUrl) URL.revokeObjectURL(pdfPreview.blobUrl);
+            setPdfPreview(null);
+          }}
+        />
+      )}
+    </>
   );
 };
 

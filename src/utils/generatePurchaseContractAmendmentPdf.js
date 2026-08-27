@@ -1,6 +1,5 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { formatDateForDisplay } from "./dateFormatter";
 import { companySetupAPI } from "../api/companySetupApi";
 
 /* ================================================================ */
@@ -18,105 +17,6 @@ const C = {
   gray500: [107, 114, 128], // #6b7280
   gray900: [17, 24, 39], // #111827
 };
-
-const NOTES = [
-  "1.PLEASE MENTION OUR PART NAME, PART NUMBER AND PO NUMBER, DELIVERY SCHEDULE IN YOUR INVOICE",
-  "2.INSPECTION REPORT SHOULD BE SUBMITTED ALONG WITH SUPPLIES,WITHOUT INSPECTION REPORT MATERIAL WILL NOT BE INSPECTED AT INWARDQC.",
-  "3.REJECTED MATERIAL SHOULD BE COLLECTED FROM OUR FACTORY WITHIN 2 DAYS FROM THE DATE OF INTIMATION, OTHERWISE IT WILL BE SENT THROUGH AVAILABLE TRANSPORT ON TO PAY BASIS.",
-  "4.IF YOU COULD NOT ABLE TO SUPPLY THE MATERIAL WITHIN THE SPECIFIED DATE PLEASE INFORM US BEFORE ONE WEEK WITH VALID REASON.",
-  "5.WITHOUT PROPER INVOICE MATERIAL WILL NOT BE INWARDED / ACCEPTED.",
-  "6.PLEASE ENSURE THAT MATERIAL, REACHES TO THE FACTORY ON SCHEDULE DATE/WEEK",
-  "7.PURCHASE ORDER VALID FOR THE YEAR 2026 - 27",
-  "8.SCHEDULE WILL BE GIVEN EVERY MONTH",
-  "9.ANY CHANGE IN TERMS & CONDITION WILL BE THROUGH AMENDMENTS.",
-  "10.IF ANY SEGGREGATION MADE,SEGGREGATION CHARGES WILL BE DEBITED TO YOUR ACCOUNT.",
-  "11.ALL PROCESSES EMPLOYED AND PARTS MANUFACTURED OR SUBCONTRACTED BY SUPPLIERS SHALL SATISFY CURRENT",
-  "   GOVERMENTAL AND SAFETY REGULATIONS ON RESTRICTED TOXIC AND HAZARDOUS MATERIALS.",
-  "12.MOTOR VEHICLE REGULATION (MVR)",
-  "   -FITTNESS CERTIFICATE (FC) MUST BE AVALABLE",
-  "   -DRIVING LICENCE (DL)",
-  "   -PUC (POLLUTION UNDER CHECK)",
-  "   -ZERO ALLCHOHALL",
-  "13.MSDS AS APPLICABLE",
-  "14.PLASTIC LESS THEM 120 MICRONS NOT ALLOWED",
-  "   AS PER PLASTIC WASTE MANAGEMENT RULES",
-  "15.TREM (TRANSPORT EMERGENCY MANUAL) CARD AS APPLICABLE",
-  "16.(IF RAW MATERIAL / CHILD PART / NOT MEET AS PER DRAWING SPECIFICATION LOT WILL BE REJECT)",
-  "17.SUPPLIER MUST COMPLY WITH EHS & OHSAS REQUIREMENT,",
-  "18.SUPPLIER MUST MEET RoHS REQUIREMENT AS APPLICABLE TO THE PRODUCT, SPECIFIC",
-];
-
-/* -------------------------------------------------------------------------- */
-/* Number -> Indian words (for "Total PO Value in Words")                     */
-/* -------------------------------------------------------------------------- */
-const ONES = [
-  "",
-  "One",
-  "Two",
-  "Three",
-  "Four",
-  "Five",
-  "Six",
-  "Seven",
-  "Eight",
-  "Nine",
-  "Ten",
-  "Eleven",
-  "Twelve",
-  "Thirteen",
-  "Fourteen",
-  "Fifteen",
-  "Sixteen",
-  "Seventeen",
-  "Eighteen",
-  "Nineteen",
-];
-const TENS = [
-  "",
-  "",
-  "Twenty",
-  "Thirty",
-  "Forty",
-  "Fifty",
-  "Sixty",
-  "Seventy",
-  "Eighty",
-  "Ninety",
-];
-
-function twoDigits(n) {
-  if (n < 20) return ONES[n];
-  return TENS[Math.floor(n / 10)] + (n % 10 ? " " + ONES[n % 10] : "");
-}
-
-function threeDigits(n) {
-  if (n >= 100) {
-    return (
-      ONES[Math.floor(n / 100)] +
-      " Hundred" +
-      (n % 100 ? " and " + twoDigits(n % 100) : "")
-    );
-  }
-  return twoDigits(n);
-}
-
-export function numberToIndianWords(num) {
-  const n = Math.round(Number(num) || 0);
-  if (n === 0) return "Zero";
-
-  const crore = Math.floor(n / 10000000);
-  const lakh = Math.floor((n % 10000000) / 100000);
-  const thousand = Math.floor((n % 100000) / 1000);
-  const rest = n % 1000;
-
-  let words = "";
-  if (crore) words += threeDigits(crore) + " Crore ";
-  if (lakh) words += threeDigits(lakh) + " Lakh ";
-  if (thousand) words += threeDigits(thousand) + " Thousand ";
-  if (rest) words += threeDigits(rest);
-
-  return words.trim();
-}
 
 const fmtAmount = (n) =>
   (Number(n) || 0).toLocaleString("en-IN", {
@@ -162,15 +62,15 @@ const buildAddressLines = (company) => {
 /* ================================================================ */
 /* Main generator — same design & page-flow logic as the Quotation   */
 /* PDF (top title bar, bordered header block, blue section headings, */
-/* dynamic Field/Value terms block, generated-by footer), returning  */
-/* { blobUrl, fileName, doc } so it can be used with PDFPreviewModal */
+/* dynamic Field/Value block, generated-by footer), returning        */
+/* { blobUrl, fileName, doc } so it can be used with PDFPreviewModal  */
 /* exactly like the Quotation flow.                                  */
 /* ================================================================ */
 /**
- * @param {Object} po - a row from PurchaseOrderList's itemData (already transformed),
- *                       OR a fresh object from getPurchaseOrderById if you fetch full detail on click.
+ * @param {Object} record - a row from PurchaseContractAmendmentList's data
+ *                          (header fields + pcDetails array)
  */
-export async function generatePurchaseOrderPdf(po) {
+export async function generatePurchaseContractAmendmentPdf(record) {
   const orgId = localStorage.getItem("orgId");
   let company = {};
 
@@ -208,12 +108,10 @@ export async function generatePurchaseOrderPdf(po) {
       setFont("helvetica", 8, "bold");
       doc.setTextColor(...C.primary);
       doc.text(
-        `${company.companyName || "Company Name"} — PURCHASE ORDER`,
+        `${company.companyName || "Company Name"} — PURCHASE CONTRACT AMENDMENT`,
         PAGE_W / 2,
         y + 15,
-        {
-          align: "center",
-        },
+        { align: "center" },
       );
       doc.setTextColor(...C.black);
       y += 30;
@@ -242,12 +140,14 @@ export async function generatePurchaseOrderPdf(po) {
   doc.rect(M, y, CW, 40, "FD");
   setFont("helvetica", 14, "bold");
   doc.setTextColor(...C.primary);
-  doc.text("PURCHASE ORDER", PAGE_W / 2, y + 26, { align: "center" });
+  doc.text("PURCHASE CONTRACT AMENDMENT", PAGE_W / 2, y + 26, {
+    align: "center",
+  });
   doc.setTextColor(...C.black);
   y += 40;
 
   /* ================================================================ */
-  /* 2. HEADER BLOCK — company/supplier (left) | PO details (right)    */
+  /* 2. HEADER BLOCK — company/party (left) | amendment details (right)*/
   /* ================================================================ */
   const HEADER_H = 150;
   doc.setDrawColor(...C.primary);
@@ -257,7 +157,7 @@ export async function generatePurchaseOrderPdf(po) {
   doc.setLineWidth(0.5);
   doc.line(PAGE_W / 2 + 20, y, PAGE_W / 2 + 20, y + HEADER_H);
 
-  /* ---- Left: company info + supplier ---- */
+  /* ---- Left: company info + party ---- */
   let ly = y + 16;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
@@ -285,20 +185,11 @@ export async function generatePurchaseOrderPdf(po) {
     ly += 12;
   };
   if (company.gst) leftRow("GSTIN :", company.gst);
-  if (company.panNo) leftRow("PAN :", company.panNo);
-  if (company.cin) leftRow("CIN :", company.cin);
-
-  ly += 4;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
-  doc.setTextColor(...C.gray900);
-  doc.text("To :", M + 8, ly);
-  ly += 12;
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(...C.gray500);
-  doc.text(po.supplierCode || "", M + 8, ly);
-  ly += 11;
-  doc.text(po.supplierName || "", M + 8, ly);
+  leftRow("Plant Id :", record.plantId);
+  leftRow("Belongs To :", record.belongsTo);
+  leftRow("Party Name :", record.partyName);
+  leftRow("Contract No :", record.contractNo);
+  leftRow("Contract Date :", record.contractDate);
 
   /* ---- Right: document numbers ---- */
   let ry = y + 18;
@@ -310,67 +201,37 @@ export async function generatePurchaseOrderPdf(po) {
     doc.text(label, rx, ry);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(...C.gray500);
-    doc.text(String(value ?? ""), rx + 90, ry);
+    doc.text(String(value ?? ""), rx + 100, ry);
     ry += 14;
   };
-  rightRow("PO No :", po.docId || po.poNo || "");
-  rightRow(
-    "PO Date :",
-    formatDateForDisplay(po.docDate || po.orderPlacedDate) || "",
-  );
-  rightRow("Ref No :", po.refNo || "");
-  rightRow("Ref Date :", formatDateForDisplay(po.refDate) || "");
-  rightRow("GSTIN No :", po.supplierGstin || "");
-  rightRow("Indent No :", po.indentNo || "");
-  rightRow("Indent Date :", formatDateForDisplay(po.indentDate) || "");
-  rightRow("PO Type :", po.poType || "");
+  rightRow("Amendment No :", record.amendmentNo || "");
+  rightRow("Amendment Date :", record.amendmentDate || "");
+  rightRow("Revision No :", record.revisionNo ?? "");
+  rightRow("Ref No :", record.refNo || "");
+  rightRow("Ref Date :", record.refDate || "");
+  rightRow("Status :", record.active !== false ? "Active" : "Inactive");
 
   doc.setTextColor(...C.black);
   y += HEADER_H;
 
   /* ================================================================ */
-  /* 3. INTRO LINE                                                     */
+  /* 3. PC DETAIL / REVISION TABLE                                     */
   /* ================================================================ */
-  const intro =
-    "We have pleasure in placing order on you for the supply of the following items as per the terms mentioned below. " +
-    "Kindly send your acceptance of the purchase order per return post. Any clarification in this order will not be entertained after 1 week of receipt of Purchase Order";
-  const introLines = doc.splitTextToSize(intro, CW - 16);
-  const introH = introLines.length * 10 + 20;
-  checkPageBreak(introH);
-  doc.setFillColor(...C.white);
-  doc.setDrawColor(...C.primary);
-  doc.setLineWidth(0.5);
-  doc.rect(M, y, CW, introH, "FD");
-  setFont("helvetica", 8.5, "bold");
-  doc.setTextColor(...C.gray900);
-  doc.text("Dear Sir,", M + 8, y + 13);
-  setFont("helvetica", 8.5, "normal");
-  doc.setTextColor(...C.gray500);
-  doc.text(introLines, M + 8, y + 25);
-  doc.setTextColor(...C.black);
-  y += introH + 12;
+  sectionHeading("Contract Detail Revisions");
 
-  /* ================================================================ */
-  /* 4. ORDER ITEMS TABLE                                              */
-  /* ================================================================ */
-  sectionHeading("Order Items");
+  const details = record.pcDetails || record.pcDetail || [];
 
-  const items =
-    (po.poType === "Import"
-      ? po.purchaseOrderImportDetailsDTO
-      : po.purchaseOrderLocalDetailsDTO) || [];
-
-  const itemRows = items.map((it, idx) => [
+  const itemRows = details.map((d, idx) => [
     idx + 1,
-    it.partNo || it.itemCode || "",
-    it.partName || it.itemDesc || it.itemName || "",
-    it.customerPartNo || "",
-    it.hsnCode || "NA",
-    `${it.taxPercentage ?? 0}%`,
-    it.unit || it.unitName || "",
-    it.qty ?? it.quantity ?? "",
-    fmtAmount(it.rate),
-    fmtAmount(it.amount ?? (it.rate || 0) * (it.qty || it.quantity || 0)),
+    d.itemCode || "",
+    d.itemName || "",
+    d.unit || "",
+    fmtAmount(d.oldRate),
+    fmtAmount(d.newRate),
+    d.validFrom || "",
+    d.newValidFrom || "",
+    d.validTo || "",
+    d.newValidTo || "",
   ]);
 
   const itemTableResult = autoTable(doc, {
@@ -379,15 +240,15 @@ export async function generatePurchaseOrderPdf(po) {
     head: [
       [
         "S.No",
-        "Part No",
-        "Part Name",
-        "Customer Part No",
-        "Hsn Code",
-        "Tax(%)",
+        "Item Code",
+        "Item Description",
         "Unit",
-        "Qty",
-        "Rate(Rs)",
-        "Amount",
+        "Old Rate",
+        "New Rate",
+        "Valid From",
+        "New Valid From",
+        "Valid To",
+        "New Valid To",
       ],
     ],
     body: itemRows,
@@ -412,9 +273,8 @@ export async function generatePurchaseOrderPdf(po) {
     },
     columnStyles: {
       0: { cellWidth: 24, halign: "center" },
-      7: { halign: "right" },
-      8: { halign: "right" },
-      9: { halign: "right" },
+      4: { halign: "right" },
+      5: { halign: "right" },
     },
     didDrawPage: (eventData) => {
       y = eventData.cursor.y;
@@ -426,62 +286,9 @@ export async function generatePurchaseOrderPdf(po) {
     12;
 
   /* ================================================================ */
-  /* 5. TOTALS TABLE                                                   */
+  /* 4. SUMMARY / TERMS BLOCK                                          */
   /* ================================================================ */
-  sectionHeading("Totals");
-
-  const totalsRows = [
-    ["CGST Total", "0 % 0"],
-    ["SGST Total", "0 % 0"],
-    ["GST Total Tax Value", fmtAmount(0)],
-    ["Total Value", fmtAmount(po.totalPoValueInr || po.totalAmount)],
-  ];
-
-  const totalsTableResult = autoTable(doc, {
-    startY: y,
-    margin: { left: M, right: M },
-    head: [["Particulars", "Amount"]],
-    body: totalsRows,
-    theme: "grid",
-    styles: {
-      fontSize: 8,
-      cellPadding: 3,
-      lineColor: [...C.gray200],
-      lineWidth: 0.5,
-      textColor: C.gray900,
-    },
-    headStyles: {
-      fillColor: C.white,
-      textColor: C.primary,
-      fontStyle: "bold",
-      fontSize: 8,
-      halign: "center",
-      cellPadding: 3,
-      lineColor: C.primary,
-      lineWidth: 0.5,
-    },
-    columnStyles: {
-      1: { halign: "right" },
-    },
-    didParseCell: (data) => {
-      if (data.row.index === totalsRows.length - 1) {
-        data.cell.styles.fontStyle = "bold";
-      }
-    },
-    didDrawPage: (eventData) => {
-      y = eventData.cursor.y;
-    },
-  });
-
-  y =
-    (totalsTableResult && totalsTableResult.finalY
-      ? totalsTableResult.finalY
-      : y) + 12;
-
-  /* ================================================================ */
-  /* 6. DELIVERY / TERMS & REMARKS BLOCK                               */
-  /* ================================================================ */
-  sectionHeading("Delivery, Terms & Remarks");
+  sectionHeading("Summary & Terms");
 
   const TERMS_LABEL_COL = M + 8;
   const TERMS_COLON_COL = M + 150;
@@ -490,20 +297,14 @@ export async function generatePurchaseOrderPdf(po) {
   const TERMS_ROW_PAD = 14;
 
   const allPairs = [
-    ["Total GST Tax Value (Words)", `Rupees ${numberToIndianWords(0)} Only`],
-    [
-      "Total PO Value (Words)",
-      `Rupees ${numberToIndianWords(po.totalPoValueInr || po.totalAmount)} Only`,
-    ],
-    ["Delivery", po.deliveryTerms || ""],
-    ["Payment Terms", po.paymentTerms || ""],
-    ["Freight Charges", po.freightCharges || ""],
-    ["Mode of Transport", po.modeOfDespatch || ""],
-    ["Freight Type", po.freightType || ""],
-    ["Packing Type", po.packingType || ""],
-    ["Insurance", po.insurance ?? 0],
-    ["Special Notes", po.notes || ""],
-    ["Remarks", po.remarks || ""],
+    ["Freight Type", record.freightType || ""],
+    ["Packing Type", record.packingType || ""],
+    ["Insurance Amount", fmtAmount(record.insuranceAmount)],
+    ["Mode of Dispatch", record.modeOfDispatch || ""],
+    ["Tax Description", record.taxDescription || ""],
+    ["Prepared By", record.preparedBy || ""],
+    ["Authorised By", record.authorisedBy || ""],
+    ["Remarks", record.remarks || ""],
   ];
 
   const rowHeights = allPairs.map(([, value]) => {
@@ -558,33 +359,7 @@ export async function generatePurchaseOrderPdf(po) {
   y += totalTermsH;
 
   /* ================================================================ */
-  /* 7. NOTES FOOTER                                                   */
-  /* ================================================================ */
-  const notesLineH = 8.5;
-  const notesH = NOTES.length * notesLineH + 20;
-  checkPageBreak(notesH + 10);
-
-  doc.setDrawColor(...C.primary);
-  doc.setLineWidth(0.5);
-  doc.setFillColor(...C.white);
-  doc.rect(M, y, CW, notesH, "FD");
-  setFont("helvetica", 8, "bold");
-  doc.setTextColor(...C.primary);
-  doc.text("Note", M + 8, y + 12);
-  doc.setTextColor(...C.black);
-
-  let ny = y + 12 + notesLineH;
-  setFont("helvetica", 6.5, "normal");
-  doc.setTextColor(...C.gray500);
-  NOTES.forEach((line) => {
-    doc.text(line, M + 8, ny);
-    ny += notesLineH;
-  });
-  doc.setTextColor(...C.black);
-  y += notesH + 12;
-
-  /* ================================================================ */
-  /* 8. SIGNATURE ROW                                                  */
+  /* 5. SIGNATURE ROW                                                  */
   /* ================================================================ */
   checkPageBreak(40);
   doc.setDrawColor(...C.primary);
@@ -593,8 +368,12 @@ export async function generatePurchaseOrderPdf(po) {
   doc.rect(M, y, CW, 30, "FD");
   setFont("helvetica", 9, "normal");
   doc.setTextColor(...C.gray900);
-  doc.text(`Prepared By : ${po.preparedBy || ""}`, M + 8, y + 20);
-  doc.text("Checked By :", PAGE_W / 2 - 20, y + 20);
+  doc.text(`Prepared By : ${record.preparedBy || ""}`, M + 8, y + 20);
+  doc.text(
+    `Authorised By : ${record.authorisedBy || ""}`,
+    PAGE_W / 2 - 20,
+    y + 20,
+  );
   doc.text(`For ${company.companyName || ""}`, PAGE_W - M - 8, y + 20, {
     align: "right",
   });
@@ -602,7 +381,7 @@ export async function generatePurchaseOrderPdf(po) {
   y += 30;
 
   /* ================================================================ */
-  /* 9. FOOTER                                                         */
+  /* 6. FOOTER                                                         */
   /* ================================================================ */
   y += 12;
   if (y + 30 > PAGE_H - M) {
@@ -637,7 +416,7 @@ export async function generatePurchaseOrderPdf(po) {
   /* ================================================================ */
   /* OUTPUT — same blob-preview pattern as the Quotation PDF           */
   /* ================================================================ */
-  const fileName = `PurchaseOrder_${(po.docId || po.poNo || "document").replace(/\//g, "-")}.pdf`;
+  const fileName = `PCAmendment_${(record.amendmentNo || "document").replace(/\//g, "-")}.pdf`;
 
   const pdfArrayBuffer = doc.output("arraybuffer");
   const pdfBlob = new Blob([pdfArrayBuffer], { type: "application/pdf" });
@@ -646,4 +425,4 @@ export async function generatePurchaseOrderPdf(po) {
   return { blobUrl, fileName, doc };
 }
 
-export default generatePurchaseOrderPdf;
+export default generatePurchaseContractAmendmentPdf;

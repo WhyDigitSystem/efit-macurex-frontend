@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import { purchaseDeliveryScheduleAPI } from "../../../api/Purchase/purchaseDeliveryScheduleAPI";
 import { toast } from "../../../utils/toast";
+import { generatePurchaseDeliverySchedulePdf } from "../../../utils/generatePurchaseDeliverySchedulePdf";
+import PDFPreviewModal from "../../../utils/PDFPreviewModal";
 
 const PurchaseDeliveryScheduleList = ({
   onAddNew,
@@ -11,6 +13,7 @@ const PurchaseDeliveryScheduleList = ({
 }) => {
   const [scheduleData, setScheduleData] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [pdfPreview, setPdfPreview] = useState(null);
 
   const ORG_ID = localStorage.getItem("orgId");
   const BRANCH_ID = localStorage.getItem("branchId");
@@ -26,7 +29,7 @@ const PurchaseDeliveryScheduleList = ({
 
       const response = await purchaseDeliveryScheduleAPI.getScheduleByOrgId(
         BRANCH_ID,
-        ORG_ID
+        ORG_ID,
       );
 
       console.log("API Response:", response);
@@ -34,7 +37,10 @@ const PurchaseDeliveryScheduleList = ({
       // Extract the purchaseDeliveryScheduleVO array from the response
       let schedules = [];
 
-      if (response?.status && response?.paramObjectsMap?.purchaseDeliveryScheduleVO) {
+      if (
+        response?.status &&
+        response?.paramObjectsMap?.purchaseDeliveryScheduleVO
+      ) {
         schedules = response.paramObjectsMap.purchaseDeliveryScheduleVO;
       } else if (Array.isArray(response)) {
         schedules = response;
@@ -80,6 +86,21 @@ const PurchaseDeliveryScheduleList = ({
   useEffect(() => {
     loadSchedules();
   }, [loadSchedules, refreshTrigger]);
+
+  const handleDownload = async (row) => {
+    try {
+      const result = await generatePurchaseDeliverySchedulePdf(row);
+
+      if (result && result.blobUrl) {
+        setPdfPreview(result);
+      } else {
+        toast.error("Failed to generate PDF preview");
+      }
+    } catch (error) {
+      console.error("Error generating Purchase Delivery Schedule PDF:", error);
+      toast.error("Failed to generate PDF");
+    }
+  };
 
   const columns = [
     {
@@ -195,28 +216,42 @@ const PurchaseDeliveryScheduleList = ({
   ];
 
   return (
-    <CommonListViewTable
-      title="Purchase Delivery Schedule"
-      data={scheduleData}
-      loading={loading}
-      columns={columns}
-      searchFields={searchFields}
-      filterOptions={filterOptions}
-      defaultFilter="all"
-      onBack={onBack}
-      onAddNew={onAddNew}
-      onEdit={onEdit}
-      onView={false}
-      showSerialNumber={true}
-      itemsPerPageOptions={[5, 10, 20, 50, 100]}
-      defaultItemsPerPage={10}
-      emptyMessage="No Purchase Delivery Schedules found"
-      loadingMessage="Loading Purchase Delivery Schedules..."
-      enableRefresh={true}
-      onRefresh={loadSchedules}
-      enableExport={true}
-      exportFileName="PurchaseDeliverySchedules"
-    />
+    <>
+      <CommonListViewTable
+        title="Purchase Delivery Schedule"
+        data={scheduleData}
+        loading={loading}
+        columns={columns}
+        searchFields={searchFields}
+        filterOptions={filterOptions}
+        defaultFilter="all"
+        onBack={onBack}
+        onAddNew={onAddNew}
+        onEdit={onEdit}
+        onDownload={handleDownload}
+        onView={false}
+        showSerialNumber={true}
+        itemsPerPageOptions={[5, 10, 20, 50, 100]}
+        defaultItemsPerPage={10}
+        emptyMessage="No Purchase Delivery Schedules found"
+        loadingMessage="Loading Purchase Delivery Schedules..."
+        enableRefresh={true}
+        onRefresh={loadSchedules}
+        enableExport={true}
+        exportFileName="PurchaseDeliverySchedules"
+      />
+
+      {pdfPreview && (
+        <PDFPreviewModal
+          blobUrl={pdfPreview.blobUrl}
+          fileName={pdfPreview.fileName}
+          onClose={() => {
+            if (pdfPreview.blobUrl) URL.revokeObjectURL(pdfPreview.blobUrl);
+            setPdfPreview(null);
+          }}
+        />
+      )}
+    </>
   );
 };
 

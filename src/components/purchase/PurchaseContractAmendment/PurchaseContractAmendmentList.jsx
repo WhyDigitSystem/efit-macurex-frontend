@@ -1,10 +1,20 @@
 import { useState, useEffect, useCallback } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import purchaseContractAmendmentAPI from "../../../api/Purchase/purchaseContractAmendmentAPI";
+import { generatePurchaseContractAmendmentPdf } from "../../../utils/generatePurchaseContractAmendmentPdf";
+import PDFPreviewModal from "../../../utils/PDFPreviewModal";
+import { useToast } from "../../Toast/ToastContext";
 
-const PurchaseContractAmendmentList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
+const PurchaseContractAmendmentList = ({
+  onAddNew,
+  onEdit,
+  onBack,
+  refreshTrigger,
+}) => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [pdfPreview, setPdfPreview] = useState(null);
+  const { addToast } = useToast();
 
   const orgId = Number(localStorage.getItem("orgId")) || 0;
   const branch = Number(localStorage.getItem("branchId")) || 1000000001;
@@ -26,21 +36,63 @@ const PurchaseContractAmendmentList = ({ onAddNew, onEdit, onBack, refreshTrigge
     loadData();
   }, [loadData, refreshTrigger]);
 
+  const handleDownload = async (row) => {
+    try {
+      const result = await generatePurchaseContractAmendmentPdf(row);
+
+      if (result && result.blobUrl) {
+        setPdfPreview(result);
+      } else {
+        addToast("Failed to generate PDF preview", "error");
+      }
+    } catch (error) {
+      console.error("Error generating PC Amendment PDF:", error);
+      addToast("Failed to generate PDF: " + error.message, "error");
+    }
+  };
+
   const columns = [
     { key: "sno", label: "#", type: "text" },
-    { key: "amendmentNo", label: "Amendment No", type: "text", accessor: (row) => row.amendmentNo || "" },
-    { key: "amendmentDate", label: "Amendment Date", type: "text", accessor: (row) => row.amendmentDate || "" },
-    { key: "contractNo", label: "Contract No", type: "text", accessor: (row) => row.contractNo || "" },
-    { key: "partyName", label: "Party Name", type: "text", accessor: (row) => row.partyName || "" },
-    { key: "revisionNo", label: "Revision", type: "text", accessor: (row) => row.revisionNo || "" },
+    {
+      key: "amendmentNo",
+      label: "Amendment No",
+      type: "text",
+      accessor: (row) => row.amendmentNo || "",
+    },
+    {
+      key: "amendmentDate",
+      label: "Amendment Date",
+      type: "text",
+      accessor: (row) => row.amendmentDate || "",
+    },
+    {
+      key: "contractNo",
+      label: "Contract No",
+      type: "text",
+      accessor: (row) => row.contractNo || "",
+    },
+    {
+      key: "partyName",
+      label: "Party Name",
+      type: "text",
+      accessor: (row) => row.partyName || "",
+    },
+    {
+      key: "revisionNo",
+      label: "Revision",
+      type: "text",
+      accessor: (row) => row.revisionNo || "",
+    },
     {
       key: "status",
       label: "Status",
       type: "status",
       accessor: (row) => (row.active !== false ? "Active" : "Inactive"),
       statusVariants: {
-        Active: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
-        Inactive: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+        Active:
+          "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+        Inactive:
+          "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
       },
     },
     {
@@ -54,18 +106,32 @@ const PurchaseContractAmendmentList = ({ onAddNew, onEdit, onBack, refreshTrigge
   const searchFields = ["amendmentNo", "contractNo", "partyName"];
 
   return (
-    <CommonListViewTable
-      title="Purchase Contract Amendment"
-      subtitle="Manage purchase contract amendments and revisions"
-      data={data}
-      loading={loading}
-      columns={columns}
-      searchFields={searchFields}
-      onAddNew={onAddNew}
-      onEdit={onEdit}
-      onBack={onBack}
-      emptyMessage="No PC amendments found"
-    />
+    <>
+      <CommonListViewTable
+        title="Purchase Contract Amendment"
+        subtitle="Manage purchase contract amendments and revisions"
+        data={data}
+        loading={loading}
+        columns={columns}
+        searchFields={searchFields}
+        onAddNew={onAddNew}
+        onEdit={onEdit}
+        onBack={onBack}
+        onDownload={handleDownload}
+        emptyMessage="No PC amendments found"
+      />
+
+      {pdfPreview && (
+        <PDFPreviewModal
+          blobUrl={pdfPreview.blobUrl}
+          fileName={pdfPreview.fileName}
+          onClose={() => {
+            if (pdfPreview.blobUrl) URL.revokeObjectURL(pdfPreview.blobUrl);
+            setPdfPreview(null);
+          }}
+        />
+      )}
+    </>
   );
 };
 

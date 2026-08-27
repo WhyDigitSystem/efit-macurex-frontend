@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import excelPurchaseOrderAPI from "../../../api/Purchase/excelPurchaseOrderAPI";
 import { toast } from "../../../utils/toast";
+import generateExcelPurchaseOrderPDF from "../../../utils/generateExcelPurchaseOrderPDF";
+import PDFPreviewModal from "../../../utils/PDFPreviewModal";
 
 const ExcelPurchaseOrderList = ({
   onAddNew,
@@ -11,6 +13,7 @@ const ExcelPurchaseOrderList = ({
 }) => {
   const [orderData, setOrderData] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [pdfPreview, setPdfPreview] = useState(null);
 
   const ORG_ID = localStorage.getItem("orgId");
 
@@ -35,6 +38,87 @@ const ExcelPurchaseOrderList = ({
   useEffect(() => {
     loadOrders();
   }, [loadOrders, refreshTrigger]);
+
+  const handleDownloadPDF = (row) => {
+    try {
+      // The saved record mirrors the form's save payload shape:
+      // { header, itemDetails, taxDetails, terms }. Fall back to flat
+      // top-level fields in case the API ever returns it unwrapped.
+      const header = row.header || row;
+      const itemSource = row.itemDetails || row.items || [];
+      const taxSource = row.taxDetails || [];
+      const termsSource = row.terms || {};
+
+      const items = itemSource.map((item) => ({
+        itemDescription: item.itemDescription || "",
+        hsnSacCode: item.hsnSacCode || "",
+        taxType: item.taxType || "",
+        taxPercent: item.taxPercent || 0,
+        qty: item.qty || 0,
+        purchaseUnit: item.purchaseUnit || "",
+        rate: item.rate || 0,
+        amount: item.amount || 0,
+        sgstRate: item.sgstRate || 0,
+        sgstAmount: item.sgstAmount || 0,
+        cgstRate: item.cgstRate || 0,
+        cgstAmount: item.cgstAmount || 0,
+        igstRate: item.igstRate || 0,
+        igstAmount: item.igstAmount || 0,
+      }));
+
+      const taxDetails = taxSource.map((tax) => ({
+        particulars: tax.particulars || "",
+        taxPercent: tax.taxPercent || 0,
+        taxAmount: tax.taxAmount || 0,
+      }));
+
+      const result = generateExcelPurchaseOrderPDF({
+        company: { name: header.plantId || "Company Name" },
+        header: {
+          plantId: header.plantId || "",
+          department: header.department || "",
+          belongsTo: header.belongsTo || "",
+          supplierCode: header.supplierCode || "",
+          supplierName: header.supplierName || "",
+          taxCode: header.taxCode || "",
+          gstState: header.gstState || "",
+          isIgstApplicable: header.isIgstApplicable || false,
+          gstnNo: header.gstnNo || "",
+          refNo: header.refNo || "",
+          refDate: header.refDate || "",
+          poNo: header.poNo || "",
+          poDate: header.poDate || "",
+          address: header.address || "",
+        },
+        items,
+        taxDetails,
+        terms: {
+          discount: termsSource.discount || 0,
+          paymentTerms: termsSource.paymentTerms || "",
+          totalAmount: termsSource.totalAmount || 0,
+          deliveryTerms: termsSource.deliveryTerms || "",
+          freight: termsSource.freight || 0,
+          freightType: termsSource.freightType || "",
+          packingType: termsSource.packingType || "",
+          insurance: termsSource.insurance || "",
+          modeOfDespatch: termsSource.modeOfDespatch || "",
+          inlandCharge: termsSource.inlandCharge || 0,
+          preparedBy: termsSource.preparedBy || "",
+          authorizedBy: termsSource.authorizedBy || "",
+          narration: termsSource.narration || "",
+        },
+      });
+
+      if (result && result.blobUrl) {
+        setPdfPreview(result);
+      } else {
+        toast.error("Failed to generate PDF preview");
+      }
+    } catch (error) {
+      console.error("PDF generation failed:", error);
+      toast.error("Failed to generate PDF: " + error.message);
+    }
+  };
 
   const columns = [
     {
@@ -140,28 +224,42 @@ const ExcelPurchaseOrderList = ({
   ];
 
   return (
-    <CommonListViewTable
-      title="Excel Purchase Order"
-      data={orderData}
-      loading={loading}
-      columns={columns}
-      searchFields={searchFields}
-      filterOptions={filterOptions}
-      defaultFilter="all"
-      onBack={onBack}
-      onAddNew={onAddNew}
-      onEdit={onEdit}
-      onView={false}
-      showSerialNumber={true}
-      itemsPerPageOptions={[5, 10, 20, 50, 100]}
-      defaultItemsPerPage={10}
-      emptyMessage="No Excel Purchase Orders found"
-      loadingMessage="Loading Excel Purchase Orders..."
-      enableRefresh={true}
-      onRefresh={loadOrders}
-      enableExport={true}
-      exportFileName="ExcelPurchaseOrders"
-    />
+    <>
+      <CommonListViewTable
+        title="Excel Purchase Order"
+        data={orderData}
+        loading={loading}
+        columns={columns}
+        searchFields={searchFields}
+        filterOptions={filterOptions}
+        defaultFilter="all"
+        onBack={onBack}
+        onAddNew={onAddNew}
+        onEdit={onEdit}
+        onDownload={handleDownloadPDF}
+        onView={false}
+        showSerialNumber={true}
+        itemsPerPageOptions={[5, 10, 20, 50, 100]}
+        defaultItemsPerPage={10}
+        emptyMessage="No Excel Purchase Orders found"
+        loadingMessage="Loading Excel Purchase Orders..."
+        enableRefresh={true}
+        onRefresh={loadOrders}
+        enableExport={true}
+        exportFileName="ExcelPurchaseOrders"
+      />
+
+      {pdfPreview && (
+        <PDFPreviewModal
+          blobUrl={pdfPreview.blobUrl}
+          fileName={pdfPreview.fileName}
+          onClose={() => {
+            if (pdfPreview.blobUrl) URL.revokeObjectURL(pdfPreview.blobUrl);
+            setPdfPreview(null);
+          }}
+        />
+      )}
+    </>
   );
 };
 
