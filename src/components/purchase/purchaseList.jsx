@@ -13,6 +13,7 @@ import {
   Boxes,
   ListChecks,
   FileEdit,
+  Undo2,
 } from "lucide-react";
 import { hasScreenAccess } from "../../utils/accessControl";
 
@@ -58,6 +59,12 @@ const SECTIONS = [
         icon: Receipt,
         path: "/purchasebill",
         screenCode: "PURCHASE_BILL",
+      },
+      {
+        name: "Purchase Return",
+        icon: Undo2,
+        path: "/purchasereturn",
+        screenCode: "PURCHASE_RETURN",
       },
       {
         name: "P.O./Delv.Sch Shortclose",
