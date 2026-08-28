@@ -1,73 +1,103 @@
+// src/components/Inventory/InternalIndent/InternalIndentList.jsx
+
 import { useCallback, useEffect, useState } from "react";
 import internalIndentAPI from "../../../api/Inventory/internalIndentAPI";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import { toast } from "../../../utils/toast";
 
-const InternalIndentList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
+const InternalIndentList = ({ onAddNew, onEdit, onBack }) => {
   const [indentData, setIndentData] = useState([]);
   const [loading, setLoading] = useState(false);
 
   const ORG_ID = Number(localStorage.getItem("orgId"));
+  const BRANCH_ID = Number(localStorage.getItem("branchId"));
 
   const loadIndents = useCallback(async () => {
+    if (!ORG_ID || !BRANCH_ID) {
+      console.warn("orgId or branchId missing from localStorage");
+      setIndentData([]);
+      return;
+    }
+
     try {
       setLoading(true);
 
-      const response = await internalIndentAPI.getInternalIndentByOrgId(ORG_ID);
+      const list = await internalIndentAPI.getInternalIndentByOrgId(
+        ORG_ID,
+        BRANCH_ID,
+      );
 
-      const sortedData = (response || []).sort(
-        (a, b) => (b.id || 0) - (a.id || 0),
+      const sortedData = [...(Array.isArray(list) ? list : [])].sort(
+        (a, b) => Number(b?.id || 0) - Number(a?.id || 0),
       );
 
       setIndentData(sortedData);
     } catch (error) {
       console.error("Failed to load internal indents:", error);
       setIndentData([]);
-      toast.error("Failed to fetch internal indents");
+      toast.error("Failed to fetch Internal Indents");
     } finally {
       setLoading(false);
     }
-  }, [ORG_ID]);
+  }, [ORG_ID, BRANCH_ID]);
 
   useEffect(() => {
     loadIndents();
-  }, [loadIndents, refreshTrigger]);
+  }, [loadIndents]);
 
   const columns = [
     {
       key: "docId",
       label: "Doc Id",
-      accessor: (row) => row.header?.docId,
+      accessor: (row) => row?.docId || "",
       type: "text",
     },
     {
       key: "docDate",
       label: "Doc Date",
-      accessor: (row) => row.header?.docDate,
+      accessor: (row) => row?.docDate || "",
       type: "date",
     },
     {
       key: "department",
       label: "Department",
-      accessor: (row) => row.header?.department,
+      accessor: (row) => row?.department?.departmentName || "",
       type: "text",
     },
     {
       key: "plant",
       label: "Plant",
-      accessor: (row) => row.header?.plant,
+      accessor: (row) => row?.branch?.branchName || "",
+      type: "text",
+    },
+    {
+      key: "belongTo",
+      label: "Belongs To",
+      accessor: (row) => row?.belongTo || "",
       type: "text",
     },
     {
       key: "approvedByPM",
       label: "Approved By PM",
-      accessor: (row) => row.summary?.approvedByPM,
+      accessor: (row) => row?.approvedByPM || "",
       type: "badge",
+    },
+    {
+      key: "preparedBy",
+      label: "Prepared By",
+      accessor: (row) => row?.preparedBy?.employeeName || "",
+      type: "text",
+    },
+    {
+      key: "authorizedBy",
+      label: "Authorised By",
+      accessor: (row) => row?.authorizedBy?.employeeName || "",
+      type: "text",
     },
     {
       key: "active",
       label: "Status",
-      accessor: "active",
+      accessor: (row) => row?.active || "",
       type: "status",
     },
     {
@@ -79,7 +109,14 @@ const InternalIndentList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     },
   ];
 
-  const searchFields = ["header.docId", "header.department"];
+  const searchFields = [
+    "docId",
+    "belongTo",
+    "department.departmentName",
+    "branch.branchName",
+    "preparedBy.employeeName",
+    "authorizedBy.employeeName",
+  ];
 
   return (
     <div className="h-full flex flex-col">

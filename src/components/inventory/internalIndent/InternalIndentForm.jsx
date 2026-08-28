@@ -1,26 +1,32 @@
 import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import internalIndentAPI from "../../../api/Inventory/internalIndentAPI";
+import branchAPI from "../../../api/branchAPI";
+// CONFIRMED: departmentAPI.js exports a named export, not a default export
+// (the earlier "does not provide an export named 'default'" error proved
+// this). Reverted to named imports for both — employeeAPI.js follows the
+// same module pattern in this codebase.
+import { departmentAPI } from "../../../api/departmentAPI";
+import { employeeAPI } from "../../../api/employeeAPI";
+import itemAPI from "../../../api/itemAPI";
+import { toast } from "../../../utils/toast";
 
-/* ---------------------------------------------------------------------------- */
-/* Shared design tokens - identical to StockTransferForm / PartyMasterForm     */
+/* ========================================================================= */
+/* DESIGN TOKENS (match existing app styling)                                */
+/* ========================================================================= */
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
-  "bg-white dark:bg-gray-900 " +
-  "border-gray-300 dark:border-gray-600 " +
-  "text-gray-900 dark:text-gray-100 " +
-  "placeholder-gray-400 dark:placeholder-gray-500 " +
+  "bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 " +
+  "text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 " +
   "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
   "dark:focus:ring-blue-400 dark:focus:border-blue-400 " +
   "disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed";
 
 const cellInputClasses =
   "w-full h-8 px-2 rounded border text-xs leading-none transition-colors " +
-  "bg-white dark:bg-gray-900 " +
-  "border-gray-300 dark:border-gray-600 " +
-  "text-gray-900 dark:text-gray-100 " +
-  "placeholder-gray-400 dark:placeholder-gray-500 " +
+  "bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 " +
+  "text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 " +
   "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
   "dark:focus:ring-blue-400 dark:focus:border-blue-400";
 
@@ -30,8 +36,64 @@ const labelClasses =
 const fieldGrid =
   "grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-x-3 gap-y-2 items-start";
 
-/* ---------------------------------------------------------------------------- */
-/* Shared building blocks - identical to StockTransferForm / PartyMasterForm   */
+/* ========================================================================= */
+/* HELPERS                                                                  */
+/* ========================================================================= */
+
+const todayISO = () => new Date().toISOString().slice(0, 10);
+
+const nowTime = () => new Date().toTimeString().slice(0, 5); // "HH:MM"
+
+const pickArray = (source, keys) => {
+  if (Array.isArray(source)) return source;
+
+  for (const key of keys) {
+    const value = key
+      .split(".")
+      .reduce((acc, k) => (acc ? acc[k] : undefined), source);
+
+    if (Array.isArray(value)) {
+      return value;
+    }
+  }
+
+  return [];
+};
+
+const asId = (value) => {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "object") return value.id ?? "";
+  return value;
+};
+
+const emptyHeader = () => ({
+  branch: "",
+  docId: "",
+  belongTo: "",
+  docDate: todayISO(),
+  department: "",
+  timeOfIndent: nowTime(),
+});
+
+const emptySummary = () => ({
+  approvedByPM: "Pending",
+  preparedBy: "",
+  authorizedBy: "",
+  remarks: "",
+});
+
+const emptyItemRow = () => ({
+  itemCode: "",
+  itemDescription: "",
+  unit: "",
+  unitLabel: "",
+  requiredQty: "",
+  purpose: "",
+});
+
+/* ========================================================================= */
+/* FIELD                                                                     */
+/* ========================================================================= */
 
 const Field = ({
   label,
@@ -41,9 +103,10 @@ const Field = ({
   error,
   required,
   type = "text",
-  options,
-  disabled,
+  options = [],
+  disabled = false,
   className = "",
+  placeholder,
 }) => {
   if (type === "select") {
     return (
@@ -52,27 +115,21 @@ const Field = ({
           {label}
           {required && <span className="text-red-500"> *</span>}
         </label>
-
         <select
           name={name}
-          value={value}
+          value={value ?? ""}
           onChange={onChange}
           disabled={disabled}
-          className={controlClasses}
+          className={`${controlClasses} ${error ? "border-red-500 focus:border-red-500" : ""}`}
         >
           <option value="">-- Select --</option>
-          {(options || []).map((opt) => (
-            <option key={opt} value={opt}>
-              {opt}
+          {(options || []).map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.label}
             </option>
           ))}
         </select>
-
-        {error && (
-          <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
-            {error}
-          </p>
-        )}
+        {error && <p className="text-[11px] text-red-500 mt-0.5">{error}</p>}
       </div>
     );
   }
@@ -84,28 +141,20 @@ const Field = ({
           {label}
           {required && <span className="text-red-500"> *</span>}
         </label>
-
         <textarea
           name={name}
-          value={value}
+          value={value ?? ""}
           onChange={onChange}
           rows={4}
+          disabled={disabled}
+          placeholder={placeholder}
           className={
-            "w-full px-2 py-1.5 rounded border text-xs leading-snug transition-colors resize-none " +
-            "bg-white dark:bg-gray-900 " +
-            "border-gray-300 dark:border-gray-600 " +
-            "text-gray-900 dark:text-gray-100 " +
-            "placeholder-gray-400 dark:placeholder-gray-500 " +
-            "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
-            "dark:focus:ring-blue-400 dark:focus:border-blue-400"
+            "w-full px-2 py-1.5 rounded border text-xs leading-snug bg-white dark:bg-gray-900 " +
+            "border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 " +
+            `focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none ${error ? "border-red-500" : ""}`
           }
         />
-
-        {error && (
-          <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
-            {error}
-          </p>
-        )}
+        {error && <p className="text-[11px] text-red-500 mt-0.5">{error}</p>}
       </div>
     );
   }
@@ -116,21 +165,16 @@ const Field = ({
         {label}
         {required && <span className="text-red-500"> *</span>}
       </label>
-
       <input
         type={type}
         name={name}
-        value={value}
+        value={value ?? ""}
         onChange={onChange}
         disabled={disabled}
-        className={controlClasses}
+        placeholder={placeholder}
+        className={`${controlClasses} ${error ? "border-red-500 focus:border-red-500" : ""}`}
       />
-
-      {error && (
-        <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
-          {error}
-        </p>
-      )}
+      {error && <p className="text-[11px] text-red-500 mt-0.5">{error}</p>}
     </div>
   );
 };
@@ -141,31 +185,6 @@ const SectionHeader = ({ children }) => (
   </h3>
 );
 
-const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
-  <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
-    <button
-      onClick={onCancel}
-      disabled={isSubmitting}
-      className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-    >
-      <X className="h-3 w-3" />
-      Cancel
-    </button>
-
-    <button
-      onClick={onSave}
-      disabled={isSubmitting}
-      className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-    >
-      <Save className="h-3 w-3" />
-      {isSubmitting ? "Saving..." : saveLabel}
-    </button>
-  </div>
-);
-
-/* ---------------------------------------------------------------------------- */
-/* Table helpers - identical to StockTransferForm / PartyMasterForm            */
-
 const TableWrapper = ({ children }) => (
   <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
     <table className="w-full text-xs">{children}</table>
@@ -175,328 +194,620 @@ const TableWrapper = ({ children }) => (
 const TableHead = ({ headers }) => (
   <thead className="bg-gray-100 dark:bg-gray-700">
     <tr>
-      {headers.map((h, i) => (
+      {headers.map((header, index) => (
         <th
-          key={i}
-          className={`p-1 whitespace-nowrap ${
-            i === 0
+          key={index}
+          className={`p-1 whitespace-nowrap dark:text-white ${
+            index === 0
               ? "w-8 text-center"
-              : i === headers.length - 1
-                ? "w-20 text-left"
+              : index === headers.length - 1
+                ? "w-20 text-center"
                 : "text-left"
-          } dark:text-white`}
+          }`}
         >
-          {h}
+          {header}
         </th>
       ))}
     </tr>
   </thead>
 );
 
-const TableRow = ({ children, index, onRemove, disabled }) => (
-  <tr className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-    <td className="p-1 text-center font-medium dark:text-white">{index + 1}</td>
-    {children}
-    <td className="p-1 text-center">
-      <button
-        type="button"
-        onClick={onRemove}
-        disabled={disabled}
-        className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-          disabled
-            ? "bg-gray-400 cursor-not-allowed"
-            : "bg-red-600 hover:bg-red-700"
-        }`}
-      >
-        <Trash2 size={10} />
-      </button>
-    </td>
-  </tr>
-);
-
-const SelectCell = ({ value, onChange, options }) => (
-  <td className="p-1 align-top">
-    <select value={value} onChange={onChange} className={cellInputClasses}>
-      <option value="">-- Select --</option>
-      {(options || []).map((opt) => (
-        <option key={opt} value={opt}>
-          {opt}
-        </option>
-      ))}
-    </select>
-  </td>
-);
-
-const InputCell = ({ value, onChange, type = "text" }) => (
-  <td className="p-1 align-top">
-    <input
-      type={type}
-      value={value}
-      onChange={onChange}
-      className={cellInputClasses}
-    />
-  </td>
-);
-
-const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
-  <TableWrapper>
-    <TableHead headers={["#", ...columns.map((c) => c.label), "Action"]} />
-    <tbody>
-      {rows.map((row, idx) => (
-        <TableRow
-          key={idx}
-          index={idx}
-          onRemove={() => onRemoveRow(idx)}
-          disabled={rows.length <= 1}
-        >
-          {columns.map((col) =>
-            col.type === "select" ? (
-              <SelectCell
-                key={col.key}
-                value={row[col.key]}
-                onChange={(e) => onCellChange(idx, col.key, e.target.value)}
-                options={col.options}
-              />
-            ) : (
-              <InputCell
-                key={col.key}
-                value={row[col.key]}
-                type={col.type === "number" ? "number" : "text"}
-                onChange={(e) => onCellChange(idx, col.key, e.target.value)}
-              />
-            ),
-          )}
-        </TableRow>
-      ))}
-    </tbody>
-  </TableWrapper>
-);
-
-/* ---------------------------------------------------------------------------- */
-/* Options (swap for real API-driven lists)                                    */
-
-const PLANT_IDS = ["BANGALORE", "CHENNAI", "PUNE", "DELHI"];
-const BELONGS_TO = ["APPLIANCES", "BOSCH"];
-const YES_NO = ["YES", "NO"];
-const DEPARTMENTS = ["PURCHASE", "PRODUCTION", "QUALITY", "STORES", "ADMIN"];
-const ITEM_CODES = ["RM-001", "RM-002", "PKG-001", "SVC-001"];
-const UNITS = ["NOS", "KG", "LTR", "BOX", "MTR"];
-
-/* ---------------------------------------------------------------------------- */
-
-const todayISO = () => new Date().toISOString().slice(0, 10);
-const nowTime = () => new Date().toTimeString().slice(0, 8);
-
-const emptyHeader = () => ({
-  plant: "",
-  docId: "",
-  belongsTo: "",
-  docDate: todayISO(),
-  department: "",
-  timeOfIndent: nowTime(),
-});
-
-const emptySummary = () => ({
-  approvedByPM: "NO",
-  preparedBy: "",
-  authorisedBy: "",
-  remarks: "",
-});
-
-const emptyItemRow = () => ({
-  itemCode: "",
-  itemDescription: "",
-  unit: "",
-  requiredQty: "",
-  purpose: "",
-});
-
-/* ---------------------------------------------------------------------------- */
-/* Child tabs - Indent Detail is a table, Summary is a field grid              */
-
-const CHILD_TABS = [
-  { key: "indentDetail", label: "1-Indent Detail", type: "table" },
-  { key: "summary", label: "2-Summary", type: "fields" },
-];
+/* ========================================================================= */
+/* INTERNAL INDENT FORM                                                      */
+/* ========================================================================= */
 
 const InternalIndentForm = ({ onBack, onSave, editData }) => {
-  const ORG_ID = parseInt(localStorage.getItem("orgId"));
-  const [activeChildTab, setActiveChildTab] = useState("indentDetail");
+  const ORG_ID = Number(localStorage.getItem("orgId"));
+  const BRANCH_ID = localStorage.getItem("branchId");
+  // FIX: this app stores the financial year under the key "finYear" in
+  // localStorage (confirmed against the working TransportBillForm doc-id
+  // flow), not "financialYear". Reading the wrong key meant FINANCIAL_YEAR
+  // was always "", which tripped the "orgId or financialYear is missing"
+  // guard and blocked doc-id generation entirely.
+  const FINANCIAL_YEAR = localStorage.getItem("finYear") || "";
+  const USER_NAME =
+    localStorage.getItem("userName") ||
+    localStorage.getItem("username") ||
+    "SYSTEM";
+
+  const isEditMode = Boolean(editData?.id);
+
+  const [loading, setLoading] = useState(isEditMode);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [activeTab, setActiveTab] = useState("indentDetail");
   const [fieldErrors, setFieldErrors] = useState({});
+  const [loadingItemRow, setLoadingItemRow] = useState(null);
+  const [generatingDocId, setGeneratingDocId] = useState(false);
 
-  const [header, setHeader] = useState({
-    ...emptyHeader(),
-    ...editData?.header,
-  });
+  const [header, setHeader] = useState(emptyHeader());
+  const [summary, setSummary] = useState(emptySummary());
+  const [itemRows, setItemRows] = useState([emptyItemRow()]);
 
-  const [summary, setSummary] = useState({
-    ...emptySummary(),
-    ...editData?.summary,
-  });
+  /* ----------------------------------------------------------------------- */
+  /* MASTER DATA - real dropdowns, same pattern as PurchaseIndentForm         */
+  /* ----------------------------------------------------------------------- */
 
-  const [itemRows, setItemRows] = useState(
-    editData?.indentDetails?.length ? editData.indentDetails : [emptyItemRow()],
+  const [branchOptions, setBranchOptions] = useState([]);
+  const [departmentOptions, setDepartmentOptions] = useState([]);
+  const [employeeOptions, setEmployeeOptions] = useState([]);
+  const [itemOptions, setItemOptions] = useState([]);
+
+  const loadBranches = useCallback(async () => {
+    try {
+      const response = await branchAPI.getBranchByOrgId(ORG_ID);
+
+      setBranchOptions(
+        (response || []).map((branch) => ({
+          id: branch.id,
+          label: branch.branchName,
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to load branches:", error);
+      setBranchOptions([]);
+    }
+  }, [ORG_ID]);
+
+  const loadDepartments = useCallback(async () => {
+    try {
+      const response = await departmentAPI.getAllDepartments(ORG_ID);
+
+      const list = pickArray(response, [
+        "paramObjectsMap.departmentVO",
+        "paramObjectsMap.departmentMasterVO",
+        "paramObjectsMap.departmentList",
+        "paramObjectsMap.department",
+        "data.paramObjectsMap.departmentVO",
+      ]);
+
+      setDepartmentOptions(
+        list.map((department) => ({
+          id: department.id,
+          label: department.departmentName ?? department.name,
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to load departments:", error);
+      setDepartmentOptions([]);
+    }
+  }, [ORG_ID]);
+
+  const loadEmployees = useCallback(async () => {
+    try {
+      const response = await employeeAPI.getEmployeeByOrgId(ORG_ID);
+
+      setEmployeeOptions(
+        (response || []).map((employee) => ({
+          id: employee.id,
+          label: employee.employeeName,
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to load employees:", error);
+      setEmployeeOptions([]);
+    }
+  }, [ORG_ID]);
+
+  const loadItems = useCallback(async () => {
+    try {
+      const response = await itemAPI.getItems(ORG_ID, BRANCH_ID);
+
+      setItemOptions(
+        (response || []).map((item) => ({
+          id: item.id,
+          label: item.itemCode ?? item.code ?? item.itemName,
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to load items:", error);
+      setItemOptions([]);
+    }
+  }, [ORG_ID, BRANCH_ID]);
+
+  useEffect(() => {
+    loadBranches();
+    loadDepartments();
+    loadEmployees();
+    loadItems();
+  }, [loadBranches, loadDepartments, loadEmployees, loadItems]);
+
+  const approvalOptions = useMemo(
+    () => [
+      { id: "Pending", label: "Pending" },
+      { id: "Approved", label: "Approved" },
+      { id: "Rejected", label: "Rejected" },
+    ],
+    [],
   );
 
-  const handleHeaderChange = (e) => {
-    const { name, value } = e.target;
-    if (fieldErrors[name]) setFieldErrors((prev) => ({ ...prev, [name]: "" }));
+  /* ----------------------------------------------------------------------- */
+  /* LOAD EDIT DATA (via getInternalIndentById - not from the list row)       */
+  /* ----------------------------------------------------------------------- */
+
+  useEffect(() => {
+    if (!isEditMode) {
+      setHeader({
+        ...emptyHeader(),
+        branch: BRANCH_ID ? String(BRANCH_ID) : "",
+      });
+      setSummary(emptySummary());
+      setItemRows([emptyItemRow()]);
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadEditData = async () => {
+      setLoading(true);
+
+      try {
+        const data = await internalIndentAPI.getInternalIndentById(editData.id);
+
+        if (cancelled) return;
+
+        if (!data) {
+          toast.error("Internal Indent details not found");
+          return;
+        }
+
+        setHeader({
+          branch: asId(data.branch),
+          docId: data.docId || "",
+          belongTo: data.belongTo || "",
+          docDate: data.docDate || todayISO(),
+          department: asId(data.department),
+          // FIX #3: trim any "HH:MM:SS" coming back from the API down to
+          // "HH:MM" so the <input type="time"> can actually display it.
+          timeOfIndent: (data.timeOfIndent || nowTime()).slice(0, 5),
+        });
+
+        setSummary({
+          approvedByPM: data.approvedByPM || "Pending",
+          preparedBy: asId(data.preparedBy?.employeeId ?? data.preparedBy),
+          authorizedBy: asId(
+            data.authorizedBy?.employeeId ?? data.authorizedBy,
+          ),
+          remarks: data.remarks || "",
+        });
+
+        const details = data.internalIndentDetailsResponseDTO || [];
+
+        setItemRows(
+          details.length > 0
+            ? details.map((detail) => ({
+                itemCode: asId(detail.item),
+                itemDescription: detail.item?.itemDescription || "",
+                unit: asId(detail.item?.unit),
+                unitLabel:
+                  detail.item?.unit?.unitName ?? detail.item?.unit?.name ?? "",
+                requiredQty: detail.requiredQty ?? "",
+                purpose: detail.purpose || "",
+              }))
+            : [emptyItemRow()],
+        );
+
+        setHeader((prev) => ({ ...prev }));
+      } catch (error) {
+        console.error("Error loading Internal Indent:", error);
+        toast.error("Failed to load Internal Indent details");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    loadEditData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [editData?.id, isEditMode, BRANCH_ID]);
+
+  /* ----------------------------------------------------------------------- */
+  /* GENERATE DOC ID FOR NEW RECORD ONLY (never regenerate on edit)           */
+  /* ----------------------------------------------------------------------- */
+
+  useEffect(() => {
+    if (isEditMode) return;
+
+    const generateDocId = async () => {
+      console.log("========== INTERNAL INDENT DOC ID ==========");
+      console.log("ORG_ID:", ORG_ID);
+      console.log("FINANCIAL_YEAR:", FINANCIAL_YEAR);
+      console.log("BRANCH_ID:", BRANCH_ID);
+
+      if (!ORG_ID || !FINANCIAL_YEAR) {
+        console.warn("orgId or financialYear is missing", {
+          ORG_ID,
+          FINANCIAL_YEAR,
+        });
+
+        toast.error("Organization ID or Financial Year is missing");
+        return;
+      }
+
+      setGeneratingDocId(true);
+
+      // Clear old/generated document number before requesting a new one
+      setHeader((prev) => ({
+        ...prev,
+        docId: "",
+      }));
+
+      try {
+        const docId = await internalIndentAPI.getInternalIndentDocId({
+          orgId: ORG_ID,
+          financialYear: FINANCIAL_YEAR,
+        });
+
+        console.log("========== GENERATED INTERNAL INDENT DOC ID ==========");
+        console.log("docId:", docId);
+
+        if (!docId) {
+          toast.error(
+            "Document number was not generated. Please check Document Type Mapping.",
+          );
+          return;
+        }
+
+        setHeader((prev) => ({
+          ...prev,
+          docId: docId,
+        }));
+      } catch (error) {
+        console.error("========== INTERNAL INDENT DOC ID ERROR ==========");
+
+        console.error("Full error:", error);
+
+        const errorData = error?.response?.data;
+
+        console.error("Backend error response:", errorData);
+
+        const message =
+          errorData?.paramObjectsMap?.errorMessage ||
+          errorData?.paramObjectsMap?.message ||
+          errorData?.message ||
+          error?.message ||
+          "Failed to generate document number";
+
+        toast.error(message);
+      } finally {
+        setGeneratingDocId(false);
+      }
+    };
+
+    generateDocId();
+  }, [isEditMode, ORG_ID, FINANCIAL_YEAR]);
+
+  /* ----------------------------------------------------------------------- */
+  /* FIELD HANDLERS                                                          */
+  /* ----------------------------------------------------------------------- */
+
+  const handleHeaderChange = (event) => {
+    const { name, value } = event.target;
+    if (fieldErrors[name]) {
+      setFieldErrors((prev) => ({ ...prev, [name]: "" }));
+    }
     setHeader((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSummaryChange = (e) => {
-    const { name, value } = e.target;
+  const handleSummaryChange = (event) => {
+    const { name, value } = event.target;
     setSummary((prev) => ({ ...prev, [name]: value }));
   };
 
-  const makeTableHandlers = (setter, emptyRow) => ({
-    onCellChange: (idx, key, value) =>
-      setter((prev) =>
-        prev.map((row, i) => (i === idx ? { ...row, [key]: value } : row)),
+  // FIX #5: guard against a stale response landing on the wrong row if rows
+  // are added/removed while an item lookup is still in flight. We capture the
+  // itemId we fetched for and only apply the result if that row still wants it.
+  const handleItemSelect = async (index, itemId) => {
+    setItemRows((prev) =>
+      prev.map((row, rowIndex) =>
+        rowIndex === index
+          ? {
+              ...emptyItemRow(),
+              itemCode: itemId,
+              requiredQty: row.requiredQty,
+              purpose: row.purpose,
+            }
+          : row,
       ),
-    onAddRow: () => setter((prev) => [...prev, emptyRow()]),
-    onRemoveRow: (idx) => setter((prev) => prev.filter((_, i) => i !== idx)),
-  });
+    );
 
-  const itemHandlers = makeTableHandlers(setItemRows, emptyItemRow);
+    if (!itemId) return;
 
-  // Config-driven lookup, same pattern as StockTransferForm's childTabConfig
-  const childTabConfig = {
-    indentDetail: {
-      type: "table",
-      rows: itemRows,
-      handlers: itemHandlers,
-      columns: [
-        {
-          key: "itemCode",
-          label: "Item Code",
-          type: "select",
-          options: ITEM_CODES,
-        },
-        { key: "itemDescription", label: "Item Description" },
-        { key: "unit", label: "Unit", type: "select", options: UNITS },
-        { key: "requiredQty", label: "Required Qty", type: "number" },
-        { key: "purpose", label: "Purpose" },
-      ],
-    },
-    summary: {
-      type: "fields",
-    },
-  };
+    setLoadingItemRow(index);
 
-  const activeTabConfig = childTabConfig[activeChildTab];
+    try {
+      const itemDetail = await itemAPI.getItemById(itemId);
 
-  const handleAddChildRow = () => {
-    if (activeTabConfig.type === "table") {
-      activeTabConfig.handlers.onAddRow();
+      if (!itemDetail) return;
+
+      const unitObject =
+        itemDetail.unit ?? itemDetail.primaryUnits ?? itemDetail.uom ?? null;
+
+      setItemRows((prev) =>
+        prev.map((row, rowIndex) => {
+          if (rowIndex !== index) return row;
+          // Row was changed to a different item while this fetch was in
+          // flight - don't clobber it with stale data.
+          if (String(row.itemCode) !== String(itemId)) return row;
+
+          return {
+            ...row,
+            itemDescription:
+              itemDetail.itemDescription ?? itemDetail.description ?? "",
+            unit: unitObject?.id ?? "",
+            unitLabel:
+              unitObject?.unitName ??
+              unitObject?.primaryUnit ??
+              unitObject?.name ??
+              "",
+          };
+        }),
+      );
+    } catch (error) {
+      console.error("Failed to load item:", error);
+    } finally {
+      setLoadingItemRow((current) => (current === index ? null : current));
     }
   };
+
+  const handleItemChange = (index, key, value) => {
+    if (key === "itemCode") {
+      handleItemSelect(index, value);
+      return;
+    }
+
+    setItemRows((prev) =>
+      prev.map((row, rowIndex) =>
+        rowIndex === index ? { ...row, [key]: value } : row,
+      ),
+    );
+  };
+
+  const addItemRow = () => setItemRows((prev) => [...prev, emptyItemRow()]);
+
+  const removeItemRow = (index) => {
+    setItemRows((prev) =>
+      prev.length <= 1 ? prev : prev.filter((_, i) => i !== index),
+    );
+  };
+
+  /* ----------------------------------------------------------------------- */
+  /* VALIDATION                                                              */
+  /* ----------------------------------------------------------------------- */
 
   const validate = () => {
     const errors = {};
 
-    if (!header.plant) errors.plant = "Plant is required";
+    if (!header.branch) errors.branch = "Branch is required";
     if (!header.docDate) errors.docDate = "Doc Date is required";
     if (!header.department) errors.department = "Department is required";
 
+    if (!itemRows.length) {
+      errors.items = "At least one item is required";
+    }
+
+    itemRows.forEach((row, index) => {
+      if (!row.itemCode) {
+        errors[`itemCode_${index}`] = "Item is required";
+      }
+
+      if (row.requiredQty === "" || Number(row.requiredQty) <= 0) {
+        errors[`requiredQty_${index}`] =
+          "Required quantity must be greater than 0";
+      }
+    });
+
     setFieldErrors(errors);
 
-    return Object.keys(errors).length === 0;
+    if (Object.keys(errors).length > 0) {
+      toast.error(Object.values(errors)[0]);
+      return false;
+    }
+
+    return true;
   };
 
-  const handleSave = async () => {
-    if (!validate()) return;
+  /* ----------------------------------------------------------------------- */
+  /* BUILD PAYLOAD                                                           */
+  /* ----------------------------------------------------------------------- */
 
-    setIsSubmitting(true);
-
+  const buildPayload = () => {
     const payload = {
-      ...(editData?.id && { id: editData.id }),
-      header,
-      summary,
-      indentDetails: itemRows,
-      active: editData?.active ?? true,
-      orgId: ORG_ID,
-      createdBy: localStorage.getItem("userName") || "SYSTEM",
+      ...(isEditMode && editData?.id
+        ? {
+            id: Number(editData.id),
+          }
+        : {}),
+
+      branch: header.branch ? Number(header.branch) : null,
+
+      belongTo: header.belongTo || "Domestic",
+
+      // FIX: was hard-coded to "" which caused the backend to fail its
+      // Document Type Mapping lookup. Send the actual generated/loaded docId.
+      docId: header.docId || "",
+
+      docDate: header.docDate || todayISO(),
+
+      department: header.department ? Number(header.department) : null,
+
+      // FIX: backend needs financialYear to resolve the Document Type Mapping,
+      // same value used to generate the docId in the first place.
+      financialYear: FINANCIAL_YEAR,
+
+      timeOfIndent: header.timeOfIndent
+        ? header.timeOfIndent.length === 5
+          ? `${header.timeOfIndent}:00`
+          : header.timeOfIndent
+        : "00:00:00",
+
+      approvedByPM: summary.approvedByPM || "Pending",
+
+      preparedBy:
+        summary.preparedBy !== "" &&
+        summary.preparedBy !== null &&
+        summary.preparedBy !== undefined
+          ? Number(summary.preparedBy)
+          : null,
+
+      authorizedBy:
+        summary.authorizedBy !== "" &&
+        summary.authorizedBy !== null &&
+        summary.authorizedBy !== undefined
+          ? Number(summary.authorizedBy)
+          : null,
+
+      remarks: summary.remarks || "",
+
+      // FIX: API expects this key even if empty.
+      cancelRemarks: editData?.cancelRemarks || "",
+
+      orgId: Number(ORG_ID),
+
+      active: true,
+
+      createdBy: editData?.createdBy || USER_NAME,
+
+      // FIX: key renamed from internalIndentDetailsResponseDTO ->
+      // internalIndentDetailsDTO to match the API's expected request shape
+      // (the "Response" suffix is only used on the way BACK from the server).
+      internalIndentDetailsDTO: itemRows
+        .filter((row) => row.itemCode)
+        .map((row) => ({
+          item: Number(row.itemCode),
+          requiredQty: Number(row.requiredQty),
+          purpose: row.purpose?.trim() || "",
+        })),
     };
 
-    console.log("📤 Saving Internal Indent Payload:", payload);
+    console.log("========== INTERNAL INDENT FINAL PAYLOAD ==========");
+    console.log(JSON.stringify(payload, null, 2));
+
+    return payload;
+  };
+
+  /* ----------------------------------------------------------------------- */
+  /* SAVE - the ONLY place that calls the save API. Master must not call it. */
+  /* ----------------------------------------------------------------------- */ 
+
+  const handleSave = async () => {
+    if (isSubmitting) return;
+    if (!validate()) return;
+
+    const payload = buildPayload();
 
     try {
+      setIsSubmitting(true);
+
       const response =
         await internalIndentAPI.updateCreateInternalIndent(payload);
-      console.log("📥 Response:", response);
 
-      const status = response?.status === true || response?.statusFlag === "Ok";
+      const success =
+        response?.status === true || response?.statusFlag === "Ok";
 
-      if (status) {
-        if (onSave) onSave(payload);
-      } else {
-        const errorMessage =
-          response?.paramObjectsMap?.message ||
+      if (!success) {
+        const message =
           response?.paramObjectsMap?.errorMessage ||
+          response?.paramObjectsMap?.message ||
           response?.message ||
-          "Failed to save internal indent";
-        alert(errorMessage);
+          "Failed to save Internal Indent";
+        toast.error(message);
+        return;
       }
+
+      toast.success(
+        isEditMode
+          ? "Internal Indent updated successfully"
+          : "Internal Indent created successfully",
+      );
+
+      // Master's onSave only switches the screen - it does not save again.
+      onSave?.(response?.paramObjectsMap?.internalIndentVO || payload);
     } catch (error) {
-      console.error("❌ Save Error:", error);
-      alert("Failed to save Internal Indent.");
+      console.error("Internal Indent save error:", error);
+      const message =
+        error?.response?.data?.paramObjectsMap?.errorMessage ||
+        error?.response?.data?.paramObjectsMap?.message ||
+        "Failed to save Internal Indent";
+      toast.error(message);
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  /* ----------------------------------------------------------------------- */
+  /* RENDER                                                                  */
+  /* ----------------------------------------------------------------------- */
+
   return (
     <div className="p-2 max-w-7xl">
-      {/* Header */}
       <div className="flex items-center gap-2 mb-3">
         <button
+          type="button"
           onClick={onBack}
-          className="p-1 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white transition-colors"
+          disabled={isSubmitting}
+          className="p-1 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
-
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-          {editData ? "Edit Internal Indent" : "Internal Indent"}
+          {isEditMode ? "Edit Internal Indent" : "Internal Indent"}
         </h2>
       </div>
 
-      {/* Main Card */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
-        {/* ---------------- Header Fields ---------------- */}
         <div>
           <SectionHeader>Indent Details</SectionHeader>
           <div className={fieldGrid}>
             <Field
               type="select"
-              label="Plant"
-              name="plant"
-              value={header.plant}
+              label="Branch"
+              name="branch"
+              value={header.branch}
               onChange={handleHeaderChange}
-              error={fieldErrors.plant}
-              options={PLANT_IDS}
+              options={branchOptions}
+              error={fieldErrors.branch}
               required
+              disabled={isEditMode}
             />
             <Field
-              label="DocId"
+              label="Doc ID"
               name="docId"
-              value={header.docId || "Auto"}
-              onChange={handleHeaderChange}
+              value={header.docId}
+              placeholder={generatingDocId ? "Generating..." : ""}
               disabled
             />
             <Field
-              type="select"
               label="Belongs To"
-              name="belongsTo"
-              value={header.belongsTo}
+              name="belongTo"
+              value={header.belongTo}
               onChange={handleHeaderChange}
-              options={BELONGS_TO}
             />
             <Field
               type="date"
-              label="DocDate"
+              label="Doc Date"
               name="docDate"
               value={header.docDate}
               onChange={handleHeaderChange}
@@ -509,8 +820,8 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
               name="department"
               value={header.department}
               onChange={handleHeaderChange}
+              options={departmentOptions}
               error={fieldErrors.department}
-              options={DEPARTMENTS}
               required
             />
             <Field
@@ -523,47 +834,168 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
           </div>
         </div>
 
-        {/* ---------------- Child Tabs: Indent Detail / Summary ---------------- */}
-        <section className="mt-0 bg-white dark:bg-gray-800">
-          {/* Tabs */}
-          <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 mb-0">
-            <div className="flex overflow-x-auto">
-              {CHILD_TABS.map((tab) => (
-                <button
-                  key={tab.key}
-                  type="button"
-                  onClick={() => setActiveChildTab(tab.key)}
-                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${
-                    activeChildTab === tab.key
-                      ? "bg-blue-600 text-white"
-                      : "text-gray-600 dark:text-gray-300"
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-
-            {activeTabConfig.type === "table" && (
+        <section>
+          <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700">
+            <div className="flex">
               <button
                 type="button"
-                onClick={handleAddChildRow}
-                className="h-6 w-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-colors flex-shrink-0"
+                onClick={() => setActiveTab("indentDetail")}
+                className={`px-4 py-1 text-xs font-semibold rounded-t ${
+                  activeTab === "indentDetail"
+                    ? "bg-blue-600 text-white"
+                    : "text-gray-600 dark:text-gray-300"
+                }`}
+              >
+                1-Indent Detail
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("summary")}
+                className={`px-4 py-1 text-xs font-semibold rounded-t ${
+                  activeTab === "summary"
+                    ? "bg-blue-600 text-white"
+                    : "text-gray-600 dark:text-gray-300"
+                }`}
+              >
+                2-Summary
+              </button>
+            </div>
+
+            {activeTab === "indentDetail" && (
+              <button
+                type="button"
+                onClick={addItemRow}
+                disabled={isSubmitting}
+                className="h-6 w-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center"
               >
                 <Plus size={12} />
               </button>
             )}
           </div>
 
-          {/* Active tab's content */}
-          {activeTabConfig.type === "table" ? (
-            <DynamicTable
-              columns={activeTabConfig.columns}
-              rows={activeTabConfig.rows}
-              onCellChange={activeTabConfig.handlers.onCellChange}
-              onRemoveRow={activeTabConfig.handlers.onRemoveRow}
-            />
-          ) : (
+          {activeTab === "indentDetail" && (
+            <div className="mt-2">
+              <TableWrapper>
+                <TableHead
+                  headers={[
+                    "#",
+                    "Item Code",
+                    "Item Description",
+                    "Unit",
+                    "Required Qty",
+                    "Purpose",
+                    "Action",
+                  ]}
+                />
+                <tbody>
+                  {itemRows.map((row, index) => (
+                    <tr
+                      key={index}
+                      className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"
+                    >
+                      <td className="p-1 text-center dark:text-white">
+                        {index + 1}
+                      </td>
+
+                      <td className="p-1 align-top">
+                        <select
+                          value={row.itemCode}
+                          onChange={(e) =>
+                            handleItemChange(index, "itemCode", e.target.value)
+                          }
+                          className={cellInputClasses}
+                        >
+                          <option value="">-- Select Item --</option>
+                          {itemOptions.map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {item.label}
+                            </option>
+                          ))}
+                        </select>
+                        {fieldErrors[`itemCode_${index}`] && (
+                          <p className="text-[10px] text-red-500 mt-0.5">
+                            {fieldErrors[`itemCode_${index}`]}
+                          </p>
+                        )}
+                      </td>
+
+                      <td className="p-1 align-top">
+                        <input
+                          type="text"
+                          value={
+                            loadingItemRow === index
+                              ? "Loading..."
+                              : row.itemDescription || ""
+                          }
+                          readOnly
+                          className={`${cellInputClasses} bg-gray-50 dark:bg-gray-800`}
+                        />
+                      </td>
+
+                      <td className="p-1 align-top">
+                        <input
+                          type="text"
+                          value={row.unitLabel || ""}
+                          readOnly
+                          className={`${cellInputClasses} bg-gray-50 dark:bg-gray-800`}
+                        />
+                      </td>
+
+                      <td className="p-1 align-top">
+                        <input
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={row.requiredQty}
+                          onChange={(e) =>
+                            handleItemChange(
+                              index,
+                              "requiredQty",
+                              e.target.value,
+                            )
+                          }
+                          className={cellInputClasses}
+                        />
+                        {fieldErrors[`requiredQty_${index}`] && (
+                          <p className="text-[10px] text-red-500 mt-0.5">
+                            {fieldErrors[`requiredQty_${index}`]}
+                          </p>
+                        )}
+                      </td>
+
+                      <td className="p-1 align-top">
+                        <input
+                          type="text"
+                          value={row.purpose || ""}
+                          onChange={(e) =>
+                            handleItemChange(index, "purpose", e.target.value)
+                          }
+                          className={cellInputClasses}
+                        />
+                      </td>
+
+                      <td className="p-1 text-center">
+                        <button
+                          type="button"
+                          onClick={() => removeItemRow(index)}
+                          disabled={itemRows.length <= 1 || isSubmitting}
+                          className={`h-5 w-5 rounded text-white inline-flex items-center justify-center ${
+                            itemRows.length <= 1 || isSubmitting
+                              ? "bg-gray-400 cursor-not-allowed"
+                              : "bg-red-600 hover:bg-red-700"
+                          }`}
+                        >
+                          <Trash2 size={10} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </TableWrapper>
+            </div>
+          )}
+
+          {activeTab === "summary" && (
             <div className="pt-3">
               <div className={fieldGrid}>
                 <Field
@@ -572,19 +1004,23 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
                   name="approvedByPM"
                   value={summary.approvedByPM}
                   onChange={handleSummaryChange}
-                  options={YES_NO}
+                  options={approvalOptions}
                 />
                 <Field
+                  type="select"
                   label="Prepared By"
                   name="preparedBy"
                   value={summary.preparedBy}
                   onChange={handleSummaryChange}
+                  options={employeeOptions}
                 />
                 <Field
+                  type="select"
                   label="Authorised By"
-                  name="authorisedBy"
-                  value={summary.authorisedBy}
+                  name="authorizedBy"
+                  value={summary.authorizedBy}
                   onChange={handleSummaryChange}
+                  options={employeeOptions}
                 />
                 <Field
                   type="textarea"
@@ -599,12 +1035,27 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
           )}
         </section>
 
-        <FormButtons
-          onCancel={onBack}
-          onSave={handleSave}
-          isSubmitting={isSubmitting}
-          saveLabel={editData ? "Update" : "Save"}
-        />
+        <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
+          <button
+            type="button"
+            onClick={onBack}
+            disabled={isSubmitting}
+            className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60"
+          >
+            <X className="h-3 w-3" />
+            Cancel
+          </button>
+
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={isSubmitting || loading}
+            className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60"
+          >
+            <Save className="h-3 w-3" />
+            {isSubmitting ? "Saving..." : isEditMode ? "Update" : "Save"}
+          </button>
+        </div>
       </div>
     </div>
   );

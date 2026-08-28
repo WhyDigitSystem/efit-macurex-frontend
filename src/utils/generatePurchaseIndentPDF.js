@@ -11,7 +11,7 @@ const C = {
   primaryTint: [239, 246, 255], // #eff6ff  blue-50
   white: [255, 255, 255],
   black: [0, 0, 0],
-  gray100: [243, 244, 246], // #f3f4f6
+  gray100: [243, 244, 246], // #f3f4f6 
   gray200: [229, 231, 235], // #e5e7eb
   gray500: [107, 114, 128], // #6b7280
   gray900: [17, 24, 39], // #111827
@@ -112,7 +112,7 @@ export function generatePurchaseIndentPDF(data) {
     ["Prepared By :", indent.preparedBy],
     ["By Whom :", indent.byWhom],
   ];
-
+ 
   const rightRows = [
     ["Indent No :", indent.indentNo],
     ["Indent Date :", indent.indentDate],
@@ -367,4 +367,4 @@ export function generatePurchaseIndentPDF(data) {
   return { blobUrl, fileName, doc };
 }
 
-export default generatePurchaseIndentPDF;
+export default generatePurchaseIndentPDF; 

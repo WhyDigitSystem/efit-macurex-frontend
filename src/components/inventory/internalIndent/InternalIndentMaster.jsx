@@ -1,7 +1,8 @@
+// src/components/Inventory/InternalIndent/InternalIndentMaster.jsx
+
 import { useState } from "react";
 import InternalIndentList from "./InternalIndentList";
 import InternalIndentForm from "./InternalIndentForm";
-import internalIndentAPI from "../../../api/Inventory/internalIndentAPI";
 
 const InternalIndentMaster = () => {
   const [screen, setScreen] = useState("list");
@@ -12,23 +13,22 @@ const InternalIndentMaster = () => {
     setScreen("form");
   };
 
-  const handleEdit = (data) => {
-    setEditData(data);
+  const handleEdit = (row) => {
+    setEditData(row);
     setScreen("form");
   };
 
   const handleBack = () => {
+    setEditData(null);
     setScreen("list");
   };
 
-  const handleSave = async (payload) => {
-    try {
-      await internalIndentAPI.updateCreateInternalIndent(payload); // Create/Update
-      handleBack();
-    } catch (error) {
-      console.error("Error saving internal indent:", error);
-      throw error;
-    }
+  // The Form already calls updateCreateInternalIndent and only invokes
+  // this after a successful save. Master must NOT call the save API
+  // again here - it only switches the screen back to the list.
+  const handleSave = () => {
+    setEditData(null);
+    setScreen("list");
   };
 
   return (
