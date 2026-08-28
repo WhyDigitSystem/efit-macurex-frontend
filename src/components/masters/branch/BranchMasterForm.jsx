@@ -52,6 +52,35 @@ const normalizeLocationRef = (val, nameKey) => {
   return { id: val ?? "", name: "" };
 };
 
+const getActiveValue = (value) => {
+  if (value === true || value === 1) return true;
+  if (value === false || value === 0) return false;
+
+  if (typeof value === "string") {
+    const status = value.trim().toLowerCase();
+
+    if (
+      status === "active" ||
+      status === "true" ||
+      status === "1" ||
+      status === "t"
+    ) {
+      return true;
+    }
+
+    if (
+      status === "inactive" ||
+      status === "false" ||
+      status === "0" ||
+      status === "f"
+    ) {
+      return false;
+    }
+  }
+
+  return false;
+};
+
 /* ---------------------------------------------------------------------------- */
 /* Shared building blocks                                                      */
 
@@ -264,6 +293,7 @@ const emptyBranchForm = () => ({
   panNo: "",
   cinNo: "",
   dunsNo: "",
+  active: false,
 });
 
 const BranchMasterForm = ({
@@ -281,7 +311,11 @@ const BranchMasterForm = ({
   const [selectedCompany, setSelectedCompany] = useState(data?.companyId || "");
   const [selectedBranch, setSelectedBranch] = useState(data?.id || "");
 
-  const [form, setForm] = useState({ ...emptyBranchForm(), ...data });
+  const [form, setForm] = useState({
+    ...emptyBranchForm(),
+    ...data,
+    active: getActiveValue(data?.active),
+  });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
 
@@ -334,12 +368,17 @@ const BranchMasterForm = ({
         setForm({
           ...emptyBranchForm(),
           ...data,
+
           countryId: countryRef.id,
           countryName: countryRef.name,
+
           stateId: stateRef.id,
           stateName: stateRef.name,
+
           cityId: cityRef.id,
           cityName: cityRef.name,
+
+          active: getActiveValue(data.active),
         });
 
         setSelectedCompany(data.companyId || "");
@@ -598,7 +637,7 @@ const BranchMasterForm = ({
       eccNo: form.eccNo?.trim() || "",
       dunsNo: form.dunsNo?.trim() || "",
 
-      active: Boolean(form.active) || true,
+      active: Boolean(form.active),
       cancelRemarks: form.cancelRemarks?.trim() || false,
 
       // On create -> current user. On update -> keep original creator.
@@ -705,7 +744,7 @@ const BranchMasterForm = ({
             />
 
             <Field
-              label="Phone Number"
+              label="Phone No"
               name="phoneNo"
               value={form.phoneNo}
               onChange={handleChange}
@@ -843,6 +882,29 @@ const BranchMasterForm = ({
               required
               className="col-span-2"
             />
+
+            <div className="flex items-center gap-2 mt-5">
+              <input
+                type="checkbox"
+                id="active"
+                name="active"
+                checked={Boolean(form.active)}
+                onChange={(e) => {
+                  setForm((prev) => ({
+                    ...prev,
+                    active: e.target.checked,
+                  }));
+                }}
+                className="h-4 w-4 accent-blue-600 dark:accent-blue-500"
+              />
+
+              <label
+                htmlFor="active"
+                className="text-xs text-gray-700 dark:text-gray-200 cursor-pointer"
+              >
+                Active
+              </label>
+            </div>
           </div>
         </div>
 

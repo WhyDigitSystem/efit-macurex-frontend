@@ -4,7 +4,7 @@ export const designationAPI = {
     // Get all designations
     getAllDesignations: async (orgId, branch) => {
         try {
-            const response = await apiClient.get(`/api/efitmaster/getDesignationByOrgId?orgId=${orgId}&branch=${branch}`);
+            const response = await apiClient.get(`/api/efitmaster/getDesignationByOrgId?orgId=${orgId}`);
             return response;
         } catch (error) {
             console.error('Error fetching designations:', error);

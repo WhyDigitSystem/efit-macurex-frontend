@@ -13,6 +13,36 @@ const controlClasses =
 
 const labelClasses =
   "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
+
+const getActiveValue = (value) => {
+  if (value === true || value === 1) return true;
+  if (value === false || value === 0) return false;
+
+  if (typeof value === "string") {
+    const status = value.trim().toLowerCase();
+
+    if (
+      status === "active" ||
+      status === "true" ||
+      status === "1" ||
+      status === "t"
+    ) {
+      return true;
+    }
+
+    if (
+      status === "inactive" ||
+      status === "false" ||
+      status === "0" ||
+      status === "f"
+    ) {
+      return false;
+    }
+  }
+
+  return false;
+};
+
 const StateMasterForm = ({ onBack, onSave, editData }) => {
   const ORG_ID = parseInt(localStorage.getItem("orgId"));
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -47,7 +77,7 @@ const StateMasterForm = ({ onBack, onSave, editData }) => {
         ? editData.countryId
         : "",
     region: editData?.region || "",
-    active: editData?.active ?? true,
+    active: getActiveValue(editData?.active),
     cancel: editData?.cancel ?? false,
 
     // Additional fields from localStorage
@@ -68,6 +98,46 @@ const StateMasterForm = ({ onBack, onSave, editData }) => {
     country: "Country",
     region: "Region",
   };
+
+  useEffect(() => {
+    if (!editData) {
+      setForm((prev) => ({
+        ...prev,
+        id: 0,
+        stateName: "",
+        stateCode: "",
+        stateNumber: "",
+        country: "",
+        region: "",
+        active: false,
+        cancel: false,
+      }));
+      return;
+    }
+
+    setForm((prev) => ({
+      ...prev,
+      id: editData.id || 0,
+      stateName: editData.stateName || "",
+      stateCode: editData.stateCode || "",
+      stateNumber: editData.stateNumber || "",
+      country: editData.country?.id
+        ? editData.country.id
+        : editData.countryId
+          ? editData.countryId
+          : "",
+      region: editData.region || "",
+      active: getActiveValue(editData.active),
+      cancel: getActiveValue(editData.cancel),
+      branch: editData.branch || loginBranch,
+      branchCode: editData.branchCode || loginBranchCode,
+      warehouse: editData.warehouse || loginWarehouse,
+      customer: editData.customer || loginCustomer,
+      client: editData.client || loginClient,
+      orgId: editData.orgId || ORG_ID,
+      createdBy: editData.createdBy || loginUserName,
+    }));
+  }, [editData]);
 
   // Initialize data on component mount
   useEffect(() => {
@@ -366,25 +436,27 @@ const StateMasterForm = ({ onBack, onSave, editData }) => {
           </div>
 
           {/* Active */}
-          <div>
-            <label className={labelClasses}>Active</label>
-
-            <button
-              type="button"
-              onClick={() =>
+          <div className="flex items-center gap-2 mt-5">
+            <input
+              type="checkbox"
+              id="active"
+              name="active"
+              checked={Boolean(form.active)}
+              onChange={(e) =>
                 setForm((prev) => ({
                   ...prev,
-                  active: !prev.active,
+                  active: e.target.checked,
                 }))
               }
-              className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${form.active ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
-                }`}
+              className="h-4 w-4 accent-blue-600 dark:accent-blue-500 cursor-pointer"
+            />
+
+            <label
+              htmlFor="active"
+              className="text-xs text-gray-700 dark:text-gray-200 cursor-pointer"
             >
-              <span
-                className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${form.active ? "translate-x-6" : "translate-x-0.5"
-                  }`}
-              />
-            </button>
+              Active
+            </label>
           </div>
         </div>
 

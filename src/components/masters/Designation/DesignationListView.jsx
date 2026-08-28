@@ -14,7 +14,7 @@ const DesignationListView = ({ onAddNew, onEdit, onBack }) => {
     try {
       setLoading(true);
 
-      const response = await designationAPI.getAllDesignations(ORG_ID, branch);
+      const response = await designationAPI.getAllDesignations(ORG_ID);
 
       let designations = [];
 
@@ -40,7 +40,7 @@ const DesignationListView = ({ onAddNew, onEdit, onBack }) => {
     } finally {
       setLoading(false);
     }
-  }, [ORG_ID, branch]);
+  }, [ORG_ID]);
 
   useEffect(() => {
     loadDesignations();

@@ -43,6 +43,7 @@ const Field = ({
   type = "text",
   options,
   multiple,
+  disabled,
   className = "",
 }) => {
   if (type === "select") {
@@ -58,6 +59,7 @@ const Field = ({
           value={value}
           onChange={onChange}
           multiple={multiple}
+          disabled={disabled}
           className={
             multiple
               ? controlClasses.replace("h-[30px]", "h-[64px]")
@@ -93,6 +95,7 @@ const Field = ({
           name={name}
           value={value}
           onChange={onChange}
+          disabled={disabled}
           rows={3}
           className={
             "w-full px-2 py-1.5 rounded border text-xs leading-snug transition-colors resize-none " +
@@ -125,6 +128,7 @@ const Field = ({
         type={type}
         name={name}
         value={value}
+        disabled={disabled}
         onChange={onChange}
         className={controlClasses}
       />
@@ -499,7 +503,7 @@ const PartyMasterForm = ({ data, onBack }) => {
         buyerName: getId(apiData.buyerName),
         logistics: "",
         zoneId: getId(apiData.zone),
-        vendorCode: apiData.vendorCode || "",
+        vendorCode: apiData.customerCompanyCode || "",
         ifGroupName: apiData.groupName || "",
         legalName: apiData.customerLegalName || "",
         tradeName: apiData.tradeName || "",
@@ -708,7 +712,7 @@ const PartyMasterForm = ({ data, onBack }) => {
 
   const loadDepartments = useCallback(async () => {
     try {
-      const response = await departmentAPI.getAllDepartments(orgId, branch);
+      const response = await departmentAPI.getAllDepartments(orgId);
       const departments = response?.paramObjectsMap?.departmentVO || [];
       const options = departments.map(item => ({
         value: item.id,
@@ -965,7 +969,7 @@ const PartyMasterForm = ({ data, onBack }) => {
       supplierType: general.supplierCategory ? Number(general.supplierCategory) : 0,
       tradeName: general.tradeName || "",
       typeExtentOfControl: supplier.typeExtentOfControl || "",
-      vendorCode: general.vendorCode || "",
+      customerCompanyCode: general.vendorCode || "",
       webAddress: general.website || "",
       zone: general.zoneId ? Number(general.zoneId) : 0,
     };
@@ -1082,7 +1086,7 @@ const PartyMasterForm = ({ data, onBack }) => {
               options={listOfValuesData.partyCategory || []}
               required
             />
-            <Field
+            {/* <Field
               type="select"
               label="Party Category"
               name="partyCategories2"
@@ -1099,7 +1103,7 @@ const PartyMasterForm = ({ data, onBack }) => {
               onChange={handleGeneralChange}
               error={fieldErrors.partyCategories3}
               options={partyCategory3Options}
-            />
+            /> */}
 
             <Field
               type="select"
@@ -1114,7 +1118,7 @@ const PartyMasterForm = ({ data, onBack }) => {
 
             <Field
               type="select"
-              label="Plant ID"
+              label="Plant"
               name="plantId"
               value={general.plantId}
               onChange={handleGeneralChange}
@@ -1145,7 +1149,7 @@ const PartyMasterForm = ({ data, onBack }) => {
 
             <Field
               type="select"
-              label="Party Type"
+              label="Customer Type"
               name="partyType"
               value={general.partyType}
               onChange={handleGeneralChange}
@@ -1169,7 +1173,15 @@ const PartyMasterForm = ({ data, onBack }) => {
             />
 
             <Field
-              label="Party Name"
+              label="Customer's Company Code"
+              name="vendorCode"
+              required
+              value={general.vendorCode}
+              onChange={handleGeneralChange}
+            />
+
+            <Field
+              label="Customer Name"
               name="partyName"
               value={general.partyName}
               onChange={handleGeneralChange}
@@ -1217,18 +1229,11 @@ const PartyMasterForm = ({ data, onBack }) => {
 
             <Field
               type="select"
-              label="ZoneId"
+              label="Zone"
               name="zoneId"
               value={general.zoneId}
               onChange={handleGeneralChange}
               options={zoneData}
-            />
-
-            <Field
-              label="Vendor Code"
-              name="vendorCode"
-              value={general.vendorCode}
-              onChange={handleGeneralChange}
             />
 
             <Field
@@ -1260,7 +1265,7 @@ const PartyMasterForm = ({ data, onBack }) => {
 
             <Field
               type="number"
-              label="Party Credit Limit"
+              label="Customer Credit Limit"
               name="partyCreditLimit"
               value={general.partyCreditLimit}
               onChange={handleGeneralChange}
@@ -1268,7 +1273,7 @@ const PartyMasterForm = ({ data, onBack }) => {
 
             <Field
               type="number"
-              label="Party Credit Period(Days)"
+              label="Customer Credit Period(Days)"
               name="partyCreditPeriod"
               value={general.partyCreditPeriod}
               onChange={handleGeneralChange}
@@ -1340,6 +1345,7 @@ const PartyMasterForm = ({ data, onBack }) => {
             <Field
               label="GST State Code"
               name="gstStateCode"
+              disabled={true}
               value={general.gstStateCode}
               readOnly
             />
@@ -1347,6 +1353,7 @@ const PartyMasterForm = ({ data, onBack }) => {
             <Field
               label="GST State ID"
               name="gstStateId"
+               disabled={true}
               value={general.gstStateId}
               readOnly
             />

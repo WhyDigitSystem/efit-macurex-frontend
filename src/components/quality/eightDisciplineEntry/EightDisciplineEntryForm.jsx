@@ -541,7 +541,7 @@ const EightDisciplineEntryForm = ({ data, onBack }) => {
 
   const loadDepartments = useCallback(async () => {
     try {
-      const res = await departmentAPI.getAllDepartments(orgId, branch);
+      const res = await departmentAPI.getAllDepartments(orgId);
       const departments = res?.paramObjectsMap?.departmentVO || [];
       setDepartmentOptions(
         departments.map((d) => ({ value: d.id, label: d.departmentName })),

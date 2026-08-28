@@ -51,7 +51,7 @@ const CauseMasterForm = ({ onBack, onSave, editData, editId }) => {
 
   const loadDepartments = useCallback(async () => {
     try {
-      const res = await departmentAPI.getAllDepartments(ORG_ID, BRANCH);
+      const res = await departmentAPI.getAllDepartments(ORG_ID);
       const departments = res?.paramObjectsMap?.departmentVO || [];
       if (departments.length) {
         setDepartmentOptions(

@@ -341,7 +341,7 @@ const CustomerComplaintForm = ({ data, onBack }) => {
 
     const loadDepartments = async () => {
       try {
-        const res = await departmentAPI.getAllDepartments(orgId, branch);
+        const res = await departmentAPI.getAllDepartments(orgId);
         const departments = res?.paramObjectsMap?.departmentVO || [];
         setDepartmentOptions(
           departments.map((d) => ({ value: d.id, label: d.departmentName })),

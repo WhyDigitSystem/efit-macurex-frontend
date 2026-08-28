@@ -797,8 +797,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
       if (!ORG_ID) return;
 
       const response = await departmentAPI.getAllDepartments(
-        ORG_ID,
-        effectiveBranchId,
+        ORG_ID
       );
 
       const list =

@@ -655,7 +655,7 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
 
   const loadDepartments = useCallback(async () => {
     try {
-      const response = await departmentAPI.getAllDepartments(ORG_ID, BRANCH_ID);
+      const response = await departmentAPI.getAllDepartments(ORG_ID);
 
       const list = pickArray(response, [
         "paramObjectsMap.departmentVO",

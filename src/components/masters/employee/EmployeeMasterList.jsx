@@ -3,8 +3,6 @@ import CommonListViewTable from "../../../utils/CommonListViewTable";
 import employeeAPI from "../../../api/employeeAPI";
 import { useToast } from "../../Toast/ToastContext";
 
-// Flattens the nested employeeMasterVO shape into the row shape the table expects.
-// Keeps the original VO under `raw` so onEdit gets the full record for the form.
 const mapEmployeeRow = (e) => ({
   id: e.id,
   employeeId: e.employeeId ?? e.empId ?? "-",
@@ -19,10 +17,12 @@ const mapEmployeeRow = (e) => ({
   dateOfJoining: e.dateOfJoining || "-",
   jobLocation: e.plant?.branchName || e.branch?.branchName || "-",
   country: e.permanentCountry?.countryName || e.tempCountry?.countryName || "-",
+  // FIX: Handle "Active" string value from API
   active:
     e.active === true ||
     e.active === "true" ||
     e.active === 1 ||
+    e.active === "Active" ||  // Added this check
     e.isActive === true,
   raw: e,
 });
@@ -70,12 +70,6 @@ const EmployeeMasterList = ({ onAddNew, onEdit, onBack }) => {
       key: "employeeName",
       label: "Employee Name",
       accessor: "employeeName",
-      type: "text",
-    },
-    {
-      key: "employeeType",
-      label: "Employee Type",
-      accessor: "employeeType",
       type: "text",
     },
     {

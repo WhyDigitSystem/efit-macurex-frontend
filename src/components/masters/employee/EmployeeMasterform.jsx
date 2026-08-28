@@ -8,6 +8,7 @@ import { departmentAPI } from "../../../api/departmentAPI";
 import { designationAPI } from "../../../api/designationAPI";
 import { useToast } from "../../Toast/ToastContext";
 import branchAPI from "../../../api/branchAPI";
+
 const UPPERCASE_FIELDS = ["employeeId"];
 
 const controlClasses =
@@ -229,6 +230,7 @@ const EmployeeMasterForm = ({ data, onBack }) => {
   const [form, setForm] = useState(emptyForm());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
+  const [loadingEmployeeId, setLoadingEmployeeId] = useState(false);
 
   // Country/State/City lists — kept separate for Temp vs Permanent address
   const [countries, setCountries] = useState([]);
@@ -262,7 +264,7 @@ const EmployeeMasterForm = ({ data, onBack }) => {
   const loadBranches = useCallback(async () => {
     try {
       const response = await branchAPI.getBranchByOrgId(orgId);
-      const options = (response || []).map((branch) => ({
+      const options = (response || []).map(branch => ({
         value: branch.id,
         label: branch.branchName,
       }));
@@ -275,7 +277,7 @@ const EmployeeMasterForm = ({ data, onBack }) => {
 
   /* ---------------- load department/designation whenever Plant ID changes ---------------- */
   useEffect(() => {
-    if (!orgId || !form.plantId) {
+    if (!orgId) {
       setDepartments([]);
       setDesignations([]);
       return;
@@ -283,24 +285,73 @@ const EmployeeMasterForm = ({ data, onBack }) => {
 
     const timer = setTimeout(async () => {
       try {
-        const res = await departmentAPI.getAllDepartments(orgId, form.plantId);
+        const res = await departmentAPI.getAllDepartments(orgId);
         setDepartments(unwrapList(res, "departmentVO", "departmentList"));
       } catch (error) {
         console.error("Department loading error", error);
       }
       try {
         const res = await designationAPI.getAllDesignations(
-          orgId,
-          form.plantId,
+          orgId
         );
         setDesignations(unwrapList(res, "designationVO", "designationList"));
       } catch (error) {
         console.error("Designation loading error", error);
       }
-    }, 350); // small debounce since Plant ID is a free-typed field
+    }, 350);
 
     return () => clearTimeout(timer);
   }, [orgId, form.plantId]);
+
+  /* ---------------- Fetch Employee Code for new employee ---------------- */
+  const fetchEmployeeCode = async () => {
+    // Only fetch if we're creating a new employee (no data prop)
+    if (data) return;
+
+    if (!orgId) {
+      console.warn("No orgId found for fetching employee code");
+      return;
+    }
+
+    setLoadingEmployeeId(true);
+    try {
+      const employeeCode = await employeeAPI.getEmployeeCode(orgId);
+      if (employeeCode) {
+        setForm(prev => ({
+          ...prev,
+          employeeId: employeeCode,
+        }));
+      }
+    } catch (error) {
+      console.error("Error fetching employee code:", error);
+      // Don't show error toast here as it might fail silently
+      // The user can still enter a code manually if needed
+    } finally {
+      setLoadingEmployeeId(false);
+    }
+  };
+
+  /* ---------------- Fetch Employee ID when editing ---------------- */
+  const fetchEmployeeById = async (employeeId) => {
+    if (!employeeId) return;
+
+    setLoadingEmployeeId(true);
+    try {
+      const response = await employeeAPI.getEmployeeById(employeeId);
+      if (response) {
+        // Update the employeeId field with the fetched ID
+        setForm(prev => ({
+          ...prev,
+          employeeId: response.employeeId || response.employeeDocId || prev.employeeId,
+        }));
+      }
+    } catch (error) {
+      console.error("Error fetching employee ID:", error);
+      // Don't show error toast here as it might fail silently
+    } finally {
+      setLoadingEmployeeId(false);
+    }
+  };
 
   /* ---------------- populate form from API record ---------------- */
   const populateForm = async (emp) => {
@@ -313,6 +364,9 @@ const EmployeeMasterForm = ({ data, onBack }) => {
     const permCountryRef = normalizeRef(emp.permanentCountry, "countryName");
     const permStateRef = normalizeRef(emp.permanentState, "stateName");
     const permCityRef = normalizeRef(emp.permanentCitys, "cityName");
+
+    // FIXED: Get branch/plant ID from multiple possible sources
+    const branchId = emp.branch?.id || emp.plant?.id || emp.branchId || emp.plantId || "";
 
     setForm({
       ...emptyForm(),
@@ -360,7 +414,7 @@ const EmployeeMasterForm = ({ data, onBack }) => {
       esiNo: emp.esiNo || "",
       esiDispName: emp.esiDispName || "",
       dateOfJoining: emp.dateOfJoining || "",
-      plantId: emp.plant?.id || "",
+      plantId: branchId, // FIXED: Use the branch ID from multiple sources
       vpfPercent: emp.vpfPercentage ?? "",
 
       department: emp.department?.departmentName || "",
@@ -371,8 +425,8 @@ const EmployeeMasterForm = ({ data, onBack }) => {
       designation: emp.designation?.designationName || "",
       designationId: emp.designation?.id || "",
 
-      branchId: emp.branch?.id || emp.plant?.id || "",
-      active: emp.active ?? true,
+      branchId: branchId, // FIXED: Use the branch ID from multiple sources
+      active: emp.active === true || emp.active === "true" || emp.active === 1 || emp.active === "Active",
       natureOfEmployment: emp.natureOfEmployment || "",
       trainingStartDate: emp.trainingStartDate || "",
       overtimeApplicable: emp.overTimeApplicable || "No",
@@ -387,6 +441,11 @@ const EmployeeMasterForm = ({ data, onBack }) => {
       bankAcNo: emp.bankAccountNo || "",
       bankName: emp.bankName || "",
     });
+
+    // If employee has an ID, fetch the employee ID code
+    if (emp.id) {
+      await fetchEmployeeById(emp.id);
+    }
 
     // Preload dependent dropdowns so edit shows correct chain
     if (tempCountryRef.id) {
@@ -421,11 +480,15 @@ const EmployeeMasterForm = ({ data, onBack }) => {
         console.error("Perm city preload error", e);
       }
     }
-    // Department/Designation lists load automatically via the plantId effect above.
   };
 
   useEffect(() => {
-    if (data) populateForm(data);
+    if (data) {
+      populateForm(data);
+    } else {
+      // If it's a new employee, fetch the employee code
+      fetchEmployeeCode();
+    }
   }, [data]);
 
   /* ---------------- cascading handlers: TEMP address ---------------- */
@@ -632,7 +695,6 @@ const EmployeeMasterForm = ({ data, onBack }) => {
     // Matches the updateCreateEmployeeMaster DTO shape
     const payload = {
       ...(form.id && { id: Number(form.id) }),
-      employeeId: form.employeeId || null,
       surName: form.surName,
       middleName: form.middleName,
       fatherHusbandName: form.fatherHusbandName,
@@ -642,13 +704,13 @@ const EmployeeMasterForm = ({ data, onBack }) => {
       dateOfBirth: form.dateOfBirth,
 
       tempAddressLine: form.tempAddressLine,
-      tempCountryId: form.tempCountry ? Number(form.tempCountry) : null,
-      tempStateId: form.tempState ? Number(form.tempState) : null,
-      tempCityId: form.tempCity ? Number(form.tempCity) : null,
-      tempPincode: form.tempPinCode ? Number(form.tempPinCode) : null,
+      tempCountryId: form.tempCountry ? Number(form.tempCountry) : 0,
+      tempStateId: form.tempState ? Number(form.tempState) : 0,
+      tempCityId: form.tempCity ? Number(form.tempCity) : 0,
+      tempPincode: form.tempPinCode ? Number(form.tempPinCode) : 0,
 
-      telephone: form.telephone ? Number(form.telephone) : null,
-      mobile: form.mobile ? Number(form.mobile) : null,
+      telephone: form.telephone ? Number(form.telephone) : 0,
+      mobile: form.mobile ? Number(form.mobile) : 0,
       email: form.email,
       qualification: form.qualification,
       grade: form.grade,
@@ -658,21 +720,21 @@ const EmployeeMasterForm = ({ data, onBack }) => {
       nominee: form.nominee,
 
       permanentAddressLine: form.permanentAddressLine,
-      permanentCountryId: form.permCountry ? Number(form.permCountry) : null,
-      permanentStateId: form.permState ? Number(form.permState) : null,
-      permanentCity: form.permCity ? Number(form.permCity) : null,
-      permanentPincode: form.permPincode ? Number(form.permPincode) : null,
+      permanentCountryId: form.permCountry ? Number(form.permCountry) : 0,
+      permanentStateId: form.permState ? Number(form.permState) : 0,
+      permanentCity: form.permCity ? Number(form.permCity) : 0,
+      permanentPincode: form.permPincode ? Number(form.permPincode) : 0,
+      informationActive: '',
 
       cardNo: form.cardNo,
       temporaryCardNo: form.temporaryCardNo,
       pfNo: form.pfNo,
       esiNo: form.esiNo,
       esiDispName: form.esiDispName,
-      vpfPercentage: form.vpfPercent ? Number(form.vpfPercent) : null,
+      vpfPercentage: form.vpfPercent ? Number(form.vpfPercent) : 0,
 
       dateOfJoining: form.dateOfJoining,
-      plantId: form.plantId ? Number(form.plantId) : null,
-      branchId: form.branchId ? Number(form.branchId) : null,
+      branchId: form.plantId ? Number(form.plantId) : null,
 
       departmentId: form.departmentId ? Number(form.departmentId) : null,
       designationId: form.designationId ? Number(form.designationId) : null,
@@ -684,8 +746,8 @@ const EmployeeMasterForm = ({ data, onBack }) => {
       trainingStartDate: form.trainingStartDate,
       trainingEndDate: form.trainingEndDate,
       referenceBy: form.refBy,
-      noticePeriod: form.noticePeriod ? Number(form.noticePeriod) : null,
-      okdById: form.okdById ? Number(form.okdById) : null,
+      noticePeriod: form.noticePeriod ? Number(form.noticePeriod) : 0,
+      okdById: form.okdById ? Number(form.okdById) : 0,
 
       currentSalaryPeriodStart: form.currentSalaryPeriodStart,
       currentSalaryPeriodEnd: form.currentSalaryPeriodEnd,
@@ -693,41 +755,42 @@ const EmployeeMasterForm = ({ data, onBack }) => {
       bankAccountNo: form.bankAcNo,
       bankName: form.bankName,
 
+      // Ensure active is sent as boolean
       active: Boolean(form.active),
 
       cancelRemarks: "",
-      screenName: "Employee Master",
-      screenCode: "EMP001",
       orgId: Number(orgId),
       financialYear: new Date().getFullYear().toString(),
       createdBy: data ? undefined : "Admin",
-      updatedBy: "Admin",
     };
 
     try {
       const response = await employeeAPI.updateCreateEmployee(payload);
 
-      if (response?.status) {
+      if (response?.status === true) {
         addToast(
           data
             ? "Employee updated successfully!"
             : "Employee saved successfully!",
+          'success'
         );
         onBack();
       } else {
         const msg =
-          response?.errors?.[0]?.shortMessage ||
-          response?.errors?.[0]?.longMessage ||
+          response?.paramObjectsMap?.errorMessage ||
+          response?.paramObjectsMap?.message ||
           "Failed to save employee";
-        addToast(msg);
+        addToast(msg, 'error');
       }
     } catch (error) {
       console.error("Error saving employee:", error);
       const serverMsg =
+        error?.response?.data?.paramObjectsMap?.errorMessage ||
+        error?.response?.data?.paramObjectsMap?.message ||
         error?.response?.data?.errors?.[0]?.longMessage ||
         error?.response?.data?.message ||
         "Something went wrong. Please try again.";
-      addToast(serverMsg);
+      addToast(serverMsg, 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -754,22 +817,20 @@ const EmployeeMasterForm = ({ data, onBack }) => {
           <button
             type="button"
             onClick={() => setActiveTab("official")}
-            className={`px-4 py-1.5 text-xs font-semibold rounded-t ${
-              activeTab === "official"
-                ? "bg-blue-600 text-white"
-                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-            } transition-colors`}
+            className={`px-4 py-1.5 text-xs font-semibold rounded-t ${activeTab === "official"
+              ? "bg-blue-600 text-white"
+              : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+              } transition-colors`}
           >
             Official Information
           </button>
           <button
             type="button"
             onClick={() => setActiveTab("personal")}
-            className={`px-4 py-1.5 text-xs font-semibold rounded-t ${
-              activeTab === "personal"
-                ? "bg-blue-600 text-white"
-                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-            } transition-colors`}
+            className={`px-4 py-1.5 text-xs font-semibold rounded-t ${activeTab === "personal"
+              ? "bg-blue-600 text-white"
+              : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+              } transition-colors`}
           >
             Personal Information
           </button>
@@ -782,11 +843,12 @@ const EmployeeMasterForm = ({ data, onBack }) => {
               <SectionHeader>Official Information</SectionHeader>
               <div className={fieldGrid}>
                 <Field
-                  label="Employee ID"
+                  label="Employee Code"
                   name="employeeId"
                   value={form.employeeId}
+                  disabled
                   onChange={handleChange}
-                  placeholder="Enter Employee ID"
+                  placeholder={loadingEmployeeId ? "Loading..." : "Enter Employee ID"}
                 />
                 <Field
                   label="Sur Name"
@@ -877,15 +939,15 @@ const EmployeeMasterForm = ({ data, onBack }) => {
                   onChange={handleTempCountryChange}
                   options={[
                     ...(form.tempCountry &&
-                    !countries.some(
-                      (c) => String(c.id) === String(form.tempCountry),
-                    )
+                      !countries.some(
+                        (c) => String(c.id) === String(form.tempCountry),
+                      )
                       ? [
-                          {
-                            id: form.tempCountry,
-                            countryName: form.tempCountryName,
-                          },
-                        ]
+                        {
+                          id: form.tempCountry,
+                          countryName: form.tempCountryName,
+                        },
+                      ]
                       : []),
                     ...countries,
                   ].map((c) => ({ value: c.id, label: c.countryName }))}
@@ -899,9 +961,9 @@ const EmployeeMasterForm = ({ data, onBack }) => {
                   disabled={!form.tempCountry}
                   options={[
                     ...(form.tempState &&
-                    !tempStates.some(
-                      (s) => String(s.id) === String(form.tempState),
-                    )
+                      !tempStates.some(
+                        (s) => String(s.id) === String(form.tempState),
+                      )
                       ? [{ id: form.tempState, stateName: form.tempStateName }]
                       : []),
                     ...tempStates,
@@ -916,9 +978,9 @@ const EmployeeMasterForm = ({ data, onBack }) => {
                   disabled={!form.tempState}
                   options={[
                     ...(form.tempCity &&
-                    !tempCities.some(
-                      (c) => String(c.id) === String(form.tempCity),
-                    )
+                      !tempCities.some(
+                        (c) => String(c.id) === String(form.tempCity),
+                      )
                       ? [{ id: form.tempCity, cityName: form.tempCityName }]
                       : []),
                     ...tempCities,
@@ -1027,15 +1089,15 @@ const EmployeeMasterForm = ({ data, onBack }) => {
                   required
                   options={[
                     ...(form.permCountry &&
-                    !countries.some(
-                      (c) => String(c.id) === String(form.permCountry),
-                    )
+                      !countries.some(
+                        (c) => String(c.id) === String(form.permCountry),
+                      )
                       ? [
-                          {
-                            id: form.permCountry,
-                            countryName: form.permCountryName,
-                          },
-                        ]
+                        {
+                          id: form.permCountry,
+                          countryName: form.permCountryName,
+                        },
+                      ]
                       : []),
                     ...countries,
                   ].map((c) => ({ value: c.id, label: c.countryName }))}
@@ -1051,9 +1113,9 @@ const EmployeeMasterForm = ({ data, onBack }) => {
                   disabled={!form.permCountry}
                   options={[
                     ...(form.permState &&
-                    !permStates.some(
-                      (s) => String(s.id) === String(form.permState),
-                    )
+                      !permStates.some(
+                        (s) => String(s.id) === String(form.permState),
+                      )
                       ? [{ id: form.permState, stateName: form.permStateName }]
                       : []),
                     ...permStates,
@@ -1070,9 +1132,9 @@ const EmployeeMasterForm = ({ data, onBack }) => {
                   disabled={!form.permState}
                   options={[
                     ...(form.permCity &&
-                    !permCities.some(
-                      (c) => String(c.id) === String(form.permCity),
-                    )
+                      !permCities.some(
+                        (c) => String(c.id) === String(form.permCity),
+                      )
                       ? [{ id: form.permCity, cityName: form.permCityName }]
                       : []),
                     ...permCities,
@@ -1121,12 +1183,12 @@ const EmployeeMasterForm = ({ data, onBack }) => {
                 />
                 <Field
                   type="select"
-                  label="Plant ID"
+                  label="Plant"
                   name="plantId"
                   value={form.plantId}
                   options={plantData}
                   onChange={handleChange}
-                  placeholder="Enter Plant ID"
+                  placeholder="Select Plant"
                 />
                 <Field
                   type="select"
@@ -1139,15 +1201,15 @@ const EmployeeMasterForm = ({ data, onBack }) => {
                   disabled={!form.plantId}
                   options={[
                     ...(form.departmentId &&
-                    !departments.some(
-                      (d) => String(d.id) === String(form.departmentId),
-                    )
+                      !departments.some(
+                        (d) => String(d.id) === String(form.departmentId),
+                      )
                       ? [
-                          {
-                            id: form.departmentId,
-                            departmentName: form.department,
-                          },
-                        ]
+                        {
+                          id: form.departmentId,
+                          departmentName: form.department,
+                        },
+                      ]
                       : []),
                     ...departments,
                   ].map((d) => ({ value: d.id, label: d.departmentName }))}
@@ -1163,20 +1225,20 @@ const EmployeeMasterForm = ({ data, onBack }) => {
                   disabled={!form.departmentId}
                   options={[
                     ...(form.designationId &&
-                    !designations.some(
-                      (d) => String(d.id) === String(form.designationId),
-                    )
+                      !designations.some(
+                        (d) => String(d.id) === String(form.designationId),
+                      )
                       ? [
-                          {
-                            id: form.designationId,
-                            designationName: form.designation,
-                          },
-                        ]
+                        {
+                          id: form.designationId,
+                          designationName: form.designation,
+                        },
+                      ]
                       : []),
                     ...designations,
                   ].map((d) => ({
                     value: d.id,
-                    label: d.designation,
+                    label: d.designationName || d.designation,
                   }))}
                 />
                 <Field
@@ -1265,13 +1327,22 @@ const EmployeeMasterForm = ({ data, onBack }) => {
                   value={form.dateOfConfirmation}
                   onChange={handleChange}
                 />
-                <Field
-                  type="checkbox"
-                  label="Active"
-                  name="active"
-                  checked={form.active}
-                  onChange={handleChange}
-                />
+                <div className="flex items-center gap-2 mt-6">
+                  <input
+                    type="checkbox"
+                    id="active"
+                    name="active"
+                    checked={Boolean(form.active)}
+                    onChange={handleChange}
+                    className="h-4 w-4 accent-blue-600 cursor-pointer"
+                  />
+                  <label
+                    htmlFor="active"
+                    className="text-xs text-gray-700 dark:text-gray-200 cursor-pointer"
+                  >
+                    Active
+                  </label>
+                </div>
                 <Field
                   type="date"
                   label="Training Start Date"

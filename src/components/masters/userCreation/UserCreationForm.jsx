@@ -3,6 +3,7 @@ import { ArrowLeft, Save, X, Plus, Trash2, Eye, EyeOff } from "lucide-react";
 import dayjs from "dayjs";
 import { userCreationAPI } from "../../../api/userCreationApi";
 import { useToast } from "../../Toast/ToastContext";
+import { encryptPassword } from "../../../utils/PasswordEnc";
 
 const controlClasses =
     "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -166,25 +167,12 @@ const UserCreationForm = ({ data, onBack }) => {
         }
     }, []);
 
-    // const loadEmployees = async () => {
-    //     try {
-    //         const response = await userCreationAPI.getAllEmployees(orgId, branch);
-    //         if (response && response.data) {
-    //             setEmpList(response.data);
-    //         }
-    //     } catch (error) {
-    //         console.error("Error loading employees:", error);
-    //     }
-    // };
-
     const loadEmployees = async () => {
         try {
             const response = await userCreationAPI.getAllEmployees(orgId);
 
             if (response?.paramObjectsMap?.employeeMasterVO) {
                 const employeeData = response.paramObjectsMap.employeeMasterVO || [];
-
-                // If API returns a single employee
                 setEmpList(employeeData);
             }
         } catch (error) {
@@ -262,14 +250,14 @@ const UserCreationForm = ({ data, onBack }) => {
                 );
             }
 
-            // Branches
+            // Branches - FIXED: Properly set branchId
             if (user.branches?.length) {
                 setBranchTableData(
                     user.branches.map((branch, index) => ({
                         id: index + 1,
-                        branchId: branch.branchId,
-                        branchCode: branch.branchCode,
-                        branch: branch.branch,
+                        branchId: branch.branchId || branch.id || "", // Ensure branchId is set
+                        branchCode: branch.branchCode || "",
+                        branch: branch.branch || branch.branchName || "",
                     }))
                 );
             }
@@ -297,10 +285,10 @@ const UserCreationForm = ({ data, onBack }) => {
             if (selectedEmp) {
                 setForm((prev) => ({
                     ...prev,
-                    employeeCode: selectedEmp.id,          // Save employee id
+                    employeeCode: selectedEmp.id,
                     employeeName: selectedEmp.employeeName,
                     email: selectedEmp.email,
-                    userName: selectedEmp.employeeId,      // EMP001
+                    userName: selectedEmp.employeeId,
                 }));
                 return;
             }
@@ -316,7 +304,6 @@ const UserCreationForm = ({ data, onBack }) => {
         const updatedRows = [...roleTableData];
         updatedRows[index][field] = value;
 
-        // If role is selected, find and set roleId
         if (field === "role") {
             const selectedRole = roleList.find((r) => r.role === value);
             if (selectedRole) {
@@ -326,7 +313,6 @@ const UserCreationForm = ({ data, onBack }) => {
 
         setRoleTableData(updatedRows);
 
-        // Clear error
         const errors = [...roleTableErrors];
         errors[index][field] = "";
         setRoleTableErrors(errors);
@@ -336,24 +322,20 @@ const UserCreationForm = ({ data, onBack }) => {
         const updatedRows = [...branchTableData];
         updatedRows[index][field] = value;
 
-        // If branchCode is selected, find and set branch name
         if (field === "branchCode") {
-            // Find the selected branch from branchList
             const selectedBranch = branchList.find((b) => b.branchCode === value);
             if (selectedBranch) {
                 updatedRows[index].branchId = selectedBranch.id;
-                // Set both branchCode and branchName
                 updatedRows[index].branchCode = selectedBranch.branchCode;
                 updatedRows[index].branch = selectedBranch.branchName || selectedBranch.branch || "";
             } else {
-                // If no branch found, clear the branch name
+                updatedRows[index].branchId = "";
                 updatedRows[index].branch = "";
             }
         }
 
         setBranchTableData(updatedRows);
 
-        // Clear error
         const errors = [...branchTableErrors];
         errors[index][field] = "";
         setBranchTableErrors(errors);
@@ -413,7 +395,6 @@ const UserCreationForm = ({ data, onBack }) => {
         if (!form.email) errors.email = "Email is required";
         else if (!emailRegex.test(form.email)) errors.email = "Invalid email format";
 
-        // Validate role table
         let roleValid = true;
         const roleErrors = roleTableData.map((row) => {
             const rowErrors = {};
@@ -429,7 +410,6 @@ const UserCreationForm = ({ data, onBack }) => {
         });
         setRoleTableErrors(roleErrors);
 
-        // Validate branch table
         let branchValid = true;
         const branchErrors = branchTableData.map((row) => {
             const rowErrors = {};
@@ -448,6 +428,12 @@ const UserCreationForm = ({ data, onBack }) => {
     const handleSave = async () => {
         if (!validate()) return;
         setIsSubmitting(true);
+
+        // Encrypt password for new users
+        let encryptedPassword = "";
+        if (!editId) {
+            encryptedPassword = await encryptPassword("Wds@2022");
+        }
 
         const payload = {
             active: form.active,
@@ -469,9 +455,12 @@ const UserCreationForm = ({ data, onBack }) => {
                     : null,
             })),
 
-            branchAccessDTOList: branchTableData.map((row) => ({
-                branch: Number(row.branchId),
-            })),
+            // FIXED: Ensure branchId is properly set and not null
+            branchAccessDTOList: branchTableData
+                .filter(row => row.branchId) // Filter out rows with empty branchId
+                .map((row) => ({
+                    branch: Number(row.branchId),
+                })),
         };
 
         // Only add id for update
@@ -481,7 +470,7 @@ const UserCreationForm = ({ data, onBack }) => {
 
         // Only add password for new users
         if (!editId) {
-            payload.password = "Wds@2022"; // Default password
+            payload.password = encryptPassword("Wds@2022");
         }
 
         console.log("Saving payload:", payload);
@@ -498,7 +487,8 @@ const UserCreationForm = ({ data, onBack }) => {
             onBack();
         } catch (error) {
             console.error("Error saving user:", error);
-            alert(error.response?.data?.message || "Failed to save user.");
+            const errorMessage = error.response?.data?.message || "Failed to save user.";
+            addToast(errorMessage, "error");
         } finally {
             setIsSubmitting(false);
         }
@@ -578,26 +568,6 @@ const UserCreationForm = ({ data, onBack }) => {
                         disabled={!!editId}
                     />
 
-                    {/* {!editId && (
-                        <div className="relative">
-                            <Field
-                                label="Password"
-                                name="password"
-                                type={showPassword ? "text" : "password"}
-                                value={form.password}
-                                onChange={handleChange}
-                                placeholder="Enter Password"
-                            />
-                            <button
-                                type="button"
-                                onClick={() => setShowPassword(!showPassword)}
-                                className="absolute right-2 top-[26px] text-gray-500 dark:text-gray-400"
-                            >
-                                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                            </button>
-                        </div>
-                    )} */}
-
                     <Field
                         type="select"
                         label="User Type"
@@ -612,21 +582,41 @@ const UserCreationForm = ({ data, onBack }) => {
                         ]}
                     />
 
-                    <Field
-                        type="checkbox"
-                        label="All India Access"
-                        name="allIndiaAccess"
-                        checked={form.allIndiaAccess}
-                        onChange={handleChange}
-                    />
+                    <div className="flex items-center gap-2 mt-5">
+                        <input
+                            type="checkbox"
+                            id="allIndiaAccess"
+                            name="allIndiaAccess"
+                            checked={Boolean(form.allIndiaAccess)}
+                            onChange={handleChange}
+                            className="h-4 w-4 accent-blue-600 cursor-pointer"
+                        />
 
-                    <Field
-                        type="checkbox"
-                        label="Active"
-                        name="active"
-                        checked={form.active}
-                        onChange={handleChange}
-                    />
+                        <label
+                            htmlFor="allIndiaAccess"
+                            className="text-xs text-gray-700 dark:text-gray-200 cursor-pointer"
+                        >
+                            All India Access
+                        </label>
+                    </div>
+
+                    <div className="flex items-center gap-2 mt-5">
+                        <input
+                            type="checkbox"
+                            id="active"
+                            name="active"
+                            checked={Boolean(form.active)}
+                            onChange={handleChange}
+                            className="h-4 w-4 accent-blue-600 cursor-pointer"
+                        />
+
+                        <label
+                            htmlFor="active"
+                            className="text-xs text-gray-700 dark:text-gray-200 cursor-pointer"
+                        >
+                            Active
+                        </label>
+                    </div>
                 </div>
 
                 {/* Tabs */}

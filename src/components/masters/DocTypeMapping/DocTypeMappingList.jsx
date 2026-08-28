@@ -55,6 +55,11 @@ const DocTypeMappingPendingList = ({ onBack }) => {
     selectedFinYear &&
     selectedFinYearId;
 
+    console.log("selectedBranchId:", selectedBranchId)
+    console.log("selectedBranchCode:", selectedBranchCode)
+    console.log("selectedFinYear:", selectedFinYear)
+    console.log("selectedFinYearId:", selectedFinYearId)
+
   useEffect(() => {
     if (filtersReady) {
       loadPendingMappings();

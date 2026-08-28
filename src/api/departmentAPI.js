@@ -2,9 +2,9 @@ import apiClient from './apiClient';
 
 export const departmentAPI = {
     // Get all departments
-    getAllDepartments: async (orgId, branch) => {
+    getAllDepartments: async (orgId) => {
         try {
-            const response = await apiClient.get(`/api/efitmaster/getAllDepartmentByOrgId?orgId=${orgId}&branch=${branch}`);
+            const response = await apiClient.get(`/api/efitmaster/getAllDepartmentByOrgId?orgId=${orgId}`);
             return response;
         } catch (error) {
             console.error('Error fetching departments:', error);

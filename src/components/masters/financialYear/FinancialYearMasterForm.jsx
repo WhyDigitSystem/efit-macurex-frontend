@@ -99,11 +99,14 @@ const FinancialYearMasterForm = ({ data, onBack }) => {
 
   const [form, setForm] = useState({
     financialYearCode: data?.financialYearCode || "",
-    financialYear: data?.financialYear || "",
+    // Convert financialYear to string to avoid trim() errors
+    financialYear: data?.finYear ? String(data.finYear) : "",
+    finYearId: data?.finYearId || "",
     fromDate: data?.startDate || "",
     toDate: data?.endDate || "",
     isCurrent: data?.isCurrent ?? false,
-    active: data?.active ?? true,
+    // Convert active to boolean
+    active: data?.active === true || data?.active === "true" || data?.active === "Active" ? true : false,
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -148,8 +151,15 @@ const FinancialYearMasterForm = ({ data, onBack }) => {
   const validate = () => {
     const errors = {};
 
-    if (!form.financialYear.trim())
+    // FIX: Convert to string before using trim()
+    if (!form.financialYear || String(form.financialYear).trim() === "")
       errors.financialYear = "Financial Year is required";
+
+    if (!form.finYearId)
+      errors.finYearId = "Financial Year ID is required";
+
+    if (form.finYearId && form.finYearId.length > 10)
+      errors.finYearId = "Financial Year ID must be maximum 10 characters";
 
     if (!form.fromDate) errors.fromDate = "From Date is required";
 
@@ -175,9 +185,12 @@ const FinancialYearMasterForm = ({ data, onBack }) => {
     const isUpdate = Boolean(selectedFY);
     const fromYear = form.fromDate ? new Date(form.fromDate).getFullYear() : 0;
 
+    // Ensure active is sent as boolean
     const payload = {
       ...(isUpdate ? { id: data.id } : {}),
-      active: form.active,
+      finYearId: String(form.finYearId),
+      // CRITICAL FIX: Ensure active is strictly boolean
+      active: form.active === true, // This will be true or false
       cancelRemarks: "",
       createdBy: localStorage.getItem("usersId") || "admin",
       endDate: form.toDate,
@@ -186,6 +199,9 @@ const FinancialYearMasterForm = ({ data, onBack }) => {
       startDate: form.fromDate,
     };
 
+    console.log("📤 Saving Financial Year Payload:", payload);
+    console.log("Active value type:", typeof payload.active, "Value:", payload.active);
+
     try {
       const response =
         await financialYearAPI.createUpdateFinancialYear(payload);
@@ -193,25 +209,25 @@ const FinancialYearMasterForm = ({ data, onBack }) => {
       if (response?.status) {
         addToast(
           response?.paramObjectsMap?.message ||
-            (isUpdate
-              ? "Financial Year updated successfully!"
-              : "Financial Year created successfully!"),
+          (isUpdate
+            ? "Financial Year updated successfully!"
+            : "Financial Year created successfully!"),
         );
         onBack?.();
       } else {
         addToast(
           response?.errors?.[0]?.shortMessage ||
-            response?.errors?.[0]?.longMessage ||
-            response?.message ||
-            "Failed to save Financial Year.",
+          response?.errors?.[0]?.longMessage ||
+          response?.message ||
+          "Failed to save Financial Year.",
         );
       }
     } catch (err) {
       console.error("Save Financial Year Error:", err);
       addToast(
         err.response?.data?.message ||
-          err.response?.data?.statusMessage ||
-          "Something went wrong.",
+        err.response?.data?.statusMessage ||
+        "Something went wrong.",
       );
     } finally {
       setIsSubmitting(false);
@@ -253,6 +269,15 @@ const FinancialYearMasterForm = ({ data, onBack }) => {
               value={form.financialYear}
               onChange={handleChange}
               error={fieldErrors.financialYear}
+              required
+            />
+
+            <Field
+              label="Financial Year ID"
+              name="finYearId"
+              value={form.finYearId}
+              onChange={handleChange}
+              error={fieldErrors.finYearId}
               required
             />
 

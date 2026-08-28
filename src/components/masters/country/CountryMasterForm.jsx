@@ -13,6 +13,61 @@ const controlClasses =
 const labelClasses =
   "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
+const normalizeActive = (value) => {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+
+    if (normalized === "active" || normalized === "true" || normalized === "t") {
+      return true;
+    }
+
+    if (
+      normalized === "inactive" ||
+      normalized === "false" ||
+      normalized === "f"
+    ) {
+      return false;
+    }
+  }
+
+  return Boolean(value);
+};
+
+const getActiveValue = (value) => {
+  console.log("Country active value from API:", value, typeof value);
+
+  if (value === true || value === 1) return true;
+  if (value === false || value === 0) return false;
+
+  if (typeof value === "string") {
+    const status = value.trim().toLowerCase();
+
+    if (
+      status === "active" ||
+      status === "true" ||
+      status === "1" ||
+      status === "t"
+    ) {
+      return true;
+    }
+
+    if (
+      status === "inactive" ||
+      status === "false" ||
+      status === "0" ||
+      status === "f"
+    ) {
+      return false;
+    }
+  }
+
+  return false;
+};
+
 const CountryMasterForm = ({ onBack, onSave, editData, editId }) => {
   const ORG_ID = Number(localStorage.getItem("orgId")) || 0;
   const CREATED_BY = localStorage.getItem("userName") || "SYSTEM";
@@ -59,14 +114,8 @@ const CountryMasterForm = ({ onBack, onSave, editData, editId }) => {
       countryNo: data.countryNo || "",
       countryCode: data.countryCode || "",
       countryName: data.countryName || "",
-      active:
-        data.active === "Active"
-          ? true
-          : data.active === true || data.active === "true",
-      cancel:
-        data.cancel === "T"
-          ? true
-          : data.cancel === true || data.cancel === "true",
+      active: getActiveValue(data.active),
+      cancel: Boolean(data.cancel),
       orgId: data.orgId || ORG_ID,
       createdBy: data.createdBy || CREATED_BY,
     });
@@ -83,12 +132,8 @@ const CountryMasterForm = ({ onBack, onSave, editData, editId }) => {
           countryNo: countryData.countryNo || "",
           countryCode: countryData.countryCode || "",
           countryName: countryData.countryName || "",
-          active:
-            countryData.active === "Active"
-              ? true
-              : Boolean(countryData.active),
-          cancel:
-            countryData.cancel === "T" ? true : Boolean(countryData.cancel),
+          active: getActiveValue(countryData.active),
+          cancel: Boolean(countryData.cancel),
           orgId: countryData.orgId || ORG_ID,
           createdBy: countryData.createdBy || CREATED_BY,
         });
@@ -237,9 +282,8 @@ const CountryMasterForm = ({ onBack, onSave, editData, editId }) => {
               name="countryCode"
               value={form.countryCode}
               onChange={handleChange}
-              className={`${controlClasses} ${
-                fieldErrors.countryCode ? "border-red-500" : ""
-              }`}
+              className={`${controlClasses} ${fieldErrors.countryCode ? "border-red-500" : ""
+                }`}
             />
 
             {fieldErrors.countryCode && (
@@ -258,9 +302,8 @@ const CountryMasterForm = ({ onBack, onSave, editData, editId }) => {
               name="countryName"
               value={form.countryName}
               onChange={handleChange}
-              className={`${controlClasses} ${
-                fieldErrors.countryName ? "border-red-500" : ""
-              }`}
+              className={`${controlClasses} ${fieldErrors.countryName ? "border-red-500" : ""
+                }`}
             />
 
             {fieldErrors.countryName && (
@@ -270,24 +313,28 @@ const CountryMasterForm = ({ onBack, onSave, editData, editId }) => {
             )}
           </div>
 
-          <div>
-            <label className={labelClasses}>Active</label>
-
-            <button
-              type="button"
-              onClick={() =>
-                setForm((prev) => ({ ...prev, active: !prev.active }))
+          {/* Active */}
+          <div className="flex items-center gap-2 mt-5">
+            <input
+              type="checkbox"
+              id="active"
+              name="active"
+              checked={Boolean(form.active)}
+              onChange={(e) =>
+                setForm((prev) => ({
+                  ...prev,
+                  active: e.target.checked,
+                }))
               }
-              className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${
-                form.active ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
-              }`}
+              className="h-4 w-4 accent-blue-600 dark:accent-blue-500 cursor-pointer"
+            />
+
+            <label
+              htmlFor="active"
+              className="text-xs text-gray-700 dark:text-gray-200 cursor-pointer"
             >
-              <span
-                className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${
-                  form.active ? "translate-x-6" : "translate-x-0.5"
-                }`}
-              />
-            </button>
+              Active
+            </label>
           </div>
         </div>
 

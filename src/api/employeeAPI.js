@@ -14,6 +14,18 @@ export const employeeAPI = {
     }
   },
 
+  getEmployeeCode: async (orgId) => {
+    try {
+      const res = await apiClient.get(
+        `/api/efitmaster/getEmployeeByDocId?orgId=${orgId}`,
+      );
+      return res?.paramObjectsMap?.employeeDocId || null;
+    } catch (error) {
+      console.error("Error fetching employee by ID:", error);
+      throw error;
+    }
+  },
+
   // Get Employee List By Organization
   getEmployeeByOrgId: async (orgId) => {
     try {

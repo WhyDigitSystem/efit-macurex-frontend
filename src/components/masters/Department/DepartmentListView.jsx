@@ -14,7 +14,7 @@ const DepartmentListView = ({ onAddNew, onEdit,onBack }) => {
     try {
       setLoading(true);
 
-      const response = await departmentAPI.getAllDepartments(ORG_ID, branch);
+      const response = await departmentAPI.getAllDepartments(ORG_ID);
 
       let departments = [];
 
