@@ -6,29 +6,36 @@ const DirectPurchaseMaster = () => {
   const [screen, setScreen] = useState("list");
   const [editData, setEditData] = useState(null);
 
-  const addNew = () => {
+  const handleAddNew = () => {
     setEditData(null);
     setScreen("form");
   };
 
-  const edit = (row) => {
+  const handleEdit = (row) => {
     setEditData(row);
     setScreen("form");
+  };
+
+  const handleBack = () => {
+    setEditData(null);
+    setScreen("list");
   };
 
   return (
     <>
       {screen === "list" && (
         <DirectPurchaseList
-          onAddNew={addNew}
-          onEdit={edit}
+          onAddNew={handleAddNew}
+          onEdit={handleEdit}
           onBack={() => window.history.back()}
         />
       )}
+
       {screen === "form" && (
         <DirectPurchaseForm
-          data={editData}
-          onBack={() => setScreen("list")}
+          editData={editData}
+          onBack={handleBack}
+          onSave={handleBack}
         />
       )}
     </>

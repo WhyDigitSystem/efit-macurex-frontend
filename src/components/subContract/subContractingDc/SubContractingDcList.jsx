@@ -2,19 +2,52 @@ import { useCallback, useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import subContractingDcAPI from "../../../api/subContractingDcAPI";
 import { toast } from "../../../utils/toast";
+import generateSubContractingDcPDF from "../../../utils/generateSubContractingDcPDF";
 
-const SubContractingDcList = ({
-  onAddNew,
-  onEdit,
-  onBack,
-  refreshTrigger,
-}) => {
+const SubContractingDcList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
 
   const ORG_ID = localStorage.getItem("orgId");
   const BRANCH_ID = localStorage.getItem("branchId");
+  const handleDownloadPDF = (record) => {
+    try {
+      const result = generateSubContractingDcPDF({
+        company: {
+          name:
+            JSON.parse(localStorage.getItem("userData") || "{}")?.companyVO
+              ?.companyName || "Company Name",
+        },
 
+        dc: record,
+
+        items:
+          record?.outgoingItems ||
+          record?.outGoingItems ||
+          record?.outgoingItemDetails ||
+          [],
+
+        summary: record?.summary || {},
+      });
+
+      const link = document.createElement("a");
+
+      link.href = result.blobUrl;
+      link.download = result.fileName;
+
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      setTimeout(() => {
+        URL.revokeObjectURL(result.blobUrl);
+      }, 1000);
+    } catch (error) {
+      console.error("Failed to generate Sub Contracting DC PDF:", error);
+
+      toast.error("Failed to generate PDF");
+    }
+  };
   const loadRecords = useCallback(async () => {
     try {
       setLoading(true);
@@ -189,6 +222,7 @@ const SubContractingDcList = ({
       onBack={onBack}
       onAddNew={onAddNew}
       onEdit={onEdit}
+      onDownload={handleDownloadPDF}
       onView={false}
       showSerialNumber={true}
       itemsPerPageOptions={[5, 10, 20, 50, 100]}

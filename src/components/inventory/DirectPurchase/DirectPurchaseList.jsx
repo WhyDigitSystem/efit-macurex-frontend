@@ -1,80 +1,260 @@
-import { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
-import apiClient from "../../../api/apiClient";
-import { toast } from "../../../utils/toast";
-
-const normalizeActive = (value) => {
-  if (value === true || value === "Yes" || value === "Active") return true;
-  return false;
-};
+import directPurchaseAPI from "../../../api/Purchase/directPurchaseAPI";
+import { useToast } from "../../Toast/ToastContext";
 
 const DirectPurchaseList = ({ onAddNew, onEdit, onBack }) => {
-  const [data, setData] = useState([]);
+  const [itemData, setItemData] = useState([]);
   const [loading, setLoading] = useState(false);
-  const ORG_ID = Number(localStorage.getItem("orgId")) || 0;
-  const BRANCH = Number(localStorage.getItem("branchId")) || 1000000001;
+  const { addToast } = useToast();
 
-  const loadData = useCallback(async () => {
-    if (!ORG_ID) return;
+  /* -------------------------------------------------------------------- */
+  /* Load Direct Purchases                                                 */
+  /* -------------------------------------------------------------------- */
+
+  const loadItems = useCallback(async () => {
     setLoading(true);
+
     try {
-      const res = await apiClient.get("/api/dev/getDirectPurchaseMasterByOrgId", {
-        params: { orgId: ORG_ID, branch: BRANCH },
-      });
-      const list = res?.paramObjectsMap?.directPurchaseMasterList || [];
-      const sorted = (list || []).sort((a, b) => (b.id || 0) - (a.id || 0));
-      setData(sorted);
+      const orgId = localStorage.getItem("orgId");
+      const branchId = localStorage.getItem("branchId");
+
+      if (!orgId || !branchId) {
+        console.error("Missing orgId or branchId");
+
+        setItemData([]);
+
+        addToast("Organization or Branch is missing", "error");
+
+        return;
+      }
+
+      const response = await directPurchaseAPI.getDirectPurchaseByOrgId(
+        branchId,
+        orgId,
+      );
+
+      if (response?.status === false) {
+        const msg =
+          response?.paramObjectsMap?.errorMessage ||
+          response?.paramObjectsMap?.message ||
+          "Failed to load direct purchases";
+
+        console.warn(msg);
+
+        setItemData([]);
+
+        return;
+      }
+
+      /*
+       * Expected backend response:
+       *
+       * response
+       *   └── paramObjectsMap
+       *        └── directPurchaseVO
+       *             └── [ { ... } ]
+       */
+
+      const orders = Array.isArray(response?.paramObjectsMap?.directPurchaseVO)
+        ? response.paramObjectsMap.directPurchaseVO
+        : [];
+
+      if (orders.length === 0) {
+        setItemData([]);
+
+        return;
+      }
+
+      const transformedData = orders.map((item) => ({
+        ...item,
+
+        id: item.id,
+
+        billNo: item.invNo || "",
+
+        invNo: item.invNo || "",
+
+        invDate: item.invDate || "",
+
+        belongsTo: item.belongsTo || "",
+
+        branch: item.branch?.branchCode || item.branch?.branchName || "",
+
+        branchCode: item.branch?.branchCode || "",
+
+        branchName: item.branch?.branchName || "",
+
+        supplierName: item.supplierName || "",
+
+        dealerType: item.dealerType || "",
+
+        suppType: item.suppType || "",
+
+        issueTo: item.issueTo || "",
+
+        financialYear: item.financialYear || "",
+
+        active:
+          item.active === true ||
+          String(item.active).toLowerCase() === "active",
+
+        activeStatus: item.active || "",
+
+        createdBy: item.createdBy || "",
+
+        cancelRemarks: item.cancelRemarks || "",
+
+        remarks: item.remarks || "",
+
+        directPurchaseCashDetailsDTO: item.directPurchaseCashDetailsDTO || [],
+
+        directPurchaseTaxDetailsDTO: item.directPurchaseTaxDetailsDTO || [],
+      }));
+
+      transformedData.sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
+
+      setItemData(transformedData);
     } catch (error) {
-      console.error("Failed to load Direct Purchase records:", error);
-      setData([]);
-      toast.error("Failed to fetch Direct Purchase records");
+      console.error("Error loading direct purchases:", error);
+
+      setItemData([]);
+
+      addToast("Failed to fetch direct purchases", "error");
     } finally {
       setLoading(false);
     }
-  }, [ORG_ID, BRANCH]);
+  }, [addToast]);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    loadItems();
+  }, [loadItems]);
+
+  const handleEdit = (item) => {
+    onEdit(item);
+  };
+
+  /* -------------------------------------------------------------------- */
+  /* Columns                                                                */
+  /* -------------------------------------------------------------------- */
 
   const columns = [
-    { key: "docNo", label: "Doc No", accessor: "docNo", type: "text", noWrap: true },
-    { key: "docDate", label: "Doc Date", accessor: "docDate", type: "text", noWrap: true },
-    { key: "supplierName", label: "Supplier", accessor: "supplierName", type: "text" },
-    { key: "invNo", label: "Inv No", accessor: "invNo", type: "text", noWrap: true },
-    { key: "invDate", label: "Inv Date", accessor: "invDate", type: "text", noWrap: true },
-    { key: "plantId", label: "Plant", accessor: "plantId", type: "text" },
     {
-      key: "active", label: "Status", accessor: "active",
-      render: (value) => {
-        const isActive = normalizeActive(value);
-        return (
-          <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
-            isActive
-              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
-              : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300"
-          }`}>
-            {isActive ? "Active" : "Inactive"}
-          </span>
-        );
+      key: "billNo",
+      label: "Bill No",
+      accessor: "billNo",
+      type: "text",
+      noWrap: true,
+    },
+    {
+      key: "invDate",
+      label: "Bill Date",
+      accessor: "invDate",
+      type: "date",
+    },
+    {
+      key: "branch",
+      label: "Plant",
+      accessor: "branch",
+      type: "text",
+    },
+    {
+      key: "supplierName",
+      label: "Supplier Name",
+      accessor: "supplierName",
+      type: "text",
+    },
+    {
+      key: "belongsTo",
+      label: "Belongs To",
+      accessor: "belongsTo",
+      type: "text",
+    },
+    {
+      key: "suppType",
+      label: "Supp. Type",
+      accessor: "suppType",
+      type: "text",
+    },
+    {
+      key: "financialYear",
+      label: "Fin. Year",
+      accessor: "financialYear",
+      type: "text",
+    },
+    {
+      key: "active",
+      label: "Status",
+      accessor: "active",
+      type: "status",
+
+      statusVariants: {
+        true: {
+          label: "Active",
+          className:
+            "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+        },
+
+        false: {
+          label: "Inactive",
+          className:
+            "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+        },
       },
     },
-    { key: "actions", label: "Actions", type: "actions", align: "center", width: "90px" },
+    {
+      key: "actions",
+      label: "Actions",
+      type: "actions",
+      align: "center",
+      width: "90px",
+    },
   ];
 
-  const searchFields = ["docNo", "supplierName", "invNo", "plantId"];
+  const searchFields = [
+    "billNo",
+    "supplierName",
+    "belongsTo",
+    "suppType",
+    "financialYear",
+  ];
 
   const filterOptions = [
-    { value: "all", label: "All" },
-    { value: "active", label: "Active", filterFn: (item) => normalizeActive(item.active) },
-    { value: "inactive", label: "Inactive", filterFn: (item) => !normalizeActive(item.active) },
+    { value: "all", label: "All", field: null },
+    {
+      value: "local",
+      label: "Local",
+      field: "suppType",
+      filterValue: "Local",
+      activeValue: "Local",
+    },
+    {
+      value: "import",
+      label: "Import",
+      field: "suppType",
+      filterValue: "Import",
+      activeValue: "Import",
+    },
+    {
+      value: "active",
+      label: "Active",
+      field: "active",
+      filterValue: true,
+      activeValue: true,
+    },
+    {
+      value: "inactive",
+      label: "Inactive",
+      field: "active",
+      filterValue: false,
+      activeValue: false,
+    },
   ];
 
   return (
     <CommonListViewTable
       title="Direct Purchase"
-      subtitle="Manage Direct Purchase Entries"
-      data={data}
+      data={itemData}
       loading={loading}
       columns={columns}
       searchFields={searchFields}
@@ -82,7 +262,7 @@ const DirectPurchaseList = ({ onAddNew, onEdit, onBack }) => {
       defaultFilter="all"
       onBack={onBack}
       onAddNew={onAddNew}
-      onEdit={(row) => onEdit(row)}
+      onEdit={handleEdit}
       onView={false}
       showSerialNumber={true}
       itemsPerPageOptions={[5, 10, 20, 50, 100]}
@@ -90,7 +270,7 @@ const DirectPurchaseList = ({ onAddNew, onEdit, onBack }) => {
       emptyMessage="No Direct Purchase records found"
       loadingMessage="Loading Direct Purchase records..."
       enableRefresh={true}
-      onRefresh={loadData}
+      onRefresh={loadItems}
       enableExport={true}
       exportFileName="DirectPurchase"
     />
