@@ -34,6 +34,24 @@ const getFinancialYears = () => {
 
 const refId = (ref) => (ref?.id ? String(ref.id) : "");
 
+const getActiveValue = (value) => {
+  if (value === true || value === 1) return true;
+  if (value === false || value === 0 || value === null) return false;
+
+  if (typeof value === "string") {
+    const status = value.trim().toLowerCase();
+
+    return (
+      status === "active" ||
+      status === "true" ||
+      status === "1" ||
+      status === "t"
+    );
+  }
+
+  return false;
+};
+
 const LocationMasterForm = ({ data, onBack }) => {
   const ORG_ID = parseInt(localStorage.getItem("orgId"));
   const branchId = parseInt(localStorage.getItem("branchId"));
@@ -68,10 +86,10 @@ const LocationMasterForm = ({ data, onBack }) => {
     partyNameId: refId(data?.partyNameId),
     financialYear: data?.financialYear || String(new Date().getFullYear()),
     cancelRemarks: data?.cancelRemarks || "",
-    active: !(data?.cancelRemarks),
+    active: data?.active !== undefined ? data.active : true,
     orgId: ORG_ID,
     createdBy: localStorage.getItem("userName") || "SYSTEM",
-    branchId: Number(localStorage.getItem("branchId")) ,
+    branchId: Number(localStorage.getItem("branchId")),
   });
 
   const fieldLabels = {
@@ -182,6 +200,7 @@ const LocationMasterForm = ({ data, onBack }) => {
       partyNameId: toNumber(form.partyNameId),
       phoneNo: toNumber(form.phoneNo),
       plantId: toNumber(form.plantId),
+      active: getActiveValue(form.active),
     };
 
     if (form.id && form.id > 0) {
@@ -198,9 +217,9 @@ const LocationMasterForm = ({ data, onBack }) => {
       if (status) {
         addToast(
           response?.paramObjectsMap?.message ||
-            (form.id && form.id > 0
-              ? "Location updated successfully!"
-              : "Location created successfully!"),
+          (form.id && form.id > 0
+            ? "Location updated successfully!"
+            : "Location created successfully!"),
           "success"
         );
         onBack();
@@ -449,14 +468,12 @@ const LocationMasterForm = ({ data, onBack }) => {
             <button
               type="button"
               onClick={() => setForm((prev) => ({ ...prev, active: !prev.active }))}
-              className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${
-                form.active ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
-              }`}
+              className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${form.active ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
+                }`}
             >
               <span
-                className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${
-                  form.active ? "translate-x-6" : "translate-x-0.5"
-                }`}
+                className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${form.active ? "translate-x-6" : "translate-x-0.5"
+                  }`}
               />
             </button>
           </div>

@@ -301,13 +301,23 @@ const FinancialYearMasterForm = ({ data, onBack }) => {
               required
             />
 
-            <Field
-              type="checkbox"
-              label="Active"
-              name="active"
-              checked={form.active}
-              onChange={handleChange}
-            />
+            <div className="flex items-center gap-2 mt-5">
+              <input
+                type="checkbox"
+                id="active"
+                name="active"
+                checked={Boolean(form.active)}
+                onChange={handleChange}
+                className="h-4 w-4 accent-blue-600 dark:accent-blue-500 cursor-pointer"
+              />
+
+              <label
+                htmlFor="active"
+                className="text-xs text-gray-700 dark:text-gray-200 cursor-pointer"
+              >
+                Active
+              </label>
+            </div>
           </div>
         </div>
 

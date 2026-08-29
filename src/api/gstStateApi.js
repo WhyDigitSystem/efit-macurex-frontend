@@ -2,10 +2,10 @@ import apiClient from "./apiClient";
 
 export const gstStateApi = {
 
-  getGstStateList: async (branch,orgId) => {
+  getGstStateList: async (orgId) => {
     try {
       const res = await apiClient.get(
-        `/api/commonmaster/getGSTStateMasterByOrgId?branch=${branch}&orgId=${orgId}`
+        `/api/commonmaster/getGSTStateMasterByOrgId?orgId=${orgId}`
       );
       return res?.paramObjectsMap?.gstStateMasterList || [];
     } catch (error) {

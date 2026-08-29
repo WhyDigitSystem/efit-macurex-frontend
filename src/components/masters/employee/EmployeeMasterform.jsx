@@ -196,6 +196,7 @@ const emptyForm = () => ({
   esiNo: "",
   esiDispName: "",
   dateOfJoining: "",
+  dateOfResignation: "",
   plantId: "",
   vpfPercent: "",
   department: "",
@@ -414,6 +415,7 @@ const EmployeeMasterForm = ({ data, onBack }) => {
       esiNo: emp.esiNo || "",
       esiDispName: emp.esiDispName || "",
       dateOfJoining: emp.dateOfJoining || "",
+      dateOfResignation: emp.dateOfResignation || "",
       plantId: branchId, // FIXED: Use the branch ID from multiple sources
       vpfPercent: emp.vpfPercentage ?? "",
 
@@ -734,6 +736,7 @@ const EmployeeMasterForm = ({ data, onBack }) => {
       vpfPercentage: form.vpfPercent ? Number(form.vpfPercent) : 0,
 
       dateOfJoining: form.dateOfJoining,
+      dateOfResignation: form.dateOfResignation,
       branchId: form.plantId ? Number(form.plantId) : null,
 
       departmentId: form.departmentId ? Number(form.departmentId) : null,
@@ -1180,6 +1183,14 @@ const EmployeeMasterForm = ({ data, onBack }) => {
                   onChange={handleChange}
                   error={fieldErrors.dateOfJoining}
                   required
+                />
+                <Field
+                  type="date"
+                  label="Date of Resignation"
+                  name="dateOfResignation"
+                  value={form.dateOfResignation}
+                  onChange={handleChange}
+                  error={fieldErrors.dateOfResignation}
                 />
                 <Field
                   type="select"

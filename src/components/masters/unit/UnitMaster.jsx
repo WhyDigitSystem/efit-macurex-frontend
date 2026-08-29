@@ -12,6 +12,10 @@ const UnitMaster = () => {
   };
 
   const handleEdit = (data) => {
+    console.log("=== PARENT: EDIT TRIGGERED ===");
+    console.log("Data received from list:", data);
+
+    // Store the entire object or just the ID
     setEditData(data);
     setScreen("form");
   };
@@ -32,7 +36,7 @@ const UnitMaster = () => {
 
       {screen === "form" && (
         <UnitMasterForm
-          editData={editData}
+          data={editData}
           onBack={handleBack}
         />
       )}

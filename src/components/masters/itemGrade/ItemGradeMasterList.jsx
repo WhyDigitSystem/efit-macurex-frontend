@@ -7,12 +7,12 @@ const ItemGradeMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
   const ORG_ID = parseInt(localStorage.getItem("orgId"));
-  const BRANCH = Number(localStorage.getItem("branchId")) || 1000000001;
+  const BRANCH = Number(localStorage.getItem("branchId"));
 
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const list = await itemGradeAPI.getAll(ORG_ID, BRANCH);
+      const list = await itemGradeAPI.getAll(ORG_ID);
       const sorted = (list || []).sort((a, b) => (b.id || 0) - (a.id || 0));
       setData(sorted);
     } catch (error) {

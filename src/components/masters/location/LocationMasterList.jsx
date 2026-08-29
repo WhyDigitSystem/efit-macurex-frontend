@@ -5,7 +5,7 @@ import { toast } from "../../../utils/toast";
 
 const normalizeRecord = (r) => ({
   ...r,
-  plantName: r.plantId?.branchName || r.plantId?.id || r.plantId || "-",
+  plantName: r.branchId?.branchName || "-",
   locationTypeName: r.locationTypeId?.valueDescription || r.locationTypeId?.id || "-",
   belongsToName: r.belongsToId?.valueDescription || r.belongsToId?.id || "-",
   contactPersonName: r.contactPersonNameId?.employeeName || r.contactPersonNameId?.id || "-",
@@ -30,6 +30,7 @@ const LocationMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
       const res = await locationMasterAPI.getLocationMasterByOrgId(ORG_ID, BRANCH);
       const sorted = (res || []).map(normalizeRecord).sort((a, b) => (b.id || 0) - (a.id || 0));
       setData(sorted);
+      console.log("sorted", sorted)
     } catch (error) {
       console.error("Failed to load locations:", error);
       setData([]);
@@ -55,7 +56,6 @@ const LocationMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     { key: "locationName", label: "Location Name", accessor: "locationName", type: "text" },
     { key: "locationType", label: "Location Type", accessor: "locationTypeName", type: "text" },
     { key: "belongsTo", label: "Belongs To", accessor: "belongsToName", type: "text" },
-    { key: "plant", label: "Plant", accessor: "plantName", type: "text" },
     { key: "contactPerson", label: "Contact Person", accessor: "contactPersonName", type: "text" },
     { key: "phoneNo", label: "Phone No", accessor: "phoneNo", type: "text", noWrap: true },
     { key: "email", label: "E-mail", accessor: "email", type: "text" },

@@ -19,7 +19,51 @@ const HolidayMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     setLoading(true);
     try {
       const list = await holidayAPI.getAll(ORG_ID, BRANCH);
-      const sorted = (list || []).sort((a, b) => (b.id || 0) - (a.id || 0));
+      console.log("Holiday List:", list);
+
+      // Flatten the data to show each holiday as a separate row
+      const flattenedData = [];
+      (list || []).forEach((item) => {
+        // If there are multiple holiday details, create a row for each
+        if (item.holidayMasterDetailsVO && item.holidayMasterDetailsVO.length > 0) {
+          item.holidayMasterDetailsVO.forEach((detail) => {
+            flattenedData.push({
+              id: detail.id || item.id,
+              holidayDate: detail.holidayDate || item.holidayDate,
+              day: detail.day || item.day,
+              holidayType: detail.holidayType || item.holidayType,
+              remarks: detail.remarks || item.remarks,
+              compensatory: detail.compensatory || item.compensatory,
+              compensatoryDate: detail.compensatoryDate || item.compensatoryDate,
+              branch: item.branch,
+              branchId: item.branchId,
+              active: item.active,
+              orgId: item.orgId,
+              createdBy: item.createdBy,
+              cancelRemarks: item.cancelRemarks,
+            });
+          });
+        } else {
+          // If no details array, use the item itself
+          flattenedData.push({
+            id: item.id,
+            holidayDate: item.holidayDate,
+            day: item.day,
+            holidayType: item.holidayType,
+            remarks: item.remarks,
+            compensatory: item.compensatory,
+            compensatoryDate: item.compensatoryDate,
+            branch: item.branch,
+            branchId: item.branchId,
+            active: item.active,
+            orgId: item.orgId,
+            createdBy: item.createdBy,
+            cancelRemarks: item.cancelRemarks,
+          });
+        }
+      });
+
+      const sorted = (flattenedData || []).sort((a, b) => (b.id || 0) - (a.id || 0));
       setData(sorted);
     } catch (error) {
       console.error("Failed to load holidays:", error);
@@ -36,23 +80,37 @@ const HolidayMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
 
   const columns = [
     {
-      key: "date",
+      key: "holidayDate",
       label: "Date",
-      accessor: "date",
+      accessor: "holidayDate",
+      type: "text",
+      noWrap: true,
+    },
+    {
+      key: "day",
+      label: "Day",
+      accessor: "day",
+      type: "text",
+      noWrap: true,
+    },
+    {
+      key: "holidayType",
+      label: "Holiday Type",
+      accessor: "holidayType",
       type: "text",
       noWrap: true,
     },
     {
       key: "branch",
       label: "Branch",
-      accessor: (row) => row.branch?.branchName || "-",
+      accessor: (row) => row.branch?.branchName || row.branch || "-",
       type: "text",
       noWrap: true,
     },
     {
-      key: "holidayCount",
-      label: "No. of Holidays",
-      accessor: (row) => row.holidayMasterDetailsVO?.length || 0,
+      key: "remarks",
+      label: "Remarks",
+      accessor: "remarks",
       type: "text",
     },
     {
@@ -63,11 +121,10 @@ const HolidayMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
         const isActive = normalizeActive(value);
         return (
           <span
-            className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
-              isActive
+            className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${isActive
                 ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
                 : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300"
-            }`}
+              }`}
           >
             {isActive ? "Active" : "Inactive"}
           </span>
@@ -83,7 +140,7 @@ const HolidayMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     },
   ];
 
-  const searchFields = ["date"];
+  const searchFields = ["holidayDate", "holidayType", "remarks"];
 
   const filterOptions = [
     { value: "all", label: "All" },
@@ -100,6 +157,7 @@ const HolidayMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   ];
 
   const handleEdit = (row) => {
+    // Pass the entire row data for editing
     onEdit(row);
   };
 

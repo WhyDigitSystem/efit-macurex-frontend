@@ -1,10 +1,10 @@
 import apiClient from "./apiClient";
 
 const itemGradeAPI = {
-  getAll: async (orgId, branch) => {
+  getAll: async (orgId) => {
     try {
       const res = await apiClient.get("/api/commonmaster/getGradeMasterByOrgId", {
-        params: { orgId, branch },
+        params: { orgId },
       });
       return res?.paramObjectsMap?.gradeMasterList || [];
     } catch (error) {

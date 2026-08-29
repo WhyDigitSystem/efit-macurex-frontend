@@ -26,7 +26,7 @@ const UnitMasterList = ({ onAddNew, onEdit, onBack }) => {
         }
       }
 
-      const data = await unitAPI.getUnits(branch, orgId);
+      const data = await unitAPI.getUnits(orgId);
 
       console.log("Unit List:", data);
 
@@ -49,7 +49,21 @@ const UnitMasterList = ({ onAddNew, onEdit, onBack }) => {
   }, []);
 
   const handleEdit = (unit) => {
-    onEdit(unit);
+    console.log("=== EDIT CLICKED ===");
+    console.log("Full unit object:", unit);
+    console.log("Unit ID (numeric):", unit?.id);
+    console.log("Unit Code:", unit?.unitId);
+
+    // Pass the numeric ID to the parent
+    if (unit && unit.id) {
+      // Pass the entire object but ensure it has the numeric ID
+      onEdit({
+        ...unit,
+        numericId: unit.id // Explicitly pass numeric ID
+      });
+    } else {
+      console.error("Unit data missing numeric id:", unit);
+    }
   };
 
   const columns = [

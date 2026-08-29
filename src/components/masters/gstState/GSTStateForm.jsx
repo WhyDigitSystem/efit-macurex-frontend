@@ -167,7 +167,7 @@ const GSTStateForm = ({ data, onBack }) => {
 
   const transformFormData = (formData) => {
     const payload = {
-      branch: Number(branch),
+      // branch: Number(branch),
       createdBy: userName,
       stateCode: formData.stateCode,
       stateName: formData.stateName,

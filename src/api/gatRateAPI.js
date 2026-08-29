@@ -1,10 +1,10 @@
 import apiClient from "./apiClient";
 
 export const gstRateApi = {
-    getGstRateList: async (branch, orgId) => {
+    getGstRateList: async (orgId) => {
         try {
             const res = await apiClient.get(
-                `/api/commonmaster/getGSTRateByOrgId?branchId=${branch}&orgId=${orgId}`
+                `/api/commonmaster/getGSTRateByOrgId?orgId=${orgId}`
             );
             console.log("GST Rate List API Response:", res);
             return res;

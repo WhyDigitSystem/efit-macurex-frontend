@@ -15,11 +15,11 @@ const GSTRateList = ({ onAddNew, onEdit, onBack }) => {
       const orgId = localStorage.getItem("orgId");
       const branch = localStorage.getItem("branchId");
 
-      if (!orgId || !branch) {
+      if (!orgId) {
         throw new Error("Organization ID or Branch ID not found");
       }
 
-      const response = await gstRateApi.getGstRateList(branch, orgId);
+      const response = await gstRateApi.getGstRateList(orgId);
       console.log("Full API Response:", response);
 
       // Extract the transportList from the response

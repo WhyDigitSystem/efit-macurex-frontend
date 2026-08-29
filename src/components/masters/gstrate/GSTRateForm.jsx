@@ -294,7 +294,7 @@ const GSTRateForm = ({ data, onBack }) => {
 
       const payload = {
         orgId: Number(orgId),
-        branch: Number(branch),
+        // branch: Number(branch),
         category: Number(selectedCategory?.id) || parseInt(formData.category) || 0,
         hsnSacCode: selectedHsn?.id || parseInt(formData.hsnCode) || 0,
         description: formData.description || "",
@@ -308,7 +308,7 @@ const GSTRateForm = ({ data, onBack }) => {
         createdBy: localStorage.getItem("userName") || "System",
         cancelRemarks: "",
         duplicateCheck: true,
-        financialYear: localStorage.getItem("finYear") || "",
+        // financialYear: localStorage.getItem("finYear") || "",
       };
 
       if (data?.id) {

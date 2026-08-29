@@ -11,7 +11,7 @@ const GSTStateList = ({ onAddNew, onEdit, onBack }) => {
   const loadItems = async () => {
     try {
       setLoading(true);
-      const data = await gstStateApi.getGstStateList(branch, orgId);
+      const data = await gstStateApi.getGstStateList(orgId);
       setItemData(data);
 
     } catch (error) {

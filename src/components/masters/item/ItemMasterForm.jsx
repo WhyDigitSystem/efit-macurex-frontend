@@ -6,6 +6,7 @@ import itemGradeAPI from "../../../api/itemGradeAPI";
 import unitMasterAPI from "../../../api/unitAPI";
 import hsnSacAPI from "../../../api/hsnSacAPI";
 import itemAPI from "../../../api/itemAPI";
+import locationMasterAPI from "../../../api/locationMasterAPI";
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -48,22 +49,52 @@ const getDefaultValues = () => ({
   sellifePart: "",
   grn: "",
   active: true,
-  units: [{ purchaseUnit: "", sellingUnit: "", pricingUnit: "", secondaryUnit: "" }],
-  inventory: [{
-    manufactured: "", defaultLocation: "", alternateLocation: "",
-    leadTime: 0, reorderLevel: 0, rackNo: "", rowNo: "", position: "",
-    minimumOrderQty: 0, maximumOrderQty: 0, binSize: "", binQty: 0
-  }],
-  purchase: [{
-    defaultSupplier: "", leadTime1: 0, alternateSupplier: "", leadTime2: 0,
-    purchaseTolerance: 0, rate: 0, date: "", landedCostRate: 0, branch: "",
-    toolOwner: "", toolNo: ""
-  }],
-  slaes: [{
-    costRate: 0, itemBlockedForInvoicing: "", minimumSellingPrice: 0,
-    salesAccount: "", leadTime: 0, customerPartNo: ""
-  }],
-  others: [{ supplierPartNo: "", technicalSpecification: "" }],
+  units: {
+    purchaseUnit: "",
+    sellingUnit: "",
+    pricingUnit: "",
+    secondaryUnit: "",
+    primaryToPurchaseConversion: "",
+  },
+  inventory: {
+    manufactured: "",
+    defaultLocation: "",
+    alternateLocation: "",
+    leadTime: 0,
+    reorderLevel: 0,
+    rackNo: "",
+    rowNo: "",
+    position: "",
+    minimumOrderQty: 0,
+    maximumOrderQty: 0,
+    binSize: "",
+    binQty: 0,
+  },
+  purchase: {
+    defaultSupplier: "",
+    leadTime1: 0,
+    alternateSupplier: "",
+    leadTime2: 0,
+    purchaseTolerance: 0,
+    rate: 0,
+    date: "",
+    landedCostRate: 0,
+    branch: "",
+    toolOwner: "",
+    toolNo: "",
+  },
+  sales: {
+    costRate: 0,
+    itemBlockedForInvoicing: "",
+    minimumSellingPrice: 0,
+    salesAccount: "",
+    leadTime: 0,
+    customerPartNo: "",
+  },
+  others: {
+    supplierPartNo: "",
+    technicalSpecification: "",
+  },
   drawing: [{ attchement: null }],
 });
 
@@ -88,6 +119,11 @@ const SELECT_OPTIONS = {
     { value: "Import", label: "Import" },
     { value: "Local", label: "Local" }
   ],
+
+  manufacturedBoughtOut: [
+    { value: "Manufactured", label: "Manufactured" },
+    { value: "Bought Out", label: "Bought Out" },
+  ],
 };
 
 const SelectField = ({ control, name, label, options = [], required, errors }) => (
@@ -104,12 +140,8 @@ const SelectField = ({ control, name, label, options = [], required, errors }) =
       render={({ field }) => (
         <select {...field} className={controlClasses}>
           <option value="">Select</option>
-
           {options.map(option => (
-            <option
-              key={option.value}
-              value={option.value}
-            >
+            <option key={option.value} value={option.value}>
               {option.label}
             </option>
           ))}
@@ -125,7 +157,7 @@ const SelectField = ({ control, name, label, options = [], required, errors }) =
   </div>
 );
 
-const InputField = ({ control, name, label, type = "text", required, placeholder, errors }) => (
+const InputField = ({ control, name, label, type = "text", required, placeholder, errors, step }) => (
   <div>
     <label className={labelClasses}>
       {label} {required && <span className="text-red-500">*</span>}
@@ -135,7 +167,14 @@ const InputField = ({ control, name, label, type = "text", required, placeholder
       control={control}
       rules={required ? { required: `${label} is required` } : undefined}
       render={({ field }) => (
-        <input {...field} type={type} className={controlClasses} placeholder={placeholder} />
+        <input
+          {...field}
+          type={type}
+          step={step}
+          className={controlClasses}
+          placeholder={placeholder}
+          value={field.value || ""}
+        />
       )}
     />
     {!name.includes('.') && errors?.[name] && (
@@ -148,37 +187,32 @@ const ItemMasterForm = ({ data, onBack }) => {
   const [orgId] = useState(localStorage.getItem("orgId"));
   const [branch] = useState(localStorage.getItem("branchId"));
   const [finYear] = useState(localStorage.getItem("finYear"));
-  const [activeChildTab, setActiveChildTab] = useState("unit");
-  const [itemGroupOptions, setItemGroupOptions] = useState([]);
+  const [activeChildTab, setActiveChildTab] = useState("units");
   const [gradeData, setGradeData] = useState([]);
   const [unitData, setUnitData] = useState([]);
   const [hsnData, setHsnData] = useState([]);
   const [listOfValuesData, setListOfValuesData] = useState({});
+  const [supplierOptions, setSupplierOptions] = useState([]);
+  const [locationOptions, setLocationOptions] = useState([]);
   const [toastMessage, setToastMessage] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const { control, handleSubmit, formState: { errors }, reset } = useForm({
+  const { control, handleSubmit, formState: { errors }, reset, watch, setValue } = useForm({
     mode: "onTouched",
     defaultValues: getDefaultValues(),
   });
 
-  // Field Arrays
-  const tabConfig = {
-    unit: useFieldArray({ control, name: "units" }),
-    inventory: useFieldArray({ control, name: "inventory" }),
-    purchase: useFieldArray({ control, name: "purchase" }),
-    sales: useFieldArray({ control, name: "slaes" }),
-    others: useFieldArray({ control, name: "others" }),
-    drawing: useFieldArray({ control, name: "drawing" }),
-  };
+  // Watch purchase fields to filter suppliers
+  const purchaseFields = watch("purchase");
+  // Watch inventory fields to filter locations
+  const inventoryFields = watch("inventory");
 
-  const getFieldArray = (tab) => tabConfig[tab] || tabConfig.unit;
-  const handleAdd = (tab) => getFieldArray(tab).append(getDefaultValues()[tab]?.[0] || {});
-  const handleRemove = (tab, index) => {
-    const { fields, remove } = getFieldArray(tab);
-    if (fields.length > 1) remove(index);
-  };
+  // Drawing Field Array
+  const { fields: drawingFields, append: appendDrawing, remove: removeDrawing } = useFieldArray({
+    control,
+    name: "drawing"
+  });
 
   const ListOfValues_GROUPS = {
     itemGroup: "Item Group",
@@ -188,20 +222,61 @@ const ItemMasterForm = ({ data, onBack }) => {
     inspection: "INSPECTION",
   };
 
+  // Function to get filtered location options for Alternate Location
+  const getFilteredLocationOptions = () => {
+    const defaultLocationId = inventoryFields?.defaultLocation;
+
+    if (!defaultLocationId) {
+      return locationOptions;
+    }
+
+    return locationOptions.filter(
+      location => location.value !== parseInt(defaultLocationId)
+    );
+  };
+
+  // Function to get filtered location options for Default Location
+  const getFilteredDefaultLocationOptions = () => {
+    const alternateLocationId = inventoryFields?.alternateLocation;
+
+    if (!alternateLocationId) {
+      return locationOptions;
+    }
+
+    return locationOptions.filter(
+      location => location.value !== parseInt(alternateLocationId)
+    );
+  };
+
   // Load data on mount
   useEffect(() => {
     loadListOfValuesData();
     loadGradeData();
     loadUnitData();
     loadHsnData();
+    loadSupplierData();
+    loadLocationData();
   }, []);
-  
+
   useEffect(() => {
     if (data && data.id) {
       fetchItemData(data.id);
     }
   }, [data]);
-  
+
+  // Function to get filtered supplier options for Alternate Supplier
+  const getFilteredSupplierOptions = () => {
+    const defaultSupplierId = purchaseFields?.defaultSupplier;
+
+    if (!defaultSupplierId) {
+      return supplierOptions;
+    }
+
+    return supplierOptions.filter(
+      supplier => supplier.value !== parseInt(defaultSupplierId)
+    );
+  };
+
   const fetchItemData = async (id) => {
     setIsLoading(true);
     try {
@@ -209,6 +284,7 @@ const ItemMasterForm = ({ data, onBack }) => {
       if (itemData) {
         console.log("Fetched item data:", itemData);
         const formData = mapApiResponseToForm(itemData);
+        console.log("Mapped form data:", formData);
         reset(formData);
       } else {
         setToastMessage({
@@ -228,6 +304,11 @@ const ItemMasterForm = ({ data, onBack }) => {
   };
 
   const mapApiResponseToForm = (apiData) => {
+    // Debug logging to see what's in the API response
+    console.log("API Data for mapping:", apiData);
+    console.log("Default Supplier ID:", apiData.defaultSupplierId);
+    console.log("Alternative Supplier ID:", apiData.alternativeSupplierId);
+
     return {
       // Basic Info
       id: apiData.id || 0,
@@ -254,25 +335,24 @@ const ItemMasterForm = ({ data, onBack }) => {
       hsnCode: apiData.itemHsn?.id || "",
       stock: apiData.stock || "",
       excisableItem: apiData.excisbleItem || "",
-      excisbleItem: apiData.excisableItem || "",
       protoType: apiData.prototype || "",
       psw: apiData.psw || "",
       qcApproval: apiData.needQcApproval || "",
-      excisableItem: apiData.isExciseItem || "",
       sellifePart: apiData.shelfLifePart || "",
       grn: apiData.isGrnRequired || "",
       active: apiData.active !== undefined ? (apiData.active ? "Yes" : "No") : "Yes",
 
-      // Units - Map from API objects to form structure
-      units: [{
+      // Units - Single object
+      units: {
         purchaseUnit: apiData.purchaseUnit?.id || "",
         sellingUnit: apiData.sellingUnit?.id || "",
         pricingUnit: apiData.pricingUnit?.id || "",
         secondaryUnit: apiData.secondaryUnit?.id || "",
-      }],
+        primaryToPurchaseConversion: apiData.primaryToPurchaseConversion || "",
+      },
 
-      // Inventory
-      inventory: [{
+      // Inventory - Single object
+      inventory: {
         manufactured: apiData.manufacturedOrBoughtout || "",
         defaultLocation: apiData.locationDefalutReponse?.id || "",
         alternateLocation: apiData.locationAlterReponse?.id || "",
@@ -283,16 +363,16 @@ const ItemMasterForm = ({ data, onBack }) => {
         position: apiData.position || "",
         minimumOrderQty: apiData.minimumOrderQty || 0,
         maximumOrderQty: apiData.maximumOrderQty || 0,
-        binSize: apiData.binSize || 0,
+        binSize: apiData.binSize || "",
         binQty: apiData.binQty || 0,
-      }],
+      },
 
-      // Purchase
-      purchase: [{
-        defaultSupplier: apiData.defaultSupplier || "",
-        leadTime1: 0, // Not in API response
-        alternateSupplier: apiData.alternativeSupplier || "",
-        leadTime2: 0, // Not in API response
+      // Purchase - Single object - FIXED supplier mapping
+      purchase: {
+        defaultSupplier: apiData.defaultSupplierId ? String(apiData.defaultSupplierId) : "",
+        leadTime1: apiData.leadTime1 || 0,
+        alternateSupplier: apiData.alternativeSupplierId ? String(apiData.alternativeSupplierId) : "",
+        leadTime2: apiData.leadTime2 || 0,
         purchaseTolerance: parseFloat(apiData.pruchaseTalerance) || 0,
         rate: apiData.rate || 0,
         date: apiData.date || "",
@@ -300,25 +380,25 @@ const ItemMasterForm = ({ data, onBack }) => {
         branch: apiData.branch?.branchName || "",
         toolOwner: apiData.toolOwner || "",
         toolNo: apiData.toolNo || "",
-      }],
+      },
 
-      // Sales
-      slaes: [{
+      // Sales - Single object
+      sales: {
         costRate: apiData.costRate || 0,
         itemBlockedForInvoicing: apiData.isItemBlockedForInvoicing || "",
         minimumSellingPrice: apiData.minSellPrice || 0,
         salesAccount: apiData.salesAccount?.toString() || "",
         leadTime: parseInt(apiData.leadTimeToDispatch) || 0,
         customerPartNo: apiData.customerPartNo || "",
-      }],
+      },
 
-      // Others
-      others: [{
+      // Others - Single object
+      others: {
         supplierPartNo: apiData.supplierPartNo || "",
         technicalSpecification: apiData.techSpec || "",
-      }],
+      },
 
-      // Drawing attachments (if any)
+      // Drawing attachments
       drawing: apiData.itemDrawingDTO?.length > 0
         ? apiData.itemDrawingDTO.map(drawing => ({ attchement: drawing }))
         : [{ attchement: null }],
@@ -359,7 +439,7 @@ const ItemMasterForm = ({ data, onBack }) => {
       const response = await itemGradeAPI.getAll(orgId, branch);
       const options = (response || []).map(item => ({
         value: item.id,
-        label: item.gradeDescription,
+        label: item.gradeCode,
       }));
       setGradeData(options);
     } catch (error) {
@@ -370,7 +450,7 @@ const ItemMasterForm = ({ data, onBack }) => {
 
   const loadUnitData = useCallback(async () => {
     try {
-      const response = await unitMasterAPI.getUnits(branch, orgId);
+      const response = await unitMasterAPI.getUnits(orgId);
       const options = (response || []).map(item => ({
         value: item.id,
         label: item.unitId,
@@ -396,6 +476,83 @@ const ItemMasterForm = ({ data, onBack }) => {
     }
   }, [orgId, branch]);
 
+  const loadSupplierData = useCallback(async () => {
+    try {
+      // Try to get suppliers from itemAPI first
+      let suppliers = [];
+
+      if (itemAPI.getSuppliers) {
+        const response = await itemAPI.getSuppliers(orgId, branch);
+        suppliers = response || [];
+      }
+
+      // If no suppliers, try the fallback API call
+      if (!suppliers || suppliers.length === 0) {
+        try {
+          const res = await fetch(`/api/purchasedeliveryschedule/getSupplierDropdownForPurchaseContract?branch=${branch}&orgId=${orgId}`, {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('token')}`,
+              'Content-Type': 'application/json'
+            }
+          });
+          const data = await res.json();
+          suppliers = data?.paramObjectsMap?.supplierList || [];
+        } catch (fetchError) {
+          console.warn("Fallback supplier fetch failed:", fetchError);
+          // Use mock data if both fail
+          suppliers = [
+            { supplierId: 1000000001, supplierCode: "SUP1001", supplierName: "Vignesh PVT LTD" },
+            { supplierId: 1000000002, supplierCode: "SUP1002", supplierName: "Supplier B" },
+            { supplierId: 1000000003, supplierCode: "SUP1003", supplierName: "Supplier C" },
+          ];
+        }
+      }
+
+      console.log("Supplier data loaded:", suppliers);
+
+      const formattedSuppliers = (suppliers || []).map(supplier => ({
+        value: supplier.supplierId || supplier.id,
+        label: `${supplier.supplierCode || ''} - ${supplier.supplierName || supplier.name || ''}`,
+        supplierId: supplier.supplierId || supplier.id,
+        supplierCode: supplier.supplierCode || '',
+        supplierName: supplier.supplierName || supplier.name || ''
+      }));
+
+      setSupplierOptions(formattedSuppliers);
+    } catch (error) {
+      console.error("Failed to load suppliers:", error);
+      // Set mock data as fallback
+      const mockSuppliers = [
+        { value: 1000000001, label: "SUP1001 - Vignesh PVT LTD" },
+        { value: 1000000002, label: "SUP1002 - Supplier B" },
+        { value: 1000000003, label: "SUP1003 - Supplier C" },
+      ];
+      setSupplierOptions(mockSuppliers);
+    }
+  }, [orgId, branch]);
+
+  const loadLocationData = useCallback(async () => {
+    try {
+      const response = await locationMasterAPI.getLocationMasterByOrgId(orgId, branch);
+      console.log("Location data loaded:", response);
+
+      const formattedLocations = (response || [])
+        .filter(location => location.active === "Active" || location.active === true)
+        .map(location => ({
+          value: location.id,
+          label: location.locationName || location.locationId || "",
+          locationId: location.locationId,
+          locationName: location.locationName,
+          active: location.active
+        }));
+
+      setLocationOptions(formattedLocations);
+    } catch (error) {
+      console.error("Failed to load locations:", error);
+      setLocationOptions([]);
+    }
+  }, [orgId, branch]);
+
   const onSubmit = async (formData) => {
     setIsSubmitting(true);
     setToastMessage(null);
@@ -403,7 +560,6 @@ const ItemMasterForm = ({ data, onBack }) => {
     try {
       console.log("Form Data:", formData);
 
-      // Build the payload
       const payload = buildPayload(formData);
 
       console.log("Sending payload:", payload);
@@ -418,7 +574,6 @@ const ItemMasterForm = ({ data, onBack }) => {
           message: data?.id ? "Item Updated Successfully!" : "Item Saved Successfully!"
         });
 
-        // Close the form after short delay
         setTimeout(() => {
           onBack();
         }, 1500);
@@ -440,12 +595,11 @@ const ItemMasterForm = ({ data, onBack }) => {
   };
 
   const buildPayload = (formData) => {
-    // Get the first row of each tab for the main payload
-    const unitData = formData.units && formData.units.length > 0 ? formData.units[0] : {};
-    const inventoryData = formData.inventory && formData.inventory.length > 0 ? formData.inventory[0] : {};
-    const purchaseData = formData.purchase && formData.purchase.length > 0 ? formData.purchase[0] : {};
-    const salesData = formData.slaes && formData.slaes.length > 0 ? formData.slaes[0] : {};
-    const othersData = formData.others && formData.others.length > 0 ? formData.others[0] : {};
+    const unitData = formData.units || {};
+    const inventoryData = formData.inventory || {};
+    const purchaseData = formData.purchase || {};
+    const salesData = formData.sales || {};
+    const othersData = formData.others || {};
 
     const payload = {
       ...(formData.id && formData.id !== 0 ? { id: formData.id } : {}),
@@ -489,6 +643,8 @@ const ItemMasterForm = ({ data, onBack }) => {
       itemTypeId: formData.itemType ? Number(formData.itemType) : 0,
       landedCostRate: String(purchaseData.landedCostRate) || "0",
       leadTime: Number(inventoryData.leadTime) || 0,
+      leadTime1: Number(purchaseData.leadTime1) || 0,
+      leadTime2: Number(purchaseData.leadTime2) || 0,
       leadTimeToDispatch: String(salesData.leadTime) || "0",
       length: Number(formData.length) || 0,
       lotSize: Number(formData.lotSize) || 0,
@@ -502,6 +658,7 @@ const ItemMasterForm = ({ data, onBack }) => {
       orgId: Number(orgId),
       position: inventoryData.position || "",
       pricingUnitId: unitData.pricingUnit ? Number(unitData.pricingUnit) : 0,
+      primaryToPurchaseConversion: unitData.primaryToPurchaseConversion || "",
       primaryUnitId: formData.primaryUnit ? Number(formData.primaryUnit) : 0,
       prototype: formData.protoType !== undefined ? String(formData.protoType) : "",
       pruchaseTalerance: String(purchaseData.purchaseTolerance) || "0",
@@ -537,7 +694,6 @@ const ItemMasterForm = ({ data, onBack }) => {
       }
     });
 
-    // Remove id if it's 0 or undefined (for new items)
     if (!payload.id || payload.id === 0) {
       delete payload.id;
     }
@@ -607,7 +763,6 @@ const ItemMasterForm = ({ data, onBack }) => {
 
           <InputField control={control} name="lotSize" label="Lot Size" type="number" errors={errors} />
 
-          {/* Yes/No Select Fields */}
           <SelectField control={control} name="stock" label="Stock" options={SELECT_OPTIONS.yesNo} errors={errors} />
           <SelectField control={control} name="protoType" label="Prototype" options={SELECT_OPTIONS.yesNo} errors={errors} />
           <SelectField control={control} name="psw" label="PSW" options={SELECT_OPTIONS.yesNo} errors={errors} />
@@ -624,12 +779,12 @@ const ItemMasterForm = ({ data, onBack }) => {
           <SelectField control={control} name="active" label="Active" options={SELECT_OPTIONS.yesNo} errors={errors} />
         </form>
 
-        {/* Child Tables */}
+        {/* Child Tabs */}
         <section className="mt-0 bg-white dark:bg-gray-800">
           {/* Tabs */}
-          <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 mb-0">
+          <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 mb-3">
             <div className="flex">
-              {["unit", "inventory", "purchase", "sales", "others", "drawing"].map((tab) => (
+              {["units", "inventory", "purchase", "sales", "others", "drawing"].map((tab) => (
                 <button
                   key={tab}
                   type="button"
@@ -641,329 +796,373 @@ const ItemMasterForm = ({ data, onBack }) => {
                 </button>
               ))}
             </div>
-            <button
-              type="button"
-              onClick={() => handleAdd(activeChildTab)}
-              className="h-6 w-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-colors"
-            >
-              <Plus size={12} />
-            </button>
           </div>
 
-          {/* Tab Content */}
-          {activeChildTab === "unit" && (
-            <TableWrapper>
-              <TableHead headers={["#", "Purchase Unit", "Selling Unit", "Pricing Unit", "Secondary Unit", "Action"]} />
-              <tbody>
-                {tabConfig.unit.fields.map((field, index) => (
-                  <TableRow key={field.id} index={index} onRemove={() => handleRemove("unit", index)} disabled={tabConfig.unit.fields.length <= 1}>
-                    <SelectCell
-                      control={control}
-                      name={`units.${index}.purchaseUnit`}
-                      options={unitData}
-                      errors={errors}
-                    />
-                    <SelectCell
-                      control={control}
-                      name={`units.${index}.sellingUnit`}
-                      options={unitData}
-                      errors={errors}
-                    />
-                    <SelectCell
-                      control={control}
-                      name={`units.${index}.pricingUnit`}
-                      options={unitData}
-                      errors={errors}
-                    />
-                    <SelectCell
-                      control={control}
-                      name={`units.${index}.secondaryUnit`}
-                      options={unitData}
-                      errors={errors}
-                    />
-                  </TableRow>
-                ))}
-              </tbody>
-            </TableWrapper>
+          {/* Units Tab */}
+          {activeChildTab === "units" && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-2">
+              <div className="grid grid-cols-1 gap-3">
+                <InputField
+                  control={control}
+                  name="units.primaryToPurchaseConversion"
+                  label="Conversion Factor"
+                  type="number"
+                  step="0.01"
+                  placeholder="Enter conversion factor"
+                  errors={errors}
+                />
+              </div>
+              <SelectField
+                control={control}
+                name="units.purchaseUnit"
+                label="Purchase Unit"
+                options={unitData}
+                errors={errors}
+              />
+              <SelectField
+                control={control}
+                name="units.sellingUnit"
+                label="Selling Unit"
+                options={unitData}
+                errors={errors}
+              />
+              <SelectField
+                control={control}
+                name="units.pricingUnit"
+                label="Pricing Unit"
+                options={unitData}
+                errors={errors}
+              />
+              <SelectField
+                control={control}
+                name="units.secondaryUnit"
+                label="Secondary Unit"
+                options={unitData}
+                errors={errors}
+              />
+            </div>
           )}
 
+          {/* Inventory Tab */}
           {activeChildTab === "inventory" && (
-            <TableWrapper>
-              <TableHead headers={["#", "Manufactured / Bought Out", "Default Location", "Alternate Location", "Lead Time", "Reorder Level", "Rack No", "Row No", "Position", "Min Order Qty", "Max Order Qty", "Bin Size", "Bin Qty", "Action"]} />
-              <tbody>
-                {tabConfig.inventory.fields.map((field, index) => (
-                  <TableRow key={field.id} index={index} onRemove={() => handleRemove("inventory", index)} disabled={tabConfig.inventory.fields.length <= 1}>
-                    <InputCell
-                      control={control}
-                      name={`inventory.${index}.manufactured`}
-                      placeholder="Manufactured/Bought Out"
-                      errors={errors}
-                    />
-                    <InputCell
-                      control={control}
-                      name={`inventory.${index}.defaultLocation`}
-                      placeholder="Default Location"
-                      errors={errors}
-                    />
-                    <InputCell
-                      control={control}
-                      name={`inventory.${index}.alternateLocation`}
-                      placeholder="Alternate Location"
-                      errors={errors}
-                    />
-                    <InputCell
-                      control={control}
-                      name={`inventory.${index}.leadTime`}
-                      type="number"
-                      placeholder="Lead Time"
-                      errors={errors}
-                    />
-                    <InputCell
-                      control={control}
-                      name={`inventory.${index}.reorderLevel`}
-                      type="number"
-                      placeholder="Reorder Level"
-                      errors={errors}
-                    />
-                    <InputCell
-                      control={control}
-                      name={`inventory.${index}.rackNo`}
-                      placeholder="Rack No"
-                      errors={errors}
-                    />
-                    <InputCell
-                      control={control}
-                      name={`inventory.${index}.rowNo`}
-                      placeholder="Row No"
-                      errors={errors}
-                    />
-                    <InputCell
-                      control={control}
-                      name={`inventory.${index}.position`}
-                      placeholder="Position"
-                      errors={errors}
-                    />
-                    <InputCell
-                      control={control}
-                      name={`inventory.${index}.minimumOrderQty`}
-                      type="number"
-                      placeholder="Min Order Qty"
-                      errors={errors}
-                    />
-                    <InputCell
-                      control={control}
-                      name={`inventory.${index}.maximumOrderQty`}
-                      type="number"
-                      placeholder="Max Order Qty"
-                      errors={errors}
-                    />
-                    <InputCell
-                      control={control}
-                      name={`inventory.${index}.binSize`}
-                      placeholder="Bin Size"
-                      errors={errors}
-                    />
-                    <InputCell
-                      control={control}
-                      name={`inventory.${index}.binQty`}
-                      type="number"
-                      placeholder="Bin Qty"
-                      errors={errors}
-                    />
-                  </TableRow>
-                ))}
-              </tbody>
-            </TableWrapper>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-2">
+              <SelectField
+                control={control}
+                name="inventory.manufactured"
+                label="Manufactured / Bought Out"
+                options={SELECT_OPTIONS.manufacturedBoughtOut}
+                required
+                errors={errors}
+              />
+              <SelectField
+                control={control}
+                name="inventory.defaultLocation"
+                label="Default Location"
+                options={getFilteredDefaultLocationOptions()}
+                errors={errors}
+              />
+              <SelectField
+                control={control}
+                name="inventory.alternateLocation"
+                label="Alternate Location"
+                options={getFilteredLocationOptions()}
+                errors={errors}
+              />
+              <InputField
+                control={control}
+                name="inventory.leadTime"
+                label="Lead Time (Days)"
+                type="number"
+                placeholder="Enter lead time"
+                errors={errors}
+              />
+              <InputField
+                control={control}
+                name="inventory.reorderLevel"
+                label="Reorder Level"
+                type="number"
+                placeholder="Enter reorder level"
+                errors={errors}
+              />
+              <InputField
+                control={control}
+                name="inventory.rackNo"
+                label="Rack No."
+                placeholder="Enter rack number"
+                errors={errors}
+              />
+              <InputField
+                control={control}
+                name="inventory.rowNo"
+                label="Row No."
+                placeholder="Enter row number"
+                errors={errors}
+              />
+              <InputField
+                control={control}
+                name="inventory.position"
+                label="Position"
+                placeholder="Enter position"
+                errors={errors}
+              />
+              <InputField
+                control={control}
+                name="inventory.minimumOrderQty"
+                label="Minimum Order Qty"
+                type="number"
+                placeholder="Enter min order qty"
+                errors={errors}
+              />
+              <InputField
+                control={control}
+                name="inventory.maximumOrderQty"
+                label="Maximum Order Qty"
+                type="number"
+                placeholder="Enter max order qty"
+                errors={errors}
+              />
+              <InputField
+                control={control}
+                name="inventory.binSize"
+                label="Bin Size"
+                placeholder="Enter bin size"
+                errors={errors}
+              />
+              <InputField
+                control={control}
+                name="inventory.binQty"
+                label="Bin Qty"
+                type="number"
+                placeholder="Enter bin qty"
+                errors={errors}
+              />
+            </div>
           )}
 
+          {/* Purchase Tab */}
           {activeChildTab === "purchase" && (
-            <TableWrapper>
-              <TableHead headers={["#", "Default Supplier", "Lead Time 1", "Alternate Supplier", "Lead Time 2", "Purchase Tolerance %", "Rate", "Date", "Landed Cost Rate", "Branch", "Tool Owner", "Tool No", "Action"]} />
-              <tbody>
-                {tabConfig.purchase.fields.map((field, index) => (
-                  <TableRow key={field.id} index={index} onRemove={() => handleRemove("purchase", index)} disabled={tabConfig.purchase.fields.length <= 1}>
-                    <InputCell
-                      control={control}
-                      name={`purchase.${index}.defaultSupplier`}
-                      placeholder="Default Supplier"
-                      errors={errors}
-                    />
-                    <InputCell
-                      control={control}
-                      name={`purchase.${index}.leadTime1`}
-                      type="number"
-                      placeholder="Lead Time 1"
-                      errors={errors}
-                    />
-                    <InputCell
-                      control={control}
-                      name={`purchase.${index}.alternateSupplier`}
-                      placeholder="Alternate Supplier"
-                      errors={errors}
-                    />
-                    <InputCell
-                      control={control}
-                      name={`purchase.${index}.leadTime2`}
-                      type="number"
-                      placeholder="Lead Time 2"
-                      errors={errors}
-                    />
-                    <InputCell
-                      control={control}
-                      name={`purchase.${index}.purchaseTolerance`}
-                      type="number"
-                      step="0.01"
-                      placeholder="Tolerance %"
-                      errors={errors}
-                    />
-                    <InputCell
-                      control={control}
-                      name={`purchase.${index}.rate`}
-                      type="number"
-                      step="0.01"
-                      placeholder="Rate"
-                      errors={errors}
-                    />
-                    <InputCell
-                      control={control}
-                      name={`purchase.${index}.date`}
-                      type="date"
-                      placeholder="Date"
-                      errors={errors}
-                    />
-                    <InputCell
-                      control={control}
-                      name={`purchase.${index}.landedCostRate`}
-                      type="number"
-                      step="0.01"
-                      placeholder="Landed Cost Rate"
-                      errors={errors}
-                    />
-                    <InputCell
-                      control={control}
-                      name={`purchase.${index}.branch`}
-                      placeholder="Branch"
-                      errors={errors}
-                    />
-                    <InputCell
-                      control={control}
-                      name={`purchase.${index}.toolOwner`}
-                      placeholder="Tool Owner"
-                      errors={errors}
-                    />
-                    <InputCell
-                      control={control}
-                      name={`purchase.${index}.toolNo`}
-                      placeholder="Tool No"
-                      errors={errors}
-                    />
-                  </TableRow>
-                ))}
-              </tbody>
-            </TableWrapper>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-2">
+              <SelectField
+                control={control}
+                name="purchase.defaultSupplier"
+                label="Default Supplier"
+                options={supplierOptions}
+                errors={errors}
+              />
+              <InputField
+                control={control}
+                name="purchase.leadTime1"
+                label="Lead Time (days)"
+                type="number"
+                placeholder="Enter lead time"
+                errors={errors}
+              />
+              <SelectField
+                control={control}
+                name="purchase.alternateSupplier"
+                label="Alternate Supplier"
+                options={getFilteredSupplierOptions()}
+                errors={errors}
+              />
+              <InputField
+                control={control}
+                name="purchase.leadTime2"
+                label="Lead Time (days)"
+                type="number"
+                placeholder="Enter lead time"
+                errors={errors}
+              />
+              <InputField
+                control={control}
+                name="purchase.purchaseTolerance"
+                label="Purchase Tolerance %"
+                type="number"
+                step="0.01"
+                placeholder="Enter tolerance"
+                errors={errors}
+              />
+              <InputField
+                control={control}
+                name="purchase.rate"
+                label="Rate"
+                type="number"
+                step="0.01"
+                placeholder="Enter rate"
+                errors={errors}
+              />
+              <InputField
+                control={control}
+                name="purchase.date"
+                label="Date"
+                type="date"
+                errors={errors}
+              />
+              <InputField
+                control={control}
+                name="purchase.landedCostRate"
+                label="Landed Cost Rate"
+                type="number"
+                step="0.01"
+                placeholder="Enter landed cost rate"
+                errors={errors}
+              />
+              <InputField
+                control={control}
+                name="purchase.branch"
+                label="Branch"
+                placeholder="Enter branch"
+                errors={errors}
+              />
+              <InputField
+                control={control}
+                name="purchase.toolOwner"
+                label="Tool Owner"
+                placeholder="Enter tool owner"
+                errors={errors}
+              />
+              <InputField
+                control={control}
+                name="purchase.toolNo"
+                label="Tool No"
+                placeholder="Enter tool number"
+                errors={errors}
+              />
+            </div>
           )}
 
+          {/* Sales Tab */}
           {activeChildTab === "sales" && (
-            <TableWrapper>
-              <TableHead headers={["#", "Cost Rate", "Item Blocked For Invoicing ? ", "Minimum Selling Price", "Sales Account", "Lead Time To Despatch (Days)", "Customer Part No ", "Action"]} />
-              <tbody>
-                {tabConfig.sales.fields.map((field, index) => (
-                  <TableRow key={field.id} index={index} onRemove={() => handleRemove("sales", index)} disabled={tabConfig.sales.fields.length <= 1}>
-                    <InputCell
-                      control={control}
-                      name={`slaes.${index}.costRate`}
-                      type="number"
-                      step="0.01"
-                      placeholder="Cost Rate"
-                      errors={errors}
-                    />
-                    <SelectCell
-                      control={control}
-                      name={`slaes.${index}.itemBlockedForInvoicing`}
-                      options={SELECT_OPTIONS.yesNo}
-                      errors={errors}
-                    />
-                    <InputCell
-                      control={control}
-                      name={`slaes.${index}.minimumSellingPrice`}
-                      type="number"
-                      step="0.01"
-                      placeholder="Min Selling Price"
-                      errors={errors}
-                    />
-                    <InputCell
-                      control={control}
-                      name={`slaes.${index}.salesAccount`}
-                      placeholder="Sales Account"
-                      errors={errors}
-                    />
-                    <InputCell
-                      control={control}
-                      name={`slaes.${index}.leadTime`}
-                      type="number"
-                      placeholder="Lead Time"
-                      errors={errors}
-                    />
-                    <InputCell
-                      control={control}
-                      name={`slaes.${index}.customerPartNo`}
-                      placeholder="Customer Part No"
-                      errors={errors}
-                    />
-                  </TableRow>
-                ))}
-              </tbody>
-            </TableWrapper>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-2">
+              <InputField
+                control={control}
+                name="sales.costRate"
+                label="Cost Rate"
+                type="number"
+                step="0.01"
+                placeholder="Enter cost rate"
+                errors={errors}
+              />
+              <SelectField
+                control={control}
+                name="sales.itemBlockedForInvoicing"
+                label="Item Blocked For Invoicing ?"
+                options={SELECT_OPTIONS.yesNo}
+                required
+                errors={errors}
+              />
+              <InputField
+                control={control}
+                name="sales.minimumSellingPrice"
+                label="Minimum Selling Price"
+                type="number"
+                step="0.01"
+                placeholder="Enter min selling price"
+                errors={errors}
+              />
+              <SelectField
+                control={control}
+                name="sales.salesAccount"
+                label="Sales Account"
+                options={[
+                  { value: "ACC001", label: "Sales Account 1" },
+                  { value: "ACC002", label: "Sales Account 2" },
+                ]}
+                errors={errors}
+              />
+              <InputField
+                control={control}
+                name="sales.leadTime"
+                label="Lead Time To Despatch (Days)"
+                type="number"
+                placeholder="Enter lead time"
+                errors={errors}
+              />
+              <InputField
+                control={control}
+                name="sales.customerPartNo"
+                label="Customer Part No."
+                placeholder="Enter customer part no"
+                errors={errors}
+              />
+            </div>
           )}
 
+          {/* Others Tab */}
           {activeChildTab === "others" && (
-            <TableWrapper>
-              <TableHead headers={["#", "Supplier Part No", "Technical Specification", "Action"]} />
-              <tbody>
-                {tabConfig.others.fields.map((field, index) => (
-                  <TableRow key={field.id} index={index} onRemove={() => handleRemove("others", index)} disabled={tabConfig.others.fields.length <= 1}>
-                    <InputCell
-                      control={control}
-                      name={`others.${index}.supplierPartNo`}
-                      placeholder="Supplier Part No."
-                      errors={errors}
-                    />
-                    <InputCell
-                      control={control}
-                      name={`others.${index}.technicalSpecification`}
-                      placeholder="Technical Specification"
-                      errors={errors}
-                    />
-                  </TableRow>
-                ))}
-              </tbody>
-            </TableWrapper>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-2">
+              <InputField
+                control={control}
+                name="others.supplierPartNo"
+                label="Supplier Part No."
+                placeholder="Enter supplier part no"
+                errors={errors}
+              />
+              <InputField
+                control={control}
+                name="others.technicalSpecification"
+                label="Technical Specification"
+                placeholder="Enter technical specification"
+                errors={errors}
+              />
+            </div>
           )}
 
+          {/* Drawing Attachment Tab */}
           {activeChildTab === "drawing" && (
-            <TableWrapper>
-              <TableHead headers={["#", "Attachment", "Action"]} />
-              <tbody>
-                {tabConfig.drawing.fields.map((field, index) => (
-                  <TableRow key={field.id} index={index} onRemove={() => handleRemove("drawing", index)} disabled={tabConfig.drawing.fields.length <= 1}>
-                    <td className="p-1">
-                      <Controller
-                        name={`drawing.${index}.attchement`}
-                        control={control}
-                        render={({ field: { onChange } }) => (
-                          <input
-                            type="file"
-                            accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.png,.jpg,.jpeg,.gif,.webp,.bmp,.svg,.zip,.rar,.txt"
-                            className={`${controlClasses} h-9 text-xs file:mr-3 file:px-3 file:py-1 file:rounded file:border-0 file:bg-blue-600 file:text-white hover:file:bg-blue-700`}
-                            onChange={(e) => onChange(e.target.files?.[0] || null)}
+            <div className="p-2">
+              <div className="flex justify-end mb-2">
+                <button
+                  type="button"
+                  onClick={() => appendDrawing({ attchement: null })}
+                  className="h-6 w-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-colors"
+                >
+                  <Plus size={12} />
+                </button>
+              </div>
+              <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
+                <table className="w-full text-xs">
+                  <thead className="bg-gray-100 dark:bg-gray-700">
+                    <tr>
+                      <th className="p-1 w-8 text-center dark:text-white">S.No</th>
+                      <th className="p-1 text-left dark:text-white">Attach Document</th>
+                      <th className="p-1 w-20 text-left dark:text-white">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {drawingFields.map((field, index) => (
+                      <tr key={field.id} className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
+                        <td className="p-1 text-center font-medium dark:text-white">{index + 1}</td>
+                        <td className="p-1">
+                          <Controller
+                            name={`drawing.${index}.attchement`}
+                            control={control}
+                            render={({ field: { onChange } }) => (
+                              <input
+                                type="file"
+                                accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.png,.jpg,.jpeg,.gif,.webp,.bmp,.svg,.zip,.rar,.txt"
+                                className={`${controlClasses} h-9 text-xs file:mr-3 file:px-3 file:py-1 file:rounded file:border-0 file:bg-blue-600 file:text-white hover:file:bg-blue-700`}
+                                onChange={(e) => onChange(e.target.files?.[0] || null)}
+                              />
+                            )}
                           />
-                        )}
-                      />
-                    </td>
-                  </TableRow>
-                ))}
-              </tbody>
-            </TableWrapper>
+                        </td>
+                        <td className="p-1 text-center">
+                          <button
+                            type="button"
+                            onClick={() => removeDrawing(index)}
+                            disabled={drawingFields.length <= 1}
+                            className={`h-5 w-5 rounded text-white flex items-center justify-center ${drawingFields.length <= 1 ? "bg-gray-400 cursor-not-allowed" : "bg-red-600 hover:bg-red-700"
+                              }`}
+                          >
+                            <Trash2 size={10} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           )}
         </section>
 
@@ -987,135 +1186,6 @@ const ItemMasterForm = ({ data, onBack }) => {
         </div>
       </div>
     </div>
-  );
-};
-
-// Table Helper Components
-const TableWrapper = ({ children }) => (
-  <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
-    <table className="w-full text-xs">{children}</table>
-  </div>
-);
-
-const TableHead = ({ headers }) => (
-  <thead className="bg-gray-100 dark:bg-gray-700">
-    <tr>
-      {headers.map((h, i) => (
-        <th key={i} className={`p-1 ${i === 0 ? "w-8 text-center" : i === headers.length - 1 ? "w-20 text-left" : "text-left"} dark:text-white`}>
-          {h}
-        </th>
-      ))}
-    </tr>
-  </thead>
-);
-
-const TableRow = ({ children, index, onRemove, disabled }) => (
-  <tr className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-    <td className="p-1 text-center font-medium dark:text-white">{index + 1}</td>
-    {children}
-    <td className="p-1 text-center">
-      <button
-        type="button"
-        onClick={onRemove}
-        disabled={disabled}
-        className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled ? "bg-gray-400 cursor-not-allowed" : "bg-red-600 hover:bg-red-700"
-          }`}
-      >
-        <Trash2 size={10} />
-      </button>
-    </td>
-  </tr>
-);
-
-const SelectCell = ({ control, name, options = [], required, errors }) => {
-  const getError = () => {
-    const parts = name.split('.');
-    let error = errors;
-    for (const part of parts) {
-      if (error && error[part]) {
-        error = error[part];
-      } else {
-        return null;
-      }
-    }
-    return error?.message;
-  };
-
-  const errorMessage = getError();
-
-  return (
-    <td className="p-1 align-top">
-      <Controller
-        name={name}
-        control={control}
-        rules={required ? { required: "This field is required" } : undefined}
-        render={({ field }) => (
-          <select {...field} className={`${controlClasses} h-8 text-xs ${errorMessage ? 'border-red-500 focus:border-red-500' : ''}`}>
-            <option value="">Select</option>
-            {(options || []).map((opt) => {
-              if (typeof opt === 'string') {
-                return <option key={opt} value={opt}>{opt}</option>;
-              } else if (typeof opt === 'object' && opt !== null) {
-                const value = opt.value ?? opt.id;
-                const label = opt.label ?? opt.valuesDescription ?? opt.name;
-                return (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                );
-              }
-              return null;
-            })}
-          </select>
-        )}
-      />
-      {errorMessage && (
-        <div className="text-red-500 text-[10px] mt-0.5 whitespace-nowrap">
-          {errorMessage}
-        </div>
-      )}
-    </td>
-  );
-};
-
-const InputCell = ({ control, name, type = "text", step, placeholder, required, errors }) => {
-  const getError = () => {
-    const parts = name.split('.');
-    let error = errors;
-    for (const part of parts) {
-      if (error && error[part]) {
-        error = error[part];
-      } else {
-        return null;
-      }
-    }
-    return error?.message;
-  };
-
-  const errorMessage = getError();
-
-  return (
-    <td className="p-1 align-top">
-      <Controller
-        name={name}
-        control={control}
-        rules={required ? { required: "This field is required" } : undefined}
-        render={({ field }) => (
-          <input
-            {...field}
-            type={type}
-            step={step}
-            className={`${controlClasses} h-8 text-xs ${errorMessage ? 'border-red-500 focus:border-red-500' : ''}`}
-            placeholder={placeholder}
-          />
-        )}
-      />
-      {errorMessage && (
-        <div className="text-red-500 text-[10px] mt-0.5 whitespace-nowrap">
-          {errorMessage}
-        </div>
-      )}
-    </td>
   );
 };
 

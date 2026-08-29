@@ -2,6 +2,7 @@ import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import dayjs from "dayjs";
 import holidayAPI from "../../../api/holidayAPI";
+import branchAPI from "../../../api/branchAPI";
 import { useToast } from "../../../components/Toast/ToastContext";
 
 const controlClasses =
@@ -39,7 +40,8 @@ const HolidayMasterForm = ({ editData, onBack }) => {
   const orgId = Number(localStorage.getItem("orgId")) || 0;
   const BRANCH = Number(localStorage.getItem("branchId")) || 1000000001;
 
-  const [docDate, setDocDate] = useState(() => dayjs().format("YYYY-MM-DD"));
+  const [branches, setBranches] = useState([]);
+  const [selectedBranch, setSelectedBranch] = useState(BRANCH || "");
   const [rows, setRows] = useState(() => [{
     id: Date.now() + Math.random(),
     holidayDate: "",
@@ -48,14 +50,28 @@ const HolidayMasterForm = ({ editData, onBack }) => {
     remarks: "",
     compensatory: "No",
     compensateDate: "",
+    rowId: null, // Store the actual ID from editData for update
   }]);
   const [fieldErrors, setFieldErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+
+  // Load branches on mount
+  useEffect(() => {
+    loadBranches();
+  }, []);
 
   useEffect(() => {
     if (editData) {
-      setDocDate(editData.date || dayjs().format("YYYY-MM-DD"));
+      setIsEditMode(true);
+
+      // If editing, set the branch from editData
+      if (editData.branchId) {
+        setSelectedBranch(editData.branchId);
+      }
+
+      // If editing and we have holiday details
       if (editData.holidayMasterDetailsVO?.length) {
         setRows(
           editData.holidayMasterDetailsVO.map((detail) => ({
@@ -66,11 +82,52 @@ const HolidayMasterForm = ({ editData, onBack }) => {
             remarks: detail.remarks || "",
             compensatory: detail.compensatory || "No",
             compensateDate: detail.compensatoryDate || "",
+            rowId: detail.id || null, // Store the actual ID for update
           }))
         );
+      } else if (editData.holidayDate) {
+        // If it's a single record (not array)
+        setRows([{
+          id: Date.now() + Math.random(),
+          holidayDate: editData.holidayDate || "",
+          day: editData.day || "",
+          holidayType: editData.holidayType || "",
+          remarks: editData.remarks || "",
+          compensatory: editData.compensatory || "No",
+          compensateDate: editData.compensatoryDate || "",
+          rowId: editData.id || null, // Store the actual ID for update
+        }]);
       }
+    } else {
+      setIsEditMode(false);
     }
   }, [editData]);
+
+  const loadBranches = async () => {
+    setLoading(true);
+    try {
+      const response = await branchAPI.getBranchByOrgId(orgId);
+      console.log("Branches loaded:", response);
+
+      const formattedBranches = (response || []).map(branch => ({
+        id: branch.id,
+        label: branch.branchName || branch.branchCode || branch.id,
+        branchCode: branch.branchCode,
+        branchName: branch.branchName
+      }));
+
+      setBranches(formattedBranches);
+
+      if (!selectedBranch && formattedBranches.length > 0) {
+        setSelectedBranch(formattedBranches[0].id);
+      }
+    } catch (error) {
+      console.error("Failed to load branches:", error);
+      addToast("Failed to load branches", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const getDayName = (dateStr) => {
     if (!dateStr) return "";
@@ -90,6 +147,7 @@ const HolidayMasterForm = ({ editData, onBack }) => {
         remarks: "",
         compensatory: "No",
         compensateDate: "",
+        rowId: null,
       },
     ]);
   };
@@ -105,9 +163,6 @@ const HolidayMasterForm = ({ editData, onBack }) => {
         const updated = { ...r, [field]: value };
         if (field === "holidayDate") {
           updated.day = getDayName(value);
-          if (value && r.compensateDate) {
-            setFieldErrors((prev) => ({ ...prev, [`${rowId}-duplicate`]: "" }));
-          }
         }
         if (field === "compensatory" && value === "No") {
           updated.compensateDate = "";
@@ -121,7 +176,9 @@ const HolidayMasterForm = ({ editData, onBack }) => {
   const validate = () => {
     const errors = {};
 
-    if (!docDate) errors.docDate = "Document Date is required";
+    if (!selectedBranch) {
+      errors.branch = "Branch is required";
+    }
 
     const dateMap = {};
     rows.forEach((r, idx) => {
@@ -154,23 +211,31 @@ const HolidayMasterForm = ({ editData, onBack }) => {
     if (!validate()) return;
     setIsSubmitting(true);
 
-    const payload = {
-      ...(editData?.id ? { id: editData.id } : {}),
-      active: true,
-      branch: BRANCH,
-      cancelRemarks: "",
-      date: docDate,
-      orgId,
-      createdBy: localStorage.getItem("userName") || "SYSTEM",
-      details: rows.map((r) => ({
+    // Format the payload as an array of objects
+    const payload = rows.map((r) => {
+      const obj = {
+        orgId: orgId,
+        branch: Number(selectedBranch),
+        createdBy: localStorage.getItem("userName") || "SYSTEM",
+        active: true,
+        cancelRemarks: "",
         holidayDate: r.holidayDate,
         day: r.day,
         holidayType: r.holidayType,
-        remarks: r.remarks,
+        remarks: r.remarks || "",
         compensatory: r.compensatory,
         compensatoryDate: r.compensatory === "Yes" ? r.compensateDate : "",
-      })),
-    };
+      };
+
+      // Only add id if it's an existing record (update mode)
+      if (isEditMode && r.rowId) {
+        obj.id = r.rowId;
+      }
+
+      return obj;
+    });
+
+    console.log("Saving Holiday Payload:", payload);
 
     try {
       await holidayAPI.createUpdate(payload);
@@ -188,7 +253,8 @@ const HolidayMasterForm = ({ editData, onBack }) => {
   };
 
   const handleNew = () => {
-    setDocDate(dayjs().format("YYYY-MM-DD"));
+    setIsEditMode(false);
+    setSelectedBranch(BRANCH || "");
     setRows([{
       id: Date.now() + Math.random(),
       holidayDate: "",
@@ -197,6 +263,7 @@ const HolidayMasterForm = ({ editData, onBack }) => {
       remarks: "",
       compensatory: "No",
       compensateDate: "",
+      rowId: null,
     }]);
     setFieldErrors({});
   };
@@ -221,14 +288,29 @@ const HolidayMasterForm = ({ editData, onBack }) => {
 
           <div className="max-w-xs">
             <label className={labelClasses}>
-              Document Date <span className="text-red-500">*</span>
+              Plant <span className="text-red-500">*</span>
             </label>
-            <input
-              type="date"
-              value={docDate}
-              onChange={(e) => setDocDate(e.target.value)}
-              className={controlClasses}
-            />
+            <select
+              value={selectedBranch}
+              onChange={(e) => {
+                setSelectedBranch(e.target.value);
+                setFieldErrors((prev) => ({ ...prev, branch: "" }));
+              }}
+              disabled={loading}
+              className={`${controlClasses} ${fieldErrors.branch ? "border-red-500" : ""}`}
+            >
+              <option value="">Select Branch</option>
+              {branches.map((branch) => (
+                <option key={branch.id} value={branch.id}>
+                  {branch.label}
+                </option>
+              ))}
+            </select>
+            {fieldErrors.branch && (
+              <p className="text-[10px] text-red-500 dark:text-red-400 mt-0.5">
+                {fieldErrors.branch}
+              </p>
+            )}
           </div>
         </div>
 
@@ -374,7 +456,7 @@ const HolidayMasterForm = ({ editData, onBack }) => {
 
           <button
             onClick={handleSubmit}
-            disabled={isSubmitting || rows.length === 0}
+            disabled={isSubmitting || rows.length === 0 || loading}
             className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
           >
             <Save className="h-3 w-3" />
