@@ -1,16 +1,25 @@
 import { useCallback, useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
+import PDFPreviewModal from "../../../utils/PDFPreviewModal";
 import materialTransferReturnNoteAPI from "../../../api/Production/materialTransferReturnNoteAPI";
-import { toast } from "../../../utils/toast";
+import { generateMaterialTransferReturnNotePDF } from "../../../utils/generateMaterialTransferReturnNotePDF";
+import { useToast } from "../../Toast/ToastContext";
 
 const MTRNList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [pdfPreview, setPdfPreview] = useState({
+    open: false,
+    blobUrl: null,
+    fileName: "",
+  });
+  const { addToast } = useToast();
 
-  const ORG_ID = localStorage.getItem("orgId");
-  const BRANCH_ID = localStorage.getItem("branchId");
+  const ORG_ID = Number(localStorage.getItem("orgId")) || 0;
+  const BRANCH_ID = Number(localStorage.getItem("branchId")) || 0;
 
   const loadRecords = useCallback(async () => {
+    if (!ORG_ID) return;
     try {
       setLoading(true);
       const data = await materialTransferReturnNoteAPI.getByOrgId(
@@ -22,7 +31,6 @@ const MTRNList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     } catch (error) {
       console.error("Failed to fetch MTRN records:", error);
       setRecords([]);
-      toast.error("Failed to fetch Material Transfer/Return Notes");
     } finally {
       setLoading(false);
     }
@@ -31,6 +39,22 @@ const MTRNList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   useEffect(() => {
     loadRecords();
   }, [loadRecords, refreshTrigger]);
+
+  const handleDownloadPDF = async (row) => {
+    try {
+      const fullData = await materialTransferReturnNoteAPI.getById(row.id);
+      if (!fullData) {
+        addToast("Material Transfer/Return Note data not found", "error");
+        return;
+      }
+      const { blobUrl, fileName } =
+        await generateMaterialTransferReturnNotePDF(fullData);
+      setPdfPreview({ open: true, blobUrl, fileName });
+    } catch (error) {
+      console.error("PDF generation error:", error);
+      addToast("Failed to generate PDF", "error");
+    }
+  };
 
   const columns = [
     {
@@ -119,24 +143,36 @@ const MTRNList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   ];
 
   return (
-    <CommonListViewTable
-      title="Material Transfer/Return Note"
-      data={records}
-      loading={loading}
-      columns={columns}
-      searchFields={searchFields}
-      onBack={onBack}
-      onAddNew={onAddNew}
-      onEdit={onEdit}
-      onView={false}
-      showSerialNumber={true}
-      itemsPerPageOptions={[5, 10, 20, 50, 100]}
-      defaultItemsPerPage={10}
-      emptyMessage="No Material Transfer/Return Notes found"
-      loadingMessage="Loading Material Transfer/Return Notes..."
-      enableRefresh={true}
-      onRefresh={loadRecords}
-    />
+    <>
+      <CommonListViewTable
+        title="Material Transfer/Return Note"
+        data={records}
+        loading={loading}
+        columns={columns}
+        searchFields={searchFields}
+        onBack={onBack}
+        onAddNew={onAddNew}
+        onEdit={onEdit}
+        onDownload={handleDownloadPDF}
+        onView={false}
+        showSerialNumber={true}
+        itemsPerPageOptions={[5, 10, 20, 50, 100]}
+        defaultItemsPerPage={10}
+        emptyMessage="No Material Transfer/Return Notes found"
+        loadingMessage="Loading Material Transfer/Return Notes..."
+        enableRefresh={true}
+        onRefresh={loadRecords}
+      />
+      <PDFPreviewModal
+        isOpen={pdfPreview.open}
+        onClose={() => {
+          URL.revokeObjectURL(pdfPreview.blobUrl);
+          setPdfPreview({ open: false, blobUrl: null, fileName: "" });
+        }}
+        blobUrl={pdfPreview.blobUrl}
+        fileName={pdfPreview.fileName}
+      />
+    </>
   );
 };
 

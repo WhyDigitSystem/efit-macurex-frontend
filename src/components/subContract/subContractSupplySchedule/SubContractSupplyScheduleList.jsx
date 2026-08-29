@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
+import PDFPreviewModal from "../../../utils/PDFPreviewModal";
 import subContractSupplyScheduleAPI from "../../../api/subContractSupplyScheduleAPI";
-import { toast } from "../../../utils/toast";
+import { generateSubContractSupplySchedulePDF } from "../../../utils/generateSubContractSupplySchedulePDF";
+import { useToast } from "../../Toast/ToastContext";
 
 const SubContractSupplyScheduleList = ({
   onAddNew,
@@ -11,11 +13,18 @@ const SubContractSupplyScheduleList = ({
 }) => {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [pdfPreview, setPdfPreview] = useState({
+    open: false,
+    blobUrl: null,
+    fileName: "",
+  });
+  const { addToast } = useToast();
 
-  const ORG_ID = localStorage.getItem("orgId");
-  const BRANCH_ID = localStorage.getItem("branchId");
+  const ORG_ID = Number(localStorage.getItem("orgId")) || 0;
+  const BRANCH_ID = Number(localStorage.getItem("branchId")) || 0;
 
   const loadRecords = useCallback(async () => {
+    if (!ORG_ID) return;
     try {
       setLoading(true);
       const data =
@@ -28,7 +37,6 @@ const SubContractSupplyScheduleList = ({
     } catch (error) {
       console.error("Failed to load sub contract supply schedules:", error);
       setRecords([]);
-      toast.error("Failed to fetch Sub Contract Supply Schedules");
     } finally {
       setLoading(false);
     }
@@ -37,6 +45,25 @@ const SubContractSupplyScheduleList = ({
   useEffect(() => {
     loadRecords();
   }, [loadRecords, refreshTrigger]);
+
+  const handleDownloadPDF = async (row) => {
+    try {
+      const fullData =
+        await subContractSupplyScheduleAPI.getSubContractSupplyScheduleById(
+          row.id,
+        );
+      if (!fullData) {
+        addToast("Sub Contract Supply Schedule data not found", "error");
+        return;
+      }
+      const { blobUrl, fileName } =
+        await generateSubContractSupplySchedulePDF(fullData);
+      setPdfPreview({ open: true, blobUrl, fileName });
+    } catch (error) {
+      console.error("PDF generation error:", error);
+      addToast("Failed to generate PDF", "error");
+    }
+  };
 
   const columns = [
     {
@@ -172,28 +199,40 @@ const SubContractSupplyScheduleList = ({
   ];
 
   return (
-    <CommonListViewTable
-      title="Sub Contract Supply Schedule"
-      data={records}
-      loading={loading}
-      columns={columns}
-      searchFields={searchFields}
-      filterOptions={filterOptions}
-      defaultFilter="all"
-      onBack={onBack}
-      onAddNew={onAddNew}
-      onEdit={onEdit}
-      onView={false}
-      showSerialNumber={true}
-      itemsPerPageOptions={[5, 10, 20, 50, 100]}
-      defaultItemsPerPage={10}
-      emptyMessage="No Sub Contract Supply Schedules found"
-      loadingMessage="Loading Sub Contract Supply Schedules..."
-      enableRefresh={true}
-      onRefresh={loadRecords}
-      enableExport={true}
-      exportFileName="SubContractSupplySchedules"
-    />
+    <>
+      <CommonListViewTable
+        title="Sub Contract Supply Schedule"
+        data={records}
+        loading={loading}
+        columns={columns}
+        searchFields={searchFields}
+        filterOptions={filterOptions}
+        defaultFilter="all"
+        onBack={onBack}
+        onAddNew={onAddNew}
+        onEdit={onEdit}
+        onDownload={handleDownloadPDF}
+        onView={false}
+        showSerialNumber={true}
+        itemsPerPageOptions={[5, 10, 20, 50, 100]}
+        defaultItemsPerPage={10}
+        emptyMessage="No Sub Contract Supply Schedules found"
+        loadingMessage="Loading Sub Contract Supply Schedules..."
+        enableRefresh={true}
+        onRefresh={loadRecords}
+        enableExport={true}
+        exportFileName="SubContractSupplySchedules"
+      />
+      <PDFPreviewModal
+        isOpen={pdfPreview.open}
+        onClose={() => {
+          URL.revokeObjectURL(pdfPreview.blobUrl);
+          setPdfPreview({ open: false, blobUrl: null, fileName: "" });
+        }}
+        blobUrl={pdfPreview.blobUrl}
+        fileName={pdfPreview.fileName}
+      />
+    </>
   );
 };
 
