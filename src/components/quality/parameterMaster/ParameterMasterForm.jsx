@@ -1,8 +1,6 @@
 import { ArrowLeft, FilePlus2, Save, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import parameterMasterAPI, {
-  PARAMETER_TYPES,
-} from "../../../api/quality/parameterMasterAPI";
+import { useCallback, useEffect, useState } from "react";
+import parameterMasterAPI from "../../../api/quality/parameterMasterAPI";
 import { useToast } from "../../Toast/ToastContext";
 
 const controlClasses =
@@ -10,103 +8,191 @@ const controlClasses =
   "bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 " +
   "text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 " +
   "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
-  "dark:focus:ring-blue-400 dark:focus:border-blue-400";
+  "dark:focus:ring-blue-400 dark:focus:border-blue-400 " +
+  "disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed";
 
 const labelClasses =
   "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
+const ToggleButton = ({ value, onChange, disabled }) => (
+  <button
+    type="button"
+    onClick={() => !disabled && onChange(!value)}
+    disabled={disabled}
+    className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${
+      value ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
+    } ${disabled ? "opacity-60 cursor-not-allowed" : ""}`}
+  >
+    <span
+      className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${
+        value ? "translate-x-6" : "translate-x-0.5"
+      }`}
+    />
+  </button>
+);
+
+const getDefaultForm = (orgId, createdBy) => ({
+  id: 0,
+
+  parameterCode: "",
+
+  parameterType: "",
+
+  parameterDescription: "",
+
+  screenCode: "",
+
+  screenName: "",
+
+  active: true,
+
+  cancel: false,
+
+  cancelRemarks: "",
+
+  orgId,
+
+  createdBy,
+
+  updatedBy: createdBy,
+});
+
+/* ============================================================================= */
+/* Normalize parameterType coming back from the backend.                        */
+/*                                                                                 */
+/* It has been observed in EITHER shape:                                        */
+/*   - a plain id (number/string)                                               */
+/*   - a full object { id, code, description }                                  */
+/*                                                                                 */
+/* The form's <select> needs a plain scalar id as its `value`, so this always   */
+/* extracts just the id.                                                        */
+/* ============================================================================= */
+
+const normalizeParameterType = (rawType) => {
+  if (rawType === null || rawType === undefined) {
+    return "";
+  }
+
+  if (typeof rawType === "object") {
+    return rawType.id ?? "";
+  }
+
+  return rawType;
+};
+
 const ParameterMasterForm = ({ onBack, onSave, editData, editId }) => {
   const ORG_ID = Number(localStorage.getItem("orgId")) || 0;
-  const CREATED_BY = localStorage.getItem("userName") || "SYSTEM";
+  const CURRENT_USER = localStorage.getItem("userName") || "SYSTEM";
 
   const { addToast } = useToast();
+
+  const isEditMode = Boolean(editId || editData?.id);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loading, setLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
-  const saveCounter = useRef(0);
+  const [typeOptions, setTypeOptions] = useState([]);
 
   const fieldLabels = {
-    parameterId: "Parameter Id",
+    parameterCode: "Parameter Code",
     parameterType: "Parameter Type",
-    parameterDescription: "Parameter Description",
   };
 
-  // Parameter Id is auto-generated when creating a new record.
-  // Editing uses the existing id.
-  const [form, setForm] = useState({
-    id: 0,
-    parameterId: "",
-    parameterType: "",
-    parameterDescription: "",
-    orgId: ORG_ID,
-    createdBy: CREATED_BY,
-  });
+  const [form, setForm] = useState(() => getDefaultForm(ORG_ID, CURRENT_USER));
+
+  /* ========================================================================= */
+  /* PARAMETER TYPE DROPDOWN                                                   */
+  /* ========================================================================= */
+
+  const loadTypeOptions = useCallback(async () => {
+    try {
+      if (!ORG_ID) return;
+
+      const options = await parameterMasterAPI.getParameterTypeOptions(ORG_ID);
+
+      setTypeOptions(options);
+    } catch (error) {
+      console.error("Failed to load parameter type options:", error);
+
+      setTypeOptions([]);
+    }
+  }, [ORG_ID]);
+
+  useEffect(() => {
+    loadTypeOptions();
+  }, [loadTypeOptions]);
+
+  /* ========================================================================= */
+  /* INITIALIZE FORM (create / edit-by-data / edit-by-id)                     */
+  /* ========================================================================= */
+
+  const populateFormFromRecord = (data) => {
+    setForm({
+      id: data.id || 0,
+
+      parameterCode: data.parameterCode || "",
+
+      parameterType: normalizeParameterType(data.parameterType),
+
+      parameterDescription: data.parameterDescription || "",
+
+      screenCode: data.screenCode || "",
+
+      screenName: data.screenName || "",
+
+      active: data.active !== false,
+
+      cancel: data.cancel === true,
+
+      cancelRemarks: data.cancelRemarks || "",
+
+      orgId: data.orgId || ORG_ID,
+
+      createdBy: data.createdBy || CURRENT_USER,
+
+      updatedBy: CURRENT_USER,
+    });
+  };
+
+  const loadParameterData = useCallback(
+    async (id) => {
+      try {
+        setLoading(true);
+
+        const record = await parameterMasterAPI.getParameterMasterById(id);
+
+        if (record) {
+          populateFormFromRecord(record);
+        }
+      } catch (error) {
+        console.error("Error loading parameter master:", error);
+
+        addToast("Failed to load parameter data", "error");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [addToast],
+  );
 
   useEffect(() => {
     const initializeForm = async () => {
       if (editId && editId > 0) {
         await loadParameterData(editId);
       } else if (editData) {
-        populateFormFromEditData(editData);
+        populateFormFromRecord(editData);
       } else {
-        setForm((prev) => ({ ...prev, parameterId: generateParameterId() }));
+        setForm(getDefaultForm(ORG_ID, CURRENT_USER));
       }
     };
 
     initializeForm();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editId, editData]);
 
-  const generateParameterId = () => {
-    const now = new Date();
-    const stamp = [
-      now.getFullYear(),
-      String(now.getMonth() + 1).padStart(2, "0"),
-      String(now.getDate()).padStart(2, "0"),
-      String(now.getHours()).padStart(2, "0"),
-      String(now.getMinutes()).padStart(2, "0"),
-      String(now.getSeconds()).padStart(2, "0"),
-    ].join("");
-
-    return `PARAM-${stamp}`;
-  };
-
-  const populateFormFromEditData = (data) => {
-    setForm({
-      id: data.id || 0,
-      parameterId: data.parameterId || data.parameterNo || "",
-      parameterType: data.parameterType || "",
-      parameterDescription: data.parameterDescription || "",
-      orgId: data.orgId || ORG_ID,
-      createdBy: data.createdBy || CREATED_BY,
-    });
-  };
-
-  const loadParameterData = async (parameterId) => {
-    try {
-      setLoading(true);
-      const parameterData = await parameterMasterAPI.getParameterById(
-        parameterId
-      );
-
-      if (parameterData) {
-        setForm({
-          id: parameterData.id || 0,
-          parameterId:
-            parameterData.parameterId || parameterData.parameterNo || "",
-          parameterType: parameterData.parameterType || "",
-          parameterDescription: parameterData.parameterDescription || "",
-          orgId: parameterData.orgId || ORG_ID,
-          createdBy: parameterData.createdBy || CREATED_BY,
-        });
-      }
-    } catch (error) {
-      console.error("Error loading parameter data:", error);
-      addToast("Failed to load parameter data", "error");
-    } finally {
-      setLoading(false);
-    }
-  };
+  /* ========================================================================= */
+  /* FIELD CHANGE                                                              */
+  /* ========================================================================= */
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -119,82 +205,102 @@ const ParameterMasterForm = ({ onBack, onSave, editData, editId }) => {
   };
 
   const handleNew = () => {
-    setForm({
-      id: 0,
-      parameterId: generateParameterId(),
-      parameterType: "",
-      parameterDescription: "",
-      orgId: ORG_ID,
-      createdBy: CREATED_BY,
-    });
+    setForm(getDefaultForm(ORG_ID, CURRENT_USER));
+
     setFieldErrors({});
   };
+
+  /* ========================================================================= */
+  /* VALIDATION                                                               */
+  /* ========================================================================= */
 
   const validateForm = () => {
     const errors = {};
 
-    if (!form.parameterId.trim())
-      errors.parameterId = "Parameter Id is required";
-    if (!form.parameterType.trim())
+    if (!form.parameterCode.trim()) {
+      errors.parameterCode = "Parameter Code is required";
+    }
+
+    if (form.parameterType === "" || form.parameterType === null) {
       errors.parameterType = "Parameter Type is required";
+    }
 
     setFieldErrors(errors);
 
     if (Object.keys(errors).length > 0) {
       const firstErrorField = Object.keys(errors)[0];
+
       const fieldLabel = fieldLabels[firstErrorField] || firstErrorField;
+
       addToast(`${fieldLabel}: ${errors[firstErrorField]}`, "error");
+
       return false;
     }
 
     return true;
   };
 
+  /* ========================================================================= */
+  /* SAVE                                                                      */
+  /* ========================================================================= */
+
   const handleSubmit = async () => {
     if (!validateForm()) return;
 
     setIsSubmitting(true);
-    saveCounter.current += 1;
 
     const payload = {
+      active: form.active !== false,
+
+      cancel: form.cancel === true,
+
+      cancelRemarks: "",
+
+      createdBy: form.createdBy || CURRENT_USER,
+
       ...(form.id && form.id > 0 && { id: form.id }),
-      parameterId: form.parameterId,
-      parameterType: form.parameterType.toUpperCase(),
-      parameterDescription: form.parameterDescription,
-      orgId: form.orgId,
-      createdBy: form.createdBy,
-      requestNo: `REQ-${Date.now()}-${saveCounter.current}`,
+
+      orgId: form.orgId || ORG_ID,
+
+      parameterCode: form.parameterCode,
+
+      parameterDescription: form.parameterDescription || "",
+
+      parameterType: Number(form.parameterType),
+
+      screenCode: form.screenCode || "",
+
+      screenName: form.screenName || "",
+
+      updatedBy: CURRENT_USER,
     };
 
-    console.log("Submitting Parameter Payload:", payload);
+    console.log("Submitting Parameter Master Payload:", payload);
 
     try {
-      const response = await parameterMasterAPI.createUpdateParameter(payload);
+      const response =
+        await parameterMasterAPI.createUpdateParameterMaster(payload);
 
       const status = response?.status === true || response?.statusFlag === "Ok";
 
       if (status) {
         const successMessage =
           response?.paramObjectsMap?.message ||
-          (form.id && form.id > 0
+          (isEditMode
             ? "Parameter updated successfully!"
             : "Parameter created successfully!");
 
         addToast(successMessage, "success");
 
         if (onSave) {
-          const savedData = {
-            ...payload,
-            id: response?.paramObjectsMap?.parameterVO?.id || payload.id,
-          };
-          onSave(savedData);
+          onSave(payload);
         } else {
           onBack();
         }
       } else {
         const errorMessage =
-          response?.paramObjectsMap?.message ||
           response?.paramObjectsMap?.errorMessage ||
+          response?.paramObjectsMap?.message ||
           response?.message ||
           "Failed to save parameter";
 
@@ -202,10 +308,11 @@ const ParameterMasterForm = ({ onBack, onSave, editData, editId }) => {
       }
     } catch (error) {
       console.error("Save Error:", error);
+
       const errorMessage =
-        error.response?.data?.paramObjectsMap?.message ||
-        error.response?.data?.paramObjectsMap?.errorMessage ||
-        error.response?.data?.message ||
+        error?.response?.data?.paramObjectsMap?.errorMessage ||
+        error?.response?.data?.paramObjectsMap?.message ||
+        error?.response?.data?.message ||
         "Save failed! Try again.";
 
       addToast(errorMessage, "error");
@@ -234,32 +341,40 @@ const ParameterMasterForm = ({ onBack, onSave, editData, editId }) => {
         </button>
 
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-          {editData || editId ? "Edit Parameter" : "Add Parameter"}
+          {isEditMode ? "Edit Parameter" : "Add Parameter"}
         </h2>
+
+        <div className="ml-auto flex items-center gap-2">
+          <label className={labelClasses}>Active</label>
+          <ToggleButton
+            value={form.active}
+            onChange={(v) => setForm((p) => ({ ...p, active: v }))}
+          />
+        </div>
       </div>
 
       {/* Main Card */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {/* Parameter Id (auto-generated, read-only) */}
+          {/* Parameter Code */}
           <div>
             <label className={labelClasses}>
-              Parameter Id <span className="text-red-500">*</span>
+              Parameter Code <span className="text-red-500">*</span>
             </label>
 
             <input
-              name="parameterId"
-              value={form.parameterId}
-              readOnly
-              disabled
-              className={`${controlClasses} bg-gray-100 dark:bg-gray-800 cursor-not-allowed ${
-                fieldErrors.parameterId ? "border-red-500" : ""
+              type="text"
+              name="parameterCode"
+              value={form.parameterCode}
+              onChange={handleChange}
+              className={`${controlClasses} ${
+                fieldErrors.parameterCode ? "border-red-500" : ""
               }`}
             />
 
-            {fieldErrors.parameterId && (
+            {fieldErrors.parameterCode && (
               <p className="text-red-500 text-[11px] mt-1">
-                {fieldErrors.parameterId}
+                {fieldErrors.parameterCode}
               </p>
             )}
           </div>
@@ -279,9 +394,9 @@ const ParameterMasterForm = ({ onBack, onSave, editData, editId }) => {
               }`}
             >
               <option value="">-- Select Parameter Type --</option>
-              {PARAMETER_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {type}
+              {typeOptions.map((type) => (
+                <option key={type.value} value={type.value}>
+                  {type.label}
                 </option>
               ))}
             </select>
@@ -292,6 +407,44 @@ const ParameterMasterForm = ({ onBack, onSave, editData, editId }) => {
               </p>
             )}
           </div>
+
+          {/* Screen Code */}
+          {/* <div>
+            <label className={labelClasses}>Screen Code</label>
+
+            <input
+              name="screenCode"
+              value={form.screenCode}
+              onChange={handleChange}
+              placeholder="e.g. PO"
+              className={controlClasses}
+            />
+          </div> */}
+
+          {/* Screen Name */}
+          {/* <div>
+            <label className={labelClasses}>Screen Name</label>
+
+            <input
+              name="screenName"
+              value={form.screenName}
+              onChange={handleChange}
+              placeholder="e.g. Purchase Order"
+              className={controlClasses}
+            />
+          </div> */}
+
+          {/* Cancel toggle (only meaningful in edit mode) */}
+          {isEditMode && (
+            <div>
+              <label className={labelClasses}>Cancel</label>
+
+              <ToggleButton
+                value={form.cancel}
+                onChange={(v) => setForm((p) => ({ ...p, cancel: v }))}
+              />
+            </div>
+          )}
         </div>
 
         {/* Parameter Description (optional, multiline) */}
@@ -342,11 +495,7 @@ const ParameterMasterForm = ({ onBack, onSave, editData, editId }) => {
             className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60"
           >
             <Save className="h-3 w-3" />
-            {isSubmitting
-              ? "Saving..."
-              : editData || editId
-                ? "Update"
-                : "Submit"}
+            {isSubmitting ? "Saving..." : isEditMode ? "Update" : "Submit"}
           </button>
         </div>
       </div>
