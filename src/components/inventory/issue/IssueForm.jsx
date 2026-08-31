@@ -1,6 +1,10 @@
 import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import issueAPI from "../../../api/Inventory/issueAPI";
+import branchAPI from "../../../api/branchAPI";
+import { departmentAPI } from "../../../api/departmentAPI";
+import itemAPI from "../../../api/itemAPI";
+import { useToast } from "../../Toast/ToastContext";
 
 /* ---------------------------------------------------------------------------- */
 /* Shared design tokens - identical to InternalIndentForm / PartyMasterForm    */
@@ -41,7 +45,7 @@ const Field = ({
   error,
   required,
   type = "text",
-  options,
+  options = [],
   disabled,
   className = "",
 }) => {
@@ -62,8 +66,8 @@ const Field = ({
         >
           <option value="">-- Select --</option>
           {(options || []).map((opt) => (
-            <option key={opt} value={opt}>
-              {opt}
+            <option key={opt?.id ?? opt} value={opt?.id ?? opt}>
+              {opt?.label ?? opt}
             </option>
           ))}
         </select>
@@ -219,8 +223,8 @@ const SelectCell = ({ value, onChange, options }) => (
     <select value={value} onChange={onChange} className={cellInputClasses}>
       <option value="">-- Select --</option>
       {(options || []).map((opt) => (
-        <option key={opt} value={opt}>
-          {opt}
+        <option key={opt?.id ?? opt} value={opt?.id ?? opt}>
+          {opt?.itemCode ?? opt?.label ?? opt}
         </option>
       ))}
     </select>
@@ -277,35 +281,47 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
 );
 
 /* ---------------------------------------------------------------------------- */
-/* Options (swap for real API-driven lists)                                    */
-
-const PLANT_IDS = ["BANGALORE", "CHENNAI", "PUNE", "DELHI"];
-const BELONGS_TO = ["APPLIANCES", "BOSCH"];
-const DEPARTMENTS = ["PURCHASE", "PRODUCTION", "QUALITY", "STORES", "ADMIN"];
-const LOCATIONS = ["MAIN STORE", "WIP STORE", "FG STORE", "QC HOLD"];
-const ITEM_CODES = ["RM-001", "RM-002", "PKG-001", "SVC-001"];
-const UNITS = ["NOS", "KG", "LTR", "BOX", "MTR"];
-
-/* ---------------------------------------------------------------------------- */
+/* Helpers                                                                      */
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const nowTime = () => new Date().toTimeString().slice(0, 8);
 
+const pickArray = (source, keys) => {
+  if (Array.isArray(source)) return source;
+
+  for (const key of keys) {
+    const value = key
+      .split(".")
+      .reduce((acc, k) => (acc ? acc[k] : undefined), source);
+
+    if (Array.isArray(value)) {
+      return value;
+    }
+  }
+
+  return [];
+};
+
+const asId = (value) => {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "object") return value.id ?? "";
+  return value;
+};
+
+const BELONGS_TO = ["INTERNAL", "EXTERNAL"];
+
 const emptyHeader = () => ({
-  plantId: "",
-  issDate: todayISO(),
+  branch: "",
   department: "",
-  issNo: "",
   belongsTo: "",
+  docDate: todayISO(),
   time: nowTime(),
-  issuesFrom: "",
   refNo: "",
   refDate: "",
   indentNo: "",
+  issueFrom: "",
   issueTo: "",
-  // seq1 / seq2 - unlabeled sequence fields from the spec, see chat notes
-  seq1: "",
-  seq2: "",
+  issNo: "",
 });
 
 const emptySummary = () => ({
@@ -313,11 +329,13 @@ const emptySummary = () => ({
 });
 
 const emptyItemRow = () => ({
+  item: "",
   itemCode: "",
   itemDescription: "",
   unit: "",
   qtyAvailable: "",
   indentQty: "",
+  previouslyIssuedQty: "",
   pendingQty: "",
   qty: "",
   rate: "",
@@ -333,29 +351,225 @@ const CHILD_TABS = [
 ];
 
 const IssueForm = ({ onBack, onSave, editData }) => {
-  const ORG_ID = parseInt(localStorage.getItem("orgId"));
+  const ORG_ID = Number(localStorage.getItem("orgId"));
+  const BRANCH_ID = Number(localStorage.getItem("branchId"));
+  const { addToast } = useToast();
+
   const [activeChildTab, setActiveChildTab] = useState("issuesDetail");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
+  const [loadingItemRow, setLoadingItemRow] = useState(null);
 
-  const [header, setHeader] = useState({
-    ...emptyHeader(),
-    ...editData?.header,
-  });
+  const [branchOptions, setBranchOptions] = useState([]);
+  const [departmentOptions, setDepartmentOptions] = useState([]);
+  const [issueFromOptions, setIssueFromOptions] = useState([]);
+  const [issueToOptions, setIssueToOptions] = useState([]);
+  const [indentNoOptions, setIndentNoOptions] = useState([]);
+  const [itemOptions, setItemOptions] = useState([]);
 
-  const [summary, setSummary] = useState({
-    ...emptySummary(),
-    ...editData?.summary,
-  });
+  const isEditMode = Boolean(editData?.id);
+  const dataLoadedRef = useRef(false);
 
-  const [itemRows, setItemRows] = useState(
-    editData?.issuesDetails?.length ? editData.issuesDetails : [emptyItemRow()],
+  const [header, setHeader] = useState(emptyHeader());
+  const [summary, setSummary] = useState(emptySummary());
+  const [itemRows, setItemRows] = useState([emptyItemRow()]);
+
+  /* ---------------- Master data dropdowns ---------------- */
+
+  const loadBranches = useCallback(async () => {
+    try {
+      const response = await branchAPI.getBranchByOrgId(ORG_ID);
+      setBranchOptions(
+        (response || []).map((b) => ({ id: b.id, label: b.branchName })),
+      );
+    } catch (error) {
+      console.error("Failed to load branches:", error);
+      setBranchOptions([]);
+    }
+  }, [ORG_ID]);
+
+  const loadDepartments = useCallback(async () => {
+    try {
+      const response = await departmentAPI.getAllDepartments(ORG_ID);
+      const list = pickArray(response, [
+        "paramObjectsMap.departmentVO",
+        "paramObjectsMap.departmentMasterVO",
+        "paramObjectsMap.departmentList",
+        "paramObjectsMap.department",
+        "data.paramObjectsMap.departmentVO",
+      ]);
+      setDepartmentOptions(
+        list.map((d) => ({ id: d.id, label: d.departmentName ?? d.name })),
+      );
+    } catch (error) {
+      console.error("Failed to load departments:", error);
+      setDepartmentOptions([]);
+    }
+  }, [ORG_ID]);
+
+  const loadIssueFromLocations = useCallback(async () => {
+    try {
+      const response = await issueAPI.getIssueFromLocations(BRANCH_ID, ORG_ID);
+      setIssueFromOptions(
+        (response || []).map((l) => ({
+          id: l.id,
+          label: l.locationName ?? l.name,
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to load Issue From locations:", error);
+      setIssueFromOptions([]);
+    }
+  }, [ORG_ID, BRANCH_ID]);
+
+  const loadIssueToLocations = useCallback(
+    async (issueFrom) => {
+      if (!issueFrom) {
+        setIssueToOptions([]);
+        return;
+      }
+
+      try {
+        const response = await issueAPI.getIssueToLocations(
+          BRANCH_ID,
+          issueFrom,
+          ORG_ID,
+        );
+        setIssueToOptions(
+          (response || []).map((l) => ({
+            id: l.id,
+            label: l.locationName ?? l.name,
+          })),
+        );
+      } catch (error) {
+        console.error("Failed to load Issue To locations:", error);
+        setIssueToOptions([]);
+      }
+    },
+    [ORG_ID, BRANCH_ID],
   );
+
+  const loadItems = useCallback(
+    async (indentNo) => {
+      if (!indentNo) {
+        setItemOptions([]);
+        setItemRows([emptyItemRow()]);
+        return;
+      }
+
+      try {
+        const response = await issueAPI.getIssueItemCodes(
+          BRANCH_ID,
+          indentNo,
+          ORG_ID,
+        );
+        setItemOptions(response || []);
+      } catch (error) {
+        console.error("Failed to load Item Codes:", error);
+        setItemOptions([]);
+      }
+    },
+    [ORG_ID, BRANCH_ID],
+  );
+
+  const loadIndentNos = useCallback(async () => {
+    try {
+      const response = await issueAPI.getIssueIndentNos(BRANCH_ID, ORG_ID);
+      setIndentNoOptions(
+        (response || []).map((item) => {
+          const value =
+            item?.indentNo ??
+            item?.indentNumber ??
+            item?.docId ??
+            item?.indentId ??
+            item?.id ??
+            item;
+          return { id: value, label: String(value) };
+        }),
+      );
+    } catch (error) {
+      console.error("Failed to load Indent Nos:", error);
+      setIndentNoOptions([]);
+    }
+  }, [ORG_ID, BRANCH_ID]);
+
+  useEffect(() => {
+    loadBranches();
+    loadDepartments();
+    loadIssueFromLocations();
+    loadIndentNos();
+  }, [
+    loadBranches,
+    loadDepartments,
+    loadIssueFromLocations,
+    loadIndentNos,
+  ]);
+
+  useEffect(() => {
+    loadIssueToLocations(header.issueFrom);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [header.issueFrom]);
+
+  useEffect(() => {
+    loadItems(header.indentNo);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [header.indentNo]);
+
+  /* ---------------- Edit data mapping ---------------- */
+
+  useEffect(() => {
+    if (!isEditMode || dataLoadedRef.current) return;
+
+    const src = editData || {};
+    const firstDetail = src.issuesDetails?.[0] || {};
+
+    setHeader({
+      branch: asId(src.branch),
+      department: asId(src.department),
+      belongsTo: src.belongsTo || "",
+      docDate: src.docDate || todayISO(),
+      time: src.time || nowTime(),
+      refNo: src.refNo || "",
+      refDate: src.refDate || "",
+      indentNo: src.indentNo || "",
+      issueFrom: asId(src.issueFrom),
+      issueTo: asId(src.issueTo),
+      issNo: src.docId || "",
+    });
+
+    setSummary({ narration: src.narration || "" });
+
+    const details = (src.issuesDetails || []).map((d) => ({
+      item: asId(d.item),
+      itemCode: d.item?.itemCode || "",
+      itemDescription: d.item?.itemDescription || "",
+      unit: d.item?.unit?.unitId || "",
+      qtyAvailable: d.qtyAvailable ?? "",
+      indentQty: d.indentQty ?? "",
+      previouslyIssuedQty: d.previouslyIssuedQty ?? "",
+      pendingQty: d.pendingQty ?? "",
+      qty: d.qty ?? "",
+      rate: d.rate ?? "",
+      amount: d.amount ?? "",
+    }));
+
+    setItemRows(details.length ? details : [emptyItemRow()]);
+    dataLoadedRef.current = true;
+  }, [isEditMode, editData]);
+
+  /* ---------------- Handlers ---------------- */
 
   const handleHeaderChange = (e) => {
     const { name, value } = e.target;
     if (fieldErrors[name]) setFieldErrors((prev) => ({ ...prev, [name]: "" }));
-    setHeader((prev) => ({ ...prev, [name]: value }));
+    setHeader((prev) => ({
+      ...prev,
+      [name]: value,
+      ...(name === "issueFrom" ? { issueTo: "" } : {}),
+    }));
+    if (name === "indentNo") {
+      setItemRows([emptyItemRow()]);
+    }
   };
 
   const handleSummaryChange = (e) => {
@@ -363,11 +577,72 @@ const IssueForm = ({ onBack, onSave, editData }) => {
     setSummary((prev) => ({ ...prev, [name]: value }));
   };
 
+  const handleItemSelect = async (index, itemId) => {
+    const item = itemOptions.find(
+      (i) => String(i.id) === String(itemId),
+    );
+
+    setItemRows((prev) =>
+      prev.map((row, rowIndex) =>
+        rowIndex === index
+          ? {
+              ...emptyItemRow(),
+              item: itemId,
+              itemCode: item?.itemCode || row.itemCode || "",
+            }
+          : row,
+      ),
+    );
+
+    if (!itemId) return;
+
+    setLoadingItemRow(index);
+
+    try {
+      const detail = item
+        ? item
+        : await itemAPI.getItemById(itemId);
+
+      if (!detail) return;
+
+      setItemRows((prev) =>
+        prev.map((row, rowIndex) => {
+          if (rowIndex !== index) return row;
+          if (String(row.item) !== String(itemId)) return row;
+
+          const unitObject =
+            detail.unit ?? detail.primaryUnits ?? detail.uom ?? null;
+
+          return {
+            ...prev[rowIndex],
+            itemCode: detail.itemCode ?? "",
+            itemDescription:
+              detail.itemDescription ?? detail.description ?? "",
+            unit:
+              detail.unitId ??
+              unitObject?.unitId ??
+              unitObject?.name ??
+              "",
+          };
+        }),
+      );
+    } catch (error) {
+      console.error("Failed to load item:", error);
+    } finally {
+      setLoadingItemRow((current) => (current === index ? null : current));
+    }
+  };
+
   const makeTableHandlers = (setter, emptyRow) => ({
-    onCellChange: (idx, key, value) =>
+    onCellChange: (idx, key, value) => {
+      if (key === "item") {
+        handleItemSelect(idx, value);
+        return;
+      }
       setter((prev) =>
         prev.map((row, i) => (i === idx ? { ...row, [key]: value } : row)),
-      ),
+      );
+    },
     onAddRow: () => setter((prev) => [...prev, emptyRow()]),
     onRemoveRow: (idx) => setter((prev) => prev.filter((_, i) => i !== idx)),
   });
@@ -382,30 +657,32 @@ const IssueForm = ({ onBack, onSave, editData }) => {
       handlers: itemHandlers,
       columns: [
         {
-          key: "itemCode",
+          key: "item",
           label: "Item Code",
           type: "select",
-          options: ITEM_CODES,
+          options: itemOptions,
         },
-        { key: "itemDescription", label: "Item Description" },
-        { key: "unit", label: "Unit", type: "select", options: UNITS },
+        { key: "itemDescription", label: "Item Description", readOnly: true },
+        { key: "unit", label: "Unit", readOnly: true },
         {
           key: "qtyAvailable",
           label: "Qty Available",
           type: "number",
-          readOnly: true,
         },
         {
           key: "indentQty",
           label: "Indent Qty",
           type: "number",
-          readOnly: true,
+        },
+        {
+          key: "previouslyIssuedQty",
+          label: "Prev. Issued Qty",
+          type: "number",
         },
         {
           key: "pendingQty",
           label: "Pending Qty",
           type: "number",
-          readOnly: true,
         },
         { key: "qty", label: "Qty", type: "number" },
         { key: "rate", label: "Rate", type: "number" },
@@ -425,13 +702,15 @@ const IssueForm = ({ onBack, onSave, editData }) => {
     }
   };
 
+  /* ---------------- Validation ---------------- */
+
   const validate = () => {
     const errors = {};
 
-    if (!header.plantId) errors.plantId = "Plant ID is required";
-    if (!header.issDate) errors.issDate = "Iss. Date is required";
+    if (!header.branch) errors.branch = "Branch is required";
     if (!header.department) errors.department = "Department is required";
-    if (!header.issuesFrom) errors.issuesFrom = "Issues From is required";
+    if (!header.docDate) errors.docDate = "Iss. Date is required";
+    if (!header.issueFrom) errors.issueFrom = "Issues From is required";
     if (!header.issueTo) errors.issueTo = "Issue To is required";
 
     setFieldErrors(errors);
@@ -439,30 +718,54 @@ const IssueForm = ({ onBack, onSave, editData }) => {
     return Object.keys(errors).length === 0;
   };
 
+  /* ---------------- Submit ---------------- */
+
   const handleSave = async () => {
     if (!validate()) return;
 
     setIsSubmitting(true);
 
     const payload = {
-      ...(editData?.id && { id: editData.id }),
-      header,
-      summary,
-      issuesDetails: itemRows,
-      active: editData?.active ?? true,
+      ...(isEditMode && { id: editData.id }),
+      active: true,
+      belongsTo: header.belongsTo || "INTERNAL",
+      branch: Number(header.branch),
+      cancelRemarks: editData?.cancelRemarks || "",
+      createdBy: localStorage.getItem("usersId") || "SYSTEM",
+      department: Number(header.department),
+      docDate: header.docDate || "",
+      financialYear: editData?.financialYear || "",
+      indentNo: header.indentNo || "",
+      issueFrom: Number(header.issueFrom),
+      issueTo: Number(header.issueTo),
+      narration: summary.narration || "",
       orgId: ORG_ID,
-      createdBy: localStorage.getItem("userName") || "SYSTEM",
+      refDate: header.refDate || "",
+      refNo: header.refNo || "",
+      time: header.time || "",
+      issuesDetails: itemRows
+        .filter((r) => r.item)
+        .map((item) => ({
+          item: Number(item.item),
+          qtyAvailable: Number(item.qtyAvailable) || 0,
+          indentQty: Number(item.indentQty) || 0,
+          previouslyIssuedQty: Number(item.previouslyIssuedQty) || 0,
+          pendingQty: Number(item.pendingQty) || 0,
+          qty: Number(item.qty) || 0,
+          rate: Number(item.rate) || 0,
+        })),
     };
-
-    console.log("📤 Saving Issue Payload:", payload);
 
     try {
       const response = await issueAPI.updateCreateIssue(payload);
-      console.log("📥 Response:", response);
 
       const status = response?.status === true || response?.statusFlag === "Ok";
 
       if (status) {
+        addToast(
+          response?.paramObjectsMap?.message || "Issue saved successfully",
+          "success",
+        );
         if (onSave) onSave(payload);
       } else {
         const errorMessage =
@@ -470,11 +773,11 @@ const IssueForm = ({ onBack, onSave, editData }) => {
           response?.paramObjectsMap?.errorMessage ||
           response?.message ||
           "Failed to save issue";
-        alert(errorMessage);
+        addToast(errorMessage, "error");
       }
     } catch (error) {
-      console.error("❌ Save Error:", error);
-      alert("Failed to save Issue.");
+      console.error("Save Error:", error);
+      addToast("Failed to save Issue.", "error");
     } finally {
       setIsSubmitting(false);
     }
@@ -492,7 +795,7 @@ const IssueForm = ({ onBack, onSave, editData }) => {
         </button>
 
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-          {editData ? "Edit Issue" : "Issues"}
+          {editData?.id ? "Edit Issue" : "Issues"}
         </h2>
       </div>
 
@@ -504,21 +807,12 @@ const IssueForm = ({ onBack, onSave, editData }) => {
           <div className={fieldGrid}>
             <Field
               type="select"
-              label="Plant ID"
-              name="plantId"
-              value={header.plantId}
+              label="Branch"
+              name="branch"
+              value={header.branch}
               onChange={handleHeaderChange}
-              error={fieldErrors.plantId}
-              options={PLANT_IDS}
-              required
-            />
-            <Field
-              type="date"
-              label="Iss. Date"
-              name="issDate"
-              value={header.issDate}
-              onChange={handleHeaderChange}
-              error={fieldErrors.issDate}
+              error={fieldErrors.branch}
+              options={branchOptions}
               required
             />
             <Field
@@ -528,8 +822,32 @@ const IssueForm = ({ onBack, onSave, editData }) => {
               value={header.department}
               onChange={handleHeaderChange}
               error={fieldErrors.department}
-              options={DEPARTMENTS}
+              options={departmentOptions}
               required
+            />
+            <Field
+              type="select"
+              label="Belongs To"
+              name="belongsTo"
+              value={header.belongsTo}
+              onChange={handleHeaderChange}
+              options={BELONGS_TO.map((v) => ({ id: v, label: v }))}
+            />
+            <Field
+              type="date"
+              label="Iss. Date"
+              name="docDate"
+              value={header.docDate}
+              onChange={handleHeaderChange}
+              error={fieldErrors.docDate}
+              required
+            />
+            <Field
+              type="time"
+              label="Time"
+              name="time"
+              value={header.time}
+              onChange={handleHeaderChange}
             />
             <Field
               label="Iss. No."
@@ -540,28 +858,31 @@ const IssueForm = ({ onBack, onSave, editData }) => {
             />
             <Field
               type="select"
-              label="Belongs To"
-              name="belongsTo"
-              value={header.belongsTo}
+              label="Issues From"
+              name="issueFrom"
+              value={header.issueFrom}
               onChange={handleHeaderChange}
-              options={BELONGS_TO}
-            />
-            <Field
-              type="time"
-              label="Time"
-              name="time"
-              value={header.time}
-              onChange={handleHeaderChange}
+              error={fieldErrors.issueFrom}
+              options={issueFromOptions}
+              required
             />
             <Field
               type="select"
-              label="Issues From"
-              name="issuesFrom"
-              value={header.issuesFrom}
+              label="Issue To"
+              name="issueTo"
+              value={header.issueTo}
               onChange={handleHeaderChange}
-              error={fieldErrors.issuesFrom}
-              options={LOCATIONS}
+              error={fieldErrors.issueTo}
+              options={issueToOptions}
               required
+            />
+            <Field
+              type="select"
+              label="Indent No"
+              name="indentNo"
+              value={header.indentNo}
+              onChange={handleHeaderChange}
+              options={indentNoOptions}
             />
             <Field
               label="Ref. No."
@@ -575,22 +896,6 @@ const IssueForm = ({ onBack, onSave, editData }) => {
               name="refDate"
               value={header.refDate}
               onChange={handleHeaderChange}
-            />
-            <Field
-              label="Indent No"
-              name="indentNo"
-              value={header.indentNo}
-              onChange={handleHeaderChange}
-            />
-            <Field
-              type="select"
-              label="Issue To"
-              name="issueTo"
-              value={header.issueTo}
-              onChange={handleHeaderChange}
-              error={fieldErrors.issueTo}
-              options={LOCATIONS}
-              required
             />
           </div>
         </div>
@@ -628,6 +933,12 @@ const IssueForm = ({ onBack, onSave, editData }) => {
           </div>
 
           {/* Active tab's content */}
+          {loadingItemRow !== null && (
+            <p className="text-[11px] text-blue-500 px-1 pt-1">
+              Loading item details...
+            </p>
+          )}
+
           {activeTabConfig.type === "table" ? (
             <DynamicTable
               columns={activeTabConfig.columns}
@@ -655,7 +966,7 @@ const IssueForm = ({ onBack, onSave, editData }) => {
           onCancel={onBack}
           onSave={handleSave}
           isSubmitting={isSubmitting}
-          saveLabel={editData ? "Update" : "Save"}
+          saveLabel={editData?.id ? "Update" : "Save"}
         />
       </div>
     </div>
