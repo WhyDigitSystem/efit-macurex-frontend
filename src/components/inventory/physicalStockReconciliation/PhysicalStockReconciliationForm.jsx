@@ -1,9 +1,12 @@
 import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import physicalStockReconciliationAPI from "../../../api/Inventory/physicalStockReconciliationAPI";
+import branchAPI from "../../../api/branchAPI";
+import itemAPI from "../../../api/itemAPI";
+import { useToast } from "../../Toast/ToastContext";
 
 /* ---------------------------------------------------------------------------- */
-/* Shared design tokens - identical to IssueForm / PartyMasterForm             */
+/* Shared design tokens                                                        */
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -31,7 +34,30 @@ const fieldGrid =
   "grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-x-3 gap-y-2 items-start";
 
 /* ---------------------------------------------------------------------------- */
-/* Shared building blocks - identical to IssueForm / PartyMasterForm           */
+/* Helpers                                                                     */
+
+const toNumber = (value, fallback = 0) => {
+  if (value === null || value === undefined || value === "") return fallback;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+};
+
+const toInteger = (value, fallback = 0) => {
+  const n = parseInt(value, 10);
+  return Number.isFinite(n) ? n : fallback;
+};
+
+const round2 = (value) =>
+  Math.round((toNumber(value) + Number.EPSILON) * 100) / 100;
+
+const money = (value) => round2(value).toFixed(2);
+
+const todayISO = () => new Date().toISOString().slice(0, 10);
+
+const nowTime = () => new Date().toTimeString().slice(0, 8);
+
+/* ---------------------------------------------------------------------------- */
+/* Shared building blocks                                                      */
 
 const Field = ({
   label,
@@ -55,15 +81,18 @@ const Field = ({
 
         <select
           name={name}
-          value={value}
+          value={value ?? ""}
           onChange={onChange}
           disabled={disabled}
           className={controlClasses}
         >
           <option value="">-- Select --</option>
           {(options || []).map((opt) => (
-            <option key={opt} value={opt}>
-              {opt}
+            <option
+              key={typeof opt === "object" ? opt.value : opt}
+              value={typeof opt === "object" ? opt.value : opt}
+            >
+              {typeof opt === "object" ? opt.label : opt}
             </option>
           ))}
         </select>
@@ -87,7 +116,7 @@ const Field = ({
 
         <textarea
           name={name}
-          value={value}
+          value={value ?? ""}
           onChange={onChange}
           rows={4}
           className={
@@ -120,7 +149,7 @@ const Field = ({
       <input
         type={type}
         name={name}
-        value={value}
+        value={value ?? ""}
         onChange={onChange}
         disabled={disabled}
         className={controlClasses}
@@ -164,7 +193,7 @@ const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
 );
 
 /* ---------------------------------------------------------------------------- */
-/* Table helpers - identical to IssueForm / PartyMasterForm                    */
+/* Table helpers                                                               */
 
 const TableWrapper = ({ children }) => (
   <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
@@ -216,11 +245,18 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
 
 const SelectCell = ({ value, onChange, options }) => (
   <td className="p-1 align-top">
-    <select value={value} onChange={onChange} className={cellInputClasses}>
+    <select
+      value={value ?? ""}
+      onChange={onChange}
+      className={cellInputClasses}
+    >
       <option value="">-- Select --</option>
       {(options || []).map((opt) => (
-        <option key={opt} value={opt}>
-          {opt}
+        <option
+          key={typeof opt === "object" ? opt.value : opt}
+          value={typeof opt === "object" ? opt.value : opt}
+        >
+          {typeof opt === "object" ? opt.label : opt}
         </option>
       ))}
     </select>
@@ -231,7 +267,7 @@ const InputCell = ({ value, onChange, type = "text", disabled }) => (
   <td className="p-1 align-top">
     <input
       type={type}
-      value={value}
+      value={value ?? ""}
       onChange={onChange}
       disabled={disabled}
       className={`${cellInputClasses} ${
@@ -277,47 +313,13 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
 );
 
 /* ---------------------------------------------------------------------------- */
-/* Options (swap for real API-driven lists)                                    */
-
-const PLANT_IDS = ["BANGALORE", "CHENNAI", "PUNE", "DELHI"];
-const BELONGS_TO = ["APPLIANCES", "BOSCH"];
-const YES_NO = ["YES", "NO"];
-const LOCATION_TYPES = ["STORE", "WIP", "FINISHED GOODS", "QC HOLD"];
-const LOCATIONS = ["MAIN STORE", "WIP STORE", "FG STORE", "QC HOLD"];
-const ITEM_CODES = ["RM-001", "RM-002", "PKG-001", "SVC-001"];
-const UNITS = ["NOS", "KG", "LTR", "BOX", "MTR"];
-const REASON_CODES = [
-  "COUNTING ERROR",
-  "DAMAGE",
-  "THEFT/LOSS",
-  "SYSTEM ERROR",
-  "UNRECORDED TRANSACTION",
-];
+/* Static options                                                              */
 
 /* ---------------------------------------------------------------------------- */
 
-const todayISO = () => new Date().toISOString().slice(0, 10);
-const nowTime = () => new Date().toTimeString().slice(0, 8);
-
-const emptyHeader = () => ({
-  locationType: "",
-  docNo: "",
-  plantId: "",
-  docDate: todayISO(),
-  location: "",
-  time: nowTime(),
-  refNo: "",
-  refDate: todayISO(),
-  belongsTo: "",
-  preparedBy: "",
-});
-
-const emptySummary = () => ({
-  narration: "",
-  approvedByPM: "NO",
-});
-
 const emptyItemRow = () => ({
+  id: 0,
+  item: "",
   itemCode: "",
   itemDescription: "",
   unit: "",
@@ -330,8 +332,42 @@ const emptyItemRow = () => ({
   amount: "",
 });
 
+const getDefaultForm = (branch) => ({
+  active: true,
+
+  approvedByPM: "Pending",
+
+  belongsTo: "",
+
+  branch: String(branch || ""),
+
+  cancelRemarks: "",
+
+  docDate: todayISO(),
+
+  docId: "",
+
+  financialYear: `${new Date().getFullYear()}-${String(
+    (new Date().getFullYear() % 100) + 1,
+  ).padStart(2, "0")}`,
+
+  location: "",
+
+  locationType: "",
+
+  narration: "",
+
+  preparedBy: "",
+
+  refDate: todayISO(),
+
+  refNo: "",
+
+  time: nowTime(),
+});
+
 /* ---------------------------------------------------------------------------- */
-/* Child tabs - Physical Stock Detail is a table, Summary is a field grid      */
+/* Child tabs                                                                  */
 
 const CHILD_TABS = [
   {
@@ -343,70 +379,455 @@ const CHILD_TABS = [
 ];
 
 const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
-  const ORG_ID = parseInt(localStorage.getItem("orgId"));
+  const ORG_ID = toInteger(localStorage.getItem("orgId"));
+  const BRANCH_ID = toInteger(localStorage.getItem("branchId"));
+
+  const isEditMode = Boolean(editData?.id);
+
+  const { addToast } = useToast();
+
   const [activeChildTab, setActiveChildTab] = useState("physicalStockDetail");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [generatingDocId, setGeneratingDocId] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
 
-  const [header, setHeader] = useState({
-    ...emptyHeader(),
-    ...editData?.header,
-  });
+  const [form, setForm] = useState(() => ({
+    ...getDefaultForm(BRANCH_ID),
+    ...(editData || {}),
+  }));
 
-  const [summary, setSummary] = useState({
-    ...emptySummary(),
-    ...editData?.summary,
-  });
+  const effectiveBranchId = toInteger(form.branch || BRANCH_ID);
 
   const [itemRows, setItemRows] = useState(
-    editData?.physicalStockDetails?.length
-      ? editData.physicalStockDetails
+    editData?.physicalStockReConcilationDetailsDTO?.length
+      ? editData.physicalStockReConcilationDetailsDTO
       : [emptyItemRow()],
   );
 
-  const handleHeaderChange = (e) => {
+  /* ========================================================================= */
+  /* MASTER DATA                                                               */
+  /* ========================================================================= */
+
+  const [branchOptions, setBranchOptions] = useState([]);
+  const [locationTypeOptions, setLocationTypeOptions] = useState([]);
+  const [locationOptions, setLocationOptions] = useState([]);
+  const [belongsToOptions, setBelongsToOptions] = useState([]);
+  const [itemOptions, setItemOptions] = useState([]);
+
+  const loadBranches = useCallback(async () => {
+    try {
+      if (!ORG_ID) return;
+
+      const response = await branchAPI.getBranchByOrgId(ORG_ID);
+
+      const list = Array.isArray(response)
+        ? response
+        : response?.paramObjectsMap?.branches ||
+          response?.paramObjectsMap?.branchVO ||
+          [];
+
+      setBranchOptions(
+        list.map((b) => ({
+          value: b.id,
+          label: b.branchName || b.name || b.branchCode || `Branch ${b.id}`,
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to load branches:", error);
+      setBranchOptions([]);
+    }
+  }, [ORG_ID]);
+
+  /* LOCATION TYPE + BELONGS TO come from getListOfValuesByOrgId */
+
+  const loadLocationTypes = useCallback(async () => {
+    try {
+      if (!ORG_ID || !effectiveBranchId) return;
+
+      const options =
+        await physicalStockReconciliationAPI.getLocationTypeOptions(
+          effectiveBranchId,
+          ORG_ID,
+        );
+
+      setLocationTypeOptions(options);
+    } catch (error) {
+      console.error("Failed to load location types:", error);
+      setLocationTypeOptions([]);
+    }
+  }, [ORG_ID, effectiveBranchId]);
+
+  const loadBelongsTo = useCallback(async () => {
+    try {
+      if (!ORG_ID || !effectiveBranchId) return;
+
+      const options = await physicalStockReconciliationAPI.getBelongsToOptions(
+        effectiveBranchId,
+        ORG_ID,
+      );
+
+      setBelongsToOptions(options);
+    } catch (error) {
+      console.error("Failed to load belongs-to options:", error);
+      setBelongsToOptions([]);
+    }
+  }, [ORG_ID, effectiveBranchId]);
+
+  /* LOCATION depends on locationType (id from getListOfValuesByOrgId) + branch */
+
+  const loadLocations = useCallback(async () => {
+    try {
+      if (!ORG_ID || !effectiveBranchId || !form.locationType) {
+        setLocationOptions([]);
+        return;
+      }
+
+      const options = await physicalStockReconciliationAPI.getLocationDropdown(
+        effectiveBranchId,
+        form.locationType,
+        ORG_ID,
+      );
+
+      setLocationOptions(options);
+    } catch (error) {
+      console.error("Failed to load locations:", error);
+      setLocationOptions([]);
+    }
+  }, [ORG_ID, effectiveBranchId, form.locationType]);
+
+  const loadItems = useCallback(async () => {
+    try {
+      if (!ORG_ID) return;
+
+      const response = await itemAPI.getItems(ORG_ID, effectiveBranchId);
+
+      const list = Array.isArray(response)
+        ? response
+        : response?.paramObjectsMap?.items ||
+          response?.paramObjectsMap?.itemMasterVO ||
+          [];
+
+      setItemOptions(
+        list.map((item) => ({
+          value: item.itemId ?? item.id,
+          label: item.itemCode || item.code || `Item ${item.itemId ?? item.id}`,
+          itemDescription:
+            item.itemDescription || item.itemDesc || item.description || "",
+          unit: item.uom || item.unitId || item.unit || "",
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to load items:", error);
+      setItemOptions([]);
+    }
+  }, [ORG_ID, effectiveBranchId]);
+
+  useEffect(() => {
+    loadBranches();
+    loadLocationTypes();
+    loadBelongsTo();
+    loadItems();
+  }, [loadBranches, loadLocationTypes, loadBelongsTo, loadItems]);
+
+  useEffect(() => {
+    loadLocations();
+  }, [loadLocations]);
+
+  /* ========================================================================= */
+  /* DOC ID (auto)                                                             */
+  /* ========================================================================= */
+
+  /* ========================================================================= */
+  /* DOC ID - AUTO GENERATE                                                    */
+  /* ========================================================================= */
+
+  useEffect(() => {
+    if (isEditMode) return;
+    if (!ORG_ID || !form.financialYear) return;
+
+    let cancelled = false;
+
+    const generateDocId = async () => {
+      setGeneratingDocId(true);
+
+      try {
+        const docId =
+          await physicalStockReconciliationAPI.getReconciliationDocId({
+            financialYear: form.financialYear,
+            orgId: ORG_ID,
+          });
+
+        console.log("Generated Physical Stock Reconciliation Doc ID:", docId);
+
+        if (!cancelled) {
+          setForm((prev) => ({
+            ...prev,
+            docId: docId || "",
+          }));
+        }
+      } catch (error) {
+        console.error(
+          "Error generating physical stock reconciliation doc id:",
+          error,
+        );
+
+        if (!cancelled) {
+          setForm((prev) => ({
+            ...prev,
+            docId: "",
+          }));
+
+          addToast("Failed to generate Doc No", "error");
+        }
+      } finally {
+        if (!cancelled) {
+          setGeneratingDocId(false);
+        }
+      }
+    };
+
+    generateDocId();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isEditMode, ORG_ID, form.financialYear, addToast]);
+
+  /* ========================================================================= */
+  /* FIELD CHANGE                                                              */
+  /* ========================================================================= */
+
+  const handleFieldChange = (e) => {
     const { name, value } = e.target;
-    if (fieldErrors[name]) setFieldErrors((prev) => ({ ...prev, [name]: "" }));
-    setHeader((prev) => ({ ...prev, [name]: value }));
+
+    if (fieldErrors[name]) {
+      setFieldErrors((prev) => ({ ...prev, [name]: "" }));
+    }
+
+    if (name === "locationType") {
+      setForm((prev) => ({ ...prev, locationType: value, location: "" }));
+      return;
+    }
+
+    setForm((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSummaryChange = (e) => {
-    const { name, value } = e.target;
-    setSummary((prev) => ({ ...prev, [name]: value }));
+  /* ========================================================================= */
+  /* ITEM ROW CALCULATION                                                     */
+  /* ========================================================================= */
+
+  const calculateItemRow = (row, changedKey, changedValue) => {
+    const updated = { ...row, [changedKey]: changedValue };
+
+    if (changedKey === "item") {
+      const selected = itemOptions.find(
+        (opt) => String(opt.value) === String(changedValue),
+      );
+
+      if (selected) {
+        updated.itemCode = selected.label || "";
+        updated.itemDescription = selected.itemDescription || "";
+        updated.unit = selected.unit || "";
+      }
+    }
+
+    const actualQty = toNumber(updated.actualQty);
+    const bookStock = toNumber(updated.bookStock);
+    const rate = toNumber(updated.rate);
+
+    updated.difference = round2(actualQty - bookStock);
+    updated.amount = money(actualQty * rate);
+
+    return updated;
   };
 
-  const makeTableHandlers = (setter, emptyRow) => ({
-    onCellChange: (idx, key, value) =>
-      setter((prev) =>
-        prev.map((row, i) => (i === idx ? { ...row, [key]: value } : row)),
+  const handleItemRowChange = (idx, key, value) => {
+    setItemRows((prev) =>
+      prev.map((row, i) =>
+        i === idx ? calculateItemRow(row, key, value) : row,
       ),
-    onAddRow: () => setter((prev) => [...prev, emptyRow()]),
-    onRemoveRow: (idx) => setter((prev) => prev.filter((_, i) => i !== idx)),
-  });
+    );
+  };
 
-  const itemHandlers = makeTableHandlers(setItemRows, emptyItemRow);
+  const addItemRow = () => setItemRows((prev) => [...prev, emptyItemRow()]);
 
-  // Config-driven lookup, same pattern as IssueForm's childTabConfig
+  const removeItemRow = (idx) => {
+    setItemRows((prev) => {
+      if (prev.length <= 1) return prev;
+      return prev.filter((_, i) => i !== idx);
+    });
+  };
+
+  const totalAmount = useMemo(
+    () => round2(itemRows.reduce((sum, r) => sum + toNumber(r.amount), 0)),
+    [itemRows],
+  );
+
+  /* ========================================================================= */
+  /* VALIDATION                                                               */
+  /* ========================================================================= */
+
+  const validate = () => {
+    const errors = {};
+
+    if (!form.branch) errors.branch = "Plant ID is required";
+    if (!form.docDate) errors.docDate = "Doc. Date is required";
+    if (!form.locationType) errors.locationType = "Location Type is required";
+    if (!form.location) errors.location = "Location is required";
+
+    setFieldErrors(errors);
+
+    if (Object.keys(errors).length > 0) {
+      addToast("Please fill all required fields correctly", "error");
+      return false;
+    }
+
+    const activeRows = itemRows.filter((r) => r.item);
+
+    if (activeRows.length === 0) {
+      addToast("Please add at least one item", "error");
+      return false;
+    }
+
+    return true;
+  };
+
+  /* ========================================================================= */
+  /* SAVE                                                                      */
+  /* ========================================================================= */
+
+  const handleSave = async () => {
+    if (!validate()) return;
+
+    setIsSubmitting(true);
+
+    const details = itemRows
+      .filter((r) => r.item)
+      .map((r) => ({
+        ...(r.id ? { id: toInteger(r.id) } : {}),
+        item: toInteger(r.item),
+        bookStock: toNumber(r.bookStock),
+        actualQty: toNumber(r.actualQty),
+        difference: toNumber(r.difference),
+        lcRate: toNumber(r.lcRate),
+        rate: toNumber(r.rate),
+        reasonCode: r.reasonCode || "",
+        amount: toNumber(r.amount),
+      }));
+
+    const payload = {
+      ...(isEditMode && { id: editData.id }),
+
+      active: form.active !== false,
+
+      approvedByPM: form.approvedByPM || "Pending",
+
+      belongsTo: form.belongsTo || "",
+
+      branch: toInteger(form.branch),
+
+      cancelRemarks: "",
+
+      createdBy:
+        (isEditMode ? form.createdBy : localStorage.getItem("userName")) ||
+        "SYSTEM",
+
+      ...(isEditMode && {
+        updatedBy: localStorage.getItem("userName") || "SYSTEM",
+      }),
+
+      docDate: form.docDate || todayISO(),
+
+      docId: form.docId || "",
+
+      financialYear: form.financialYear,
+
+      location: toInteger(form.location),
+
+      locationType: toInteger(form.locationType),
+
+      narration: form.narration || "",
+
+      orgId: ORG_ID,
+
+      physicalStockReConcilationDetailsDTO: details,
+
+      preparedBy: toInteger(form.preparedBy),
+
+      refDate: form.refDate || todayISO(),
+
+      refNo: form.refNo || "",
+
+      time: form.time || nowTime(),
+    };
+
+    console.log("Physical Stock Reconciliation Payload:", payload);
+
+    try {
+      const response =
+        await physicalStockReconciliationAPI.updateCreateReconciliation(
+          payload,
+        );
+
+      const status = response?.status === true || response?.statusFlag === "Ok";
+
+      if (status) {
+        addToast(
+          isEditMode
+            ? "Physical Stock Reconciliation updated successfully"
+            : "Physical Stock Reconciliation created successfully",
+          "success",
+        );
+
+        if (onSave) onSave(payload);
+        else onBack();
+      } else {
+        const errorMessage =
+          response?.paramObjectsMap?.errorMessage ||
+          response?.paramObjectsMap?.message ||
+          response?.message ||
+          "Failed to save physical stock reconciliation";
+
+        addToast(errorMessage, "error");
+      }
+    } catch (error) {
+      console.error("Save Error:", error);
+
+      addToast(
+        error?.response?.data?.paramObjectsMap?.errorMessage ||
+          error?.response?.data?.paramObjectsMap?.message ||
+          error?.response?.data?.message ||
+          "Failed to save Physical Stock Reconciliation.",
+        "error",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  /* ========================================================================= */
+  /* CHILD TAB CONFIG                                                          */
+  /* ========================================================================= */
+
   const childTabConfig = {
     physicalStockDetail: {
       type: "table",
       rows: itemRows,
-      handlers: itemHandlers,
+      handlers: {
+        onCellChange: handleItemRowChange,
+        onAddRow: addItemRow,
+        onRemoveRow: removeItemRow,
+      },
       columns: [
         {
-          key: "itemCode",
+          key: "item",
           label: "Item Code",
           type: "select",
-          options: ITEM_CODES,
+          options: itemOptions,
         },
-        { key: "itemDescription", label: "Item Description" },
-        { key: "unit", label: "Unit", type: "select", options: UNITS },
-        {
-          key: "bookStock",
-          label: "Book Stock",
-          type: "number",
-          readOnly: true,
-        },
+        { key: "itemDescription", label: "Item Description", readOnly: true },
+        { key: "unit", label: "Unit", readOnly: false },
+        { key: "bookStock", label: "Book Stock", type: "number" },
         { key: "actualQty", label: "Actual Qty", type: "number" },
         {
           key: "difference",
@@ -419,15 +840,11 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
         {
           key: "reasonCode",
           label: "Reason Code",
-          type: "select",
-          options: REASON_CODES,
         },
-        { key: "amount", label: "Amount", type: "number" },
+        { key: "amount", label: "Amount", type: "number", readOnly: true },
       ],
     },
-    summary: {
-      type: "fields",
-    },
+    summary: { type: "fields" },
   };
 
   const activeTabConfig = childTabConfig[activeChildTab];
@@ -438,76 +855,20 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
     }
   };
 
-  const validate = () => {
-    const errors = {};
-
-    if (!header.plantId) errors.plantId = "Plant ID is required";
-    if (!header.docDate) errors.docDate = "Doc. Date is required";
-    if (!header.location) errors.location = "Location is required";
-    if (!header.locationType) errors.locationType = "Location Type is required";
-
-    setFieldErrors(errors);
-
-    return Object.keys(errors).length === 0;
-  };
-
-  const handleSave = async () => {
-    if (!validate()) return;
-
-    setIsSubmitting(true);
-
-    const payload = {
-      ...(editData?.id && { id: editData.id }),
-      header,
-      summary,
-      physicalStockDetails: itemRows,
-      active: editData?.active ?? true,
-      orgId: ORG_ID,
-      createdBy: localStorage.getItem("userName") || "SYSTEM",
-    };
-
-    console.log("📤 Saving Physical Stock Reconciliation Payload:", payload);
-
-    try {
-      const response =
-        await physicalStockReconciliationAPI.updateCreateReconciliation(
-          payload,
-        );
-      console.log("📥 Response:", response);
-
-      const status = response?.status === true || response?.statusFlag === "Ok";
-
-      if (status) {
-        if (onSave) onSave(payload);
-      } else {
-        const errorMessage =
-          response?.paramObjectsMap?.message ||
-          response?.paramObjectsMap?.errorMessage ||
-          response?.message ||
-          "Failed to save physical stock reconciliation";
-        alert(errorMessage);
-      }
-    } catch (error) {
-      console.error("❌ Save Error:", error);
-      alert("Failed to save Physical Stock Reconciliation.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   return (
     <div className="p-2 max-w-7xl">
       {/* Header */}
       <div className="flex items-center gap-2 mb-3">
         <button
           onClick={onBack}
+          disabled={isSubmitting}
           className="p-1 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
 
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-          {editData
+          {isEditMode
             ? "Edit Physical Stock Re-Conciliation"
             : "Physical Stock Re-Conciliation"}
         </h2>
@@ -521,90 +882,111 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
           <div className={fieldGrid}>
             <Field
               type="select"
-              label="Location Type"
-              name="locationType"
-              value={header.locationType}
-              onChange={handleHeaderChange}
-              error={fieldErrors.locationType}
-              options={LOCATION_TYPES}
+              label="Plant ID"
+              name="branch"
+              value={form.branch}
+              onChange={handleFieldChange}
+              error={fieldErrors.branch}
+              options={branchOptions}
               required
             />
+
             <Field
               label="Doc No."
-              name="docNo"
-              value={header.docNo || "Auto"}
-              onChange={handleHeaderChange}
+              name="docId"
+              value={generatingDocId ? "Generating..." : form.docId}
+              onChange={() => {}}
               disabled
             />
+
             <Field
               type="select"
-              label="Plant ID"
-              name="plantId"
-              value={header.plantId}
-              onChange={handleHeaderChange}
-              error={fieldErrors.plantId}
-              options={PLANT_IDS}
+              label="Location Type"
+              name="locationType"
+              value={form.locationType}
+              onChange={handleFieldChange}
+              error={fieldErrors.locationType}
+              options={locationTypeOptions}
               required
             />
-            <Field
-              type="date"
-              label="Doc. Date"
-              name="docDate"
-              value={header.docDate}
-              onChange={handleHeaderChange}
-              error={fieldErrors.docDate}
-              required
-            />
+
             <Field
               type="select"
               label="Location"
               name="location"
-              value={header.location}
-              onChange={handleHeaderChange}
+              value={form.location}
+              onChange={handleFieldChange}
               error={fieldErrors.location}
-              options={LOCATIONS}
+              options={locationOptions}
+              disabled={!form.locationType}
               required
             />
+
+            <Field
+              type="date"
+              label="Doc. Date"
+              name="docDate"
+              value={form.docDate}
+              onChange={handleFieldChange}
+              error={fieldErrors.docDate}
+              required
+            />
+
             <Field
               type="time"
               label="Time"
               name="time"
-              value={header.time}
-              onChange={handleHeaderChange}
+              value={form.time}
+              onChange={handleFieldChange}
             />
+
             <Field
               label="Ref. No"
               name="refNo"
-              value={header.refNo}
-              onChange={handleHeaderChange}
+              value={form.refNo}
+              onChange={handleFieldChange}
             />
+
             <Field
               type="date"
               label="Ref. Date"
               name="refDate"
-              value={header.refDate}
-              onChange={handleHeaderChange}
+              value={form.refDate}
+              onChange={handleFieldChange}
             />
+
             <Field
-              type="select"
               label="Belongs to"
               name="belongsTo"
-              value={header.belongsTo}
-              onChange={handleHeaderChange}
-              options={BELONGS_TO}
+              value={form.belongsTo}
+              onChange={handleFieldChange}
             />
+
             <Field
-              label="Prepared By"
+              label="Prepared By PM"
               name="preparedBy"
-              value={header.preparedBy}
-              onChange={handleHeaderChange}
+              value={form.preparedBy}
+              onChange={handleFieldChange}
+            />
+
+            <Field
+              label="Financial Year"
+              name="financialYear"
+              value={form.financialYear}
+              onChange={handleFieldChange}
+            />
+
+            <Field
+              label="Approved By PM"
+              name="approvedByPM"
+              value={form.approvedByPM}
+              onChange={handleFieldChange}
             />
           </div>
         </div>
 
-        {/* ---------------- Child Tabs: Physical Stock Detail / Summary ---------------- */}
+        {/* ---------------- Child Tabs ---------------- */}
         <section className="mt-0 bg-white dark:bg-gray-800">
-          {/* Tabs */}
           <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 mb-0">
             <div className="flex overflow-x-auto">
               {CHILD_TABS.map((tab) => (
@@ -634,14 +1016,20 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
             )}
           </div>
 
-          {/* Active tab's content */}
           {activeTabConfig.type === "table" ? (
-            <DynamicTable
-              columns={activeTabConfig.columns}
-              rows={activeTabConfig.rows}
-              onCellChange={activeTabConfig.handlers.onCellChange}
-              onRemoveRow={activeTabConfig.handlers.onRemoveRow}
-            />
+            <>
+              <DynamicTable
+                columns={activeTabConfig.columns}
+                rows={activeTabConfig.rows}
+                onCellChange={activeTabConfig.handlers.onCellChange}
+                onRemoveRow={activeTabConfig.handlers.onRemoveRow}
+              />
+
+              <div className="flex justify-end mt-1 text-[11px] text-gray-500 dark:text-gray-400">
+                Total Amount:
+                <span className="font-semibold ml-1">{money(totalAmount)}</span>
+              </div>
+            </>
           ) : (
             <div className="pt-3">
               <div className={fieldGrid}>
@@ -649,17 +1037,17 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
                   type="textarea"
                   label="Narration"
                   name="narration"
-                  value={summary.narration}
-                  onChange={handleSummaryChange}
+                  value={form.narration}
+                  onChange={handleFieldChange}
                   className="col-span-2 md:col-span-4 xl:col-span-6"
                 />
+
                 <Field
-                  type="select"
-                  label="Approved By PM"
-                  name="approvedByPM"
-                  value={summary.approvedByPM}
-                  onChange={handleSummaryChange}
-                  options={YES_NO}
+                  label="Total Amount"
+                  name="totalAmount"
+                  value={money(totalAmount)}
+                  onChange={() => {}}
+                  disabled
                 />
               </div>
             </div>
@@ -670,7 +1058,7 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
           onCancel={onBack}
           onSave={handleSave}
           isSubmitting={isSubmitting}
-          saveLabel={editData ? "Update" : "Save"}
+          saveLabel={isEditMode ? "Update" : "Save"}
         />
       </div>
     </div>

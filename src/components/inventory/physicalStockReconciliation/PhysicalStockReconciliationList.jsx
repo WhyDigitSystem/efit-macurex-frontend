@@ -12,14 +12,26 @@ const PhysicalStockReconciliationList = ({
   const [reconciliationData, setReconciliationData] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const ORG_ID = Number(localStorage.getItem("orgId"));
+  const ORG_ID = Number(localStorage.getItem("orgId")) || 0;
+  const BRANCH_ID = Number(localStorage.getItem("branchId")) || 0;
 
   const loadReconciliations = useCallback(async () => {
     try {
       setLoading(true);
 
+      if (!ORG_ID || !BRANCH_ID) {
+        setReconciliationData([]);
+
+        toast.error("Organization or Branch is missing");
+
+        return;
+      }
+
       const response =
-        await physicalStockReconciliationAPI.getReconciliationByOrgId(ORG_ID);
+        await physicalStockReconciliationAPI.getReconciliationByOrgId(
+          ORG_ID,
+          BRANCH_ID,
+        );
 
       const sortedData = (response || []).sort(
         (a, b) => (b.id || 0) - (a.id || 0),
@@ -28,65 +40,80 @@ const PhysicalStockReconciliationList = ({
       setReconciliationData(sortedData);
     } catch (error) {
       console.error("Failed to load physical stock reconciliations:", error);
+
       setReconciliationData([]);
+
       toast.error("Failed to fetch physical stock reconciliations");
     } finally {
       setLoading(false);
     }
-  }, [ORG_ID]);
+  }, [ORG_ID, BRANCH_ID]);
 
   useEffect(() => {
     loadReconciliations();
   }, [loadReconciliations, refreshTrigger]);
 
+  /* -------------------------------------------------------------------------- */
+  /* Columns - payload is FLAT, not header/summary nested                       */
+  /* -------------------------------------------------------------------------- */
+
   const columns = [
     {
-      key: "docNo",
+      key: "docId",
       label: "Doc No.",
-      accessor: (row) => row.header?.docNo,
+      accessor: "docId",
       type: "text",
+      noWrap: true,
     },
     {
       key: "docDate",
       label: "Doc. Date",
-      accessor: (row) => row.header?.docDate,
+      accessor: "docDate",
       type: "date",
     },
     {
-      key: "plantId",
-      label: "Plant ID",
-      accessor: (row) => row.header?.plantId,
+      key: "refNo",
+      label: "Ref. No",
+      accessor: "refNo",
       type: "text",
     },
     {
-      key: "location",
-      label: "Location",
-      accessor: (row) => row.header?.location,
-      type: "text",
-    },
-    {
-      key: "locationType",
-      label: "Location Type",
-      accessor: (row) => row.header?.locationType,
+      key: "belongsTo",
+      label: "Belongs To",
+      accessor: "belongsTo",
       type: "text",
     },
     {
       key: "preparedBy",
       label: "Prepared By",
-      accessor: (row) => row.header?.preparedBy,
+      accessor: "preparedBy",
       type: "text",
     },
     {
       key: "approvedByPM",
       label: "Approved By PM",
-      accessor: (row) => row.summary?.approvedByPM,
-      type: "badge",
+      accessor: "approvedByPM",
+      type: "text",
     },
     {
       key: "active",
       label: "Status",
       accessor: "active",
       type: "status",
+
+      statusVariants: {
+        true: {
+          label: "Active",
+          className:
+            "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+        },
+
+        false: {
+          label: "Inactive",
+          className:
+            "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+        },
+      },
     },
     {
       key: "actions",
@@ -97,31 +124,51 @@ const PhysicalStockReconciliationList = ({
     },
   ];
 
-  const searchFields = ["header.docNo", "header.location", "header.preparedBy"];
+  const searchFields = ["docId", "refNo", "belongsTo", "preparedBy"];
+
+  const filterOptions = [
+    { value: "all", label: "All", field: null },
+
+    {
+      value: "active",
+      label: "Active",
+      field: "active",
+      filterValue: true,
+      activeValue: true,
+    },
+
+    {
+      value: "inactive",
+      label: "Inactive",
+      field: "active",
+      filterValue: false,
+      activeValue: false,
+    },
+  ];
 
   return (
-    <div className="h-full flex flex-col">
-      <CommonListViewTable
-        title="Physical Stock Re-Conciliation"
-        data={reconciliationData}
-        loading={loading}
-        columns={columns}
-        searchFields={searchFields}
-        onBack={onBack}
-        onAddNew={onAddNew}
-        onEdit={onEdit}
-        onView={false}
-        showSerialNumber={true}
-        itemsPerPageOptions={[5, 10, 20, 50, 100]}
-        defaultItemsPerPage={10}
-        emptyMessage="No Physical Stock Reconciliations found"
-        loadingMessage="Loading Physical Stock Reconciliations..."
-        enableRefresh={true}
-        onRefresh={loadReconciliations}
-        enableExport={true}
-        exportFileName="PhysicalStockReconciliations"
-      />
-    </div>
+    <CommonListViewTable
+      title="Physical Stock Re-Conciliation"
+      data={reconciliationData}
+      loading={loading}
+      columns={columns}
+      searchFields={searchFields}
+      filterOptions={filterOptions}
+      defaultFilter="all"
+      onBack={onBack}
+      onAddNew={onAddNew}
+      onEdit={onEdit}
+      onView={false}
+      showSerialNumber={true}
+      itemsPerPageOptions={[5, 10, 20, 50, 100]}
+      defaultItemsPerPage={10}
+      emptyMessage="No Physical Stock Reconciliations found"
+      loadingMessage="Loading Physical Stock Reconciliations..."
+      enableRefresh={true}
+      onRefresh={loadReconciliations}
+      enableExport={true}
+      exportFileName="PhysicalStockReconciliations"
+    />
   );
 };
 

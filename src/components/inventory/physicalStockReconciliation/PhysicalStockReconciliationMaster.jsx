@@ -1,11 +1,11 @@
 import { useState } from "react";
 import PhysicalStockReconciliationList from "./PhysicalStockReconciliationList";
 import PhysicalStockReconciliationForm from "./PhysicalStockReconciliationForm";
-import physicalStockReconciliationAPI from "../../../api/Inventory/physicalStockReconciliationAPI";
 
 const PhysicalStockReconciliationMaster = () => {
   const [screen, setScreen] = useState("list");
   const [editData, setEditData] = useState(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const handleAddNew = () => {
     setEditData(null);
@@ -18,17 +18,13 @@ const PhysicalStockReconciliationMaster = () => {
   };
 
   const handleBack = () => {
+    setEditData(null);
     setScreen("list");
   };
 
-  const handleSave = async (payload) => {
-    try {
-      await physicalStockReconciliationAPI.updateCreateReconciliation(payload); // Create/Update
-      handleBack();
-    } catch (error) {
-      console.error("Error saving physical stock reconciliation:", error);
-      throw error;
-    }
+  const handleSave = () => {
+    setRefreshTrigger((prev) => prev + 1);
+    handleBack();
   };
 
   return (
@@ -38,6 +34,7 @@ const PhysicalStockReconciliationMaster = () => {
           onAddNew={handleAddNew}
           onEdit={handleEdit}
           onBack={() => window.history.back()}
+          refreshTrigger={refreshTrigger}
         />
       )}
 
