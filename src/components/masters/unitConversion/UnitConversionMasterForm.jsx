@@ -131,7 +131,7 @@ const UnitConversionMasterForm = ({ data, onBack }) => {
   useEffect(() => {
     const loadUnits = async () => {
       try {
-        const units = await unitMasterAPI.getUnits(branch, orgId);
+        const units = await unitMasterAPI.getUnits(orgId);
         console.log("Loaded units:", units);
         setUnitOptions(units);
       } catch (error) {

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useToast } from "../../Toast/ToastContext";
 import partyAccountMappingAPI from "../../../api/partyAccountMappingAPI";
 import listOfValuesAPI from "../../../api/listOfValuesAPI";
+import branchAPI from "../../../api/branchAPI";
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -43,10 +44,13 @@ const PartyAccountMappingForm = ({ onBack, onSave, editData }) => {
   const ORG_ID = parseInt(localStorage.getItem("orgId"));
   const BRANCH = Number(localStorage.getItem("branchId"));
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const { addToast } = useToast();
 
+  const [branches, setBranches] = useState([]);
+  const [branchLoading, setBranchLoading] = useState(false);
+
   const [categories, setCategories] = useState([]);
-  const [categoryGroupId, setCategoryGroupId] = useState(null);
   const [parties, setParties] = useState([]);
   const [partiesLoading, setPartiesLoading] = useState(false);
   const [accounts, setAccounts] = useState([]);
@@ -61,6 +65,7 @@ const PartyAccountMappingForm = ({ onBack, onSave, editData }) => {
     docDate: editData?.docDate || new Date().toISOString().slice(0, 10),
     asOnDate: editData?.asOnDate || new Date().toISOString().slice(0, 10),
     branch: editData?.branch?.id || BRANCH,
+    branchName: editData?.branch?.branchName || "",
     category: editData?.category?.id || "",
     active: editData?.active === true || editData?.active === "Active",
     cancelRemarks: "",
@@ -68,26 +73,93 @@ const PartyAccountMappingForm = ({ onBack, onSave, editData }) => {
     createdBy: localStorage.getItem("userName") || "SYSTEM",
   });
 
-  const [rows, setRows] = useState(
-    editData?.details?.length
-      ? editData.details.map(normalizeDetail)
-      : [newRow()],
-  );
+  const [rows, setRows] = useState([newRow()]);
 
+  // Fetch full data when editing
+  useEffect(() => {
+    const fetchFullData = async () => {
+      if (editData?.id) {
+        setIsLoading(true);
+        try {
+          const fullData = await partyAccountMappingAPI.getMappingById(editData.id);
+          console.log("Full data fetched:", fullData);
+
+          if (fullData) {
+            // Set form data
+            setForm({
+              id: fullData.id || 0,
+              docId: fullData.docId || "",
+              docDate: fullData.docDate || new Date().toISOString().slice(0, 10),
+              asOnDate: fullData.asOnDate || new Date().toISOString().slice(0, 10),
+              branch: fullData.branch?.id || BRANCH,
+              branchName: fullData.branch?.branchName || "",
+              category: fullData.category?.id || "",
+              active: fullData.active === true || fullData.active === "Active",
+              cancelRemarks: fullData.cancelRemarks || "",
+              orgId: ORG_ID,
+              createdBy: localStorage.getItem("userName") || "SYSTEM",
+            });
+
+            // Set rows
+            if (fullData.details?.length) {
+              setRows(fullData.details.map(normalizeDetail));
+            } else {
+              setRows([newRow()]);
+            }
+          }
+        } catch (error) {
+          console.error("Error fetching full data:", error);
+          addToast("Failed to load mapping data", "error");
+        } finally {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    fetchFullData();
+  }, [editData, ORG_ID, BRANCH]);
+
+  // Load branches
+  useEffect(() => {
+    const fetchBranches = async () => {
+      try {
+        setBranchLoading(true);
+        const response = await branchAPI.getBranchByOrgId(ORG_ID);
+        const sortedBranches = (response || []).sort((a, b) =>
+          (a.branchName || "").localeCompare(b.branchName || "")
+        );
+        setBranches(sortedBranches);
+
+        // If editing, set the branch name from the selected branch
+        if (editData?.branch?.id) {
+          const selectedBranch = sortedBranches.find(
+            (b) => b.id === editData.branch.id
+          );
+          if (selectedBranch) {
+            setForm((prev) => ({
+              ...prev,
+              branchName: selectedBranch.branchName,
+            }));
+          }
+        }
+      } catch (error) {
+        console.error("Failed to load branches:", error);
+        addToast("Failed to load branches", "error");
+      } finally {
+        setBranchLoading(false);
+      }
+    };
+
+    if (ORG_ID) fetchBranches();
+  }, [ORG_ID, editData]);
+
+  // Load categories (child details from listOfValuesDetailsVO)
   useEffect(() => {
     const loadCategories = async () => {
       try {
-        const [values, groups] = await Promise.all([
-          listOfValuesAPI.getListValuesGroup(CATEGORY_LIST_CODE, ORG_ID),
-          listOfValuesAPI.getListOfValuesByOrgId(BRANCH, ORG_ID),
-        ]);
+        const values = await listOfValuesAPI.getListValuesGroup(CATEGORY_LIST_CODE, ORG_ID);
+        console.log("Categories loaded:", values);
         setCategories((values || []).map(normalizeListValue));
-        const group = (groups || []).find(
-          (g) =>
-            (g.listDescription || g.listCode || "").toUpperCase() ===
-            CATEGORY_LIST_CODE,
-        );
-        setCategoryGroupId(group?.id || null);
       } catch (error) {
         console.warn(
           `Failed to load categories (list code: ${CATEGORY_LIST_CODE})`,
@@ -97,45 +169,48 @@ const PartyAccountMappingForm = ({ onBack, onSave, editData }) => {
       }
     };
     if (ORG_ID) loadCategories();
-  }, [ORG_ID, BRANCH]);
+  }, [ORG_ID]);
 
-  // Reload the party list whenever the category changes, since party options
-  // are category-specific. The backend stores parties under the LOV *group*
-  // id, so getParty must be called with the group id rather than the
-  // value-level id the dropdown exposes.
+  // Reload the party list whenever the category or branch changes
   useEffect(() => {
-    if (!form.category || !categoryGroupId) {
+    if (!form.category || !form.branch) {
       setParties([]);
       return;
     }
     const fetchParties = async () => {
       try {
         setPartiesLoading(true);
+        // Use form.category directly (the selected child ID)
         const response = await partyAccountMappingAPI.getParties(
           ORG_ID,
-          categoryGroupId,
-          BRANCH,
+          form.category, // Pass the selected category child ID
+          form.branch,
         );
+        console.log("Parties fetched with category ID:", form.category);
+        console.log("Parties fetched:", response);
         setParties(response || []);
       } catch (error) {
         console.error("Error fetching parties:", error);
         setParties([]);
+        addToast("Failed to load parties", "error");
       } finally {
         setPartiesLoading(false);
       }
     };
     fetchParties();
-  }, [form.category, categoryGroupId, ORG_ID, BRANCH]);
+  }, [form.category, form.branch, ORG_ID]);
 
   useEffect(() => {
     const fetchAccounts = async () => {
       try {
         setAccountsLoading(true);
         const response = await partyAccountMappingAPI.getAccounts(ORG_ID);
+        console.log("Accounts fetched:", response);
         setAccounts(response || []);
       } catch (error) {
         console.error("Error fetching accounts:", error);
         setAccounts([]);
+        addToast("Failed to load accounts", "error");
       } finally {
         setAccountsLoading(false);
       }
@@ -149,6 +224,24 @@ const PartyAccountMappingForm = ({ onBack, onSave, editData }) => {
       setFieldErrors((prev) => ({ ...prev, [name]: "" }));
     }
     setForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleBranchChange = (e) => {
+    const branchId = Number(e.target.value);
+    const selectedBranch = branches.find((b) => b.id === branchId);
+
+    setForm((prev) => ({
+      ...prev,
+      branch: branchId,
+      branchName: selectedBranch?.branchName || "",
+      // Reset category when branch changes
+      category: "",
+    }));
+
+    // Clear errors
+    if (fieldErrors.branch) {
+      setFieldErrors((prev) => ({ ...prev, branch: "" }));
+    }
   };
 
   const handlePartyChange = (rowId, partyId) => {
@@ -188,7 +281,7 @@ const PartyAccountMappingForm = ({ onBack, onSave, editData }) => {
 
   const validate = () => {
     const errors = {};
-    if (!form.docDate) errors.docDate = "Doc Date is required";
+    if (!form.branch) errors.branch = "Branch is required";
     if (!form.asOnDate) errors.asOnDate = "As On Date is required";
     if (!form.category) errors.category = "Category is required";
 
@@ -222,12 +315,18 @@ const PartyAccountMappingForm = ({ onBack, onSave, editData }) => {
 
     setIsSubmitting(true);
 
+    // Get the selected category object to get its ID
+    const selectedCategory = categories.find(
+      (cat) => String(cat.id) === String(form.category)
+    );
+
     const payload = {
       active: Boolean(form.active),
       asOnDate: form.asOnDate,
       branch: toNumber(form.branch),
       cancelRemarks: form.active ? "" : form.cancelRemarks,
-      category: toNumber(categoryGroupId) || toNumber(form.category),
+      // Use the selected category's ID (child ID from listOfValuesDetailsVO)
+      category: toNumber(selectedCategory?.id) || toNumber(form.category),
       createdBy: form.createdBy,
       details: rows.map(({ partyId, accountName }) => ({
         partyId: toNumber(partyId),
@@ -283,6 +382,32 @@ const PartyAccountMappingForm = ({ onBack, onSave, editData }) => {
     }
   };
 
+  if (isLoading) {
+    return (
+      <div className="p-2 max-w-7xl">
+        <div className="flex items-center gap-2 mb-3">
+          <button
+            onClick={onBack}
+            className="p-1 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+          <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+            Loading...
+          </h2>
+        </div>
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-8">
+          <div className="flex justify-center items-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <span className="ml-2 text-gray-600 dark:text-gray-300">
+              Loading mapping data...
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-2 max-w-7xl">
       {/* HEADER */}
@@ -304,34 +429,30 @@ const PartyAccountMappingForm = ({ onBack, onSave, editData }) => {
       {/* MAIN CARD */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
         {/* HEADER FIELDS */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
-          {/* Doc Id - auto generated, read-only */}
-          <div>
-            <label className={labelClasses}>Doc Id</label>
-            <input
-              value={form.docId || "Auto"}
-              disabled
-              className={`${controlClasses} bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed`}
-            />
-          </div>
-
-          {/* Doc Date */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+          {/* Branch - Dropdown */}
           <div>
             <label className={labelClasses}>
-              Doc Date <span className="text-red-500">*</span>
+              Branch <span className="text-red-500">*</span>
             </label>
-            <input
-              type="date"
-              name="docDate"
-              value={form.docDate}
-              onChange={handleHeaderChange}
-              className={`${controlClasses} ${
-                fieldErrors.docDate ? "border-red-500" : ""
-              }`}
-            />
-            {fieldErrors.docDate && (
+            <select
+              name="branch"
+              value={form.branch}
+              onChange={handleBranchChange}
+              disabled={branchLoading}
+              className={`${controlClasses} ${fieldErrors.branch ? "border-red-500" : ""
+                }`}
+            >
+              <option value="">Select Branch</option>
+              {branches.map((branch) => (
+                <option key={branch.id} value={branch.id}>
+                  {branch.branchName} ({branch.branchCode})
+                </option>
+              ))}
+            </select>
+            {fieldErrors.branch && (
               <p className="text-red-500 text-[11px] mt-1">
-                {fieldErrors.docDate}
+                {fieldErrors.branch}
               </p>
             )}
           </div>
@@ -346,27 +467,14 @@ const PartyAccountMappingForm = ({ onBack, onSave, editData }) => {
               name="asOnDate"
               value={form.asOnDate}
               onChange={handleHeaderChange}
-              className={`${controlClasses} ${
-                fieldErrors.asOnDate ? "border-red-500" : ""
-              }`}
+              className={`${controlClasses} ${fieldErrors.asOnDate ? "border-red-500" : ""
+                }`}
             />
             {fieldErrors.asOnDate && (
               <p className="text-red-500 text-[11px] mt-1">
                 {fieldErrors.asOnDate}
               </p>
             )}
-          </div>
-
-          {/* Branch - read-only, always the current branch */}
-          <div>
-            <label className={labelClasses}>
-              Branch <span className="text-red-500">*</span>
-            </label>
-            <input
-              value={editData?.branch?.branchName || editData?.branch?.id || BRANCH}
-              disabled
-              className={`${controlClasses} bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed`}
-            />
           </div>
 
           {/* Category */}
@@ -378,9 +486,8 @@ const PartyAccountMappingForm = ({ onBack, onSave, editData }) => {
               name="category"
               value={form.category}
               onChange={handleHeaderChange}
-              className={`${controlClasses} ${
-                fieldErrors.category ? "border-red-500" : ""
-              }`}
+              className={`${controlClasses} ${fieldErrors.category ? "border-red-500" : ""
+                }`}
             >
               <option value="">Select Category</option>
               {categories.map((cat) => (
@@ -408,14 +515,12 @@ const PartyAccountMappingForm = ({ onBack, onSave, editData }) => {
                   cancelRemarks: "",
                 }))
               }
-              className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${
-                form.active ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
-              }`}
+              className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${form.active ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
+                }`}
             >
               <span
-                className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${
-                  form.active ? "translate-x-6" : "translate-x-0.5"
-                }`}
+                className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${form.active ? "translate-x-6" : "translate-x-0.5"
+                  }`}
               />
             </button>
           </div>
@@ -487,10 +592,9 @@ const PartyAccountMappingForm = ({ onBack, onSave, editData }) => {
                         onChange={(e) =>
                           handlePartyChange(row.rowId, e.target.value)
                         }
-                        disabled={partiesLoading}
-                        className={`${controlClasses} ${
-                          rowErrors[row.rowId]?.partyId ? "border-red-500" : ""
-                        }`}
+                        disabled={partiesLoading || !form.category || !form.branch}
+                        className={`${controlClasses} ${rowErrors[row.rowId]?.partyId ? "border-red-500" : ""
+                          }`}
                       >
                         <option value="">Select Party</option>
                         {parties.map((party) => {
@@ -517,29 +621,13 @@ const PartyAccountMappingForm = ({ onBack, onSave, editData }) => {
 
                     {/* Account Name */}
                     <td className="px-2 py-1">
-                      <select
+                      <input
                         value={row.accountName}
                         onChange={(e) =>
                           handleAccountChange(row.rowId, e.target.value)
                         }
-                        disabled={accountsLoading}
-                        className={`${controlClasses} ${
-                          rowErrors[row.rowId]?.accountName
-                            ? "border-red-500"
-                            : ""
-                        }`}
-                      >
-                        <option value="">Select Account</option>
-                        {accounts.map((account) => {
-                          const accountLabel =
-                            account.accountName || account.name || account.accountId;
-                          return (
-                            <option key={account.accountId ?? accountLabel} value={accountLabel}>
-                              {accountLabel}
-                            </option>
-                          );
-                        })}
-                      </select>
+                        className={`${controlClasses} bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed`}
+                      />
                     </td>
 
                     <td className="px-2 py-1 text-center">

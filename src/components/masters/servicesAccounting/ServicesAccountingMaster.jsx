@@ -15,7 +15,7 @@ const controlClasses =
 const labelClasses =
   "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
-const ServiceAccountingForm = ({ data, onBack }) => {
+const ServiceAccountingForm = ({ data, onBack, loading: parentLoading }) => {
   const { addToast } = useToast();
   const orgId = localStorage.getItem("orgId");
   const branchId = localStorage.getItem("branchId");
@@ -37,15 +37,14 @@ const ServiceAccountingForm = ({ data, onBack }) => {
   useEffect(() => {
     const loadHsnOptions = async () => {
       try {
-        const data = await hsnSacAPI.getAll(orgId, branchId);
-        console.log('Loaded HSN/SAC options:', data);
+        const hsnData = await hsnSacAPI.getAll(orgId, branchId);
+        console.log('Loaded HSN/SAC options:', hsnData);
 
         // Transform to match the select options
-        // Show hsn code and description separated by hyphen
-        const options = Array.isArray(data) ? data.map(item => ({
+        const options = Array.isArray(hsnData) ? hsnData.map(item => ({
           id: item.id,
-          label: `${item.hsn || ''} - ${item.description || ''}`,
-          hsn: item.hsn,
+          label: `${item.hsnCode || item.hsn || ''} - ${item.description || ''}`,
+          hsn: item.hsnCode || item.hsn,
           description: item.description
         })) : [];
 
@@ -61,45 +60,30 @@ const ServiceAccountingForm = ({ data, onBack }) => {
     }
   }, [orgId, branchId, addToast]);
 
-  // Load item data if editing
+  // Populate form when data changes (from parent)
   useEffect(() => {
-    const loadItemData = async () => {
-      if (data?.id) {
-        setIsLoading(true);
-        try {
-          const response = await servicesAccountingAPI.getById(data.id);
-          console.log('Loaded service for edit:', response);
+    if (data && data.id) {
+      console.log('Populating form with data:', data);
 
-          if (response) {
-            // Get the hsnId from the response
-            let hsnId = response.hsnId || response.hsnCode || "";
-
-            // If hsnId is an object, extract the id
-            if (typeof hsnId === 'object' && hsnId !== null) {
-              hsnId = hsnId.id || "";
-            }
-
-            setFormData({
-              id: response.id || 0,
-              serviceName: response.serviceName || "",
-              serviceDescription: response.serviceDescription || "",
-              hsnId: String(hsnId),
-              active: response.active === "Active" || response.active === true,
-            });
-          }
-        } catch (error) {
-          console.error('Error loading service for edit:', error);
-          addToast('Failed to load service data', 'error');
-        } finally {
-          setIsLoading(false);
-        }
+      // Extract HSN ID from the nested itemHsn object
+      let hsnId = "";
+      if (data.itemHsn) {
+        hsnId = data.itemHsn.id || data.itemHsn.hsnId || "";
+      } else if (data.hsnId) {
+        hsnId = data.hsnId;
+      } else if (data.hsnCode) {
+        hsnId = data.hsnCode;
       }
-    };
 
-    if (data?.id) {
-      loadItemData();
+      setFormData({
+        id: data.id || 0,
+        serviceName: data.serviceName || "",
+        serviceDescription: data.serviceDescription || "",
+        hsnId: String(hsnId),
+        active: data.active === "Active" || data.active === true,
+      });
     }
-  }, [data, addToast]);
+  }, [data]);
 
   const validate = () => {
     const newErrors = {};
@@ -123,7 +107,7 @@ const ServiceAccountingForm = ({ data, onBack }) => {
 
     setIsSubmitting(true);
 
-    // Build payload - only include id if editing (data?.id exists)
+    // Build payload
     const payload = {
       orgId: Number(orgId),
       branchId: Number(branchId),
@@ -176,8 +160,8 @@ const ServiceAccountingForm = ({ data, onBack }) => {
     setFormData(prev => ({ ...prev, active: e.target.checked }));
   };
 
-  // Loading state
-  if (isLoading) {
+  // Show loading state
+  if (parentLoading || isLoading) {
     return (
       <div className="p-2 max-w-7xl">
         <div className="flex items-center gap-2 mb-3">

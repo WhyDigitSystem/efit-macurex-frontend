@@ -178,7 +178,7 @@ const BankMasterForm = ({ data, onBack }) => {
 
           <div>
             <label className={labelClasses}>
-              Branch <span className="text-red-500">*</span>
+              Bank Branch <span className="text-red-500">*</span>
             </label>
             <input
               type="text"

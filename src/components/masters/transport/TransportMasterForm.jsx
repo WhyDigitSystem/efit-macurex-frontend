@@ -14,7 +14,7 @@ const controlClasses =
 const labelClasses =
   "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
-const TransportMasterForm = ({ onBack, onSave, editData }) => {
+const TransportMasterForm = ({ onBack, onSave, editData, loading: parentLoading }) => {
   const ORG_ID = parseInt(localStorage.getItem("orgId"));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { addToast } = useToast();
@@ -23,6 +23,7 @@ const TransportMasterForm = ({ onBack, onSave, editData }) => {
   const [branchLoading, setBranchLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
 
+  // Initialize form with editData
   const [form, setForm] = useState({
     id: editData?.id || 0,
     transportName: editData?.transportName || "",
@@ -31,12 +32,11 @@ const TransportMasterForm = ({ onBack, onSave, editData }) => {
       typeof editData?.branch === "object"
         ? editData.branch.id
         : editData?.branch || "",
-
     branchCode:
       typeof editData?.branch === "object"
         ? editData.branch.branchCode
         : editData?.branchCode || "",
-    active: editData?.active ?? true,
+    active: editData?.active === "Active" ? true : (editData?.active ?? true),
     cancelRemarks: editData?.cancelRemarks || "",
     orgId: ORG_ID,
     createdBy: localStorage.getItem("userName") || "SYSTEM",
@@ -53,6 +53,29 @@ const TransportMasterForm = ({ onBack, onSave, editData }) => {
     fetchBranches();
   }, []);
 
+  // Update form when editData changes
+  useEffect(() => {
+    if (editData) {
+      setForm({
+        id: editData?.id || 0,
+        transportName: editData?.transportName || "",
+        address: editData?.address || "",
+        branch:
+          typeof editData?.branch === "object"
+            ? editData.branch.id
+            : editData?.branch || "",
+        branchCode:
+          typeof editData?.branch === "object"
+            ? editData.branch.branchCode
+            : editData?.branchCode || "",
+        active: editData?.active === "Active" ? true : (editData?.active ?? true),
+        cancelRemarks: editData?.cancelRemarks || "",
+        orgId: ORG_ID,
+        createdBy: localStorage.getItem("userName") || "SYSTEM",
+      });
+    }
+  }, [editData, ORG_ID]);
+
   const fetchBranches = async () => {
     try {
       setBranchLoading(true);
@@ -61,6 +84,16 @@ const TransportMasterForm = ({ onBack, onSave, editData }) => {
         (a.branchName || "").localeCompare(b.branchName || ""),
       );
       setBranches(sortedBranches);
+
+      // If editing and the branch from editData is not in the sorted list,
+      // but we have the branch data, add it to the list
+      if (editData && typeof editData.branch === "object") {
+        const branchExists = sortedBranches.some(b => b.id === editData.branch.id);
+        if (!branchExists) {
+          // Add the editData branch to the list
+          setBranches(prev => [editData.branch, ...prev]);
+        }
+      }
     } catch (error) {
       console.error("Error fetching branches:", error);
       addToast("Failed to load branches", "error");
@@ -154,9 +187,9 @@ const TransportMasterForm = ({ onBack, onSave, editData }) => {
     const payload = {
       transportName: form.transportName,
       address: form.address,
-      branch: Number(form.branch), // send only ID
+      branch: Number(form.branch),
       branchCode: form.branchCode,
-      active: form.active,
+      active: form.active, // Send as boolean (true/false)
       cancelRemarks: form.cancelRemarks,
       createdBy: form.createdBy,
       orgId: form.orgId,
@@ -207,6 +240,28 @@ const TransportMasterForm = ({ onBack, onSave, editData }) => {
     }
   };
 
+  // Show loading state while fetching transport data
+  if (parentLoading) {
+    return (
+      <div className="p-2 max-w-7xl">
+        <div className="flex items-center gap-2 mb-3">
+          <button
+            onClick={onBack}
+            className="p-1 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+          <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+            Edit Transport
+          </h2>
+        </div>
+        <div className="flex items-center justify-center h-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+          <div className="text-gray-500 dark:text-gray-400">Loading transport details...</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-2 max-w-7xl ">
       {/* HEADER */}
@@ -237,9 +292,8 @@ const TransportMasterForm = ({ onBack, onSave, editData }) => {
               name="transportName"
               value={form.transportName}
               onChange={handleChange}
-              className={`${controlClasses} ${
-                fieldErrors.transportName ? "border-red-500" : ""
-              }`}
+              className={`${controlClasses} ${fieldErrors.transportName ? "border-red-500" : ""
+                }`}
             />
 
             {fieldErrors.transportName && (
@@ -257,12 +311,11 @@ const TransportMasterForm = ({ onBack, onSave, editData }) => {
 
             <select
               name="branch"
-              value={form.branch}
+              value={form.branch || ""}
               onChange={handleBranchChange}
               disabled={branchLoading}
-              className={`${controlClasses} ${
-                fieldErrors.branch ? "border-red-500" : ""
-              }`}
+              className={`${controlClasses} ${fieldErrors.branch ? "border-red-500" : ""
+                }`}
             >
               <option value="">Select Branch</option>
 
@@ -288,9 +341,8 @@ const TransportMasterForm = ({ onBack, onSave, editData }) => {
               name="address"
               value={form.address}
               onChange={handleChange}
-              className={`${controlClasses} ${
-                fieldErrors.address ? "border-red-500" : ""
-              }`}
+              className={`${controlClasses} ${fieldErrors.address ? "border-red-500" : ""
+                }`}
             />
 
             {fieldErrors.address && (
@@ -300,28 +352,25 @@ const TransportMasterForm = ({ onBack, onSave, editData }) => {
             )}
           </div>
 
-          {/* Active */}
+          {/* Active - Checkbox */}
           <div>
-            <label className={labelClasses}>Active</label>
-
-            <button
-              type="button"
-              onClick={() =>
-                setForm((prev) => ({
-                  ...prev,
-                  active: !prev.active,
-                }))
-              }
-              className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${
-                form.active ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
-              }`}
-            >
-              <span
-                className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${
-                  form.active ? "translate-x-6" : "translate-x-0.5"
-                }`}
+            <div className="flex items-center gap-2 mt-1">
+              <input
+                type="checkbox"
+                id="active"
+                name="active"
+                checked={Boolean(form.active)}
+                onChange={handleChange}
+                className="h-4 w-4 accent-blue-600 dark:accent-blue-500 cursor-pointer"
               />
-            </button>
+
+              <label
+                htmlFor="active"
+                className="text-xs text-gray-700 dark:text-gray-200 cursor-pointer"
+              >
+                Active
+              </label>
+            </div>
           </div>
 
           {/* Cancel Remarks - only relevant when marking inactive */}
@@ -333,9 +382,8 @@ const TransportMasterForm = ({ onBack, onSave, editData }) => {
                 name="cancelRemarks"
                 value={form.cancelRemarks}
                 onChange={handleChange}
-                className={`${controlClasses} ${
-                  fieldErrors.cancelRemarks ? "border-red-500" : ""
-                }`}
+                className={`${controlClasses} ${fieldErrors.cancelRemarks ? "border-red-500" : ""
+                  }`}
               />
 
               {fieldErrors.cancelRemarks && (

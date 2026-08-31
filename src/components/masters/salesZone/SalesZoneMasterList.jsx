@@ -8,13 +8,13 @@ const SalesZoneMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   const [loading, setLoading] = useState(false);
 
   const ORG_ID = Number(localStorage.getItem("orgId"));
-  const BRANCH = Number(localStorage.getItem("branchId")||1000000001);
+  const BRANCH = Number(localStorage.getItem("branchId"));
 
   const loadZones = useCallback(async () => {
     if (!ORG_ID) return;
     try {
       setLoading(true);
-      const response = await salesZoneAPI.getSalesZoneByOrgId(ORG_ID, BRANCH);
+      const response = await salesZoneAPI.getSalesZoneByOrgId(ORG_ID);
       const sortedData = (response || []).sort(
         (a, b) => (b.id || 0) - (a.id || 0),
       );

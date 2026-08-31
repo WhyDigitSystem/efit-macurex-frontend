@@ -204,13 +204,22 @@ const LMEMasterForm = ({ data, onBack }) => {
     }, [data]);
 
     const handleChange = (e) => {
-        const { name, value } = e.target;
+        const { name, value, type, checked } = e.target;
 
         if (fieldErrors[name]) {
             setFieldErrors((prev) => ({
                 ...prev,
                 [name]: "",
             }));
+        }
+
+        // Handle checkbox
+        if (type === "checkbox") {
+            setForm((prev) => ({
+                ...prev,
+                [name]: checked,
+            }));
+            return;
         }
 
         // If currency is selected, auto-fill the symbol
@@ -263,7 +272,7 @@ const LMEMasterForm = ({ data, onBack }) => {
             lmeRate: parseFloat(form.lmeRate),
             lmeDateFrom: form.lmeDateFrom,
             elmeDateTo: form.lmeDateTo,
-            active: form.active,
+            active: form.active, // Send as boolean
             createdBy: "ITC001",
             cancelRemarks: "",
             finyear: new Date().getFullYear().toString(),
@@ -282,14 +291,14 @@ const LMEMasterForm = ({ data, onBack }) => {
             const successMessage =
                 response?.paramObjectsMap?.message ||
                 (form.id && form.id > 0
-                    ? "State updated successfully!"
-                    : "State created successfully!");
+                    ? "LME updated successfully!"
+                    : "LME created successfully!");
 
             addToast(successMessage, "success");
             onBack();
         } catch (error) {
             console.error("Error saving LME:", error);
-            addToast("Failed to save LME");
+            addToast("Failed to save LME", "error");
         } finally {
             setIsSubmitting(false);
         }
@@ -373,23 +382,23 @@ const LMEMasterForm = ({ data, onBack }) => {
                     />
                 </div>
 
-                {/* Active Toggle */}
-                <div className="flex items-center gap-2">
-                    <label className={labelClasses}>Active</label>
-                    <button
-                        type="button"
-                        onClick={() => setForm(prev => ({ ...prev, active: !prev.active }))}
-                        className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${form.active ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
-                            }`}
+                {/* Active - Checkbox */}
+                <div className="flex items-center gap-2 mt-2">
+                    <input
+                        type="checkbox"
+                        id="active"
+                        name="active"
+                        checked={Boolean(form.active)}
+                        onChange={handleChange}
+                        className="h-4 w-4 accent-blue-600 dark:accent-blue-500 cursor-pointer"
+                    />
+
+                    <label
+                        htmlFor="active"
+                        className="text-xs text-gray-700 dark:text-gray-200 cursor-pointer"
                     >
-                        <span
-                            className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${form.active ? "translate-x-6" : "translate-x-0.5"
-                                }`}
-                        />
-                    </button>
-                    <span className="text-xs text-gray-600 dark:text-gray-400 ml-1">
-                        {form.active ? "Active" : "Inactive"}
-                    </span>
+                        Active
+                    </label>
                 </div>
 
                 {/* Buttons */}

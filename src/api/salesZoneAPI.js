@@ -13,10 +13,10 @@ const salesZoneAPI = {
     }
   },
 
-  getSalesZoneByOrgId: async (orgId, branch) => {
+  getSalesZoneByOrgId: async (orgId) => {
     try {
       const res = await apiClient.get("/api/commonmaster/getSalesZoneMasterByOrgId", {
-        params: { orgId, branch },
+        params: { orgId },
       });
       return res?.paramObjectsMap?.salesZoneMasterList || [];
     } catch (error) {

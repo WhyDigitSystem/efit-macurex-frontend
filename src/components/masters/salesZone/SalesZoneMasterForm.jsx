@@ -134,7 +134,6 @@ const SalesZoneMasterForm = ({ onBack, editData }) => {
       cancelRemarks: form.cancelRemarks,
       createdBy: form.createdBy,
       orgId: form.orgId,
-      branch: form.branch,
     };
 
     if (form.id && form.id > 0) {

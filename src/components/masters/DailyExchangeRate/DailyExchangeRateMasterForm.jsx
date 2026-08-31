@@ -1,5 +1,5 @@
-import { ArrowLeft, Save, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { ArrowLeft, Save, X, Upload } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "../../Toast/ToastContext";
 import dailyExchangeRateAPI from "../../../api/dailyExchangeRateAPI";
 import currencyAPI from "../../../api/currencyAPI";
@@ -36,10 +36,12 @@ const DailyExchangeRateMasterForm = ({ onBack, editData }) => {
   const ORG_ID = parseInt(localStorage.getItem("orgId"));
   const BRANCH = parseInt(localStorage.getItem("branchId") || 1000000001);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const { addToast } = useToast();
 
   const [fieldErrors, setFieldErrors] = useState({});
   const [currencyOptions, setCurrencyOptions] = useState([]);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     const loadCurrencies = async () => {
@@ -137,6 +139,67 @@ const DailyExchangeRateMasterForm = ({ onBack, editData }) => {
     }
 
     setForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleFileUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const validTypes = [
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/vnd.ms-excel",
+    ];
+    if (!validTypes.includes(file.type)) {
+      addToast("Please upload an Excel file (.xlsx or .xls)", "error");
+      fileInputRef.current.value = "";
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      addToast("File size should be less than 5MB", "error");
+      fileInputRef.current.value = "";
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("files", file);
+
+    try {
+      setIsUploading(true);
+      const response = await dailyExchangeRateAPI.uploadExcelForExchangeRate(
+        formData
+      );
+      console.log("Upload Response:", response);
+
+      // Check if there are errors in the response
+      if (response?.errors && response.errors.length > 0) {
+        const errorMessages = response.errors
+          .map((err) => err.logMessage || err.nonMessage || "Upload error")
+          .join(", ");
+        addToast(`Upload failed: ${errorMessages}`, "error");
+      } else {
+        addToast("File uploaded successfully!", "success");
+        // Optionally refresh the list or reset form
+        if (onBack) onBack();
+      }
+    } catch (error) {
+      console.error("Upload Error:", error);
+      const errorMessage =
+        error.response?.data?.errors?.[0]?.logMessage ||
+        error.response?.data?.errors?.[0]?.nonMessage ||
+        error.response?.data?.message ||
+        "File upload failed! Please try again.";
+      addToast(errorMessage, "error");
+    } finally {
+      setIsUploading(false);
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
   };
 
   const handleSave = async () => {
@@ -255,9 +318,8 @@ const DailyExchangeRateMasterForm = ({ onBack, editData }) => {
               name="currency"
               value={form.currency}
               onChange={handleChange}
-              className={`${controlClasses} ${
-                fieldErrors.currency ? "border-red-500" : ""
-              }`}
+              className={`${controlClasses} ${fieldErrors.currency ? "border-red-500" : ""
+                }`}
             >
               <option value="">Select Currency</option>
 
@@ -286,9 +348,8 @@ const DailyExchangeRateMasterForm = ({ onBack, editData }) => {
               value={form.sellingExRate}
               onChange={handleChange}
               inputMode="decimal"
-              className={`${controlClasses} ${
-                fieldErrors.sellingExRate ? "border-red-500" : ""
-              }`}
+              className={`${controlClasses} ${fieldErrors.sellingExRate ? "border-red-500" : ""
+                }`}
             />
 
             {fieldErrors.sellingExRate && (
@@ -309,9 +370,8 @@ const DailyExchangeRateMasterForm = ({ onBack, editData }) => {
               value={form.buyingExRate}
               onChange={handleChange}
               inputMode="decimal"
-              className={`${controlClasses} ${
-                fieldErrors.buyingExRate ? "border-red-500" : ""
-              }`}
+              className={`${controlClasses} ${fieldErrors.buyingExRate ? "border-red-500" : ""
+                }`}
             />
 
             {fieldErrors.buyingExRate && (
@@ -331,9 +391,8 @@ const DailyExchangeRateMasterForm = ({ onBack, editData }) => {
               name="month"
               value={form.month}
               onChange={handleChange}
-              className={`${controlClasses} ${
-                fieldErrors.month ? "border-red-500" : ""
-              }`}
+              className={`${controlClasses} ${fieldErrors.month ? "border-red-500" : ""
+                }`}
             >
               <option value="">Select Month</option>
 
@@ -361,9 +420,8 @@ const DailyExchangeRateMasterForm = ({ onBack, editData }) => {
               name="year"
               value={form.year}
               onChange={handleChange}
-              className={`${controlClasses} ${
-                fieldErrors.year ? "border-red-500" : ""
-              }`}
+              className={`${controlClasses} ${fieldErrors.year ? "border-red-500" : ""
+                }`}
             >
               <option value="">Select Year</option>
 
@@ -418,14 +476,12 @@ const DailyExchangeRateMasterForm = ({ onBack, editData }) => {
                   active: !prev.active,
                 }))
               }
-              className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${
-                form.active ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
-              }`}
+              className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${form.active ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
+                }`}
             >
               <span
-                className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${
-                  form.active ? "translate-x-6" : "translate-x-0.5"
-                }`}
+                className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${form.active ? "translate-x-6" : "translate-x-0.5"
+                  }`}
               />
             </button>
           </div>
@@ -439,9 +495,8 @@ const DailyExchangeRateMasterForm = ({ onBack, editData }) => {
                 name="cancelRemarks"
                 value={form.cancelRemarks}
                 onChange={handleChange}
-                className={`${controlClasses} ${
-                  fieldErrors.cancelRemarks ? "border-red-500" : ""
-                }`}
+                className={`${controlClasses} ${fieldErrors.cancelRemarks ? "border-red-500" : ""
+                  }`}
               />
 
               {fieldErrors.cancelRemarks && (
@@ -454,24 +509,48 @@ const DailyExchangeRateMasterForm = ({ onBack, editData }) => {
         </div>
 
         {/* ACTION BUTTONS */}
-        <div className="flex justify-end gap-2 pt-3 mt-3 border-t border-gray-200 dark:border-gray-700">
-          <button
-            onClick={onBack}
-            disabled={isSubmitting}
-            className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60"
-          >
-            <X className="h-3 w-3" />
-            Cancel
-          </button>
+        <div className="flex justify-between items-center gap-2 pt-3 mt-3 border-t border-gray-200 dark:border-gray-700">
+          {/* Left side - Upload button */}
+          <div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={handleFileUpload}
+              className="hidden"
+              disabled={isUploading}
+            />
 
-          <button
-            onClick={handleSave}
-            disabled={isSubmitting}
-            className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60"
-          >
-            <Save className="h-3 w-3" />
-            {isSubmitting ? "Saving..." : editData ? "Update" : "Save"}
-          </button>
+            <button
+              onClick={handleUploadClick}
+              disabled={isUploading}
+              className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60"
+            >
+              <Upload className="h-3 w-3" />
+              {isUploading ? "Uploading..." : "Upload Excel"}
+            </button>
+          </div>
+
+          {/* Right side - Cancel and Save buttons */}
+          <div className="flex gap-2">
+            <button
+              onClick={onBack}
+              disabled={isSubmitting || isUploading}
+              className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60"
+            >
+              <X className="h-3 w-3" />
+              Cancel
+            </button>
+
+            <button
+              onClick={handleSave}
+              disabled={isSubmitting || isUploading}
+              className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60"
+            >
+              <Save className="h-3 w-3" />
+              {isSubmitting ? "Saving..." : editData ? "Update" : "Save"}
+            </button>
+          </div>
         </div>
       </div>
     </div>

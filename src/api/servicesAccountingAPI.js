@@ -23,14 +23,7 @@ const servicesAccountingAPI = {
       const response = await apiClient.get(
         `/api/commonmaster/getServiceAccMasterById?id=${id}`
       );
-      console.log("Get Service By ID Response:", response);
-
-      // Extract data from response
-      const serviceData = response?.paramObjectsMap?.serviceAccMasterVO ||
-        response?.paramObjectsMap?.serviceVO ||
-        response?.data ||
-        null;
-      return serviceData;
+      return response;
     } catch (error) {
       console.error("Error fetching service by ID:", error);
       throw error;

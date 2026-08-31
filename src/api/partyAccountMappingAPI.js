@@ -25,13 +25,13 @@ export const partyAccountMappingAPI = {
     }
   },
 
-  // Party master lookup, used to populate the Party dropdown. Returns the
-  // partyList with partyId / partyName for the given branch + category.
+  // Party master lookup, used to populate the Party dropdown.
+  // Returns the partyList with partyId / partyName for the given branch + category.
   getParties: async (orgId, category, branch) => {
     try {
-      const res = await apiClient.get("/api/commonmaster/getParty", {
-        params: { branch, category, orgId },
-      });
+      const res = await apiClient.get(
+        `/api/commonmaster/getPartyforMappingOfPartyToAcc?branch=${branch}&category=${category}&orgId=${orgId}`,
+      );
       return res?.paramObjectsMap?.partyList || [];
     } catch (error) {
       console.error("Error fetching parties:", error);

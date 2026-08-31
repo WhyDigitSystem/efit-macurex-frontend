@@ -34,6 +34,25 @@ const dailyExchangeRateAPI = {
       throw error;
     }
   },
+
+  // Add this method to your dailyExchangeRateAPI
+  uploadExcelForExchangeRate: async (formData) => {
+    try {
+      const res = await apiClient.post(
+        "/api/commonmaster/uploadExcelforExchangeRate",
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
+      return res;
+    } catch (error) {
+      console.error("Error uploading exchange rate file:", error);
+      throw error;
+    }
+  },
 };
 
 export default dailyExchangeRateAPI;
