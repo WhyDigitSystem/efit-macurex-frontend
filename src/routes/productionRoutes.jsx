@@ -15,6 +15,7 @@ import ScheduleOrderShortCloseMaster from "../components/Production/ScheduleOrde
 import ReconcileConsumptionStock from "../components/Production/ReconcileConsumptionStock/reconcileConsumptionStock";
 import ScrapNoteMaster from "../components/Production/ScrapNote/ScrapNoteMaster";
 import StockOrderMaster from "../components/Production/StockOrder/StockOrderMaster";
+import ToolsFixturesMaster from "../components/Production/ToolsFixtures/ToolsFixturesMaster";
 
 const productionRoutes = [
   {
@@ -101,6 +102,11 @@ const productionRoutes = [
     path: "/productionschedule3months",
     label: "Production Schedule (for next 3 months)",
     element: <ProductionScheduleMaster />,
+  },
+  {
+    path: "/toolsfixtureslist",
+    label: "Tools & Fixtures List",
+    element: <ToolsFixturesMaster />,
   },
 ];
 

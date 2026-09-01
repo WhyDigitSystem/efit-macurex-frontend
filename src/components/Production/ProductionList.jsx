@@ -176,6 +176,12 @@ const SECTIONS = [
         path: "/productionschedule3months",
         screenCode: "PRODUCTION_SCHEDULE_3_MONTHS",
       },
+      {
+        name: "Tools & Fixtures",
+        icon: Wrench,
+        path: "/toolsfixtureslist",
+        screenCode: "TOOLS_FIXTURES_MODULE",
+      },
     ],
   },
 ];
