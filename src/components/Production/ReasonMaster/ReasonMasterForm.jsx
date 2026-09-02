@@ -3,6 +3,7 @@ import { ArrowLeft, Save, X } from "lucide-react";
 import { useToast } from "../../Toast/ToastContext";
 import reasonMasterAPI from "../../../api/Production/reasonMasterAPI";
 import { departmentAPI } from "../../../api/departmentAPI";
+import listOfValuesAPI from "../../../api/listOfValuesAPI";
 
 /* ---------------------------------------------------------------------------- */
 /* Shared design tokens                                                        */
@@ -129,7 +130,6 @@ const Field = ({
 const ReasonMasterForm = ({ editId, editData, onBack }) => {
     const { addToast } = useToast();
     const orgId = Number(localStorage.getItem("orgId")) || 0;
-    const branchId = Number(localStorage.getItem("branchId")) || 0;
     const usersId =
         localStorage.getItem("usersId") ||
         localStorage.getItem("userName") ||
@@ -170,17 +170,20 @@ const ReasonMasterForm = ({ editId, editData, onBack }) => {
         }
 
         try {
-            const reasons = await reasonMasterAPI.getReasonOptions(orgId, branchId);
+            const reasons = await listOfValuesAPI.getListValuesGroup(
+                "Reason Master",
+                orgId,
+            );
             setReasonOptions(
                 (reasons || []).map((r) => ({
                     value: r.id,
-                    label: r.reasonName || r.valuesDescription || r.reason || r.id,
+                    label: r.valuesDescription || r.reasonName || r.id,
                 })),
             );
         } catch (error) {
             console.error("Failed to load reason options:", error);
         }
-    }, [orgId, branchId]);
+    }, [orgId]);
 
     /* ---------------- Load edit data ---------------- */
 
@@ -313,10 +316,13 @@ const ReasonMasterForm = ({ editId, editData, onBack }) => {
             reasonDescription: form.reasonDescription.trim(),
             narration: form.narration.trim(),
             active: form.active,
-            orgId,
-            branchId,
-            createdBy: usersId,
+            cancel: false,
             cancelRemarks: "",
+            orgId,
+            createdBy: usersId,
+            updatedBy: usersId,
+            screenCode: "RM",
+            screenName: "REASONMASTER",
         };
 
         try {

@@ -968,8 +968,6 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
 
       taxDescription: formData.taxDescription || "",
 
-      attachment: [],
-
       details: (formData.details || [])
         .filter((item) => item.item)
         .map((item) => {
@@ -1012,7 +1010,7 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
 
     // Append JSON DTO
     formDataToSend.append(
-      "purchaseOrderAmendmentDto",
+      "PurchaseOrderAmendmentDTO",
       poAmendmentBlob,
       "poAmendmentDTO.json",
     );

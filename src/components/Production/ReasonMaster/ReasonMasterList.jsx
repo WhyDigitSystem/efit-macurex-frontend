@@ -6,10 +6,12 @@ import { toast } from "../../../utils/toast";
 const resolveLabel = (value) => {
   if (value && typeof value === "object") {
     return (
-      value.reasonName ||
-      value.valuesDescription ||
       value.departmentName ||
+      value.valuesDescription ||
+      value.description ||
+      value.reasonName ||
       value.name ||
+      value.code ||
       value.id
     );
   }
@@ -21,12 +23,11 @@ const ReasonMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   const [loading, setLoading] = useState(false);
 
   const ORG_ID = localStorage.getItem("orgId");
-  const BRANCH_ID = localStorage.getItem("branchId");
 
   const loadRecords = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await reasonMasterAPI.getAll(ORG_ID, BRANCH_ID);
+      const data = await reasonMasterAPI.getAll(ORG_ID);
       const sorted = (data || []).sort((a, b) => (b.id || 0) - (a.id || 0));
       setRecords(sorted);
     } catch (error) {
@@ -36,7 +37,7 @@ const ReasonMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     } finally {
       setLoading(false);
     }
-  }, [ORG_ID, BRANCH_ID]);
+  }, [ORG_ID]);
 
   useEffect(() => {
     loadRecords();

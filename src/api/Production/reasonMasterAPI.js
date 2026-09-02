@@ -5,16 +5,16 @@ import apiClient from "../apiClient";
    The backend persists the header record in a single transaction, keeps
    the complete reason record history and applies server-side validation. */
 const reasonMasterAPI = {
-  // Get all Reason Masters by org/branch
-  getAll: async (orgId, branchId) => {
+  // Get all Reason Masters by org
+  getAll: async (orgId) => {
     try {
-      const res = await apiClient.get("/api/reasonMaster/getAll", {
-        params: { orgId, branch: branchId },
-      });
+      const res = await apiClient.get(
+        `/api/reasonmaster/getReasonMasterByOrgId?orgId=${orgId}`,
+      );
       return (
+        res?.paramObjectsMap?.reasonMasterResponseVO ||
         res?.paramObjectsMap?.reasonMasterList ||
         res?.paramObjectsMap?.reasonList ||
-        res?.paramObjectsMap?.reasonMasterVO ||
         []
       );
     } catch (error) {
@@ -26,9 +26,9 @@ const reasonMasterAPI = {
   // Get Reason Master by ID
   getById: async (id) => {
     try {
-      const res = await apiClient.get("/api/reasonMaster/getById", {
-        params: { id },
-      });
+      const res = await apiClient.get(
+        `/api/reasonmaster/getReasonMasterById?id=${id}`,
+      );
       return res?.paramObjectsMap?.reasonMasterVO || null;
     } catch (error) {
       console.error("Error fetching reason master by id:", error);
@@ -39,28 +39,11 @@ const reasonMasterAPI = {
   // Create / Update Reason Master
   createUpdate: async (payload) => {
     try {
-      const res = await apiClient.put("/api/reasonMaster/createUpdate", payload);
+      const res = await apiClient.put("/api/reasonmaster/createUpdateReasonMaster", payload);
       return res;
     } catch (error) {
       console.error("Error saving reason master:", error);
       throw error;
-    }
-  },
-
-  // Reason (type/group) options for the mandatory Reason dropdown
-  getReasonOptions: async (orgId, branchId) => {
-    try {
-      const res = await apiClient.get("/api/reasonMaster/getReasonOptions", {
-        params: { orgId, branch: branchId },
-      });
-      return (
-        res?.paramObjectsMap?.reasonList ||
-        res?.paramObjectsMap?.reasonMasterList ||
-        []
-      );
-    } catch (error) {
-      console.error("Error fetching reason options:", error);
-      return [];
     }
   },
 };
