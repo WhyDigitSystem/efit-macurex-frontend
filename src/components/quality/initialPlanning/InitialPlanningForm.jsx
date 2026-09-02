@@ -5,16 +5,16 @@ import {
   Save,
   Trash2,
   X,
+  Eye,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import dayjs from "dayjs";
 import initialPlanningAPI from "../../../api/quality/initialPlanningAPI";
-import parameterMasterAPI from "../../../api/quality/parameterMasterAPI";
-import itemAPI from "../../../api/itemAPI";
 import itemGradeAPI from "../../../api/itemGradeAPI";
 import unitMasterAPI from "../../../api/unitAPI";
 import employeeAPI from "../../../api/employeeAPI";
 import listOfValuesAPI from "../../../api/listOfValuesAPI";
+import partyMasterAPI from "../../../api/partyMasterAPI";
 import { useToast } from "../../Toast/ToastContext";
 
 /* ---------------------------------------------------------------------------- */
@@ -35,15 +35,6 @@ const controlErrClasses =
 
 const cellInputClasses =
   "w-full h-8 px-2 rounded border text-xs leading-none transition-colors " +
-  "bg-white dark:bg-gray-900 " +
-  "border-gray-300 dark:border-gray-600 " +
-  "text-gray-900 dark:text-gray-100 " +
-  "placeholder-gray-400 dark:placeholder-gray-500 " +
-  "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
-  "dark:focus:ring-blue-400 dark:focus:border-blue-400";
-
-const cellTextareaClasses =
-  "w-full h-8 px-2 py-[10px] rounded border text-xs leading-none transition-colors overflow-y-auto resize-none scrollbar-hide " +
   "bg-white dark:bg-gray-900 " +
   "border-gray-300 dark:border-gray-600 " +
   "text-gray-900 dark:text-gray-100 " +
@@ -176,17 +167,19 @@ const SectionHeader = ({ children }) => (
   </h3>
 );
 
-const GridSectionHeader = ({ children, onAdd }) => (
+const GridSectionHeader = ({ children, onAdd, onViewInstruments }) => (
   <div className="flex items-center justify-between mb-2">
     <SectionHeader>{children}</SectionHeader>
-    <button
-      type="button"
-      onClick={onAdd}
-      className="h-6 w-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-colors"
-      title="Add Row"
-    >
-      <Plus size={12} />
-    </button>
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={onAdd}
+        className="h-6 w-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-colors"
+        title="Add Row"
+      >
+        <Plus size={12} />
+      </button>
+    </div>
   </div>
 );
 
@@ -236,13 +229,12 @@ const TableHead = ({ headers }) => (
       {headers.map((h, i) => (
         <th
           key={i}
-          className={`p-2 whitespace-nowrap ${
-            i === 0
-              ? "w-8 text-center"
-              : i === headers.length - 1
-                ? "w-20 text-left"
-                : "text-left"
-          } dark:text-white`}
+          className={`p-2 whitespace-nowrap ${i === 0
+            ? "w-8 text-center"
+            : i === headers.length - 1
+              ? "w-20 text-left"
+              : "text-left"
+            } dark:text-white`}
         >
           {h}
         </th>
@@ -260,11 +252,10 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
         type="button"
         onClick={onRemove}
         disabled={disabled}
-        className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-          disabled
-            ? "bg-gray-400 cursor-not-allowed"
-            : "bg-red-600 hover:bg-red-700"
-        }`}
+        className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
+          ? "bg-gray-400 cursor-not-allowed"
+          : "bg-red-600 hover:bg-red-700"
+          }`}
       >
         <Trash2 size={10} />
       </button>
@@ -272,9 +263,7 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
   </tr>
 );
 
-/* Generic dynamic table. Supports text / number / select / textarea / readonly
-   columns. Options may be plain strings or { value, label }. */
-const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
+const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow, showInstrumentView = false, onViewInstruments }) => (
   <TableWrapper>
     <TableHead headers={["#", ...columns.map((c) => c.label), "Action"]} />
     <tbody>
@@ -307,6 +296,21 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
               );
             }
 
+            if (col.type === "instrumentsView") {
+              return (
+                <td className="p-2 align-top" key={col.key}>
+                  <button
+                    type="button"
+                    onClick={() => onViewInstruments && onViewInstruments(idx)}
+                    className="h-6 px-2 rounded bg-blue-600 hover:bg-blue-700 text-white text-xs flex items-center gap-1 transition-colors"
+                    title="View Instruments"
+                  >
+                    <Eye size={14} />
+                  </button>
+                </td>
+              );
+            }
+
             return (
               <td className="p-2 align-top" key={col.key}>
                 <input
@@ -327,6 +331,93 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
   </TableWrapper>
 );
 
+const InstrumentsPopup = ({
+  isOpen,
+  onClose,
+  instrumentRows,
+  onInstrumentCellChange,
+  onAddInstrumentRow,
+  onRemoveInstrumentRow,
+}) => {
+  if (!isOpen) return null;
+
+  const columns = [
+    { key: "instrumentNo", label: "Instrument No. *" },
+    { key: "instrumentName", label: "Instrument Name *" },
+    { key: "range", label: "Range" },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+          <h3 className="text-base font-semibold text-gray-900 dark:text-white">
+            Fill Instruments
+          </h3>
+          <button
+            onClick={onClose}
+            className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          >
+            <X size={20} className="text-gray-500 dark:text-gray-400" />
+          </button>
+        </div>
+
+        <div className="p-4 overflow-y-auto flex-1">
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-xs text-gray-500 dark:text-gray-400">
+              Manage instruments for this planning
+            </div>
+            <button
+              type="button"
+              onClick={onAddInstrumentRow}
+              className="h-6 w-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-colors"
+            >
+              <Plus size={12} />
+            </button>
+          </div>
+
+          <TableWrapper>
+            <TableHead headers={["S.No", ...columns.map((c) => c.label), "Action"]} />
+            <tbody>
+              {instrumentRows.map((row, index) => (
+                <TableRow
+                  key={index}
+                  index={index}
+                  onRemove={() => onRemoveInstrumentRow(index)}
+                  disabled={instrumentRows.length <= 1}
+                >
+                  {columns.map((col) => (
+                    <td className="p-2 align-top" key={col.key}>
+                      <input
+                        type="text"
+                        value={row[col.key] || ""}
+                        onChange={(e) =>
+                          onInstrumentCellChange(index, col.key, e.target.value)
+                        }
+                        className={cellInputClasses}
+                        placeholder={`Enter ${col.label}`}
+                      />
+                    </td>
+                  ))}
+                </TableRow>
+              ))}
+            </tbody>
+          </TableWrapper>
+        </div>
+
+        <div className="flex justify-end p-4 border-t border-gray-200 dark:border-gray-700">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 /* ---------------------------------------------------------------------------- */
 /* Tab config / row factories                                                  */
 
@@ -337,8 +428,10 @@ const CHILD_TABS = [
 
 const emptyDetailRow = () => ({
   parameter: "",
+  parameterTypeDescription: "",
   specification: "",
   uom: "",
+  uomId: "", // Store the UOM ID
   accCriteria: "",
   inspectionMethod: "",
   instrumentsUsed: "",
@@ -353,8 +446,16 @@ const emptyInstrumentRow = () => ({
 
 const fmtDate = (value) => (value ? dayjs(value).format("YYYY-MM-DD") : "");
 
-const generateDocNo = () =>
-  `IPL-${dayjs().format("YYYYMMDD")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
+// Get current financial year
+const getFinancialYear = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  if (month >= 0 && month <= 2) {
+    return `${year - 1}-${year}`;
+  }
+  return `${year}`;
+};
 
 /* ---------------------------------------------------------------------------- */
 
@@ -369,6 +470,7 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
   const [loading, setLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [tableErrors, setTableErrors] = useState({});
+  const [showInstrumentsPopup, setShowInstrumentsPopup] = useState(false);
 
   /* ---------------- Lookup options ---------------- */
   const [itemTypeOptions, setItemTypeOptions] = useState([]);
@@ -377,14 +479,16 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
   const [itemMap, setItemMap] = useState({});
   const [gradeOptions, setGradeOptions] = useState([]);
   const [uomOptions, setUomOptions] = useState([]);
+  const [uomMap, setUomMap] = useState({});
   const [parameterOptions, setParameterOptions] = useState([]);
+  const [parameterMap, setParameterMap] = useState({});
   const [employeeOptions, setEmployeeOptions] = useState([]);
 
   /* ---------------- State ---------------- */
   const [header, setHeader] = useState(() => ({
     id: 0,
-    docNo: editData ? "" : generateDocNo(),
-    docDate: "",
+    docNo: "",
+    docDate: dayjs().format("YYYY-MM-DD"),
     itemType: "",
     itemCode: "",
     itemDesc: "",
@@ -411,6 +515,26 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
     approved: "",
   });
 
+  /* ---------------- Generate Doc ID ---------------- */
+  const generateDocId = useCallback(async () => {
+    try {
+      const currentYear = dayjs().year();
+      const response = await initialPlanningAPI.getInitialPlanningDocId(
+        currentYear,
+        ORG_ID
+      );
+
+      if (response?.paramObjectsMap?.initialPlanningDocId) {
+        return response.paramObjectsMap.initialPlanningDocId;
+      }
+      return `INIP/${currentYear}/00001`;
+    } catch (error) {
+      console.error("Error generating Doc ID:", error);
+      const currentYear = dayjs().year();
+      return `INIP/${currentYear}/00001`;
+    }
+  }, [ORG_ID]);
+
   /* ---------------- Lookup loading ---------------- */
 
   const loadLov = useCallback(async (group, setter) => {
@@ -419,7 +543,7 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
       if (Array.isArray(res) && res.length) {
         setter(
           res.map((v) => ({
-            value: v.valuesDescription || v.valueDescription || v.id,
+            value: v.id,
             label: v.valuesDescription || v.valueDescription || v.id,
           })),
         );
@@ -430,13 +554,19 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
     }
   }, [ORG_ID]);
 
-  const loadItems = useCallback(async () => {
+  const loadItems = useCallback(async (itemType) => {
     try {
-      const res = await itemAPI.getItems(ORG_ID, BRANCH_ID);
+      const res = await initialPlanningAPI.getItemDropdownForInitialPlanning(itemType, ORG_ID);
       const map = {};
       const options = (res || []).map((it) => {
         map[it.itemCode] = it;
-        return { value: it.itemCode, label: it.itemCode };
+        return {
+          value: it.itemCode,
+          label: it.itemCode,
+          itemGrade: it.gradeDescription,
+          id: it.id, // Store the item ID
+          gradeId: it.gradeId, // Store the grade ID
+        };
       });
       setItemOptions(options);
       setItemMap(map);
@@ -445,7 +575,7 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
       setItemOptions([]);
       setItemMap({});
     }
-  }, [ORG_ID, BRANCH_ID]);
+  }, [ORG_ID]);
 
   const loadGrades = useCallback(async () => {
     try {
@@ -462,43 +592,60 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
     }
   }, [ORG_ID, BRANCH_ID]);
 
-  const loadUnits = useCallback(async () => {
+  const loadUoms = useCallback(async () => {
     try {
-      const res = await unitMasterAPI.getUnits(BRANCH_ID, ORG_ID);
-      setUomOptions(
-        (res || []).map((u) => ({
-          value: u.unitId || u.id,
-          label: u.unitId || u.unitName || u.id,
-        })),
-      );
+      const res = await unitMasterAPI.getUnits(ORG_ID);
+      console.log("UOM options loaded:", res);
+      const map = {};
+      const options = (res || []).map((u) => {
+        const unitId = u.unitId || u.id;
+        map[unitId] = u;
+        return {
+          value: unitId,
+          label: unitId || u.id,
+          id: u.id, // Store the UOM ID
+        };
+      });
+      setUomOptions(options);
+      setUomMap(map);
     } catch (error) {
-      console.error("Failed to load units:", error);
+      console.error("Failed to load UOMs:", error);
       setUomOptions([]);
+      setUomMap({});
     }
-  }, [ORG_ID, BRANCH_ID]);
+  }, [ORG_ID]);
 
   const loadParameters = useCallback(async () => {
     try {
-      const res = await parameterMasterAPI.getParameters(ORG_ID);
-      setParameterOptions(
-        (res || []).map((p) => ({
+      const res = await initialPlanningAPI.getParameterDropdownForInitialPlanning(ORG_ID);
+      console.log("Parameters loaded:", res);
+      const map = {};
+      const options = (res || []).map((p) => {
+        map[p.id] = p;
+        return {
           value: p.id,
-          label: p.parameterType || p.parameterId,
-        })),
-      );
+          label: p.parameterDescription || p.parameterCode || p.id,
+          parameterTypeDescription: p.parameterTypeDescription || "",
+        };
+      });
+      setParameterOptions(options);
+      setParameterMap(map);
     } catch (error) {
       console.error("Failed to load parameters:", error);
       setParameterOptions([]);
+      setParameterMap({});
     }
   }, [ORG_ID]);
 
   const loadEmployees = useCallback(async () => {
     try {
       const res = await employeeAPI.getEmployeeByOrgId(ORG_ID);
+      console.log("Employees loaded:", res);
       setEmployeeOptions(
-        (res || []).map((e) => ({
-          value: e.id,
-          label: e.employeeName || e.name || e.id,
+        (res || []).map((emp) => ({
+          value: emp.id,
+          label: emp.employeeName || emp.employeeId || emp.id,
+          employeeId: emp.employeeId,
         })),
       );
     } catch (error) {
@@ -507,36 +654,65 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
     }
   }, [ORG_ID]);
 
+  const loadSourceOptions = useCallback(async () => {
+    try {
+      const res = await partyMasterAPI.getPartyByOrgId(ORG_ID, BRANCH_ID);
+      console.log("Source options loaded:", res);
+      setSourceOptions(
+        (res || []).map((party) => ({
+          value: party.id,
+          label: party.customerName || party.customerLegalName || party.id,
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to load source options:", error);
+      setSourceOptions([]);
+    }
+  }, [ORG_ID, BRANCH_ID]);
+
   useEffect(() => {
     loadLov("ITEM TYPE", setItemTypeOptions);
-    loadLov("SOURCE", setSourceOptions);
-    loadItems();
+    loadSourceOptions();
     loadGrades();
-    loadUnits();
+    loadUoms();
     loadParameters();
     loadEmployees();
-  }, [
-    loadLov,
-    loadItems,
-    loadGrades,
-    loadUnits,
-    loadParameters,
-    loadEmployees,
-  ]);
+  }, [loadLov, loadSourceOptions, loadGrades, loadUoms, loadParameters, loadEmployees]);
+
+  useEffect(() => {
+    if (header.itemType) {
+      loadItems(header.itemType);
+    } else {
+      setItemOptions([]);
+      setItemMap({});
+    }
+  }, [header.itemType, loadItems]);
+
+  useEffect(() => {
+    const initDocId = async () => {
+      if (!editData && !editId) {
+        const docId = await generateDocId();
+        setHeader((prev) => ({ ...prev, docNo: docId }));
+      }
+    };
+    initDocId();
+  }, []);
 
   /* ---------------- Edit data loading ---------------- */
 
   const populateFormFromEditData = (data) => {
+    console.log("Populating form with edit data:", data);
+
     setHeader({
       id: data.id || 0,
-      docNo: data.docNo || data.planningNo || generateDocNo(),
-      docDate: fmtDate(data.docDate),
-      itemType: data.itemType || "",
-      itemCode: data.itemCode || "",
-      itemDesc: data.itemDesc || data.itemDescription || "",
-      itemGrade: data.itemGrade || "",
+      docNo: data.docId || "",
+      docDate: fmtDate(data.docDate) || dayjs().format("YYYY-MM-DD"),
+      itemType: data.itemType?.id || "",
+      itemCode: data.item?.itemCode || "",
+      itemDesc: data.item?.itemDescription || "",
+      itemGrade: data.item_grade?.gradeDescription || "",
       drawingNo: data.drawingNo || "",
-      source: data.source || "",
+      source: data.source?.id || "",
       materialCharacteristics: data.materialCharacteristics || "",
       samplingPlan: data.samplingPlan || "",
       sourceText: data.sourceText || "",
@@ -545,45 +721,53 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
     });
 
     setDetailRows(
-      data.planningDetails?.length
-        ? data.planningDetails.map((d) => ({
-            parameter: d.parameter || "",
-            specification: d.specification || "",
-            uom: d.uom || "",
-            accCriteria: d.accCriteria || "",
-            inspectionMethod: d.inspectionMethod || "",
-            instrumentsUsed: d.instrumentsUsed ?? "",
-            remarks: d.remarks || "",
-          }))
+      data.initialPlanningDetailsResponseDTO?.length
+        ? data.initialPlanningDetailsResponseDTO.map((d) => ({
+          parameter: d.parameter || "",
+          parameterTypeDescription: "",
+          specification: d.specification || "",
+          uom: d.uom?.unitId || "",
+          uomId: d.uom?.id || "", // Store the UOM ID
+          accCriteria: d.accCriteria || "",
+          inspectionMethod: d.inspectionMethod || "",
+          instrumentsUsed: d.noOfInstrumentsUsed ?? "",
+          remarks: d.remarks || "",
+        }))
         : [emptyDetailRow()],
     );
 
     setInstrumentRows(
-      data.instruments?.length
-        ? data.instruments.map((i) => ({
-            instrumentNo: i.instrumentNo || "",
-            instrumentName: i.instrumentName || "",
-            range: i.range || "",
-          }))
+      data.initialPlanningDetailsResponseDTO?.[0]?.initialPlanningInstrumentDetailsResponseDTO?.length
+        ? data.initialPlanningDetailsResponseDTO[0].initialPlanningInstrumentDetailsResponseDTO.map((i) => ({
+          instrumentNo: i.instrumentNo || "",
+          instrumentName: i.instrumentName || "",
+          range: i.range || "",
+        }))
         : [emptyInstrumentRow()],
     );
 
     setSummary({
-      process: data.summary?.process || "",
-      aesthetics: data.summary?.aesthetics || "",
-      packingRequirements: data.summary?.packingRequirements || "",
-      others: data.summary?.others || "",
-      preparedBy: data.summary?.preparedBy || "",
-      approvedBy: data.summary?.approvedBy || "",
-      approved: data.summary?.approved || "",
+      process: data.process || "",
+      aesthetics: data.aesthetics || "",
+      packingRequirements: data.packingRequirements || "",
+      others: data.others || "",
+      preparedBy: data.preparedBy?.employeeId || "",
+      approvedBy: data.approvedBy?.employeeId || "",
+      approved: data.approved || "",
     });
   };
 
   const loadPlanningData = async (planningId) => {
     try {
       setLoading(true);
-      const data = await initialPlanningAPI.getInitialPlanningById(planningId);
-      if (data) populateFormFromEditData(data);
+      const response = await initialPlanningAPI.getInitialPlanningById(planningId);
+      console.log("Get By ID Response:", response);
+
+      if (response) {
+        populateFormFromEditData(response);
+      } else {
+        addToast("Failed to load planning data", "error");
+      }
     } catch (error) {
       console.error("Error loading initial planning data:", error);
       addToast("Failed to load initial planning data", "error");
@@ -609,13 +793,24 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
       setFieldErrors((prev) => ({ ...prev, [name]: "" }));
     }
 
+    if (name === "itemType") {
+      setHeader((prev) => ({
+        ...prev,
+        itemType: value,
+        itemCode: "",
+        itemDesc: "",
+        itemGrade: "",
+      }));
+      return;
+    }
+
     if (name === "itemCode") {
       const item = itemMap[value];
       setHeader((prev) => ({
         ...prev,
         itemCode: value,
-        itemDesc: item?.itemDescription || item?.itemDesc || "",
-        itemGrade: item?.itemGrade || prev.itemGrade || "",
+        itemDesc: item?.itemDescription || "",
+        itemGrade: item?.gradeDescription || "",
       }));
       return;
     }
@@ -633,18 +828,58 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
     setSummary((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleDetailCellChange = (idx, key, value) =>
+  const handlePreparedByChange = (e) => {
+    const value = e.target.value;
+
+    if (value && summary.approvedBy === value) {
+      addToast("This employee is already selected as Approved By. Please select a different employee.", "warning");
+      return;
+    }
+
+    setSummary((prev) => ({ ...prev, preparedBy: value }));
+    if (fieldErrors.preparedBy) {
+      setFieldErrors((prev) => ({ ...prev, preparedBy: "" }));
+    }
+  };
+
+  const handleApprovedByChange = (e) => {
+    const value = e.target.value;
+
+    if (value && summary.preparedBy === value) {
+      addToast("This employee is already selected as Prepared By. Please select a different employee.", "warning");
+      return;
+    }
+
+    setSummary((prev) => ({ ...prev, approvedBy: value }));
+    if (fieldErrors.approvedBy) {
+      setFieldErrors((prev) => ({ ...prev, approvedBy: "" }));
+    }
+  };
+
+  const handleDetailCellChange = (idx, key, value) => {
     setDetailRows((prev) =>
-      prev.map((row, i) =>
-        i === idx
-          ? {
-              ...row,
-              [key]:
-                key === "instrumentsUsed" ? value.replace(/\D/g, "") : value,
-            }
-          : row,
-      ),
+      prev.map((row, i) => {
+        if (i === idx) {
+          const updatedRow = { ...row, [key]: value };
+
+          if (key === "parameter") {
+            const selectedParam = parameterMap[value];
+            updatedRow.parameterTypeDescription = selectedParam?.parameterTypeDescription || "";
+            updatedRow.inspectionMethod = selectedParam?.parameterTypeDescription || "";
+          }
+
+          // If UOM is selected, store its ID
+          if (key === "uom") {
+            const selectedUom = uomMap[value];
+            updatedRow.uomId = selectedUom?.id || value;
+          }
+
+          return updatedRow;
+        }
+        return row;
+      })
     );
+  };
 
   const handleInstrumentCellChange = (idx, key, value) =>
     setInstrumentRows((prev) =>
@@ -667,11 +902,16 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
       prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx),
     );
 
-  const handleNew = () => {
+  const handleViewInstruments = () => {
+    setShowInstrumentsPopup(true);
+  };
+
+  const handleNew = async () => {
+    const docId = await generateDocId();
     setHeader({
       id: 0,
-      docNo: generateDocNo(),
-      docDate: "",
+      docNo: docId,
+      docDate: dayjs().format("YYYY-MM-DD"),
       itemType: "",
       itemCode: "",
       itemDesc: "",
@@ -712,6 +952,10 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
     if (!header.source) errors.source = "Source is required";
     if (!summary.preparedBy) errors.preparedBy = "Prepared By is required";
     if (!summary.approvedBy) errors.approvedBy = "Approved By is required";
+
+    if (summary.preparedBy && summary.approvedBy && summary.preparedBy === summary.approvedBy) {
+      errors.approvedBy = "Prepared By and Approved By cannot be the same person";
+    }
 
     setFieldErrors(errors);
 
@@ -771,49 +1015,50 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
 
     setIsSubmitting(true);
 
+    // Get the selected item to get its ID and gradeId
+    const selectedItem = itemMap[header.itemCode];
+
     const payload = {
       ...(header.id && header.id > 0 && { id: header.id }),
-      docNo: header.docNo,
+      active: true,
+      docId: header.docNo,
       docDate: header.docDate,
-      itemType: header.itemType,
-      itemCode: header.itemCode,
-      itemDesc: header.itemDesc,
-      itemGrade: header.itemGrade,
-      drawingNo: header.drawingNo,
-      source: header.source,
-      materialCharacteristics: header.materialCharacteristics,
-      samplingPlan: header.samplingPlan,
-      sourceText: header.sourceText,
-      planningDetails: detailRows
-        .filter((r) => r.parameter?.trim())
+      itemType: Number(header.itemType),
+      item: selectedItem?.id || Number(header.itemCode), // Send item ID (from the API response)
+      item_grade: selectedItem?.gradeId || 0, // Send grade ID (from the API response)
+      drawingNo: header.drawingNo || "",
+      source: Number(header.source),
+      materialCharacteristics: header.materialCharacteristics || "",
+      samplingPlan: header.samplingPlan || "",
+      orgId: ORG_ID,
+      createdBy: CREATED_BY,
+      cancelRemarks: "",
+      financialYear: getFinancialYear(),
+      process: summary.process || "",
+      aesthetics: summary.aesthetics || "",
+      packingRequirements: summary.packingRequirements || "",
+      others: summary.others || "",
+      preparedBy: summary.preparedBy ? Number(summary.preparedBy) : 0,
+      approvedBy: summary.approvedBy ? Number(summary.approvedBy) : 0,
+      approved: summary.approved || "",
+      initialPlanningDetailsDTO: detailRows
+        .filter((r) => r.parameter?.trim() && r.specification?.trim() && r.uom?.trim())
         .map((r) => ({
-          parameter: r.parameter,
-          specification: r.specification,
-          uom: r.uom,
-          accCriteria: r.accCriteria,
-          inspectionMethod: r.inspectionMethod,
-          instrumentsUsed:
-            r.instrumentsUsed === "" ? "" : Number(r.instrumentsUsed),
-          remarks: r.remarks,
+          parameter: r.parameter || "",
+          specification: r.specification || "",
+          uom: Number(r.uomId) || 0, // Send UOM ID
+          accCriteria: r.accCriteria || "",
+          inspectionMethod: r.inspectionMethod || "",
+          noOfInstrumentsUsed: r.instrumentsUsed ? Number(r.instrumentsUsed) : 0,
+          remarks: r.remarks || "",
+          initialPlanningInstrumentDetailsDTO: instrumentRows
+            .filter((inst) => inst.instrumentNo?.trim() && inst.instrumentName?.trim())
+            .map((inst) => ({
+              instrumentNo: inst.instrumentNo || "",
+              instrumentName: inst.instrumentName || "",
+              range: inst.range || "",
+            })),
         })),
-      instruments: instrumentRows
-        .filter((r) => r.instrumentNo?.trim())
-        .map((r) => ({
-          instrumentNo: r.instrumentNo,
-          instrumentName: r.instrumentName,
-          range: r.range,
-        })),
-      summary: {
-        process: summary.process,
-        aesthetics: summary.aesthetics,
-        packingRequirements: summary.packingRequirements,
-        others: summary.others,
-        preparedBy: summary.preparedBy,
-        approvedBy: summary.approvedBy,
-        approved: summary.approved,
-      },
-      orgId: header.orgId,
-      createdBy: header.createdBy,
     };
 
     console.log("Submitting Initial Planning Payload:", payload);
@@ -873,6 +1118,16 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
     );
   }
 
+  const getPreparedByOptions = () => {
+    if (!summary.approvedBy) return employeeOptions;
+    return employeeOptions.filter(opt => String(opt.value) !== String(summary.approvedBy));
+  };
+
+  const getApprovedByOptions = () => {
+    if (!summary.preparedBy) return employeeOptions;
+    return employeeOptions.filter(opt => String(opt.value) !== String(summary.preparedBy));
+  };
+
   return (
     <div className="w-full p-2">
       {/* Header */}
@@ -891,7 +1146,7 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
 
       {/* Main Card */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
-        {/* ---------------- Header Info ---------------- */}
+        {/* Header Info */}
         <div>
           <SectionHeader>Header</SectionHeader>
           <div className={fieldGrid}>
@@ -941,13 +1196,12 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
               disabled
             />
             <Field
-              type="select"
               label="Item Grade"
               name="itemGrade"
               value={header.itemGrade}
               onChange={handleHeaderChange}
               error={fieldErrors.itemGrade}
-              options={gradeOptions}
+              disabled
               required
             />
             <Field
@@ -967,30 +1221,23 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
               required
             />
             <Field
-              type="textarea"
-              label="Material Characteristics"
-              name="materialCharacteristics"
-              value={header.materialCharacteristics}
-              onChange={handleHeaderChange}
-            />
-            <Field
               label="Sampling Plan"
               name="samplingPlan"
               value={header.samplingPlan}
               onChange={handleHeaderChange}
             />
             <Field
-              label="Source"
-              name="sourceText"
-              value={header.sourceText}
+              type="textarea"
+              label="Material Characteristics"
+              name="materialCharacteristics"
+              value={header.materialCharacteristics}
               onChange={handleHeaderChange}
             />
           </div>
         </div>
 
-        {/* ---------------- Child Tabs ---------------- */}
+        {/* Child Tabs */}
         <section className="mt-0 bg-white dark:bg-gray-800">
-          {/* Tabs */}
           <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 mb-0">
             <div className="flex flex-wrap">
               {CHILD_TABS.map((tab) => (
@@ -998,11 +1245,10 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
                   key={tab.key}
                   type="button"
                   onClick={() => setActiveChildTab(tab.key)}
-                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${
-                    activeChildTab === tab.key
-                      ? "bg-blue-600 text-white"
-                      : "text-gray-600 dark:text-gray-300"
-                  }`}
+                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${activeChildTab === tab.key
+                    ? "bg-blue-600 text-white"
+                    : "text-gray-600 dark:text-gray-300"
+                    }`}
                 >
                   {tab.label}
                 </button>
@@ -1042,41 +1288,22 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
                       label: "No. of Instruments Used",
                       type: "number",
                     },
+                    {
+                      key: "instrumentsView",
+                      label: "",
+                      type: "instrumentsView",
+                    },
                     { key: "remarks", label: "Remarks" },
                   ]}
                   rows={detailRows}
                   onCellChange={handleDetailCellChange}
                   onRemoveRow={handleRemoveDetailRow}
+                  onViewInstruments={handleViewInstruments}
                 />
 
                 {tableErrors.details && (
                   <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
                     {tableErrors.details}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <GridSectionHeader
-                  onAdd={handleAddInstrumentRow}
-                >
-                  Fill Instruments
-                </GridSectionHeader>
-
-                <DynamicTable
-                  columns={[
-                    { key: "instrumentNo", label: "Instrument No. *" },
-                    { key: "instrumentName", label: "Instrument Name *" },
-                    { key: "range", label: "Range" },
-                  ]}
-                  rows={instrumentRows}
-                  onCellChange={handleInstrumentCellChange}
-                  onRemoveRow={handleRemoveInstrumentRow}
-                />
-
-                {tableErrors.instruments && (
-                  <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
-                    {tableErrors.instruments}
                   </p>
                 )}
               </div>
@@ -1120,9 +1347,9 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
                   label="Prepared By"
                   name="preparedBy"
                   value={summary.preparedBy}
-                  onChange={handleSummaryChange}
+                  onChange={handlePreparedByChange}
                   error={fieldErrors.preparedBy}
-                  options={employeeOptions}
+                  options={getPreparedByOptions()}
                   required
                 />
                 <Field
@@ -1130,9 +1357,9 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
                   label="Approved By"
                   name="approvedBy"
                   value={summary.approvedBy}
-                  onChange={handleSummaryChange}
+                  onChange={handleApprovedByChange}
                   error={fieldErrors.approvedBy}
-                  options={employeeOptions}
+                  options={getApprovedByOptions()}
                   required
                 />
                 <Field
@@ -1159,6 +1386,16 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
           saveLabel={editData || editId ? "Update" : "Submit"}
         />
       </div>
+
+      {/* Instruments Popup */}
+      <InstrumentsPopup
+        isOpen={showInstrumentsPopup}
+        onClose={() => setShowInstrumentsPopup(false)}
+        instrumentRows={instrumentRows}
+        onInstrumentCellChange={handleInstrumentCellChange}
+        onAddInstrumentRow={handleAddInstrumentRow}
+        onRemoveInstrumentRow={handleRemoveInstrumentRow}
+      />
     </div>
   );
 };

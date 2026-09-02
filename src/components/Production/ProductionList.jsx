@@ -24,13 +24,39 @@ import {
   Wrench,
   Clock3,
   CalendarDays,
+  Settings2,
 } from "lucide-react";
 import { hasScreenAccess } from "../../utils/accessControl";
 
 // Same section/item shape as menu-items config, so this page reads
 // like every other module page in the app (mirrors MastersList.js).
 const SECTIONS = [
+  // 1. MASTERS
   {
+    title: "Masters",
+    description: "Manage production master data and planning",
+    icon: Settings2,
+    gradient: "from-purple-600 to-indigo-500",
+    color: "purple",
+
+    items: [
+      {
+        name: "Machine /Instrument Master",
+        icon: Settings2,
+        path: "/machineMaster",
+        screenCode: "MACHINE_MASTER",
+      },
+    ],
+  },
+
+  // 2. PRODUCTION
+  {
+    title: "Production",
+    description: "Manage production planning, manufacturing operations, shop floor activities and production transactions",
+    icon: Factory,
+    gradient: "from-red-500 to-orange-600",
+    color: "red",
+
     items: [
       {
         name: "Production Schedule Order",
@@ -357,27 +383,11 @@ const ProductionList = () => {
     >
       {hasAnyItems ? (
         <>
-          {/* Main Header */}
-          {/* Main Header */}
-          <div className="flex items-center gap-2 mb-4">
-            <div className="p-1.5 rounded-lg bg-gradient-to-br from-red-500 to-orange-600 shadow-sm">
-              <Factory className="h-4 w-4 text-white" />
-            </div>
 
-            <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-              Production
-            </h2>
+          {/* ======================================================
+              MASTERS + PRODUCTION SECTIONS
+          ====================================================== */}
 
-            <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
-              Manage production planning, manufacturing operations, shop floor
-              activities and production transactions
-            </span>
-
-            <div className="flex-1 h-px bg-gradient-to-r from-gray-200 to-transparent dark:from-gray-700"></div>
-          </div>
-
-          {/* Each section gets its own row heading (when it has a title)
-              + each item card gets its own color */}
           {filteredSections.map((section, sectionIndex) => {
             const SectionIcon = section.icon;
 
@@ -386,24 +396,23 @@ const ProductionList = () => {
                 key={section.title || `section-${sectionIndex}`}
                 className="mb-5"
               >
-                {/* Section Row Heading — only rendered when the section
-                    actually has a title (skips the unnamed first section) */}
+                {/* Section Row Heading */}
                 {section.title && (
-                  <div className="flex items-center gap-2 mb-2">
+                  <div className="flex items-center gap-2 mb-3">
                     {SectionIcon && (
                       <div
-                        className={`p-1 rounded-md bg-gradient-to-br ${section.gradient} shadow-sm`}
+                        className={`p-1.5 rounded-lg bg-gradient-to-br ${section.gradient} shadow-sm`}
                       >
-                        <SectionIcon className="h-3.5 w-3.5 text-white" />
+                        <SectionIcon className="h-4 w-4 text-white" />
                       </div>
                     )}
                     <h3
-                      className={`text-sm font-semibold ${getColorStyles(section.color).text}`}
+                      className={`text-base font-semibold ${getColorStyles(section.color).text}`}
                     >
                       {section.title}
                     </h3>
                     {section.description && (
-                      <span className="text-[11px] text-gray-500 dark:text-gray-400">
+                      <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">
                         {section.description}
                       </span>
                     )}
@@ -463,10 +472,10 @@ const ProductionList = () => {
         <div className="flex items-center justify-center h-[50vh]">
           <div className="text-center">
             <h2 className="text-base font-semibold text-gray-800 dark:text-white">
-              No sales modules available
+              No production modules available
             </h2>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              You do not have access to any sales module.
+              You do not have access to any production module.
             </p>
           </div>
         </div>

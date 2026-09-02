@@ -16,8 +16,14 @@ import ReconcileConsumptionStock from "../components/Production/ReconcileConsump
 import ScrapNoteMaster from "../components/Production/ScrapNote/ScrapNoteMaster";
 import StockOrderMaster from "../components/Production/StockOrder/StockOrderMaster";
 import ToolsFixturesMaster from "../components/Production/ToolsFixtures/ToolsFixturesMaster";
+import MachineMaster from "../components/Production/MachineMaster/MachineMaster";
 
 const productionRoutes = [
+  {
+    path: "/machineMaster",
+    label: "Machine Master",
+    element: <MachineMaster />,
+  },
   {
     path: "/productionscheduleorder",
     label: "Production Schedule Order",

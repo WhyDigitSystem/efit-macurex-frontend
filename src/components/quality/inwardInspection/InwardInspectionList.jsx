@@ -18,10 +18,15 @@ const InwardInspectionList = ({
   const loadRecords = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await inwardInspectionAPI.getInwardInspectionByOrgId(
+      const response = await inwardInspectionAPI.getInwardInspectionByOrgId(
         ORG_ID,
         BRANCH_ID,
       );
+
+      console.log("Inward Inspection List Response:", response);
+
+      // The response should be an array of records
+      const data = Array.isArray(response) ? response : [];
       data.sort((a, b) => (b.id || 0) - (a.id || 0));
       setRecords(data);
     } catch (error) {
@@ -41,72 +46,74 @@ const InwardInspectionList = ({
     {
       key: "docNo",
       label: "Doc No",
-      accessor: (row) => row.docNo,
+      accessor: (row) => row.docId || row.docNo || "",
       type: "text",
       noWrap: true,
     },
     {
       key: "docDate",
       label: "Doc Date",
-      accessor: (row) => row.docDate,
+      accessor: (row) => row.docDate || "",
       type: "text",
     },
     {
       key: "plantId",
       label: "Plant",
-      accessor: (row) =>
-        typeof row.plantId === "object"
-          ? row.plantId.branchName || row.plantId.id
-          : row.plantName || row.plantId,
+      accessor: (row) => {
+        if (row.branch) {
+          return row.branch.branchName || row.branch.id;
+        }
+        if (row.plantId) {
+          return typeof row.plantId === "object"
+            ? row.plantId.branchName || row.plantId.id
+            : row.plantId;
+        }
+        return "";
+      },
       type: "text",
     },
     {
       key: "inwardType",
       label: "Inward Type",
-      accessor: (row) => row.inwardType,
+      accessor: (row) => row.inwardType || "",
       type: "text",
     },
     {
       key: "supplierCode",
       label: "Supplier Code",
-      accessor: (row) =>
-        typeof row.supplierCode === "object"
-          ? row.supplierCode.customerCode || row.supplierCode.id
-          : row.supplierCode,
+      accessor: (row) => {
+        if (row.supplierCode) {
+          return typeof row.supplierCode === "object"
+            ? row.supplierCode.supplierCode || row.supplierCode.id
+            : row.supplierCode;
+        }
+        return "";
+      },
       type: "text",
     },
     {
       key: "supplierName",
       label: "Supplier Name",
-      accessor: (row) =>
-        typeof row.supplierName === "object"
-          ? row.supplierName.customerName || row.supplierName.name || row.supplierName.id
-          : row.supplierName,
+      accessor: (row) => {
+        if (row.supplierCode) {
+          return typeof row.supplierCode === "object"
+            ? row.supplierCode.supplierName || row.supplierCode.customerName || row.supplierCode.name || row.supplierCode.id
+            : row.supplierCode;
+        }
+        if (row.supplierName) {
+          return typeof row.supplierName === "object"
+            ? row.supplierName.customerName || row.supplierName.name || row.supplierName.id
+            : row.supplierName;
+        }
+        return "";
+      },
       type: "text",
     },
     {
       key: "mrnNo",
       label: "MRN/SC GRN No",
-      accessor: (row) => row.mrnNo || row.mrnScGrnNo,
+      accessor: (row) => row.mrinGrnNo || row.mrnNo || row.mrnScGrnNo || "",
       type: "text",
-    },
-    {
-      key: "approved",
-      label: "Approved",
-      accessor: (row) => (row.approved ? "Yes" : "No"),
-      type: "status",
-      statusVariants: {
-        Yes: {
-          label: "Yes",
-          className:
-            "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
-        },
-        No: {
-          label: "No",
-          className:
-            "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
-        },
-      },
     },
     {
       key: "active",
@@ -136,18 +143,16 @@ const InwardInspectionList = ({
   ];
 
   const searchFields = [
+    "docId",
     "docNo",
     "docDate",
-    "plantId",
-    "plantId.branchName",
-    "plantName",
     "inwardType",
-    "supplierCode",
-    "supplierCode.customerCode",
-    "supplierName",
-    "supplierName.customerName",
+    "mrinGrnNo",
     "mrnNo",
     "mrnScGrnNo",
+    "supplierCode.supplierCode",
+    "supplierCode.supplierName",
+    "branch.branchName",
   ];
 
   const filterOptions = [
@@ -163,14 +168,14 @@ const InwardInspectionList = ({
       value: "active",
       label: "Active",
       field: "active",
-      filterValue: "active",
+      filterValue: "Active",
       activeValue: "Active",
     },
     {
       value: "inactive",
       label: "Inactive",
       field: "active",
-      filterValue: "inactive",
+      filterValue: "Inactive",
       activeValue: "Active",
     },
   ];

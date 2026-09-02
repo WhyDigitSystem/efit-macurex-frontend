@@ -6,14 +6,15 @@ import {
   Trash2,
   Paperclip,
   UploadCloud,
+  Eye,
+  FileText,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import dayjs from "dayjs";
 import { useToast } from "../../Toast/ToastContext";
 import inwardInspectionAPI from "../../../api/quality/inwardInspectionAPI";
 import branchAPI from "../../../api/branchAPI";
 import locationMasterAPI from "../../../api/locationMasterAPI";
-import itemAPI from "../../../api/itemAPI";
 import unitMasterAPI from "../../../api/unitAPI";
 import partyMasterAPI from "../../../api/partyMasterAPI";
 import { employeeAPI } from "../../../api/employeeAPI";
@@ -163,36 +164,52 @@ const Field = ({
   );
 };
 
-// Yes / No toggle for the Approved header field.
-const ToggleField = ({ label, name, value, onChange, required, disabled }) => (
-  <div className="w-full">
-    <label className={labelClasses}>
-      {label}
-      {required && <span className="text-red-500"> *</span>}
-    </label>
+// Select field for Approved (Yes/No)
+const ApprovedSelectField = ({
+  label,
+  name,
+  value,
+  onChange,
+  required,
+  error,
+  disabled,
+  className = "",
+}) => {
+  const options = [
+    { value: "Yes", label: "Yes" },
+    { value: "No", label: "No" },
+  ];
 
-    <div className="flex h-[30px] items-center gap-2">
-      <button
-        type="button"
+  return (
+    <div className={`w-full ${className}`}>
+      <label className={labelClasses}>
+        {label}
+        {required && <span className="text-red-500"> *</span>}
+      </label>
+
+      <select
+        name={name}
+        value={value}
+        onChange={onChange}
         disabled={disabled}
-        onClick={() => onChange({ target: { name, value: !value } })}
-        className={`relative inline-flex h-[22px] w-[40px] items-center rounded-full transition-colors ${
-          value ? "bg-green-600" : "bg-gray-300 dark:bg-gray-600"
-        } ${disabled ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+        className={`${controlClasses} ${error ? controlErrClasses : ""}`}
       >
-        <span
-          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-            value ? "translate-x-5" : "translate-x-1"
-          }`}
-        />
-      </button>
+        <option value="">-- Select --</option>
+        {options.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
 
-      <span className="text-xs font-medium text-gray-700 dark:text-gray-200">
-        {value ? "Yes" : "No"}
-      </span>
+      {error && (
+        <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
+          {error}
+        </p>
+      )}
     </div>
-  </div>
-);
+  );
+};
 
 // File upload with drag-and-drop or click-to-upload.
 const FileField = ({
@@ -203,13 +220,17 @@ const FileField = ({
   required,
   error,
   className = "",
+  onViewFile,
 }) => {
   const [dragOver, setDragOver] = useState(false);
 
   const handleFiles = (files) => {
     const file = files?.[0];
-    onChange({ target: { name, value: file ? file.name : "" } });
+    onChange({ target: { name, value: file || "" } });
   };
+
+  // Check if value is an existing file object
+  const isExistingFile = value && typeof value === 'object' && value.filePath;
 
   return (
     <div className={`w-full ${className}`}>
@@ -218,41 +239,61 @@ const FileField = ({
         {required && <span className="text-red-500"> *</span>}
       </label>
 
-      <label
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragOver(true);
-        }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setDragOver(false);
-          handleFiles(e.dataTransfer.files);
-        }}
-        className={[
-          "flex items-center gap-2 h-[30px] px-2 rounded border text-xs cursor-pointer transition-colors",
-          "bg-white dark:bg-gray-900",
-          dragOver
-            ? "border-blue-500 ring-1 ring-blue-500"
-            : error
-              ? "border-red-500"
-              : "border-gray-300 dark:border-gray-600 hover:border-blue-500",
-        ].join(" ")}
-      >
-        <UploadCloud className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
-        <span className="truncate text-gray-500 dark:text-gray-400">
-          {value || "Click or drop supplier report..."}
-        </span>
-        <input
-          type="file"
-          name={name}
-          className="hidden"
-          onChange={(e) => {
-            handleFiles(e.target.files);
-            e.target.value = "";
+      {isExistingFile ? (
+        // Show existing file with view button
+        <div className="flex items-center gap-2 h-[30px] px-2 rounded border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800">
+          <FileText className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+          <span className="truncate text-gray-700 dark:text-gray-300 flex-1">
+            {value.fileName || value.name || value.filePath?.split('/').pop() || 'File'}
+          </span>
+          <button
+            type="button"
+            onClick={() => onViewFile && onViewFile(value)}
+            className="h-6 px-2 rounded bg-blue-600 hover:bg-blue-700 text-white text-xs flex items-center gap-1 transition-colors"
+          >
+            <Eye size={12} />
+            View
+          </button>
+        </div>
+      ) : (
+        <label
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragOver(true);
           }}
-        />
-      </label>
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragOver(false);
+            handleFiles(e.dataTransfer.files);
+          }}
+          className={[
+            "flex items-center gap-2 h-[30px] px-2 rounded border text-xs cursor-pointer transition-colors",
+            "bg-white dark:bg-gray-900",
+            dragOver
+              ? "border-blue-500 ring-1 ring-blue-500"
+              : error
+                ? "border-red-500"
+                : "border-gray-300 dark:border-gray-600 hover:border-blue-500",
+          ].join(" ")}
+        >
+          <UploadCloud className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+          <span className="truncate text-gray-500 dark:text-gray-400">
+            {value && typeof value === 'object' && value.name
+              ? value.name
+              : value || "Click or drop supplier report..."}
+          </span>
+          <input
+            type="file"
+            name={name}
+            className="hidden"
+            onChange={(e) => {
+              handleFiles(e.target.files);
+              e.target.value = "";
+            }}
+          />
+        </label>
+      )}
 
       {error && (
         <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
@@ -306,13 +347,12 @@ const TableHead = ({ headers }) => (
       {headers.map((h, i) => (
         <th
           key={i}
-          className={`p-2 whitespace-nowrap ${
-            i === 0
-              ? "w-8 text-center"
-              : i === headers.length - 1
-                ? "w-20 text-left"
-                : "text-left"
-          } dark:text-white`}
+          className={`p-2 whitespace-nowrap ${i === 0
+            ? "w-8 text-center"
+            : i === headers.length - 1
+              ? "w-20 text-left"
+              : "text-left"
+            } dark:text-white`}
         >
           {h}
         </th>
@@ -330,11 +370,10 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
         type="button"
         onClick={onRemove}
         disabled={disabled}
-        className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-          disabled
-            ? "bg-gray-400 cursor-not-allowed"
-            : "bg-red-600 hover:bg-red-700"
-        }`}
+        className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
+          ? "bg-gray-400 cursor-not-allowed"
+          : "bg-red-600 hover:bg-red-700"
+          }`}
       >
         <Trash2 size={10} />
       </button>
@@ -342,9 +381,7 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
   </tr>
 );
 
-/* Generic dynamic table. Supports text / number / date / select / textarea /
-   readonly columns. Options may be plain strings or { value, label } objects. */
-const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
+const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow, onViewMeasurements }) => (
   <TableWrapper>
     <TableHead headers={["#", ...columns.map((c) => c.label), "Action"]} />
     <tbody>
@@ -395,6 +432,21 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
               );
             }
 
+            if (col.type === "measurementsView") {
+              return (
+                <td className="p-2 align-top" key={col.key}>
+                  <button
+                    type="button"
+                    onClick={() => onViewMeasurements && onViewMeasurements(idx)}
+                    className="h-6 px-2 rounded bg-blue-600 hover:bg-blue-700 text-white text-xs flex items-center gap-1 transition-colors"
+                    title="View Measurements"
+                  >
+                    <Eye size={14} />
+                  </button>
+                </td>
+              );
+            }
+
             return (
               <td className="p-2 align-top" key={col.key}>
                 <input
@@ -422,16 +474,110 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
 );
 
 /* ---------------------------------------------------------------------------- */
-/* Options                                                                      */
+/* Measurements Popup Component                                                  */
 
-const INWARD_TYPES = ["MRN", "SC GRN", "IMPORT GRN", "SUB-CONTRACT GRN", "OTHER"];
-const PPAP_SAMPLE = ["Regular", "Non-Regular"];
-const MEASUREMENT_STATUS = ["Pass", "Fail", "N/A"];
+const MeasurementsPopup = ({
+  isOpen,
+  onClose,
+  measurementRows,
+  onMeasurementCellChange,
+  onAddMeasurementRow,
+  onRemoveMeasurementRow,
+  unitOptions,
+}) => {
+  if (!isOpen) return null;
+
+  const columns = [
+    { key: "parameter", label: "Parameters" },
+    {
+      key: "type",
+      label: "Type",
+      type: "select",
+      options: PARAMETER_TYPES,
+    },
+    { key: "specification", label: "Specification" },
+    { key: "acceptanceCriteria", label: "Acceptance Criteria" },
+    {
+      key: "uom",
+      label: "UOM",
+    },
+    { key: "mv1", label: "Value 1", type: "number" },
+    { key: "mv2", label: "Value 2", type: "number" },
+    { key: "mv3", label: "Value 3", type: "number" },
+    { key: "mv4", label: "Value 4", type: "number" },
+    { key: "mv5", label: "Value 5", type: "number" },
+    { key: "mv6", label: "Value 6", type: "number" },
+    {
+      key: "status",
+      label: "Status",
+      type: "select",
+      options: ["Confirming", "Non-Confirming"],
+    },
+    { key: "remarks", label: "Remarks", type: "textarea" },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-6xl max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+          <h3 className="text-base font-semibold text-gray-900 dark:text-white">
+            Measurements
+          </h3>
+          <button
+            onClick={onClose}
+            className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          >
+            <X size={20} className="text-gray-500 dark:text-gray-400" />
+          </button>
+        </div>
+
+        <div className="p-4 overflow-y-auto flex-1">
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-xs text-gray-500 dark:text-gray-400">
+              Manage measurements for this inspection
+            </div>
+            <button
+              type="button"
+              onClick={onAddMeasurementRow}
+              className="h-6 w-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-colors"
+            >
+              <Plus size={12} />
+            </button>
+          </div>
+
+          <DynamicTable
+            columns={columns}
+            rows={measurementRows}
+            onCellChange={onMeasurementCellChange}
+            onRemoveRow={onRemoveMeasurementRow}
+          />
+        </div>
+
+        <div className="flex justify-end p-4 border-t border-gray-200 dark:border-gray-700 gap-2">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+          >
+            Close
+          </button>
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded text-xs text-white bg-green-600 hover:bg-blue-700 transition-colors"
+          >
+            Submit
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const INWARD_TYPES = ["BROUGHT OUT", "SUB CONTRACTED"];
+const PPAP_SAMPLE = ["No/Regular", "Yes"];
 const RESULT_OPTIONS = ["Accepted", "Rejected", "Rework", "Pending"];
 
 const CHILD_TABS = [
   { key: "inspectionDetails", label: "Inspection Details", kind: "table" },
-  { key: "measurements", label: "Measurements", kind: "table" },
   { key: "summary", label: "Summary", kind: "fields" },
   { key: "supplierReport", label: "Attached Supplier Report", kind: "table" },
 ];
@@ -455,12 +601,16 @@ const emptyInspectionRow = () => ({
   reworkLocation: "",
   totalAcceptedQty: "",
   conversionFactor: "",
+  toatlAccQty: "",
+  reworkUnit: "",
   rejectedQty: "",
   rejectedLocation: "",
   reasonForRejection: "",
   rejectUnit: "",
   rate: "",
   amount: "",
+  toatlReceivedQty: "",
+  inspection: "", // Add this field
 });
 
 const emptyMeasurementRow = () => ({
@@ -480,13 +630,10 @@ const emptyMeasurementRow = () => ({
 });
 
 const emptyReportRow = () => ({
-  fileName: "",
+  fileName: null,
 });
 
 const fmtDate = (value) => (value ? dayjs(value).format("YYYY-MM-DD") : "");
-
-const generateDocNo = () =>
-  `IN-${dayjs().format("YYYYMMDD")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
 
 /* ---------------------------------------------------------------------------- */
 
@@ -494,7 +641,7 @@ const InwardInspectionForm = ({ data, onBack }) => {
   const { addToast } = useToast();
   const orgId = Number(localStorage.getItem("orgId")) || 0;
   const branch = Number(localStorage.getItem("branchId")) || 0;
-  const usersId = localStorage.getItem("usersId");
+  const usersId = localStorage.getItem("usersId") || localStorage.getItem("userName") || "SYSTEM";
 
   const userData = JSON.parse(localStorage.getItem("userData") || "{}");
   const orgName = (
@@ -507,35 +654,92 @@ const InwardInspectionForm = ({ data, onBack }) => {
   const [activeChildTab, setActiveChildTab] = useState("inspectionDetails");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
+  const [loadingDocId, setLoadingDocId] = useState(false);
+  const [loadingGrn, setLoadingGrn] = useState(false);
+  const [loadingItemDetails, setLoadingItemDetails] = useState(false);
+  const [loadingLocations, setLoadingLocations] = useState(false);
+  const [loadingData, setLoadingData] = useState(false);
+  const [showMeasurementsPopup, setShowMeasurementsPopup] = useState(false);
 
   const [plantOptions, setPlantOptions] = useState([]);
   const [locationOptions, setLocationOptions] = useState([]);
-  const [itemOptions, setItemOptions] = useState([]);
-  const [itemMasterMap, setItemMasterMap] = useState({});
   const [unitOptions, setUnitOptions] = useState([]);
   const [supplierOptions, setSupplierOptions] = useState([]);
   const [employeeOptions, setEmployeeOptions] = useState([]);
-  const [mrnOptions, setMrnOptions] = useState([]);
+
+  // Initialize GRN options with existing data for editing
+  const [grnOptions, setGrnOptions] = useState(() => {
+    if (data?.id && data?.mrinGrnNo) {
+      return [{ value: data.mrinGrnNo, label: data.mrinGrnNo }];
+    }
+    return [];
+  });
+
+  const [grnDetailsMap, setGrnDetailsMap] = useState(() => {
+    if (data?.id && data?.mrinGrnNo) {
+      const map = {};
+      map[data.mrinGrnNo] = {
+        grnNo: data.mrinGrnNo,
+        grnDate: data.mrinGrnDate,
+        grnTime: data.grnTime,
+        poNo: data.poPcJoNo,
+        scheduleNo: data.scheduleNo,
+      };
+      return map;
+    }
+    return {};
+  });
+
+  const [grnItemOptions, setGrnItemOptions] = useState(() => {
+    if (data?.inwardInspectionDetailsResponseDTO?.[0]?.item) {
+      const item = data.inwardInspectionDetailsResponseDTO[0];
+      const label = item.itemDescription
+        ? `${item.item} - ${item.itemDescription}`
+        : item.item;
+      return [{ value: item.item, label: label }];
+    }
+    return [];
+  });
+
+  const [grnItemDetailsMap, setGrnItemDetailsMap] = useState(() => {
+    if (data?.inwardInspectionDetailsResponseDTO?.[0]?.item) {
+      const item = data.inwardInspectionDetailsResponseDTO[0];
+      const map = {};
+      map[item.item] = {
+        itemCode: item.item,
+        itemDescription: item.itemDescription || "",
+        drawingNo: item.drawingNo || "",
+        poQty: item.orderQty || "",
+        receivedQty: item.receivedQty || "",
+        purchaseUnitDescription: item.purchaseUnit || "",
+        primaryUnitDescription: item.primaryUnit || "",
+        acceptQty: item.acceptQty || "",
+        inspectionDescription: item.inspection || "",
+      };
+      return map;
+    }
+    return {};
+  });
 
   const [header, setHeader] = useState(() => {
     const base = {
       plantId: data?.plantId?.id ?? data?.plantId ?? "",
-      docNo: data?.docNo || (data ? "" : generateDocNo()),
+      docNo: data?.docNo || (data ? "" : ""),
       inwardType: data?.inwardType || "",
       docDate: data?.docDate || dayjs().format("YYYY-MM-DD"),
       supplierCode: data?.supplierCode?.id ?? data?.supplierCode ?? "",
       supplierName: data?.supplierName || "",
-      mrnNo: data?.mrnNo || "",
-      approved: data?.approved !== false,
-      mrnDate: data?.mrnDate || "",
+      mrnNo: data?.mrnNo || data?.mrinGrnNo || "",
+      approved: data?.approved || "No",
+      mrnDate: data?.mrnDate || data?.mrinGrnDate || "",
       timeOfInspection: data?.timeOfInspection || dayjs().format("HH:mm:ss"),
-      mrnGrnTime: data?.mrnGrnTime || "",
-      isoExpiryDate: data?.isoExpiryDate || "",
+      mrnGrnTime: data?.mrnGrnTime || data?.grnTime || "",
+      isoExpiryDate: data?.isoExpiryDate || data?.isoExpiaryDate || "",
       poPcJoNo: data?.poPcJoNo || "",
       ppapSample: data?.ppapSample || "",
       scheduleNo: data?.scheduleNo || "",
-      supplierInvoiceNo: data?.supplierInvoiceNo || "",
-      supplierInvoiceDate: data?.supplierInvoiceDate || "",
+      supplierInvoiceNo: data?.supplierInvoiceNo || data?.supInvNo || "",
+      supplierInvoiceDate: data?.supplierInvoiceDate || data?.supInvDt || "",
       active: data?.active !== false,
     };
     base.docDate = fmtDate(base.docDate);
@@ -545,11 +749,48 @@ const InwardInspectionForm = ({ data, onBack }) => {
     return base;
   });
 
-  const [inspectionRows, setInspectionRows] = useState(
-    data?.inspectionDetails?.length
-      ? data.inspectionDetails
-      : [emptyInspectionRow()],
-  );
+  const [inspectionRows, setInspectionRows] = useState(() => {
+    // Check if we have data from props (editing)
+    if (data?.inwardInspectionDetailsResponseDTO?.length) {
+      return data.inwardInspectionDetailsResponseDTO.map((d) => ({
+        itemCode: d.item || "",
+        itemDescription: d.itemDescription || "",
+        drawingNo: d.drawingNo || "",
+        orderQty: d.orderQty || "",
+        purchaseUnit: d.purchaseUnit || "",
+        primaryUnit: d.primaryUnit || "",
+        receivedQty: d.receivedQty || "",
+        receivedUnit: d.receivedUnit || "",
+        acceptedQty: d.acceptQty || "",
+        acceptedUnit: d.acceptUnit?.id || "",
+        receivedLocation: d.receivedLocation?.id || "",
+        batchNo: d.batchNo || "",
+        qtyAcceptedOnDeviation: d.qtyAccOnDevtn || "",
+        acceptedAfterSegregation: d.accQtyAfterSegn || "",
+        reworkQty: d.reworkQty || "",
+        reworkLocation: d.reworkLocation?.id || "",
+        totalAcceptedQty: d.totAccQty || "",
+        conversionFactor: d.conversionFactor || "",
+        toatlAccQty: d.totalAccQtyInPrimaryUnit || "",
+        reworkUnit: d.reworkUnit?.id || "",
+        rejectedQty: d.rejectQty || "",
+        rejectedLocation: d.rejectedLocation?.id || "",
+        reasonForRejection: d.reason || "",
+        rejectUnit: d.rejectUnit?.id || "",
+        rate: d.rate || "",
+        amount: d.amount || "",
+        toatlReceivedQty: d.totalReceivedQty || "",
+        stk: d.stk || "",
+        inspection: d.inspection || "",
+      }));
+    }
+    // Check if we have data from inspectionDetails (another format)
+    if (data?.inspectionDetails?.length) {
+      return data.inspectionDetails;
+    }
+    // Default empty row
+    return [emptyInspectionRow()];
+  });
 
   const [measurementRows, setMeasurementRows] = useState(
     data?.measurements?.length ? data.measurements : [emptyMeasurementRow()],
@@ -557,32 +798,448 @@ const InwardInspectionForm = ({ data, onBack }) => {
 
   const [summary, setSummary] = useState({
     considerations:
-      data?.summary?.considerations || data?.inwardSummary?.considerations || "",
+      data?.summary?.considerations || data?.inwardSummary?.considerations || data?.considerations || "",
+    disposalAction:
+      data?.summary?.disposalAction || data?.inwardSummary?.disposalAction || data?.disposalAction || "",
     checkedBy:
       data?.summary?.checkedBy?.id ??
       data?.summary?.checkedBy ??
       data?.inwardSummary?.checkedBy?.id ??
       data?.inwardSummary?.checkedBy ??
+      data?.checkedBy?.id ??
       "",
     approvedBy:
       data?.summary?.approvedBy?.id ??
       data?.summary?.approvedBy ??
       data?.inwardSummary?.approvedBy?.id ??
       data?.inwardSummary?.approvedBy ??
+      data?.approvedBy?.id ??
       "",
     result:
       data?.summary?.result ??
       data?.inwardSummary?.result ??
+      data?.result ??
       "",
     notes:
       data?.summary?.notes ??
       data?.inwardSummary?.notes ??
+      data?.notes ??
       "",
   });
 
   const [reportRows, setReportRows] = useState(
-    data?.supplierReports?.length ? data.supplierReports : [emptyReportRow()],
+    data?.supplierReports?.length ? data.supplierReports : data?.inwardInspectionFileUploadDetailsResponseDTO?.length ? data.inwardInspectionFileUploadDetailsResponseDTO.map((f) => ({ fileName: f })) : [emptyReportRow()],
   );
+
+  // Ref to track if data has been loaded
+  const dataLoadedRef = useRef(false);
+
+  // Load data by ID when editing
+  const loadInspectionData = useCallback(async (inspectionId) => {
+    if (!inspectionId) return;
+
+    setLoadingData(true);
+    try {
+      const response = await inwardInspectionAPI.getInwardInspectionById(inspectionId);
+      console.log("Get By ID Response:", response);
+
+      if (response) {
+        const inspection = response;
+
+        // Set header data
+        setHeader({
+          plantId: inspection.branch?.id || "",
+          docNo: inspection.docId || "",
+          inwardType: inspection.inwardType || "",
+          docDate: fmtDate(inspection.docDate) || dayjs().format("YYYY-MM-DD"),
+          supplierCode: inspection.supplierCode?.id || "",
+          supplierName: inspection.supplierCode?.supplierName || "",
+          mrnNo: inspection.mrinGrnNo || "",
+          approved: inspection.approved ? "Yes" : "No",
+          mrnDate: fmtDate(inspection.mrinGrnDate) || "",
+          timeOfInspection: inspection.timeOfInspection || dayjs().format("HH:mm:ss"),
+          mrnGrnTime: inspection.grnTime || "",
+          isoExpiryDate: fmtDate(inspection.isoExpiaryDate) || "",
+          poPcJoNo: inspection.poPcJoNo || "",
+          ppapSample: inspection.ppapSample || "",
+          scheduleNo: inspection.scheduleNo || "",
+          supplierInvoiceNo: inspection.supInvNo || "",
+          supplierInvoiceDate: fmtDate(inspection.supInvDt) || "",
+          active: inspection.active === "Active" || inspection.active === true,
+        });
+
+        // Set MRN options to include the existing MRN
+        if (inspection.mrinGrnNo) {
+          setGrnOptions([
+            {
+              value: inspection.mrinGrnNo,
+              label: inspection.mrinGrnNo,
+            }
+          ]);
+          setGrnDetailsMap({
+            [inspection.mrinGrnNo]: {
+              grnNo: inspection.mrinGrnNo,
+              grnDate: inspection.mrinGrnDate,
+              grnTime: inspection.grnTime,
+              poNo: inspection.poPcJoNo,
+              scheduleNo: inspection.scheduleNo,
+            }
+          });
+        }
+
+        // ---- FIX: Call GRN Item Details API to get item details ----
+        if (inspection.mrinGrnNo && inspection.supplierCode?.id && inspection.poPcJoNo) {
+          try {
+            setLoadingItemDetails(true);
+            const grnItemResponse = await inwardInspectionAPI.getGrnItemDetails(
+              branch,
+              orgId,
+              inspection.poPcJoNo,
+              inspection.supplierCode.id
+            );
+            console.log("GRN Item Details Response:", grnItemResponse);
+
+            if (grnItemResponse?.paramObjectsMap?.grnDetails) {
+              const itemList = grnItemResponse.paramObjectsMap.grnDetails;
+              const map = {};
+              const options = itemList.map((item) => {
+                map[item.itemCode] = item;
+                return {
+                  value: item.itemCode,
+                  label: `${item.itemCode} - ${item.itemDescription || ''}`,
+                };
+              });
+
+              // Merge with existing options to keep the selected one
+              const existingItem = inspection.inwardInspectionDetailsResponseDTO?.[0];
+              if (existingItem && existingItem.item) {
+                // Add existing item if not in the list
+                const exists = options.some(opt => String(opt.value) === String(existingItem.item));
+                if (!exists) {
+                  options.unshift({
+                    value: existingItem.item,
+                    label: `${existingItem.item} - ${existingItem.itemDescription || ''}`,
+                  });
+                }
+              }
+
+              setGrnItemOptions(options);
+              setGrnItemDetailsMap(map);
+            }
+          } catch (error) {
+            console.error("Error fetching GRN item details:", error);
+          } finally {
+            setLoadingItemDetails(false);
+          }
+        }
+
+        // Set summary
+        setSummary({
+          considerations: inspection.considerations || "",
+          disposalAction: inspection.disposalAction || "",
+          checkedBy: inspection.checkedBy?.id || "",
+          approvedBy: inspection.approvedBy?.id || "",
+          result: inspection.result || "",
+          notes: inspection.notes || "",
+        });
+
+        // Set inspection details
+        // Set inspection details
+        if (inspection.inwardInspectionDetailsResponseDTO?.length) {
+          const details = inspection.inwardInspectionDetailsResponseDTO.map((d) => ({
+            itemCode: d.item || "", // This should be the numeric ID like 1000000006
+            itemDescription: d.itemDescription || "",
+            drawingNo: d.drawingNo || "",
+            orderQty: d.orderQty || "",
+            purchaseUnit: d.purchaseUnit || "",
+            primaryUnit: d.primaryUnit || "",
+            receivedQty: d.receivedQty || "",
+            receivedUnit: d.receivedUnit || "",
+            acceptedQty: d.acceptQty || "",
+            acceptedUnit: d.acceptUnit?.id || "",
+            receivedLocation: d.receivedLocation?.id || "",
+            batchNo: d.batchNo || "",
+            qtyAcceptedOnDeviation: d.qtyAccOnDevtn || "",
+            acceptedAfterSegregation: d.accQtyAfterSegn || "",
+            reworkQty: d.reworkQty || "",
+            reworkLocation: d.reworkLocation?.id || "",
+            totalAcceptedQty: d.totAccQty || "",
+            conversionFactor: d.conversionFactor || "",
+            toatlAccQty: d.totalAccQtyInPrimaryUnit || "",
+            reworkUnit: d.reworkUnit?.id || "",
+            rejectedQty: d.rejectQty || "",
+            rejectedLocation: d.rejectedLocation?.id || "",
+            reasonForRejection: d.reason || "",
+            rejectUnit: d.rejectUnit?.id || "",
+            rate: d.rate || "",
+            amount: d.amount || "",
+            toatlReceivedQty: d.totalReceivedQty || "",
+            stk: d.stk || "",
+            inspection: d.inspection || "",
+          }));
+          setInspectionRows(details);
+
+          console.log("Inspection Details from API:", details);
+
+          // Update the first row with GRN item details if available
+          const existingDetail = inspection.inwardInspectionDetailsResponseDTO[0];
+          if (existingDetail && existingDetail.item) {
+            // Get the GRN item details from the map
+            const grnItem = grnItemDetailsMap[existingDetail.item];
+            console.log("GRN Item for existing detail:", grnItem);
+
+            setInspectionRows(prev => {
+              const updated = [...prev];
+              if (updated.length > 0) {
+                updated[0] = {
+                  ...updated[0],
+                  itemCode: existingDetail.item, // Set the numeric ID
+                  itemDescription: grnItem?.itemDescription || existingDetail.itemDescription || "",
+                  drawingNo: grnItem?.drawingNo || existingDetail.drawingNo || "",
+                  orderQty: grnItem?.poQty || existingDetail.orderQty || "",
+                  receivedQty: grnItem?.receivedQty || existingDetail.receivedQty || "",
+                  purchaseUnit: grnItem?.purchaseUnitDescription || existingDetail.purchaseUnit || "",
+                  primaryUnit: grnItem?.primaryUnitDescription || existingDetail.primaryUnit || "",
+                  acceptedQty: grnItem?.acceptQty || existingDetail.acceptQty || "",
+                  inspection: grnItem?.inspectionDescription || existingDetail.inspection || "",
+                  toatlReceivedQty: grnItem?.receivedQty || existingDetail.receivedQty || "",
+                };
+              }
+              console.log("Updated inspection rows:", updated);
+              return updated;
+            });
+          }
+        }
+
+        // Set measurements
+        if (inspection.inwardInspectionDetailsResponseDTO?.[0]?.inwardInspectionMeasurementsResponseDTO?.length) {
+          const measurements = inspection.inwardInspectionDetailsResponseDTO[0]
+            .inwardInspectionMeasurementsResponseDTO.map((m) => ({
+              parameter: m.parameters || "",
+              type: m.type || "",
+              specification: m.spec || "",
+              acceptanceCriteria: m.accCriteria || "",
+              uom: m.uom || "",
+              mv1: m.test1 || "",
+              mv2: m.test2 || "",
+              mv3: m.test3 || "",
+              mv4: m.test4 || "",
+              mv5: m.test5 || "",
+              mv6: m.test6 || "",
+              status: m.status || "",
+              remarks: m.remarks || "",
+            }));
+          setMeasurementRows(measurements);
+        }
+
+        // Set file attachments
+        if (inspection.inwardInspectionFileUploadDetailsResponseDTO?.length) {
+          const files = inspection.inwardInspectionFileUploadDetailsResponseDTO.map((f) => ({
+            fileName: f,
+          }));
+          setReportRows(files);
+        }
+
+        dataLoadedRef.current = true;
+      }
+    } catch (error) {
+      console.error("Error loading inspection data:", error);
+      addToast("Failed to load inspection data", "error");
+    } finally {
+      setLoadingData(false);
+    }
+  }, [addToast, branch, orgId]);
+
+  // Load data when editing - only once
+  useEffect(() => {
+    if (data?.id && !dataLoadedRef.current) {
+      loadInspectionData(data.id);
+    }
+  }, [data?.id, loadInspectionData]);
+
+  // Reset the loaded flag when data ID changes
+  useEffect(() => {
+    dataLoadedRef.current = false;
+  }, [data?.id]);
+
+  /* ---------------- Generate Doc ID ---------------- */
+  const generateDocId = useCallback(async () => {
+    if (data?.docNo) return;
+
+    setLoadingDocId(true);
+    try {
+      const currentYear = dayjs().year();
+      const response = await inwardInspectionAPI.getInwardInspectionDocId(
+        currentYear,
+        orgId
+      );
+
+      if (response?.paramObjectsMap?.docId) {
+        setHeader((prev) => ({ ...prev, docNo: response.paramObjectsMap.docId }));
+      }
+    } catch (error) {
+      console.error("Error generating Doc ID:", error);
+      const fallbackDocNo = `BLR/II/${dayjs().year()}-${dayjs().year() + 1}/00001`;
+      setHeader((prev) => ({ ...prev, docNo: fallbackDocNo }));
+    } finally {
+      setLoadingDocId(false);
+    }
+  }, [orgId, data?.docNo]);
+
+  /* ---------------- Load Location Options ---------------- */
+  const loadLocations = useCallback(async () => {
+    setLoadingLocations(true);
+    try {
+      const response = await locationMasterAPI.getLocationMasterByOrgId(orgId, branch);
+      console.log("Location Response:", response);
+
+      if (response && Array.isArray(response)) {
+        const options = response.map((loc) => ({
+          value: loc.id,
+          label: loc.locationName || loc.locationId || loc.id,
+        }));
+        setLocationOptions(options);
+      } else {
+        setLocationOptions([]);
+      }
+    } catch (error) {
+      console.error("Failed to load locations:", error);
+      setLocationOptions([]);
+      addToast("Failed to load locations", "error");
+    } finally {
+      setLoadingLocations(false);
+    }
+  }, [orgId, branch, addToast]);
+
+  /* ---------------- Load GRN Details ---------------- */
+  const loadGrnDetails = useCallback(async (supplierCode) => {
+    if (!supplierCode) {
+      setGrnOptions([]);
+      setGrnDetailsMap({});
+      return;
+    }
+
+    setLoadingGrn(true);
+    try {
+      const response = await inwardInspectionAPI.getGrnNoDetails(
+        branch,
+        orgId,
+        supplierCode
+      );
+
+      if (response?.paramObjectsMap?.grnDetails) {
+        const grnList = response.paramObjectsMap.grnDetails;
+        const map = {};
+        const options = grnList.map((grn) => {
+          map[grn.grnNo] = grn;
+          return {
+            value: grn.grnNo,
+            label: grn.grnNo,
+          };
+        });
+        setGrnOptions(options);
+        setGrnDetailsMap(map);
+      } else {
+        setGrnOptions([]);
+        setGrnDetailsMap({});
+      }
+    } catch (error) {
+      console.error("Failed to load GRN details:", error);
+      setGrnOptions([]);
+      setGrnDetailsMap({});
+      addToast("Failed to load GRN details", "error");
+    } finally {
+      setLoadingGrn(false);
+    }
+  }, [branch, orgId, addToast]);
+
+  /* ---------------- Load GRN Item Details ---------------- */
+  const loadGrnItemDetails = useCallback(async (purchaseOrderNo, supplierCode) => {
+    if (!purchaseOrderNo || !supplierCode) {
+      setGrnItemDetailsMap({});
+      setGrnItemOptions([]);
+      return;
+    }
+
+    setLoadingItemDetails(true);
+    try {
+      const response = await inwardInspectionAPI.getGrnItemDetails(
+        branch,
+        orgId,
+        purchaseOrderNo,
+        supplierCode
+      );
+
+      console.log("GRN Item Details Response:", response);
+
+      if (response?.paramObjectsMap?.grnDetails) {
+        const itemList = response.paramObjectsMap.grnDetails;
+        const map = {};
+        const options = itemList.map((item) => {
+          // Store item details with numeric item ID as key
+          const itemId = item.item; // This is the numeric ID like 1000000006
+          map[itemId] = {
+            itemCode: itemId, // Store the numeric ID
+            itemDescription: item.itemDescription || "",
+            drawingNo: item.drawingNo || "",
+            poQty: item.poQty || "",
+            receivedQty: item.receivedQty || "",
+            purchaseUnitDescription: item.purchaseUnitDescription || "",
+            primaryUnitDescription: item.primaryUnitDescription || "",
+            acceptQty: item.acceptQty || "",
+            inspectionDescription: item.inspectionDescription || "",
+          };
+          return {
+            value: itemId, // Use numeric ID as the value
+            label: `${item.itemCode} - ${item.itemDescription || ''}`,
+          };
+        });
+        setGrnItemDetailsMap(map);
+        setGrnItemOptions(options);
+
+        console.log("GRN Item Options:", options);
+        console.log("GRN Item Details Map:", map);
+      } else {
+        setGrnItemDetailsMap({});
+        setGrnItemOptions([]);
+      }
+    } catch (error) {
+      console.error("Failed to load GRN item details:", error);
+      setGrnItemDetailsMap({});
+      setGrnItemOptions([]);
+      addToast("Failed to load GRN item details", "error");
+    } finally {
+      setLoadingItemDetails(false);
+    }
+  }, [branch, orgId, addToast]);
+
+  /* ---------------- Load Supplier Details ---------------- */
+  const loadSuppliers = useCallback(async () => {
+    try {
+      const response = await inwardInspectionAPI.getSupplierDetailsShortClose(
+        branch,
+        orgId
+      );
+
+      if (response?.paramObjectsMap?.mapp) {
+        const supplierList = response.paramObjectsMap.mapp;
+        setSupplierOptions(
+          supplierList.map((s) => ({
+            value: s.supplierId,
+            label: `${s.supplierCode} - ${s.supplierName}`,
+            supplierName: s.supplierName,
+            supplierCode: s.supplierCode,
+          }))
+        );
+      } else {
+        setSupplierOptions([]);
+      }
+    } catch (error) {
+      console.error("Failed to load suppliers:", error);
+      setSupplierOptions([]);
+      addToast("Failed to load suppliers", "error");
+    }
+  }, [branch, orgId, addToast]);
 
   /* ---------------- Lookup loading ---------------- */
 
@@ -611,28 +1268,6 @@ const InwardInspectionForm = ({ data, onBack }) => {
     }
   }, [orgId, isMacurex]);
 
-  // Received / Rework / Rejected Location reuse the same plant/branch list.
-  useEffect(() => {
-    setLocationOptions(plantOptions);
-  }, [plantOptions]);
-
-  const loadItems = useCallback(async () => {
-    try {
-      const res = await itemAPI.getItems(orgId, branch);
-      const map = {};
-      const options = (res || []).map((it) => {
-        map[it.id] = it;
-        return { value: it.id, label: it.itemCode };
-      });
-      setItemOptions(options);
-      setItemMasterMap(map);
-    } catch (error) {
-      console.error("Failed to load item options:", error);
-      setItemOptions([]);
-      setItemMasterMap({});
-    }
-  }, [orgId, branch]);
-
   const loadUnits = useCallback(async () => {
     try {
       const res = await unitMasterAPI.getUnits(branch, orgId);
@@ -645,22 +1280,6 @@ const InwardInspectionForm = ({ data, onBack }) => {
     } catch (error) {
       console.error("Failed to load unit options:", error);
       setUnitOptions([]);
-    }
-  }, [orgId, branch]);
-
-  const loadSuppliers = useCallback(async () => {
-    try {
-      const res = await partyMasterAPI.getPartyByOrgId(orgId, branch);
-      setSupplierOptions(
-        (res || []).map((c) => ({
-          value: c.id,
-          label: c.customerCode || c.docId || c.id,
-          customerName: c.customerName || "",
-        })),
-      );
-    } catch (error) {
-      console.error("Failed to load supplier options:", error);
-      setSupplierOptions([]);
     }
   }, [orgId, branch]);
 
@@ -679,44 +1298,55 @@ const InwardInspectionForm = ({ data, onBack }) => {
     }
   }, [orgId]);
 
-  // MRN / SC GRN numbers loaded from the saved GRN records.
-  const loadMrnOptions = useCallback(async () => {
-    try {
-      const res = await inwardInspectionAPI.getInwardInspectionByOrgId(
-        orgId,
-        branch,
-      );
-      const options = (res || [])
-        .map((r) => r.mrnNo || r.mrnScGrnNo || "")
-        .filter(Boolean);
-      setMrnOptions([...new Set(options)]);
-    } catch (error) {
-      console.error("Failed to load MRN options:", error);
-      setMrnOptions([]);
-    }
-  }, [orgId, branch]);
-
   useEffect(() => {
     if (orgId) loadPlants();
   }, [orgId, loadPlants]);
 
   useEffect(() => {
     if (orgId && branch) {
-      loadItems();
       loadUnits();
       loadSuppliers();
       loadEmployees();
-      loadMrnOptions();
+      loadLocations();
     }
   }, [
     orgId,
     branch,
-    loadItems,
     loadUnits,
     loadSuppliers,
     loadEmployees,
-    loadMrnOptions,
+    loadLocations,
   ]);
+
+  // Generate Doc ID on mount (only for new records)
+  useEffect(() => {
+    if (!data?.id && !data?.docNo) {
+      generateDocId();
+    }
+  }, [generateDocId, data]);
+
+  // Load GRN details when supplier changes (only for new records)
+  useEffect(() => {
+    if (header.supplierCode && !data?.id) {
+      loadGrnDetails(header.supplierCode);
+    } else {
+      // Don't reset grnOptions if we're editing and have data
+      if (!data?.id) {
+        setGrnOptions([]);
+        setGrnDetailsMap({});
+      }
+    }
+  }, [header.supplierCode, loadGrnDetails, data?.id]);
+
+  // Load GRN item details when MRN is selected (only for new records)
+  useEffect(() => {
+    if (header.mrnNo && header.supplierCode && !data?.id) {
+      const grnDetail = grnDetailsMap[header.mrnNo];
+      if (grnDetail?.poNo) {
+        loadGrnItemDetails(grnDetail.poNo, header.supplierCode);
+      }
+    }
+  }, [header.mrnNo, header.supplierCode, grnDetailsMap, loadGrnItemDetails, data?.id]);
 
   /* ---------------- Handlers ---------------- */
 
@@ -729,7 +1359,19 @@ const InwardInspectionForm = ({ data, onBack }) => {
         const supplier = supplierOptions.find(
           (s) => String(s.value) === String(value),
         );
-        next.supplierName = supplier?.customerName || "";
+        next.supplierName = supplier?.supplierName || "";
+        // Reset MRN when supplier changes
+        next.mrnNo = "";
+      }
+      // Auto-fill GRN details when MRN is selected
+      if (name === "mrnNo") {
+        const grnDetail = grnDetailsMap[value];
+        if (grnDetail) {
+          next.mrnDate = fmtDate(grnDetail.grnDate) || next.mrnDate;
+          next.mrnGrnTime = grnDetail.grnTime || next.mrnGrnTime;
+          next.poPcJoNo = grnDetail.poNo || next.poPcJoNo;
+          next.scheduleNo = grnDetail.scheduleNo || next.scheduleNo;
+        }
       }
       return next;
     });
@@ -743,11 +1385,34 @@ const InwardInspectionForm = ({ data, onBack }) => {
         let next = { ...row, [key]: value };
 
         if (key === "itemCode") {
-          const item = itemMasterMap[value];
-          next.itemDescription = item?.itemDescription || "";
-          next.drawingNo = item?.drawingNo || item?.itemDrawingNo || "";
-          next.purchaseUnit = item?.purchaseUnits?.id || "";
-          next.primaryUnit = item?.primaryUnits?.id || "";
+          // value is the numeric item ID from the dropdown
+          const grnItem = grnItemDetailsMap[value];
+          console.log("Selected item value:", value);
+          console.log("GRN Item details:", grnItem);
+
+          if (grnItem) {
+            next.itemCode = value; // Store the numeric ID
+            next.itemDescription = grnItem.itemDescription || "";
+            next.drawingNo = grnItem.drawingNo || "";
+            next.orderQty = grnItem.poQty || "";
+            next.receivedQty = grnItem.receivedQty || "";
+            next.purchaseUnit = grnItem.purchaseUnitDescription || "";
+            next.primaryUnit = grnItem.primaryUnitDescription || "";
+            next.acceptedQty = grnItem.acceptQty || "";
+            next.inspection = grnItem.inspectionDescription || "";
+            next.toatlReceivedQty = grnItem.receivedQty || "";
+          } else {
+            // If no GRN item found, keep existing values
+            next.itemDescription = row.itemDescription || "";
+            next.drawingNo = row.drawingNo || "";
+            next.orderQty = row.orderQty || "";
+            next.receivedQty = row.receivedQty || "";
+            next.purchaseUnit = row.purchaseUnit || "";
+            next.primaryUnit = row.primaryUnit || "";
+            next.acceptedQty = row.acceptedQty || "";
+            next.inspection = row.inspection || "";
+            next.toatlReceivedQty = row.toatlReceivedQty || "";
+          }
         }
 
         const qtyKeys = [
@@ -810,7 +1475,19 @@ const InwardInspectionForm = ({ data, onBack }) => {
   const handleRemoveReportRow = (idx) =>
     setReportRows((prev) => prev.filter((_, i) => i !== idx));
 
-  /* ---------------- Validation & Save ---------------- */
+  const handleViewMeasurements = () => {
+    setShowMeasurementsPopup(true);
+  };
+
+  const handleViewFile = (file) => {
+    if (file?.filePath) {
+      window.open(file.filePath, '_blank');
+    } else {
+      addToast("File path not available", "warning");
+    }
+  };
+
+  /* ---------------- Validation ---------------- */
 
   const validate = () => {
     const errors = {};
@@ -821,6 +1498,7 @@ const InwardInspectionForm = ({ data, onBack }) => {
     if (!header.docDate) errors.docDate = "Doc Date is required";
     if (!header.supplierCode) errors.supplierCode = "Supplier Code is required";
     if (!header.mrnNo) errors.mrnNo = "MRN/SC GRN No is required";
+    if (!header.approved) errors.approved = "Approved is required";
 
     const validInspection = inspectionRows.filter((r) => r.itemCode?.trim());
     if (!validInspection.length)
@@ -849,7 +1527,16 @@ const InwardInspectionForm = ({ data, onBack }) => {
     if (!summary.approvedBy) errors.approvedBy = "Approved By is required";
     if (!summary.result) errors.result = "Result is required";
 
-    const validReports = reportRows.filter((r) => r.fileName?.trim());
+    // ---- FIX: Check for valid reports (File objects or strings) ----
+    const validReports = reportRows.filter((r) => {
+      if (!r.fileName) return false;
+      // Check if it's a File object, a string, or an object with filePath
+      if (r.fileName instanceof File) return true;
+      if (typeof r.fileName === 'string' && r.fileName.trim()) return true;
+      if (typeof r.fileName === 'object' && r.fileName.filePath) return true;
+      return false;
+    });
+
     if (!validReports.length)
       errors.supplierReports = "Attach at least one Supplier Report";
 
@@ -857,78 +1544,170 @@ const InwardInspectionForm = ({ data, onBack }) => {
     return Object.keys(errors).length === 0;
   };
 
+  /* ---------------- Save with File Upload ---------------- */
   const handleSave = async () => {
     if (!validate()) return;
 
     setIsSubmitting(true);
 
-    const isUpdate = Boolean(data?.id);
-
-    // Single-transaction payload: header + inspection details + measurements
-    // + summary + attached supplier reports. The backend maintains the complete
-    // inspection history with approval tracking (server-side validation).
-    const payload = {
-      ...(isUpdate ? { id: data.id } : {}),
-      orgId,
-      branch,
-      ...header,
-      inspectionDetails: inspectionRows.filter((r) => r.itemCode?.trim()),
-      measurements: measurementRows.filter((r) => r.parameter?.trim()),
-      summary,
-      supplierReports: reportRows.filter((r) => r.fileName?.trim()),
-      createdBy: isUpdate ? data?.createdBy || usersId : usersId,
-      ...(isUpdate ? { updatedBy: usersId } : {}),
-    };
-
     try {
-      const response =
-        await inwardInspectionAPI.createUpdateInwardInspection(payload);
+      const isUpdate = Boolean(data?.id);
 
-      if (response?.status) {
-        addToast(
-          response?.paramObjectsMap?.message ||
-            (isUpdate
-              ? "Inward Inspection updated successfully!"
-              : "Inward Inspection created successfully!"),
-        );
-        onBack?.();
-      } else {
-        addToast(
-          response?.errors?.[0]?.shortMessage ||
-            response?.errors?.[0]?.longMessage ||
-            response?.message ||
-            response?.paramObjectsMap?.message ||
-            "Failed to save Inward Inspection.",
-        );
+      // Build the payload
+      const payload = {
+        ...(isUpdate ? { id: data.id } : {}),
+        active: true,
+        branch: branch,
+        docId: header.docNo,
+        docDate: header.docDate,
+        inwardType: header.inwardType,
+        supplierCode: Number(header.supplierCode),
+        mrinGrnNo: header.mrnNo,
+        approved: header.approved === "Yes" ? true : false,
+        mrinGrnDate: header.mrnDate || "",
+        timeOfInspection: header.timeOfInspection || dayjs().format("HH:mm:ss"),
+        mrnGrnTime: header.mrnGrnTime || "",
+        isoExpiaryDate: header.isoExpiryDate || "",
+        poPcJoNo: header.poPcJoNo || "",
+        ppapSample: header.ppapSample || "",
+        scheduleNo: header.scheduleNo || "",
+        supInvNo: header.supplierInvoiceNo || "",
+        supInvDt: header.supplierInvoiceDate || "",
+        orgId: orgId,
+        createdBy: usersId,
+        financialYear: dayjs().year().toString(),
+        considerations: summary.considerations || "",
+        disposalAction: summary.disposalAction || "",
+        checkedBy: summary.checkedBy ? Number(summary.checkedBy) : 0,
+        approvedBy: summary.approvedBy ? Number(summary.approvedBy) : 0,
+        result: summary.result || "",
+        notes: summary.notes || "",
+        inwardInspectionDetailsDTO: inspectionRows
+          .filter((r) => r.itemCode && String(r.itemCode).trim())
+          .map((r) => {
+            const itemId = Number(r.itemCode); // This should be the numeric ID
+            console.log("Saving item ID:", itemId, "from itemCode:", r.itemCode);
+
+            return {
+              item: itemId || 0, // Use the numeric ID
+              itemDescription: r.itemDescription || "",
+              drawingNo: r.drawingNo || "",
+              orderQty: Number(r.orderQty) || 0,
+              purchaseUnit: Number(r.purchaseUnit) || 0,
+              primaryUnit: Number(r.primaryUnit) || 0,
+              receivedQty: Number(r.receivedQty) || 0,
+              receivedUnit: Number(r.receivedUnit) || 0,
+              acceptQty: Number(r.acceptedQty) || 0,
+              acceptUnit: Number(r.acceptedUnit) || 0,
+              receivedLocation: Number(r.receivedLocation) || 0,
+              batchNo: r.batchNo || "",
+              qtyAccOnDevtn: Number(r.qtyAcceptedOnDeviation) || 0,
+              accQtyAfterSegn: Number(r.acceptedAfterSegregation) || 0,
+              reworkQty: Number(r.reworkQty) || 0,
+              reworkLocation: Number(r.reworkLocation) || 0,
+              totAccQty: Number(r.totalAcceptedQty) || 0,
+              conversionFactor: Number(r.conversionFactor) || 0,
+              totalAccQtyInPrimaryUnit: Number(r.toatlAccQty) || 0,
+              reworkUnit: Number(r.reworkUnit) || 0,
+              rejectQty: Number(r.rejectedQty) || 0,
+              rejectedLocation: Number(r.rejectedLocation) || 0,
+              reason: r.reasonForRejection || "",
+              rejectUnit: Number(r.rejectUnit) || 0,
+              rate: Number(r.rate) || 0,
+              amount: Number(r.amount) || 0,
+              totalReceivedQty: Number(r.toatlReceivedQty) || 0,
+              stk: r.stk || "",
+              inspection: r.inspection || "",
+              sampleSize: 0,
+              tcReceived: "Yes",
+              inspectionReportReceived: "Yes",
+              inwardInspectionMeasurementsDTO: measurementRows
+                .filter((m) => m.parameter?.trim())
+                .map((m) => ({
+                  parameters: m.parameter || "",
+                  type: m.type || "",
+                  spec: m.specification || "",
+                  accCriteria: m.acceptanceCriteria || "",
+                  uom: m.uom || "",
+                  test1: m.mv1 || "",
+                  test2: m.mv2 || "",
+                  test3: m.mv3 || "",
+                  test4: m.mv4 || "",
+                  test5: m.mv5 || "",
+                  test6: m.mv6 || "",
+                  status: m.status || "",
+                  remarks: m.remarks || "",
+                })),
+            };
+          }),
+      };
+
+      console.log("Saving Payload:", payload);
+
+      // Create FormData for file upload
+      const formData = new FormData();
+
+      // Add payload as JSON
+      const payloadBlob = new Blob([JSON.stringify(payload)], {
+        type: "application/json",
+      });
+      formData.append("inwardInspection", payloadBlob, "inwardInspection.json");
+
+      // Add report files (only new files, not existing ones)
+      const validReports = reportRows.filter((r) => {
+        if (!r.fileName) return false;
+        return r.fileName instanceof File;
+      });
+
+      if (validReports.length > 0) {
+        validReports.forEach((report) => {
+          formData.append("files", report.fileName);
+        });
       }
-    } catch (err) {
-      console.error("Save Inward Inspection Error:", err);
-      if (err.response?.data) {
+
+      const response = await inwardInspectionAPI.createUpdateInwardInspection(formData);
+
+      console.log("Response:", response);
+
+      const isSuccess = response?.status === true || response?.statusFlag === "Ok";
+
+      if (isSuccess) {
         addToast(
-          err.response.data.message ||
-            err.response.data.statusMessage ||
-            err.response.data.error ||
-            JSON.stringify(err.response.data),
+          isUpdate
+            ? "Inward Inspection updated successfully!"
+            : "Inward Inspection created successfully!",
+          "success"
         );
+        onBack();
       } else {
-        addToast("Something went wrong.");
+        const errorMessage = response?.paramObjectsMap?.message || response?.message || "Failed to save";
+        addToast(errorMessage, "error");
       }
+    } catch (error) {
+      console.error("Save Error:", error);
+      const errorMessage = error?.response?.data?.message || error?.message || "Something went wrong";
+      addToast(errorMessage, "error");
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  if (loadingData) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-500 dark:text-gray-400">Loading inspection data...</div>
+      </div>
+    );
+  }
+
   const activeTabMeta = CHILD_TABS.find((t) => t.key === activeChildTab);
 
   const canAddRow =
     activeTabMeta.kind === "table" &&
-    ["inspectionDetails", "measurements", "supplierReport"].includes(
-      activeChildTab,
-    );
+    ["inspectionDetails", "supplierReport"].includes(activeChildTab);
 
   const handleAddRow = () => {
     if (activeChildTab === "inspectionDetails") handleAddInspectionRow();
-    else if (activeChildTab === "measurements") handleAddMeasurementRow();
     else if (activeChildTab === "supplierReport") handleAddReportRow();
   };
 
@@ -971,7 +1750,7 @@ const InwardInspectionForm = ({ data, onBack }) => {
               onChange={handleHeaderChange}
               error={fieldErrors.docNo}
               required
-              disabled={!data}
+              disabled={true}
             />
             <Field
               type="select"
@@ -1016,14 +1795,17 @@ const InwardInspectionForm = ({ data, onBack }) => {
               value={header.mrnNo}
               onChange={handleHeaderChange}
               error={fieldErrors.mrnNo}
-              options={mrnOptions}
+              options={grnOptions}
               required
+              disabled={!header.supplierCode || loadingGrn}
             />
-            <ToggleField
+            <ApprovedSelectField
               label="Approved"
               name="approved"
               value={header.approved}
               onChange={handleHeaderChange}
+              error={fieldErrors.approved}
+              required
             />
             <Field
               type="date"
@@ -1098,11 +1880,10 @@ const InwardInspectionForm = ({ data, onBack }) => {
                   key={tab.key}
                   type="button"
                   onClick={() => setActiveChildTab(tab.key)}
-                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${
-                    activeChildTab === tab.key
-                      ? "bg-blue-600 text-white"
-                      : "text-gray-600 dark:text-gray-300"
-                  }`}
+                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${activeChildTab === tab.key
+                    ? "bg-blue-600 text-white"
+                    : "text-gray-600 dark:text-gray-300"
+                    }`}
                 >
                   {tab.label}
                 </button>
@@ -1129,33 +1910,32 @@ const InwardInspectionForm = ({ data, onBack }) => {
                     key: "itemCode",
                     label: "Item Code",
                     type: "select",
-                    options: itemOptions,
+                    options: grnItemOptions,
                   },
                   {
                     key: "itemDescription",
                     label: "Item Description",
                     readOnly: true,
                   },
+                  {
+                    key: "inspection",
+                    label: "Inspection"
+                  },
+                  { key: "stk", label: "STK" },
                   { key: "drawingNo", label: "Drawing No" },
                   { key: "orderQty", label: "Order Qty", type: "number" },
                   {
                     key: "purchaseUnit",
                     label: "Purchase Unit",
-                    type: "select",
-                    options: unitOptions,
                   },
                   {
                     key: "primaryUnit",
                     label: "Primary Unit",
-                    type: "select",
-                    options: unitOptions,
                   },
                   { key: "receivedQty", label: "Received Qty", type: "number" },
                   {
                     key: "receivedUnit",
                     label: "Received Unit",
-                    type: "select",
-                    options: unitOptions,
                   },
                   { key: "acceptedQty", label: "Accepted Qty", type: "number" },
                   {
@@ -1200,6 +1980,17 @@ const InwardInspectionForm = ({ data, onBack }) => {
                     type: "number",
                   },
                   {
+                    key: "toatlAccQty",
+                    label: "Total Acc Qty (Primary Unit)",
+                    type: "number",
+                  },
+                  {
+                    key: "reworkUnit",
+                    label: "Rework Unit",
+                    type: "select",
+                    options: unitOptions,
+                  },
+                  {
                     key: "rejectedQty",
                     label: "Rejected Qty",
                     type: "number",
@@ -1228,10 +2019,22 @@ const InwardInspectionForm = ({ data, onBack }) => {
                     type: "number",
                     readOnly: true,
                   },
+                  {
+                    key: "toatlReceivedQty",
+                    label: "Total Received Qty",
+                    type: "number",
+                    readOnly: true,
+                  },
+                  {
+                    key: "measurementsView",
+                    label: "",
+                    type: "measurementsView",
+                  },
                 ]}
                 rows={inspectionRows}
                 onCellChange={handleInspectionCellChange}
                 onRemoveRow={handleRemoveInspectionRow}
+                onViewMeasurements={handleViewMeasurements}
               />
               {fieldErrors.inspectionDetails && (
                 <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
@@ -1241,56 +2044,10 @@ const InwardInspectionForm = ({ data, onBack }) => {
             </div>
           )}
 
-          {/* Tab 2: Measurements */}
-          {activeChildTab === "measurements" && (
-            <div className="pt-3">
-              <DynamicTable
-                columns={[
-                  { key: "parameter", label: "Parameters" },
-                  {
-                    key: "type",
-                    label: "Type",
-                    type: "select",
-                    options: PARAMETER_TYPES,
-                  },
-                  { key: "specification", label: "Specification" },
-                  { key: "acceptanceCriteria", label: "Acceptance Criteria" },
-                  {
-                    key: "uom",
-                    label: "UOM",
-                    type: "select",
-                    options: unitOptions,
-                  },
-                  { key: "mv1", label: "Value 1", type: "number" },
-                  { key: "mv2", label: "Value 2", type: "number" },
-                  { key: "mv3", label: "Value 3", type: "number" },
-                  { key: "mv4", label: "Value 4", type: "number" },
-                  { key: "mv5", label: "Value 5", type: "number" },
-                  { key: "mv6", label: "Value 6", type: "number" },
-                  {
-                    key: "status",
-                    label: "Status",
-                    type: "select",
-                    options: MEASUREMENT_STATUS,
-                  },
-                  { key: "remarks", label: "Remarks", type: "textarea" },
-                ]}
-                rows={measurementRows}
-                onCellChange={handleMeasurementCellChange}
-                onRemoveRow={handleRemoveMeasurementRow}
-              />
-              {fieldErrors.measurements && (
-                <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
-                  {fieldErrors.measurements}
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Tab 3: Summary */}
+          {/* Tab 2: Summary */}
           {activeChildTab === "summary" && (
             <div className="pt-3">
-              <div className="space-y-4">
+              <div className="space-y-2">
                 <div>
                   <SectionHeader>Considerations</SectionHeader>
                   <Field
@@ -1298,6 +2055,13 @@ const InwardInspectionForm = ({ data, onBack }) => {
                     label="Considerations"
                     name="considerations"
                     value={summary.considerations}
+                    onChange={handleSummaryChange}
+                  />
+                  <Field
+                    type="textarea"
+                    label="Disposal Action"
+                    name="disposalAction"
+                    value={summary.disposalAction}
                     onChange={handleSummaryChange}
                   />
                 </div>
@@ -1348,7 +2112,7 @@ const InwardInspectionForm = ({ data, onBack }) => {
             </div>
           )}
 
-          {/* Tab 4: Attached Supplier Report */}
+          {/* Tab 3: Attached Supplier Report */}
           {activeChildTab === "supplierReport" && (
             <div className="pt-3">
               <div className="w-full overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
@@ -1391,6 +2155,7 @@ const InwardInspectionForm = ({ data, onBack }) => {
                                 ? "Required"
                                 : ""
                             }
+                            onViewFile={handleViewFile}
                           />
                         </td>
                         <td className="p-2 text-center">
@@ -1398,11 +2163,10 @@ const InwardInspectionForm = ({ data, onBack }) => {
                             type="button"
                             onClick={() => handleRemoveReportRow(idx)}
                             disabled={reportRows.length <= 1}
-                            className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-                              reportRows.length <= 1
-                                ? "bg-gray-400 cursor-not-allowed"
-                                : "bg-red-600 hover:bg-red-700"
-                            }`}
+                            className={`h-5 w-5 rounded text-white flex items-center justify-center ${reportRows.length <= 1
+                              ? "bg-gray-400 cursor-not-allowed"
+                              : "bg-red-600 hover:bg-red-700"
+                              }`}
                           >
                             <Trash2 size={10} />
                           </button>
@@ -1428,6 +2192,17 @@ const InwardInspectionForm = ({ data, onBack }) => {
           saveLabel={data ? "Update" : "Save"}
         />
       </div>
+
+      {/* Measurements Popup */}
+      <MeasurementsPopup
+        isOpen={showMeasurementsPopup}
+        onClose={() => setShowMeasurementsPopup(false)}
+        measurementRows={measurementRows}
+        onMeasurementCellChange={handleMeasurementCellChange}
+        onAddMeasurementRow={handleAddMeasurementRow}
+        onRemoveMeasurementRow={handleRemoveMeasurementRow}
+        unitOptions={unitOptions}
+      />
     </div>
   );
 };

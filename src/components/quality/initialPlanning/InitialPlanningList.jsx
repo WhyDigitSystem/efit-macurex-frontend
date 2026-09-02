@@ -13,9 +13,16 @@ const InitialPlanningList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     try {
       setLoading(true);
 
+      // Use the correct API endpoint
       const response = await initialPlanningAPI.getInitialPlannings(ORG_ID);
 
-      const sortedPlannings = (response || []).sort(
+      console.log("Initial Planning List Response:", response);
+
+      // The response should be an array of planning records
+      const planningList = Array.isArray(response) ? response : [];
+
+      // Sort by ID descending (newest first)
+      const sortedPlannings = planningList.sort(
         (a, b) => (b.id || 0) - (a.id || 0),
       );
 
@@ -41,7 +48,7 @@ const InitialPlanningList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     {
       key: "docNo",
       label: "Doc No",
-      accessor: "docNo",
+      accessor: "docId", // Use docId from API response
       type: "text",
       noWrap: true,
     },
@@ -54,25 +61,25 @@ const InitialPlanningList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     {
       key: "itemCode",
       label: "Item Code",
-      accessor: "itemCode",
+      accessor: (row) => row.item?.itemCode || row.itemCode || "",
       type: "text",
     },
     {
       key: "itemDesc",
       label: "Item Description",
-      accessor: "itemDesc",
+      accessor: (row) => row.item?.itemDescription || row.itemDesc || "",
       type: "text",
     },
     {
       key: "itemGrade",
       label: "Item Grade",
-      accessor: "itemGrade",
+      accessor: (row) => row.item_grade?.gradeDescription || row.itemGrade || "",
       type: "text",
     },
     {
       key: "source",
       label: "Source",
-      accessor: "source",
+      accessor: (row) => row.source?.customerName || row.source || "",
       type: "text",
     },
     {
@@ -84,7 +91,7 @@ const InitialPlanningList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     },
   ];
 
-  const searchFields = ["docNo", "itemCode", "itemDesc", "itemGrade", "source"];
+  const searchFields = ["docId", "itemCode", "itemDesc", "itemGrade", "source"];
 
   return (
     <CommonListViewTable
