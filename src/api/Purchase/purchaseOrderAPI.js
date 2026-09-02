@@ -290,6 +290,54 @@ const purchaseOrderAPI = {
       throw error;
     }
   },
+  // ================================================================
+  // HSN CODE DETAILS
+  // ================================================================
+  getHsnCodeDetails: async (branch, item, orgId, type = "yes") => {
+    try {
+      const response = await apiClient.get(
+        "/api/purchaseOrder/getHsnCodeDetails",
+        {
+          params: {
+            branch,
+            item,
+            orgId,
+            type,
+          },
+        },
+      );
+
+      return response?.data ?? response;
+    } catch (error) {
+      console.error(
+        "Error fetching HSN details:",
+        error?.response?.data || error,
+      );
+      throw error;
+    }
+  },
+
+  getTaxValueByHsn: async (hsn, orgId) => {
+    try {
+      const response = await apiClient.get(
+        "/api/rejectionInvoice/getTaxValue",
+        {
+          params: {
+            hsn,
+            orgId,
+          },
+        },
+      );
+
+      return response?.data ?? response;
+    } catch (error) {
+      console.error(
+        "Error fetching tax value:",
+        error?.response?.data || error,
+      );
+      throw error;
+    }
+  },
 };
 
 export default purchaseOrderAPI;

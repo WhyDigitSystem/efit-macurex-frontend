@@ -306,7 +306,7 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
           key={row.id || index}
           index={index}
           onRemove={() => onRemoveRow(index)}
-          disabled={rows.length <= 1}
+          disabled={rows.length <= 1 || Boolean(row.isSystemRow)}
         >
           {columns.map((column) => {
             /* ==========================================================
@@ -332,11 +332,19 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
                 <SelectCell
                   key={column.key}
                   value={row[column.key]}
-                  disabled={column.disabled}
+                  disabled={
+                    typeof column.disabled === "function"
+                      ? column.disabled(row, index)
+                      : column.disabled
+                  }
                   onChange={(event) =>
                     onCellChange(index, column.key, event.target.value)
                   }
-                  options={column.options}
+                  options={
+                    typeof column.options === "function"
+                      ? column.options(row, index)
+                      : column.options
+                  }
                 />
               );
             }
@@ -356,7 +364,11 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
                       ? "date"
                       : "text"
                 }
-                disabled={column.disabled}
+                disabled={
+                  typeof column.disabled === "function"
+                    ? column.disabled(row, index)
+                    : column.disabled
+                }
                 min={column.type === "number" ? 0 : undefined}
                 step={
                   column.type === "number" ? column.step || "0.01" : undefined
@@ -427,6 +439,12 @@ const emptyLocalDetailRow = () => ({
 
   taxType: "",
   taxPercentage: "",
+  sgstRate: "",
+  cgstRate: "",
+  igstRate: "",
+  sgstAmount: "",
+  cgstAmount: "",
+  igstAmount: "",
 
   purchaseUnit: "",
   primaryUnit: "",
@@ -470,9 +488,11 @@ const emptyImportDetailRow = () => ({
 });
 
 const emptyTaxRow = () => ({
+  id: 0,
   particulars: "",
   tax: "",
   amount: "",
+  isSystemRow: false,
 });
 
 const emptyFileRow = () => ({
@@ -617,11 +637,21 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
       : [emptyImportDetailRow()],
   );
 
-  const [taxRows, setTaxRows] = useState(
-    editData?.purchaseOrderLocalTaxDetailsDTO?.length
-      ? editData.purchaseOrderLocalTaxDetailsDTO
-      : [emptyTaxRow()],
-  );
+  const [taxRows, setTaxRows] = useState(() => {
+    const existing = editData?.purchaseOrderLocalTaxDetailsDTO;
+
+    if (!existing?.length) {
+      return [emptyTaxRow()];
+    }
+
+    return existing.map((row, index) => ({
+      ...row,
+      id: row.id ?? index + 1,
+      isSystemRow:
+        Boolean(row.isSystemRow) ||
+        ["Gross Amount", "IGST", "CGST", "SGST"].includes(row.particulars),
+    }));
+  });
   const [belongsToOptions, setBelongsToOptions] = useState([]);
   const [fileRows, setFileRows] = useState(
     editData?.purchaseOrderLocalFileUploadDetailsDTO?.length
@@ -796,9 +826,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
     try {
       if (!ORG_ID) return;
 
-      const response = await departmentAPI.getAllDepartments(
-        ORG_ID
-      );
+      const response = await departmentAPI.getAllDepartments(ORG_ID);
 
       const list =
         response?.paramObjectsMap?.departmentVO ||
@@ -837,7 +865,6 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
       setItemOptions(
         list.map((item) => ({
           value: item.itemId ?? item.id,
-
           label: item.itemCode || item.code || `Item ${item.itemId ?? item.id}`,
 
           itemDescription:
@@ -1155,8 +1182,14 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
               indentQty: "",
               pendingIndentQty: "",
 
-              taxType: "",
+              taxType: formData.isIgstApplicable === "Yes" ? "IGST" : "SGST",
               taxPercentage: "",
+              sgstRate: "",
+              cgstRate: "",
+              igstRate: "",
+              sgstAmount: 0,
+              cgstAmount: 0,
+              igstAmount: 0,
 
               poQtyInPurchaseUnit: "",
               qtyInPrimaryUnit: "",
@@ -1498,7 +1531,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
   }, [isIndentRequired, loadIndentDropdown]);
 
   /* ========================================================================= */
-  /* LOCAL TAX TYPE SYNC (derived from Is IGST Appl)                          */
+  /* LOCAL GST TYPE SYNC                                                     */
   /* ========================================================================= */
 
   useEffect(() => {
@@ -1506,11 +1539,10 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
       formData.isIgstApplicable === "Yes" ? "IGST" : "SGST";
 
     setLocalDetailRows((previous) =>
-      previous.map((row) =>
-        row.taxType === derivedTaxType
-          ? row
-          : { ...row, taxType: derivedTaxType },
-      ),
+      previous.map((row) => ({
+        ...row,
+        taxType: derivedTaxType,
+      })),
     );
   }, [formData.isIgstApplicable]);
   /* ========================================================================= */
@@ -1757,12 +1789,23 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
   };
 
   const addTaxRow = () => {
-    setTaxRows((previous) => [...previous, emptyTaxRow()]);
+    setTaxRows((previous) => [
+      ...previous,
+      { ...emptyTaxRow(), isSystemRow: false },
+    ]);
   };
 
   const removeTaxRow = (index) => {
     setTaxRows((previous) => {
-      if (previous.length <= 1) {
+      const row = previous[index];
+
+      if (!row || row.isSystemRow) {
+        return previous;
+      }
+
+      const userRows = previous.filter((item) => !item.isSystemRow);
+
+      if (userRows.length <= 1) {
         return previous;
       }
 
@@ -1780,25 +1823,39 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
       [changedKey]: changedValue,
     };
 
-    /* Item auto-fill */
+    const selectedItem =
+      changedKey === "item"
+        ? itemOptions.find(
+            (item) => String(item.value) === String(changedValue),
+          )
+        : itemOptions.find(
+            (item) => String(item.value) === String(updated.item),
+          );
 
-    if (changedKey === "item") {
-      const selectedItem = itemOptions.find(
-        (item) => String(item.value) === String(changedValue),
-      );
+    if (selectedItem) {
+      updated.itemDescription = selectedItem.itemDescription || "";
+      updated.hsnCode = selectedItem.hsnCode || updated.hsnCode || "";
+      updated.purchaseUnit = selectedItem.unit || updated.purchaseUnit || "";
+      updated.primaryUnit = selectedItem.unit || updated.primaryUnit || "";
+      updated.sgstRate = toNumber(selectedItem.sgstRate);
+      updated.cgstRate = toNumber(selectedItem.cgstRate);
+      updated.igstRate = toNumber(selectedItem.igstRate);
 
-      if (selectedItem) {
-        updated.itemDescription = selectedItem.itemDescription || "";
-
-        updated.hsnCode = selectedItem.hsnCode || updated.hsnCode || "";
-
-        updated.purchaseUnit = selectedItem.unit || updated.purchaseUnit || "";
-
-        updated.primaryUnit = selectedItem.unit || updated.primaryUnit || "";
+      const fallbackTax = toNumber(selectedItem.taxPercentage);
+      if (
+        !updated.sgstRate &&
+        !updated.cgstRate &&
+        !updated.igstRate &&
+        fallbackTax
+      ) {
+        if (formData.isIgstApplicable === "Yes") {
+          updated.igstRate = fallbackTax;
+        } else {
+          updated.sgstRate = fallbackTax / 2;
+          updated.cgstRate = fallbackTax / 2;
+        }
       }
     }
-
-    /* Indent auto-fill */
 
     if (changedKey === "indentNo") {
       const selectedIndentItem = indentItemOptions.find(
@@ -1812,6 +1869,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
         );
 
         updated.item = selectedIndentItem.itemMasterId ?? updated.item;
+        updated.itemCode = matchedItem?.label || updated.itemCode || "";
         updated.itemDescription =
           matchedItem?.itemDescription ||
           selectedIndentItem.itemDescription ||
@@ -1819,46 +1877,286 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
         updated.hsnCode = matchedItem?.hsnCode || updated.hsnCode || "";
         updated.purchaseUnit = matchedItem?.unit || updated.purchaseUnit || "";
         updated.primaryUnit = matchedItem?.unit || updated.primaryUnit || "";
-
         updated.indentDate =
           selectedIndentItem.indentDate || updated.indentDate;
         updated.indentQty = selectedIndentItem.indentQty ?? updated.indentQty;
         updated.pendingIndentQty =
           selectedIndentItem.pendingIndentQty ?? updated.pendingIndentQty;
+
+        if (matchedItem) {
+          updated.sgstRate = toNumber(matchedItem.sgstRate);
+          updated.cgstRate = toNumber(matchedItem.cgstRate);
+          updated.igstRate = toNumber(matchedItem.igstRate);
+
+          const fallbackTax = toNumber(matchedItem.taxPercentage);
+          if (
+            !updated.sgstRate &&
+            !updated.cgstRate &&
+            !updated.igstRate &&
+            fallbackTax
+          ) {
+            if (formData.isIgstApplicable === "Yes") {
+              updated.igstRate = fallbackTax;
+            } else {
+              updated.sgstRate = fallbackTax / 2;
+              updated.cgstRate = fallbackTax / 2;
+            }
+          }
+        }
       }
     }
-
-    /* PO Qty -> Primary Qty */
 
     if (changedKey === "poQtyInPurchaseUnit") {
       updated.qtyInPrimaryUnit = changedValue;
     }
 
-    /* Amount */
-
     const quantity = Math.max(0, toNumber(updated.poQtyInPurchaseUnit));
-
     const rate = Math.max(0, toNumber(updated.rateInInr));
-
     const discount = Math.min(100, Math.max(0, toNumber(updated.discount)));
-
     const gross = quantity * rate;
-
     const discountAmount = (gross * discount) / 100;
-
     const netAmount = gross - discountAmount;
 
     updated.amountInInr = money(netAmount);
 
+    const isIGST = formData.isIgstApplicable === "Yes";
+    const fallbackTax = toNumber(updated.taxPercentage);
+    const sgstRate = toNumber(updated.sgstRate);
+    const cgstRate = toNumber(updated.cgstRate);
+    const igstRate = toNumber(updated.igstRate);
+
+    if (isIGST) {
+      const rateToUse = igstRate || fallbackTax;
+      updated.taxType = "IGST";
+      updated.taxPercentage = rateToUse || "";
+      updated.igstAmount = round2((netAmount * rateToUse) / 100);
+      updated.sgstAmount = 0;
+      updated.cgstAmount = 0;
+    } else {
+      let finalSgstRate = sgstRate;
+      let finalCgstRate = cgstRate;
+
+      if (!finalSgstRate && !finalCgstRate && fallbackTax) {
+        finalSgstRate = fallbackTax / 2;
+        finalCgstRate = fallbackTax / 2;
+      }
+
+      updated.taxType = "SGST";
+      updated.sgstRate = finalSgstRate;
+      updated.cgstRate = finalCgstRate;
+      updated.taxPercentage =
+        finalSgstRate + finalCgstRate || fallbackTax || "";
+      updated.sgstAmount = round2((netAmount * finalSgstRate) / 100);
+      updated.cgstAmount = round2((netAmount * finalCgstRate) / 100);
+      updated.igstAmount = 0;
+    }
+
     return updated;
   };
+  const handleLocalCellChange = async (index, key, value) => {
+    const currentRow = localDetailRows[index];
 
-  const handleLocalCellChange = (index, key, value) => {
+    if (!currentRow) return;
+
+    console.log("LOCAL CELL CHANGE:", {
+      index,
+      key,
+      value,
+      currentRow,
+    });
+
+    // ================================================================
+    // 1. NORMAL ROW UPDATE
+    // ================================================================
+
+    let updatedRow = calculateLocalRow(currentRow, key, value);
+
+    // ================================================================
+    // 2. SET IMMEDIATELY
+    // ================================================================
+
     setLocalDetailRows((previous) =>
-      previous.map((row, rowIndex) =>
-        rowIndex === index ? calculateLocalRow(row, key, value) : row,
-      ),
+      previous.map((row, rowIndex) => (rowIndex === index ? updatedRow : row)),
     );
+
+    // ================================================================
+    // 3. ONLY FETCH HSN WHEN ITEM IS SELECTED
+    // ================================================================
+
+    if (key !== "item" && key !== "indentNo") {
+      return;
+    }
+
+    try {
+      let itemId = "";
+
+      // ------------------------------------------------
+      // Direct Item Code selection
+      // ------------------------------------------------
+
+      if (key === "item") {
+        itemId = value;
+      }
+
+      // ------------------------------------------------
+      // Indent selection
+      // ------------------------------------------------
+
+      if (key === "indentNo") {
+        itemId = updatedRow.item;
+      }
+
+      itemId = toNumber(itemId);
+
+      console.log("HSN API ITEM ID:", itemId);
+      console.log("HSN API BRANCH:", effectiveBranchId);
+      console.log("HSN API ORG:", ORG_ID);
+
+      if (!itemId) {
+        console.warn("Item ID is empty. HSN API not called.");
+        return;
+      }
+
+      if (!effectiveBranchId) {
+        console.warn("Branch ID is empty. HSN API not called.");
+        return;
+      }
+
+      if (!ORG_ID) {
+        console.warn("ORG ID is empty. HSN API not called.");
+        return;
+      }
+
+      // ================================================================
+      // 4. GET HSN
+      // ================================================================
+
+      const hsnResponse = await purchaseOrderAPI.getHsnCodeDetails(
+        effectiveBranchId,
+        itemId,
+        ORG_ID,
+        "yes",
+      );
+
+      console.log("GET HSN RESPONSE:", hsnResponse);
+
+      const hsnList = hsnResponse?.paramObjectsMap?.mapp;
+
+      if (!Array.isArray(hsnList) || hsnList.length === 0) {
+        console.warn("No HSN returned for item:", itemId);
+        return;
+      }
+
+      const hsnData = hsnList[0];
+
+      const hsn = hsnData?.hsn ?? hsnData?.hsnCode ?? "";
+
+      const customerPartNo = hsnData?.customerPartNo ?? "";
+
+      console.log("HSN FOUND:", hsn);
+
+      if (!hsn) {
+        console.warn("HSN is empty for item:", itemId);
+        return;
+      }
+
+      // ================================================================
+      // 5. GET TAX USING HSN
+      // ================================================================
+
+      const taxResponse = await purchaseOrderAPI.getTaxValueByHsn(hsn, ORG_ID);
+
+      console.log("GET TAX RESPONSE:", taxResponse);
+
+      const taxList = taxResponse?.paramObjectsMap?.mapp;
+
+      if (!Array.isArray(taxList) || taxList.length === 0) {
+        console.warn("No tax returned for HSN:", hsn);
+        return;
+      }
+
+      const taxData = taxList[0];
+
+      console.log("TAX DATA FROM API:", taxData);
+
+      // ================================================================
+      // 6. API VALUES
+      // ================================================================
+
+      const sgst = toNumber(taxData?.sgst);
+
+      const cgst = toNumber(taxData?.cgst);
+
+      const igst = toNumber(taxData?.igst);
+
+      const taxPercentage = toNumber(taxData?.taxPercentage);
+
+      console.log("FINAL TAX VALUES:", {
+        hsn,
+        customerPartNo,
+        sgst,
+        cgst,
+        igst,
+        taxPercentage,
+      });
+
+      // ================================================================
+      // 7. UPDATE ROW WITH HSN + TAX
+      // ================================================================
+
+      setLocalDetailRows((previous) =>
+        previous.map((row, rowIndex) => {
+          if (rowIndex !== index) {
+            return row;
+          }
+
+          const nextRow = {
+            ...row,
+
+            hsnCode: hsn,
+
+            customerPartNo: customerPartNo || row.customerPartNo || "",
+
+            taxPercentage: taxPercentage || "",
+
+            sgstRate: sgst,
+
+            cgstRate: cgst,
+
+            igstRate: igst,
+          };
+
+          // ============================================================
+          // 8. RECALCULATE ROW
+          // ============================================================
+
+          const recalculatedRow = calculateLocalRow(
+            nextRow,
+            "taxPercentage",
+            taxPercentage || "",
+          );
+
+          return {
+            ...recalculatedRow,
+
+            hsnCode: hsn,
+
+            customerPartNo:
+              customerPartNo || recalculatedRow.customerPartNo || "",
+
+            sgstRate: sgst,
+
+            cgstRate: cgst,
+
+            igstRate: igst,
+
+            taxPercentage: taxPercentage || "",
+          };
+        }),
+      );
+    } catch (error) {
+      console.error("HSN / TAX API ERROR:", error?.response?.data || error);
+    }
   };
 
   /* ========================================================================= */
@@ -2039,23 +2337,120 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
 
   const calculateTaxAmount = (taxableAmount, percentage) => {
     const base = Math.max(0, toNumber(taxableAmount));
-
     const taxPercentage = Math.max(0, toNumber(percentage));
-
     return round2((base * taxPercentage) / 100);
   };
+
+  const calculateTaxDetails = useCallback(() => {
+    if (!isLocal) return;
+
+    const grossAmount = round2(
+      localDetailRows.reduce(
+        (total, row) => total + toNumber(row.amountInInr),
+        0,
+      ),
+    );
+
+    const isIGST = formData.isIgstApplicable === "Yes";
+    let sgstAmount = 0;
+    let cgstAmount = 0;
+    let igstAmount = 0;
+
+    localDetailRows.forEach((row) => {
+      const amount = Math.max(0, toNumber(row.amountInInr));
+      const fallbackRate = toNumber(row.taxPercentage);
+
+      if (isIGST) {
+        const rate = toNumber(row.igstRate) || fallbackRate;
+        igstAmount += calculateTaxAmount(amount, rate);
+      } else {
+        let sgstRate = toNumber(row.sgstRate);
+        let cgstRate = toNumber(row.cgstRate);
+
+        if (!sgstRate && !cgstRate && fallbackRate) {
+          sgstRate = fallbackRate / 2;
+          cgstRate = fallbackRate / 2;
+        }
+
+        sgstAmount += calculateTaxAmount(amount, sgstRate);
+        cgstAmount += calculateTaxAmount(amount, cgstRate);
+      }
+    });
+
+    const systemRows = [
+      {
+        id: "system-gross",
+        particulars: "Gross Amount",
+        tax: 0,
+        amount: money(grossAmount),
+        isSystemRow: true,
+      },
+    ];
+
+    if (isIGST) {
+      systemRows.push({
+        id: "system-igst",
+        particulars: "IGST",
+        tax: grossAmount > 0 ? round2((igstAmount / grossAmount) * 100) : 0,
+        amount: money(igstAmount),
+        isSystemRow: true,
+      });
+    } else {
+      systemRows.push(
+        {
+          id: "system-sgst",
+          particulars: "SGST",
+          tax: grossAmount > 0 ? round2((sgstAmount / grossAmount) * 100) : 0,
+          amount: money(sgstAmount),
+          isSystemRow: true,
+        },
+        {
+          id: "system-cgst",
+          particulars: "CGST",
+          tax: grossAmount > 0 ? round2((cgstAmount / grossAmount) * 100) : 0,
+          amount: money(cgstAmount),
+          isSystemRow: true,
+        },
+      );
+    }
+
+    setTaxRows((previous) => {
+      const userRows = previous
+        .filter((row) => !row.isSystemRow)
+        .map((row) => {
+          if (row.tax === "" || row.tax === null || row.tax === undefined) {
+            return { ...row, isSystemRow: false };
+          }
+
+          return {
+            ...row,
+            isSystemRow: false,
+            amount: money(calculateTaxAmount(grossAmount, row.tax)),
+          };
+        });
+
+      const nextRows = [...systemRows, ...userRows];
+
+      return JSON.stringify(previous) === JSON.stringify(nextRows)
+        ? previous
+        : nextRows;
+    });
+  }, [isLocal, localDetailRows, formData.isIgstApplicable]);
+
+  useEffect(() => {
+    if (isLocal) {
+      calculateTaxDetails();
+    }
+  }, [isLocal, calculateTaxDetails]);
 
   const handleTaxCellChange = (index, key, value) => {
     setTaxRows((previous) =>
       previous.map((row, rowIndex) => {
-        if (rowIndex !== index) {
+        if (rowIndex !== index || row.isSystemRow) {
           return row;
         }
 
-        const updated = {
-          ...row,
-          [key]: value,
-        };
+        const updated = { ...row, [key]: value };
 
         if (key === "particulars") {
           const definition = taxDefinitionOptions.find(
@@ -2064,9 +2459,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
 
           if (definition) {
             const tax = toNumber(definition.percentage);
-
             updated.tax = tax;
-
             updated.amount = money(calculateTaxAmount(localGrossAmount, tax));
           } else {
             updated.tax = "";
@@ -2076,9 +2469,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
 
         if (key === "tax") {
           const tax = Math.max(0, toNumber(value));
-
           updated.tax = tax;
-
           updated.amount = money(calculateTaxAmount(localGrossAmount, tax));
         }
 
@@ -2087,29 +2478,13 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
     );
   };
 
-  useEffect(() => {
-    if (!isLocal) return;
-
-    setTaxRows((previous) =>
-      previous.map((row) => {
-        if (row.tax === "" || row.tax === null || row.tax === undefined) {
-          return row;
-        }
-
-        return {
-          ...row,
-          amount: money(calculateTaxAmount(localGrossAmount, row.tax)),
-        };
-      }),
-    );
-  }, [localGrossAmount, isLocal]);
-
   const taxRowsTotal = useMemo(() => {
     return round2(
-      taxRows.reduce((total, row) => total + toNumber(row.amount), 0),
+      taxRows
+        .filter((row) => row.particulars !== "Gross Amount")
+        .reduce((total, row) => total + toNumber(row.amount), 0),
     );
   }, [taxRows]);
-
   /* ========================================================================= */
   /* CHARGES                                                                  */
   /* ========================================================================= */
@@ -2441,6 +2816,13 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
 
               taxPercentage: toNumber(row.taxPercentage),
 
+              sgstRate: toNumber(row.sgstRate),
+              cgstRate: toNumber(row.cgstRate),
+              igstRate: toNumber(row.igstRate),
+              sgstAmount: toNumber(row.sgstAmount),
+              cgstAmount: toNumber(row.cgstAmount),
+              igstAmount: toNumber(row.igstAmount),
+
               purchaseUnit: toInteger(row.purchaseUnit),
 
               primaryUnit: toInteger(row.primaryUnit),
@@ -2513,6 +2895,8 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
                 tax: toNumber(row.tax),
 
                 amount: toNumber(row.amount),
+
+                isSystemRow: Boolean(row.isSystemRow),
               };
             })
         : [];
@@ -3478,13 +3862,23 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
                     key: "particulars",
                     label: "Particulars",
                     type: "select",
-                    options: taxDefinitionOptions,
+                    options: (row) =>
+                      row.isSystemRow
+                        ? [
+                            {
+                              value: row.particulars,
+                              label: row.particulars,
+                            },
+                          ]
+                        : taxDefinitionOptions,
+                    disabled: (row) => Boolean(row.isSystemRow),
                   },
 
                   {
                     key: "tax",
                     label: "Tax %",
                     type: "number",
+                    disabled: (row) => Boolean(row.isSystemRow),
                   },
 
                   {
