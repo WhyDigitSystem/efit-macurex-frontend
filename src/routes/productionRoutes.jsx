@@ -17,12 +17,18 @@ import ScrapNoteMaster from "../components/Production/ScrapNote/ScrapNoteMaster"
 import StockOrderMaster from "../components/Production/StockOrder/StockOrderMaster";
 import ToolsFixturesMaster from "../components/Production/ToolsFixtures/ToolsFixturesMaster";
 import MachineMaster from "../components/Production/MachineMaster/MachineMaster";
+import ReasonMaster from "../components/Production/ReasonMaster/ReasonMaster";
 
 const productionRoutes = [
   {
     path: "/machineMaster",
     label: "Machine Master",
     element: <MachineMaster />,
+  },
+  {
+    path: "/reasonmaster",
+    label: "Reason Master",
+    element: <ReasonMaster />,
   },
   {
     path: "/productionscheduleorder",

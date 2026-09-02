@@ -25,6 +25,7 @@ import {
   Clock3,
   CalendarDays,
   Settings2,
+  MessageSquareWarning,
 } from "lucide-react";
 import { hasScreenAccess } from "../../utils/accessControl";
 
@@ -45,6 +46,12 @@ const SECTIONS = [
         icon: Settings2,
         path: "/machineMaster",
         screenCode: "MACHINE_MASTER",
+      },
+      {
+        name: "Reason Master",
+        icon: MessageSquareWarning,
+        path: "/reasonmaster",
+        screenCode: "REASON_MASTER",
       },
     ],
   },
