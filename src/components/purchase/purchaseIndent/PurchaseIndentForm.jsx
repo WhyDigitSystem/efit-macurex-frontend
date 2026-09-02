@@ -17,6 +17,7 @@ import { departmentAPI } from "../../../api/departmentAPI";
 import { employeeAPI } from "../../../api/employeeAPI";
 import itemAPI from "../../../api/itemAPI";
 import docTypeMappingAPI from "../../../api/docTypeMappingAPI";
+import listOfValuesAPI from "../../../api/listOfValuesAPI";
 
 /* -------------------------------------------------------------------------- */
 /* Shared styles */
@@ -524,7 +525,11 @@ const AttachmentTable = ({
 const emptyHeader = () => ({
   active: true,
   approved: false,
+
+  // IMPORTANT:
+  // Belongs To is stored as LOV description/string.
   belongsTo: "",
+
   branch: "",
   indentDate: "",
   department: "",
@@ -577,20 +582,9 @@ const PURCHASE_INDENT_SCREEN_CODE = "PIN";
 /* -------------------------------------------------------------------------- */
 
 const PurchaseIndentForm = ({ onBack, onSave, data }) => {
-  /*
-   * EXACTLY LIKE YOUR ENQUIRY FORM:
-   *
-   * Enquiry:
-   *   <EnquiryForm data={editData} />
-   *
-   * Purchase Indent:
-   *   <PurchaseIndentForm data={editData} />
-   *
-   * Therefore editId is taken from data.
-   */
   const editId = data?.id;
 
-  const ORG_ID = parseInt(localStorage.getItem("orgId"));
+  const ORG_ID = parseInt(localStorage.getItem("orgId"), 10);
 
   const BRANCH_ID = localStorage.getItem("branchId");
 
@@ -634,10 +628,25 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
 
   const [itemList, setItemList] = useState([]);
 
+  /* ---------------------------------------------------------------------- */
+  /* BELONGS TO - LIST OF VALUES */
+  /* ---------------------------------------------------------------------- */
+
+  const [belongsToOptions, setBelongsToOptions] = useState([]);
+
   const [loadingItemRow, setLoadingItemRow] = useState(null);
+
+  /* ---------------------------------------------------------------------- */
+  /* Load Plants */
+  /* ---------------------------------------------------------------------- */
 
   const loadPlants = useCallback(async () => {
     try {
+      if (!ORG_ID) {
+        setPlantData([]);
+        return;
+      }
+
       const response = await branchAPI.getBranchByOrgId(ORG_ID);
 
       setPlantData(
@@ -653,8 +662,17 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
     }
   }, [ORG_ID]);
 
+  /* ---------------------------------------------------------------------- */
+  /* Load Departments */
+  /* ---------------------------------------------------------------------- */
+
   const loadDepartments = useCallback(async () => {
     try {
+      if (!ORG_ID) {
+        setDepartmentData([]);
+        return;
+      }
+
       const response = await departmentAPI.getAllDepartments(ORG_ID);
 
       const list = pickArray(response, [
@@ -678,8 +696,17 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
     }
   }, [ORG_ID, BRANCH_ID]);
 
+  /* ---------------------------------------------------------------------- */
+  /* Load Employees */
+  /* ---------------------------------------------------------------------- */
+
   const loadEmployees = useCallback(async () => {
     try {
+      if (!ORG_ID) {
+        setEmployeeList([]);
+        return;
+      }
+
       const response = await employeeAPI.getEmployeeByOrgId(ORG_ID);
 
       setEmployeeList(response || []);
@@ -690,8 +717,17 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
     }
   }, [ORG_ID]);
 
+  /* ---------------------------------------------------------------------- */
+  /* Load Items */
+  /* ---------------------------------------------------------------------- */
+
   const loadItems = useCallback(async () => {
     try {
+      if (!ORG_ID) {
+        setItemList([]);
+        return;
+      }
+
       const response = await itemAPI.getItems(ORG_ID, BRANCH_ID);
 
       setItemList(
@@ -707,12 +743,87 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
     }
   }, [ORG_ID, BRANCH_ID]);
 
+  /* ---------------------------------------------------------------------- */
+  /* Load Belongs To from List Of Values */
+  /* ---------------------------------------------------------------------- */
+
+  const loadBelongsTo = useCallback(async () => {
+    try {
+      if (!ORG_ID) {
+        setBelongsToOptions([]);
+        return;
+      }
+
+      console.log("Loading BELONGS TO LOV for Organization:", ORG_ID);
+
+      const response = await listOfValuesAPI.getListValuesGroup(
+        "BELONGS TO",
+        ORG_ID,
+      );
+
+      console.log("BELONGS TO LOV response:", response);
+
+      const list = Array.isArray(response) ? response : [];
+
+      const options = list
+        .map((item) => {
+          /*
+           * Different APIs may return the description using
+           * different property names.
+           */
+          const description =
+            item.valuesDescription ||
+            item.valueDescription ||
+            item.description ||
+            item.valuesDesc ||
+            item.valueDesc ||
+            "";
+
+          return {
+            /*
+             * IMPORTANT:
+             *
+             * The option id is intentionally the description.
+             *
+             * This means:
+             *
+             * Domestic -> Domestic
+             * Import   -> Import
+             *
+             * We are NOT sending the LOV database ID.
+             */
+            id: description,
+
+            value: description,
+
+            label: description,
+          };
+        })
+        .filter((item) => item.id);
+
+      setBelongsToOptions(options);
+    } catch (error) {
+      console.error("Failed to load Belongs To values:", error);
+
+      setBelongsToOptions([]);
+    }
+  }, [ORG_ID]);
+
+  /* ---------------------------------------------------------------------- */
+  /* Load all master data */
+  /* ---------------------------------------------------------------------- */
+
   useEffect(() => {
     loadPlants();
     loadDepartments();
     loadEmployees();
     loadItems();
-  }, [loadPlants, loadDepartments, loadEmployees, loadItems]);
+    loadBelongsTo();
+  }, [loadPlants, loadDepartments, loadEmployees, loadItems, loadBelongsTo]);
+
+  /* ---------------------------------------------------------------------- */
+  /* Employee options */
+  /* ---------------------------------------------------------------------- */
 
   const preparedByOptions = employeeList.map((employee) => ({
     id: employee.id,
@@ -727,8 +838,7 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
 
   useEffect(() => {
     /*
-     * IMPORTANT:
-     * Don't generate a new number during edit.
+     * Do not generate a new number during edit.
      */
     if (isEditMode) {
       return;
@@ -736,7 +846,6 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
 
     if (!BRANCH_ID) {
       console.warn("No branchId found in localStorage");
-
       return;
     }
 
@@ -767,9 +876,7 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
 
         const docId = await purchaseIndentAPI.getPurchaseIndentDocId({
           financialYear: pinDetail.finYear,
-
           orgId: pinDetail.orgId,
-
           screenCode: pinDetail.screenCode,
         });
 
@@ -793,20 +900,6 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
   /* ---------------------------------------------------------------------- */
 
   useEffect(() => {
-    /*
-     * EXACT SAME CONCEPT AS ENQUIRY:
-     *
-     * Enquiry:
-     *   if (data?.id) {
-     *      loadEnquiryData(data.id);
-     *   }
-     *
-     * Purchase Indent:
-     *   if (data?.id) {
-     *      loadPurchaseIndentData(data.id);
-     *   }
-     */
-
     if (!data?.id) {
       setIsLoading(false);
       return;
@@ -847,16 +940,30 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
 
         setRecordId(purchaseIndent.id ?? data.id);
 
-        /*
-         * Keep the existing indent number.
-         */
+        /* -------------------------------------------------------------- */
+        /* Keep existing indent number */
+        /* -------------------------------------------------------------- */
+
         setIndentNo(purchaseIndent.indentNo ?? data.indentNo ?? "");
+
+        /* -------------------------------------------------------------- */
+        /* Header */
+        /* -------------------------------------------------------------- */
 
         setHeader({
           active: purchaseIndent.active ?? true,
 
           approved: purchaseIndent.approved ?? false,
 
+          /*
+           * IMPORTANT:
+           * Belongs To remains a STRING.
+           *
+           * Example:
+           * "Domestic"
+           *
+           * Do not use asId() here.
+           */
           belongsTo: purchaseIndent.belongsTo ?? data.belongsTo ?? "",
 
           branch: asId(purchaseIndent.branch ?? data.branch),
@@ -1186,13 +1293,11 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
 
       const payload = {
         /*
-         * THIS IS IMPORTANT FOR UPDATE.
+         * Update:
+         * send existing database ID.
          *
-         * If edit:
-         *   id will be sent.
-         *
-         * If add:
-         *   id will not be sent.
+         * Create:
+         * don't send ID.
          */
         ...(isEditMode && recordId
           ? {
@@ -1204,6 +1309,17 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
 
         approved: header.approved,
 
+        /*
+         * IMPORTANT:
+         *
+         * Belongs To is sent as STRING.
+         *
+         * Example:
+         * "Domestic"
+         *
+         * NOT:
+         * 1000000001
+         */
         belongsTo: header.belongsTo,
 
         branch: Number(header.branch),
@@ -1273,9 +1389,6 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
       const status = response?.status === true || response?.statusFlag === "Ok";
 
       if (status) {
-        /*
-         * Return to list after successful save/update.
-         */
         if (onSave) {
           onSave(response?.paramObjectsMap ?? payload);
         }
@@ -1350,6 +1463,8 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
           <SectionHeader>Indent Details</SectionHeader>
 
           <div className={fieldGrid}>
+            {/* Plant */}
+
             <Field
               type="select"
               label="Plant"
@@ -1361,6 +1476,8 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
               required
             />
 
+            {/* Indent No */}
+
             <Field
               label="Indent No"
               name="indentNo"
@@ -1369,12 +1486,20 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
               disabled
             />
 
+            {/* ====================================================== */}
+            {/* BELONGS TO */}
+            {/* ====================================================== */}
+
             <Field
+              type="select"
               label="Belongs To"
               name="belongsTo"
               value={header.belongsTo}
               onChange={handleHeaderChange}
+              options={belongsToOptions}
             />
+
+            {/* Indent Date */}
 
             <Field
               type="date"
@@ -1385,6 +1510,8 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
               error={fieldErrors.indentDate}
               required
             />
+
+            {/* Department */}
 
             <Field
               type="select"
@@ -1397,6 +1524,8 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
               required
             />
 
+            {/* Prepared By */}
+
             <Field
               type="select"
               label="Prepared By"
@@ -1408,6 +1537,8 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
               required
             />
 
+            {/* By Whom */}
+
             <Field
               type="select"
               label="By Whom"
@@ -1416,6 +1547,8 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
               onChange={handleHeaderChange}
               options={byWhomOptions}
             />
+
+            {/* Approved */}
 
             <div className="w-full">
               <label className={labelClasses}>Approved</label>
@@ -1469,7 +1602,9 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
             )}
           </div>
 
+          {/* ======================================================== */}
           {/* Item Details */}
+          {/* ======================================================== */}
 
           {activeChildTab === "item" && (
             <TableWrapper>
@@ -1497,6 +1632,8 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
                     onRemove={() => handleRemoveDetailRow(index)}
                     disabled={detailRows.length <= 1}
                   >
+                    {/* Item Code */}
+
                     <td className="p-1 align-top">
                       <select
                         value={row.item}
@@ -1519,6 +1656,8 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
                       </select>
                     </td>
 
+                    {/* Item Description */}
+
                     <td className="p-1 align-top">
                       <input
                         value={
@@ -1531,6 +1670,8 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
                       />
                     </td>
 
+                    {/* Primary Unit */}
+
                     <td className="p-1 align-top">
                       <input
                         value={row.primaryUnitLabel}
@@ -1539,6 +1680,8 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
                       />
                     </td>
 
+                    {/* Purchase Unit */}
+
                     <td className="p-1 align-top">
                       <input
                         value={row.purchaseUnitLabel}
@@ -1546,6 +1689,8 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
                         className={`${cellInputClasses} bg-gray-100 dark:bg-gray-800`}
                       />
                     </td>
+
+                    {/* Qty Primary */}
 
                     <td className="p-1 align-top">
                       <input
@@ -1562,6 +1707,8 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
                       />
                     </td>
 
+                    {/* Conversion Factor */}
+
                     <td className="p-1 align-top">
                       <input
                         type="number"
@@ -1571,6 +1718,8 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
                       />
                     </td>
 
+                    {/* Qty Purchase */}
+
                     <td className="p-1 align-top">
                       <input
                         type="number"
@@ -1579,6 +1728,8 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
                         className={`${cellInputClasses} bg-gray-100 dark:bg-gray-800`}
                       />
                     </td>
+
+                    {/* Required Date */}
 
                     <td className="p-1 align-top">
                       <input
@@ -1594,6 +1745,8 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
                         className={cellInputClasses}
                       />
                     </td>
+
+                    {/* Purpose */}
 
                     <td className="p-1 align-top">
                       <input
@@ -1614,7 +1767,9 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
             </TableWrapper>
           )}
 
+          {/* ======================================================== */}
           {/* Attachment */}
+          {/* ======================================================== */}
 
           {activeChildTab === "attachment" && (
             <AttachmentTable
@@ -1626,7 +1781,9 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
             />
           )}
 
+          {/* ======================================================== */}
           {/* Summary */}
+          {/* ======================================================== */}
 
           {activeChildTab === "summary" && (
             <div className="pt-3">

@@ -1,18 +1,19 @@
 import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+
 import internalIndentAPI from "../../../api/Inventory/internalIndentAPI";
 import branchAPI from "../../../api/branchAPI";
+import listOfValuesAPI from "../../../api/listOfValuesAPI";
+
 // CONFIRMED: departmentAPI.js exports a named export, not a default export
-// (the earlier "does not provide an export named 'default'" error proved
-// this). Reverted to named imports for both — employeeAPI.js follows the
-// same module pattern in this codebase.
 import { departmentAPI } from "../../../api/departmentAPI";
 import { employeeAPI } from "../../../api/employeeAPI";
 import itemAPI from "../../../api/itemAPI";
+
 import { toast } from "../../../utils/toast";
 
 /* ========================================================================= */
-/* DESIGN TOKENS (match existing app styling)                                */
+/* DESIGN TOKENS                                                             */
 /* ========================================================================= */
 
 const controlClasses =
@@ -37,12 +38,12 @@ const fieldGrid =
   "grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-x-3 gap-y-2 items-start";
 
 /* ========================================================================= */
-/* HELPERS                                                                  */
+/* HELPERS                                                                   */
 /* ========================================================================= */
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
-const nowTime = () => new Date().toTimeString().slice(0, 5); // "HH:MM"
+const nowTime = () => new Date().toTimeString().slice(0, 5);
 
 const pickArray = (source, keys) => {
   if (Array.isArray(source)) return source;
@@ -115,20 +116,25 @@ const Field = ({
           {label}
           {required && <span className="text-red-500"> *</span>}
         </label>
+
         <select
           name={name}
           value={value ?? ""}
           onChange={onChange}
           disabled={disabled}
-          className={`${controlClasses} ${error ? "border-red-500 focus:border-red-500" : ""}`}
+          className={`${controlClasses} ${
+            error ? "border-red-500 focus:border-red-500" : ""
+          }`}
         >
           <option value="">-- Select --</option>
+
           {(options || []).map((option) => (
             <option key={option.id} value={option.id}>
               {option.label}
             </option>
           ))}
         </select>
+
         {error && <p className="text-[11px] text-red-500 mt-0.5">{error}</p>}
       </div>
     );
@@ -141,6 +147,7 @@ const Field = ({
           {label}
           {required && <span className="text-red-500"> *</span>}
         </label>
+
         <textarea
           name={name}
           value={value ?? ""}
@@ -151,9 +158,12 @@ const Field = ({
           className={
             "w-full px-2 py-1.5 rounded border text-xs leading-snug bg-white dark:bg-gray-900 " +
             "border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 " +
-            `focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none ${error ? "border-red-500" : ""}`
+            `focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none ${
+              error ? "border-red-500" : ""
+            }`
           }
         />
+
         {error && <p className="text-[11px] text-red-500 mt-0.5">{error}</p>}
       </div>
     );
@@ -165,6 +175,7 @@ const Field = ({
         {label}
         {required && <span className="text-red-500"> *</span>}
       </label>
+
       <input
         type={type}
         name={name}
@@ -172,8 +183,11 @@ const Field = ({
         onChange={onChange}
         disabled={disabled}
         placeholder={placeholder}
-        className={`${controlClasses} ${error ? "border-red-500 focus:border-red-500" : ""}`}
+        className={`${controlClasses} ${
+          error ? "border-red-500 focus:border-red-500" : ""
+        }`}
       />
+
       {error && <p className="text-[11px] text-red-500 mt-0.5">{error}</p>}
     </div>
   );
@@ -219,12 +233,10 @@ const TableHead = ({ headers }) => (
 const InternalIndentForm = ({ onBack, onSave, editData }) => {
   const ORG_ID = Number(localStorage.getItem("orgId"));
   const BRANCH_ID = localStorage.getItem("branchId");
-  // FIX: this app stores the financial year under the key "finYear" in
-  // localStorage (confirmed against the working TransportBillForm doc-id
-  // flow), not "financialYear". Reading the wrong key meant FINANCIAL_YEAR
-  // was always "", which tripped the "orgId or financialYear is missing"
-  // guard and blocked doc-id generation entirely.
+
+  // Financial year is stored using "finYear"
   const FINANCIAL_YEAR = localStorage.getItem("finYear") || "";
+
   const USER_NAME =
     localStorage.getItem("userName") ||
     localStorage.getItem("username") ||
@@ -244,13 +256,20 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
   const [itemRows, setItemRows] = useState([emptyItemRow()]);
 
   /* ----------------------------------------------------------------------- */
-  /* MASTER DATA - real dropdowns, same pattern as PurchaseIndentForm         */
+  /* MASTER DATA                                                             */
   /* ----------------------------------------------------------------------- */
 
   const [branchOptions, setBranchOptions] = useState([]);
   const [departmentOptions, setDepartmentOptions] = useState([]);
   const [employeeOptions, setEmployeeOptions] = useState([]);
   const [itemOptions, setItemOptions] = useState([]);
+
+  // NEW: Belongs To LOV options
+  const [belongsToOptions, setBelongsToOptions] = useState([]);
+
+  /* ----------------------------------------------------------------------- */
+  /* LOAD BRANCHES                                                           */
+  /* ----------------------------------------------------------------------- */
 
   const loadBranches = useCallback(async () => {
     try {
@@ -267,6 +286,10 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
       setBranchOptions([]);
     }
   }, [ORG_ID]);
+
+  /* ----------------------------------------------------------------------- */
+  /* LOAD DEPARTMENTS                                                        */
+  /* ----------------------------------------------------------------------- */
 
   const loadDepartments = useCallback(async () => {
     try {
@@ -292,6 +315,10 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
     }
   }, [ORG_ID]);
 
+  /* ----------------------------------------------------------------------- */
+  /* LOAD EMPLOYEES                                                          */
+  /* ----------------------------------------------------------------------- */
+
   const loadEmployees = useCallback(async () => {
     try {
       const response = await employeeAPI.getEmployeeByOrgId(ORG_ID);
@@ -307,6 +334,10 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
       setEmployeeOptions([]);
     }
   }, [ORG_ID]);
+
+  /* ----------------------------------------------------------------------- */
+  /* LOAD ITEMS                                                              */
+  /* ----------------------------------------------------------------------- */
 
   const loadItems = useCallback(async () => {
     try {
@@ -324,12 +355,77 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
     }
   }, [ORG_ID, BRANCH_ID]);
 
+  /* ----------------------------------------------------------------------- */
+  /* LOAD BELONGS TO LOV                                                     */
+  /* ----------------------------------------------------------------------- */
+
+  const loadBelongsTo = useCallback(async () => {
+    try {
+      if (!ORG_ID) {
+        console.warn("ORG_ID is missing. Cannot load Belongs To values.");
+        setBelongsToOptions([]);
+        return;
+      }
+
+      const response = await listOfValuesAPI.getListValuesGroup(
+        "BELONGS TO",
+        ORG_ID,
+      );
+
+      console.log("========== BELONGS TO LOV RESPONSE ==========");
+      console.log(response);
+
+      const list = Array.isArray(response)
+        ? response
+        : response?.paramObjectsMap?.listValues ||
+          response?.paramObjectsMap?.values ||
+          response?.paramObjectsMap?.listValueDetails ||
+          [];
+
+      const options = list
+        .map((item) => {
+          const description =
+            item?.valuesDescription ||
+            item?.valueDescription ||
+            item?.description ||
+            item?.value ||
+            "";
+
+          return {
+            // IMPORTANT:
+            // Belongs To must send the description/string to backend,
+            // not the LOV ID.
+            id: description,
+            label: description,
+          };
+        })
+        .filter((item) => item.id);
+
+      console.log("========== BELONGS TO OPTIONS ==========");
+      console.log(options);
+
+      setBelongsToOptions(options);
+    } catch (error) {
+      console.error("Failed to load Belongs To values:", error);
+      setBelongsToOptions([]);
+    }
+  }, [ORG_ID]);
+
+  /* ----------------------------------------------------------------------- */
+  /* LOAD ALL MASTER DATA                                                    */
+  /* ----------------------------------------------------------------------- */
+
   useEffect(() => {
     loadBranches();
     loadDepartments();
     loadEmployees();
     loadItems();
-  }, [loadBranches, loadDepartments, loadEmployees, loadItems]);
+    loadBelongsTo();
+  }, [loadBranches, loadDepartments, loadEmployees, loadItems, loadBelongsTo]);
+
+  /* ----------------------------------------------------------------------- */
+  /* APPROVAL OPTIONS                                                        */
+  /* ----------------------------------------------------------------------- */
 
   const approvalOptions = useMemo(
     () => [
@@ -341,18 +437,26 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
   );
 
   /* ----------------------------------------------------------------------- */
-  /* LOAD EDIT DATA (via getInternalIndentById - not from the list row)       */
+  /* LOAD EDIT DATA                                                          */
   /* ----------------------------------------------------------------------- */
 
   useEffect(() => {
     if (!isEditMode) {
       setHeader({
         ...emptyHeader(),
+
         branch: BRANCH_ID ? String(BRANCH_ID) : "",
+
+        // Keep empty here so the LOV value can be selected.
+        // If you want Domestic as default, change this to:
+        // belongTo: "Domestic"
+        belongTo: "",
       });
+
       setSummary(emptySummary());
       setItemRows([emptyItemRow()]);
       setLoading(false);
+
       return;
     }
 
@@ -373,21 +477,28 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
 
         setHeader({
           branch: asId(data.branch),
+
           docId: data.docId || "",
+
+          // Backend returns the Belongs To description/string.
           belongTo: data.belongTo || "",
+
           docDate: data.docDate || todayISO(),
+
           department: asId(data.department),
-          // FIX #3: trim any "HH:MM:SS" coming back from the API down to
-          // "HH:MM" so the <input type="time"> can actually display it.
+
           timeOfIndent: (data.timeOfIndent || nowTime()).slice(0, 5),
         });
 
         setSummary({
           approvedByPM: data.approvedByPM || "Pending",
+
           preparedBy: asId(data.preparedBy?.employeeId ?? data.preparedBy),
+
           authorizedBy: asId(
             data.authorizedBy?.employeeId ?? data.authorizedBy,
           ),
+
           remarks: data.remarks || "",
         });
 
@@ -397,11 +508,16 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
           details.length > 0
             ? details.map((detail) => ({
                 itemCode: asId(detail.item),
+
                 itemDescription: detail.item?.itemDescription || "",
+
                 unit: asId(detail.item?.unit),
+
                 unitLabel:
                   detail.item?.unit?.unitName ?? detail.item?.unit?.name ?? "",
+
                 requiredQty: detail.requiredQty ?? "",
+
                 purpose: detail.purpose || "",
               }))
             : [emptyItemRow()],
@@ -412,7 +528,9 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
         console.error("Error loading Internal Indent:", error);
         toast.error("Failed to load Internal Indent details");
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
@@ -424,7 +542,7 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
   }, [editData?.id, isEditMode, BRANCH_ID]);
 
   /* ----------------------------------------------------------------------- */
-  /* GENERATE DOC ID FOR NEW RECORD ONLY (never regenerate on edit)           */
+  /* GENERATE DOC ID FOR NEW RECORD ONLY                                     */
   /* ----------------------------------------------------------------------- */
 
   useEffect(() => {
@@ -448,7 +566,6 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
 
       setGeneratingDocId(true);
 
-      // Clear old/generated document number before requesting a new one
       setHeader((prev) => ({
         ...prev,
         docId: "",
@@ -472,7 +589,7 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
 
         setHeader((prev) => ({
           ...prev,
-          docId: docId,
+          docId,
         }));
       } catch (error) {
         console.error("========== INTERNAL INDENT DOC ID ERROR ==========");
@@ -505,20 +622,33 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
 
   const handleHeaderChange = (event) => {
     const { name, value } = event.target;
+
     if (fieldErrors[name]) {
-      setFieldErrors((prev) => ({ ...prev, [name]: "" }));
+      setFieldErrors((prev) => ({
+        ...prev,
+        [name]: "",
+      }));
     }
-    setHeader((prev) => ({ ...prev, [name]: value }));
+
+    setHeader((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
   };
 
   const handleSummaryChange = (event) => {
     const { name, value } = event.target;
-    setSummary((prev) => ({ ...prev, [name]: value }));
+
+    setSummary((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
   };
 
-  // FIX #5: guard against a stale response landing on the wrong row if rows
-  // are added/removed while an item lookup is still in flight. We capture the
-  // itemId we fetched for and only apply the result if that row still wants it.
+  /* ----------------------------------------------------------------------- */
+  /* ITEM SELECT                                                             */
+  /* ----------------------------------------------------------------------- */
+
   const handleItemSelect = async (index, itemId) => {
     setItemRows((prev) =>
       prev.map((row, rowIndex) =>
@@ -548,15 +678,19 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
       setItemRows((prev) =>
         prev.map((row, rowIndex) => {
           if (rowIndex !== index) return row;
-          // Row was changed to a different item while this fetch was in
-          // flight - don't clobber it with stale data.
-          if (String(row.itemCode) !== String(itemId)) return row;
+
+          if (String(row.itemCode) !== String(itemId)) {
+            return row;
+          }
 
           return {
             ...row,
+
             itemDescription:
               itemDetail.itemDescription ?? itemDetail.description ?? "",
+
             unit: unitObject?.id ?? "",
+
             unitLabel:
               unitObject?.unitName ??
               unitObject?.primaryUnit ??
@@ -580,12 +714,19 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
 
     setItemRows((prev) =>
       prev.map((row, rowIndex) =>
-        rowIndex === index ? { ...row, [key]: value } : row,
+        rowIndex === index
+          ? {
+              ...row,
+              [key]: value,
+            }
+          : row,
       ),
     );
   };
 
-  const addItemRow = () => setItemRows((prev) => [...prev, emptyItemRow()]);
+  const addItemRow = () => {
+    setItemRows((prev) => [...prev, emptyItemRow()]);
+  };
 
   const removeItemRow = (index) => {
     setItemRows((prev) =>
@@ -600,9 +741,17 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
   const validate = () => {
     const errors = {};
 
-    if (!header.branch) errors.branch = "Branch is required";
-    if (!header.docDate) errors.docDate = "Doc Date is required";
-    if (!header.department) errors.department = "Department is required";
+    if (!header.branch) {
+      errors.branch = "Branch is required";
+    }
+
+    if (!header.docDate) {
+      errors.docDate = "Doc Date is required";
+    }
+
+    if (!header.department) {
+      errors.department = "Department is required";
+    }
 
     if (!itemRows.length) {
       errors.items = "At least one item is required";
@@ -643,18 +792,17 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
 
       branch: header.branch ? Number(header.branch) : null,
 
+      // IMPORTANT:
+      // Belongs To is a LOV DESCRIPTION/string.
+      // Do NOT convert this to Number().
       belongTo: header.belongTo || "Domestic",
 
-      // FIX: was hard-coded to "" which caused the backend to fail its
-      // Document Type Mapping lookup. Send the actual generated/loaded docId.
       docId: header.docId || "",
 
       docDate: header.docDate || todayISO(),
 
       department: header.department ? Number(header.department) : null,
 
-      // FIX: backend needs financialYear to resolve the Document Type Mapping,
-      // same value used to generate the docId in the first place.
       financialYear: FINANCIAL_YEAR,
 
       timeOfIndent: header.timeOfIndent
@@ -681,7 +829,6 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
 
       remarks: summary.remarks || "",
 
-      // FIX: API expects this key even if empty.
       cancelRemarks: editData?.cancelRemarks || "",
 
       orgId: Number(ORG_ID),
@@ -690,30 +837,31 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
 
       createdBy: editData?.createdBy || USER_NAME,
 
-      // FIX: key renamed from internalIndentDetailsResponseDTO ->
-      // internalIndentDetailsDTO to match the API's expected request shape
-      // (the "Response" suffix is only used on the way BACK from the server).
       internalIndentDetailsDTO: itemRows
         .filter((row) => row.itemCode)
         .map((row) => ({
           item: Number(row.itemCode),
+
           requiredQty: Number(row.requiredQty),
+
           purpose: row.purpose?.trim() || "",
         })),
     };
 
     console.log("========== INTERNAL INDENT FINAL PAYLOAD ==========");
+
     console.log(JSON.stringify(payload, null, 2));
 
     return payload;
   };
 
   /* ----------------------------------------------------------------------- */
-  /* SAVE - the ONLY place that calls the save API. Master must not call it. */
-  /* ----------------------------------------------------------------------- */ 
+  /* SAVE                                                                    */
+  /* ----------------------------------------------------------------------- */
 
   const handleSave = async () => {
     if (isSubmitting) return;
+
     if (!validate()) return;
 
     const payload = buildPayload();
@@ -733,7 +881,9 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
           response?.paramObjectsMap?.message ||
           response?.message ||
           "Failed to save Internal Indent";
+
         toast.error(message);
+
         return;
       }
 
@@ -743,14 +893,15 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
           : "Internal Indent created successfully",
       );
 
-      // Master's onSave only switches the screen - it does not save again.
       onSave?.(response?.paramObjectsMap?.internalIndentVO || payload);
     } catch (error) {
       console.error("Internal Indent save error:", error);
+
       const message =
         error?.response?.data?.paramObjectsMap?.errorMessage ||
         error?.response?.data?.paramObjectsMap?.message ||
         "Failed to save Internal Indent";
+
       toast.error(message);
     } finally {
       setIsSubmitting(false);
@@ -763,6 +914,10 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
 
   return (
     <div className="p-2 max-w-7xl">
+      {/* ----------------------------------------------------------------- */}
+      {/* HEADER                                                            */}
+      {/* ----------------------------------------------------------------- */}
+
       <div className="flex items-center gap-2 mb-3">
         <button
           type="button"
@@ -772,15 +927,22 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
+
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
           {isEditMode ? "Edit Internal Indent" : "Internal Indent"}
         </h2>
       </div>
 
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
+        {/* ----------------------------------------------------------------- */}
+        {/* INDENT DETAILS                                                   */}
+        {/* ----------------------------------------------------------------- */}
+
         <div>
           <SectionHeader>Indent Details</SectionHeader>
+
           <div className={fieldGrid}>
+            {/* Branch */}
             <Field
               type="select"
               label="Branch"
@@ -792,6 +954,8 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
               required
               disabled={isEditMode}
             />
+
+            {/* Doc ID */}
             <Field
               label="Doc ID"
               name="docId"
@@ -799,12 +963,18 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
               placeholder={generatingDocId ? "Generating..." : ""}
               disabled
             />
+
+            {/* Belongs To - LOV DROPDOWN */}
             <Field
+              type="select"
               label="Belongs To"
               name="belongTo"
               value={header.belongTo}
               onChange={handleHeaderChange}
+              options={belongsToOptions}
             />
+
+            {/* Doc Date */}
             <Field
               type="date"
               label="Doc Date"
@@ -814,6 +984,8 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
               error={fieldErrors.docDate}
               required
             />
+
+            {/* Department */}
             <Field
               type="select"
               label="Department"
@@ -824,6 +996,8 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
               error={fieldErrors.department}
               required
             />
+
+            {/* Time */}
             <Field
               type="time"
               label="Time Of Indent"
@@ -834,9 +1008,14 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
           </div>
         </div>
 
+        {/* ----------------------------------------------------------------- */}
+        {/* TABS                                                             */}
+        {/* ----------------------------------------------------------------- */}
+
         <section>
           <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700">
             <div className="flex">
+              {/* Indent Detail Tab */}
               <button
                 type="button"
                 onClick={() => setActiveTab("indentDetail")}
@@ -848,6 +1027,8 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
               >
                 1-Indent Detail
               </button>
+
+              {/* Summary Tab */}
               <button
                 type="button"
                 onClick={() => setActiveTab("summary")}
@@ -873,6 +1054,10 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
             )}
           </div>
 
+          {/* ---------------------------------------------------------------- */}
+          {/* INDENT DETAIL TAB                                               */}
+          {/* ---------------------------------------------------------------- */}
+
           {activeTab === "indentDetail" && (
             <div className="mt-2">
               <TableWrapper>
@@ -887,16 +1072,19 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
                     "Action",
                   ]}
                 />
+
                 <tbody>
                   {itemRows.map((row, index) => (
                     <tr
                       key={index}
                       className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"
                     >
+                      {/* # */}
                       <td className="p-1 text-center dark:text-white">
                         {index + 1}
                       </td>
 
+                      {/* ITEM CODE */}
                       <td className="p-1 align-top">
                         <select
                           value={row.itemCode}
@@ -906,12 +1094,14 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
                           className={cellInputClasses}
                         >
                           <option value="">-- Select Item --</option>
+
                           {itemOptions.map((item) => (
                             <option key={item.id} value={item.id}>
                               {item.label}
                             </option>
                           ))}
                         </select>
+
                         {fieldErrors[`itemCode_${index}`] && (
                           <p className="text-[10px] text-red-500 mt-0.5">
                             {fieldErrors[`itemCode_${index}`]}
@@ -919,6 +1109,7 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
                         )}
                       </td>
 
+                      {/* ITEM DESCRIPTION */}
                       <td className="p-1 align-top">
                         <input
                           type="text"
@@ -932,6 +1123,7 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
                         />
                       </td>
 
+                      {/* UNIT */}
                       <td className="p-1 align-top">
                         <input
                           type="text"
@@ -941,6 +1133,7 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
                         />
                       </td>
 
+                      {/* REQUIRED QTY */}
                       <td className="p-1 align-top">
                         <input
                           type="number"
@@ -956,6 +1149,7 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
                           }
                           className={cellInputClasses}
                         />
+
                         {fieldErrors[`requiredQty_${index}`] && (
                           <p className="text-[10px] text-red-500 mt-0.5">
                             {fieldErrors[`requiredQty_${index}`]}
@@ -963,6 +1157,7 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
                         )}
                       </td>
 
+                      {/* PURPOSE */}
                       <td className="p-1 align-top">
                         <input
                           type="text"
@@ -974,6 +1169,7 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
                         />
                       </td>
 
+                      {/* ACTION */}
                       <td className="p-1 text-center">
                         <button
                           type="button"
@@ -995,9 +1191,14 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
             </div>
           )}
 
+          {/* ---------------------------------------------------------------- */}
+          {/* SUMMARY TAB                                                     */}
+          {/* ---------------------------------------------------------------- */}
+
           {activeTab === "summary" && (
             <div className="pt-3">
               <div className={fieldGrid}>
+                {/* Approved By PM */}
                 <Field
                   type="select"
                   label="Approved By PM"
@@ -1006,6 +1207,8 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
                   onChange={handleSummaryChange}
                   options={approvalOptions}
                 />
+
+                {/* Prepared By */}
                 <Field
                   type="select"
                   label="Prepared By"
@@ -1014,6 +1217,8 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
                   onChange={handleSummaryChange}
                   options={employeeOptions}
                 />
+
+                {/* Authorised By */}
                 <Field
                   type="select"
                   label="Authorised By"
@@ -1022,6 +1227,8 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
                   onChange={handleSummaryChange}
                   options={employeeOptions}
                 />
+
+                {/* Remarks */}
                 <Field
                   type="textarea"
                   label="Remarks"
@@ -1035,7 +1242,12 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
           )}
         </section>
 
+        {/* ----------------------------------------------------------------- */}
+        {/* ACTION BUTTONS                                                    */}
+        {/* ----------------------------------------------------------------- */}
+
         <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
+          {/* Cancel */}
           <button
             type="button"
             onClick={onBack}
@@ -1046,6 +1258,7 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
             Cancel
           </button>
 
+          {/* Save */}
           <button
             type="button"
             onClick={handleSave}
@@ -1053,6 +1266,7 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
             className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60"
           >
             <Save className="h-3 w-3" />
+
             {isSubmitting ? "Saving..." : isEditMode ? "Update" : "Save"}
           </button>
         </div>

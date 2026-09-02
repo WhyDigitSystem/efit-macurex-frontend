@@ -1,8 +1,11 @@
 import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+
 import physicalStockReconciliationAPI from "../../../api/Inventory/physicalStockReconciliationAPI";
 import branchAPI from "../../../api/branchAPI";
 import itemAPI from "../../../api/itemAPI";
+import listOfValuesAPI from "../../../api/listOfValuesAPI";
+
 import { useToast } from "../../Toast/ToastContext";
 
 /* ---------------------------------------------------------------------------- */
@@ -38,12 +41,15 @@ const fieldGrid =
 
 const toNumber = (value, fallback = 0) => {
   if (value === null || value === undefined || value === "") return fallback;
+
   const n = Number(value);
+
   return Number.isFinite(n) ? n : fallback;
 };
 
 const toInteger = (value, fallback = 0) => {
   const n = parseInt(value, 10);
+
   return Number.isFinite(n) ? n : fallback;
 };
 
@@ -87,6 +93,7 @@ const Field = ({
           className={controlClasses}
         >
           <option value="">-- Select --</option>
+
           {(options || []).map((opt) => (
             <option
               key={typeof opt === "object" ? opt.value : opt}
@@ -225,7 +232,9 @@ const TableHead = ({ headers }) => (
 const TableRow = ({ children, index, onRemove, disabled }) => (
   <tr className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
     <td className="p-1 text-center font-medium dark:text-white">{index + 1}</td>
+
     {children}
+
     <td className="p-1 text-center">
       <button
         type="button"
@@ -251,6 +260,7 @@ const SelectCell = ({ value, onChange, options }) => (
       className={cellInputClasses}
     >
       <option value="">-- Select --</option>
+
       {(options || []).map((opt) => (
         <option
           key={typeof opt === "object" ? opt.value : opt}
@@ -280,6 +290,7 @@ const InputCell = ({ value, onChange, type = "text", disabled }) => (
 const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
   <TableWrapper>
     <TableHead headers={["#", ...columns.map((c) => c.label), "Action"]} />
+
     <tbody>
       {rows.map((row, idx) => (
         <TableRow
@@ -313,9 +324,7 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
 );
 
 /* ---------------------------------------------------------------------------- */
-/* Static options                                                              */
-
-/* ---------------------------------------------------------------------------- */
+/* Empty Item Row                                                              */
 
 const emptyItemRow = () => ({
   id: 0,
@@ -331,6 +340,9 @@ const emptyItemRow = () => ({
   reasonCode: "",
   amount: "",
 });
+
+/* ---------------------------------------------------------------------------- */
+/* Default Form                                                                */
 
 const getDefaultForm = (branch) => ({
   active: true,
@@ -367,7 +379,7 @@ const getDefaultForm = (branch) => ({
 });
 
 /* ---------------------------------------------------------------------------- */
-/* Child tabs                                                                  */
+/* Child Tabs                                                                  */
 
 const CHILD_TABS = [
   {
@@ -375,11 +387,19 @@ const CHILD_TABS = [
     label: "1-Physical Stock Detail",
     type: "table",
   },
-  { key: "summary", label: "2-Summary", type: "fields" },
+  {
+    key: "summary",
+    label: "2-Summary",
+    type: "fields",
+  },
 ];
+
+/* ---------------------------------------------------------------------------- */
+/* Main Component                                                              */
 
 const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
   const ORG_ID = toInteger(localStorage.getItem("orgId"));
+
   const BRANCH_ID = toInteger(localStorage.getItem("branchId"));
 
   const isEditMode = Boolean(editData?.id);
@@ -387,8 +407,11 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
   const { addToast } = useToast();
 
   const [activeChildTab, setActiveChildTab] = useState("physicalStockDetail");
+
   const [isSubmitting, setIsSubmitting] = useState(false);
+
   const [generatingDocId, setGeneratingDocId] = useState(false);
+
   const [fieldErrors, setFieldErrors] = useState({});
 
   const [form, setForm] = useState(() => ({
@@ -409,14 +432,28 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
   /* ========================================================================= */
 
   const [branchOptions, setBranchOptions] = useState([]);
+
   const [locationTypeOptions, setLocationTypeOptions] = useState([]);
+
   const [locationOptions, setLocationOptions] = useState([]);
+
   const [belongsToOptions, setBelongsToOptions] = useState([]);
+
   const [itemOptions, setItemOptions] = useState([]);
+
+  /* ========================================================================= */
+  /* LOAD BRANCHES                                                             */
+  /* ========================================================================= */
 
   const loadBranches = useCallback(async () => {
     try {
-      if (!ORG_ID) return;
+      if (!ORG_ID) {
+        console.warn("ORG_ID is missing. Cannot load branches.");
+
+        setBranchOptions([]);
+
+        return;
+      }
 
       const response = await branchAPI.getBranchByOrgId(ORG_ID);
 
@@ -434,15 +471,22 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
       );
     } catch (error) {
       console.error("Failed to load branches:", error);
+
       setBranchOptions([]);
     }
   }, [ORG_ID]);
 
-  /* LOCATION TYPE + BELONGS TO come from getListOfValuesByOrgId */
+  /* ========================================================================= */
+  /* LOCATION TYPE                                                             */
+  /* ========================================================================= */
 
   const loadLocationTypes = useCallback(async () => {
     try {
-      if (!ORG_ID || !effectiveBranchId) return;
+      if (!ORG_ID || !effectiveBranchId) {
+        setLocationTypeOptions([]);
+
+        return;
+      }
 
       const options =
         await physicalStockReconciliationAPI.getLocationTypeOptions(
@@ -453,32 +497,78 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
       setLocationTypeOptions(options);
     } catch (error) {
       console.error("Failed to load location types:", error);
+
       setLocationTypeOptions([]);
     }
   }, [ORG_ID, effectiveBranchId]);
 
+  /* ========================================================================= */
+  /* BELONGS TO - LOV API                                                      */
+  /* ========================================================================= */
+
   const loadBelongsTo = useCallback(async () => {
     try {
-      if (!ORG_ID || !effectiveBranchId) return;
+      if (!ORG_ID) {
+        console.warn("ORG_ID is missing. Cannot load Belongs To values.");
 
-      const options = await physicalStockReconciliationAPI.getBelongsToOptions(
-        effectiveBranchId,
+        setBelongsToOptions([]);
+
+        return;
+      }
+
+      const response = await listOfValuesAPI.getListValuesGroup(
+        "BELONGS TO",
         ORG_ID,
       );
 
+      console.log("========== BELONGS TO LOV RESPONSE ==========");
+
+      console.log(response);
+
+      const list = Array.isArray(response)
+        ? response
+        : response?.paramObjectsMap?.listValues ||
+          response?.paramObjectsMap?.values ||
+          response?.paramObjectsMap?.listValueDetails ||
+          [];
+
+      const options = list
+        .map((item) => {
+          const description =
+            item?.valuesDescription ||
+            item?.valueDescription ||
+            item?.description ||
+            item?.value ||
+            "";
+
+          return {
+            value: description,
+            label: description,
+          };
+        })
+        .filter((item) => item.value);
+
+      console.log("========== BELONGS TO OPTIONS ==========");
+
+      console.log(options);
+
       setBelongsToOptions(options);
     } catch (error) {
-      console.error("Failed to load belongs-to options:", error);
+      console.error("Failed to load Belongs To values:", error);
+
       setBelongsToOptions([]);
     }
-  }, [ORG_ID, effectiveBranchId]);
+  }, [ORG_ID]);
 
-  /* LOCATION depends on locationType (id from getListOfValuesByOrgId) + branch */
+  /* ========================================================================= */
+  /* LOCATIONS                                                                 */
+  /* ========================================================================= */
 
   const loadLocations = useCallback(async () => {
     try {
       if (!ORG_ID || !effectiveBranchId || !form.locationType) {
         setLocationOptions([]);
+
         return;
       }
 
@@ -491,13 +581,22 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
       setLocationOptions(options);
     } catch (error) {
       console.error("Failed to load locations:", error);
+
       setLocationOptions([]);
     }
   }, [ORG_ID, effectiveBranchId, form.locationType]);
 
+  /* ========================================================================= */
+  /* ITEMS                                                                      */
+  /* ========================================================================= */
+
   const loadItems = useCallback(async () => {
     try {
-      if (!ORG_ID) return;
+      if (!ORG_ID) {
+        setItemOptions([]);
+
+        return;
+      }
 
       const response = await itemAPI.getItems(ORG_ID, effectiveBranchId);
 
@@ -510,17 +609,25 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
       setItemOptions(
         list.map((item) => ({
           value: item.itemId ?? item.id,
+
           label: item.itemCode || item.code || `Item ${item.itemId ?? item.id}`,
+
           itemDescription:
             item.itemDescription || item.itemDesc || item.description || "",
+
           unit: item.uom || item.unitId || item.unit || "",
         })),
       );
     } catch (error) {
       console.error("Failed to load items:", error);
+
       setItemOptions([]);
     }
   }, [ORG_ID, effectiveBranchId]);
+
+  /* ========================================================================= */
+  /* LOAD MASTER DATA                                                          */
+  /* ========================================================================= */
 
   useEffect(() => {
     loadBranches();
@@ -534,16 +641,15 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
   }, [loadLocations]);
 
   /* ========================================================================= */
-  /* DOC ID (auto)                                                             */
-  /* ========================================================================= */
-
-  /* ========================================================================= */
   /* DOC ID - AUTO GENERATE                                                    */
   /* ========================================================================= */
 
   useEffect(() => {
     if (isEditMode) return;
-    if (!ORG_ID || !form.financialYear) return;
+
+    if (!ORG_ID || !form.financialYear) {
+      return;
+    }
 
     let cancelled = false;
 
@@ -554,6 +660,7 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
         const docId =
           await physicalStockReconciliationAPI.getReconciliationDocId({
             financialYear: toInteger(String(form.financialYear).split("-")[0]),
+
             orgId: ORG_ID,
           });
 
@@ -601,23 +708,37 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
     const { name, value } = e.target;
 
     if (fieldErrors[name]) {
-      setFieldErrors((prev) => ({ ...prev, [name]: "" }));
+      setFieldErrors((prev) => ({
+        ...prev,
+        [name]: "",
+      }));
     }
 
     if (name === "locationType") {
-      setForm((prev) => ({ ...prev, locationType: value, location: "" }));
+      setForm((prev) => ({
+        ...prev,
+        locationType: value,
+        location: "",
+      }));
+
       return;
     }
 
-    setForm((prev) => ({ ...prev, [name]: value }));
+    setForm((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
   };
 
   /* ========================================================================= */
-  /* ITEM ROW CALCULATION                                                     */
+  /* ITEM ROW CALCULATION                                                      */
   /* ========================================================================= */
 
   const calculateItemRow = (row, changedKey, changedValue) => {
-    const updated = { ...row, [changedKey]: changedValue };
+    const updated = {
+      ...row,
+      [changedKey]: changedValue,
+    };
 
     if (changedKey === "item") {
       const selected = itemOptions.find(
@@ -626,16 +747,21 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
 
       if (selected) {
         updated.itemCode = selected.label || "";
+
         updated.itemDescription = selected.itemDescription || "";
+
         updated.unit = selected.unit || "";
       }
     }
 
     const actualQty = toNumber(updated.actualQty);
+
     const bookStock = toNumber(updated.bookStock);
+
     const rate = toNumber(updated.rate);
 
     updated.difference = round2(actualQty - bookStock);
+
     updated.amount = money(actualQty * rate);
 
     return updated;
@@ -649,11 +775,16 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
     );
   };
 
-  const addItemRow = () => setItemRows((prev) => [...prev, emptyItemRow()]);
+  const addItemRow = () => {
+    setItemRows((prev) => [...prev, emptyItemRow()]);
+  };
 
   const removeItemRow = (idx) => {
     setItemRows((prev) => {
-      if (prev.length <= 1) return prev;
+      if (prev.length <= 1) {
+        return prev;
+      }
+
       return prev.filter((_, i) => i !== idx);
     });
   };
@@ -664,21 +795,33 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
   );
 
   /* ========================================================================= */
-  /* VALIDATION                                                               */
+  /* VALIDATION                                                                */
   /* ========================================================================= */
 
   const validate = () => {
     const errors = {};
 
-    if (!form.branch) errors.branch = "Plant ID is required";
-    if (!form.docDate) errors.docDate = "Doc. Date is required";
-    if (!form.locationType) errors.locationType = "Location Type is required";
-    if (!form.location) errors.location = "Location is required";
+    if (!form.branch) {
+      errors.branch = "Plant ID is required";
+    }
+
+    if (!form.docDate) {
+      errors.docDate = "Doc. Date is required";
+    }
+
+    if (!form.locationType) {
+      errors.locationType = "Location Type is required";
+    }
+
+    if (!form.location) {
+      errors.location = "Location is required";
+    }
 
     setFieldErrors(errors);
 
     if (Object.keys(errors).length > 0) {
       addToast("Please fill all required fields correctly", "error");
+
       return false;
     }
 
@@ -686,6 +829,7 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
 
     if (activeRows.length === 0) {
       addToast("Please add at least one item", "error");
+
       return false;
     }
 
@@ -697,31 +841,52 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
   /* ========================================================================= */
 
   const handleSave = async () => {
-    if (!validate()) return;
+    if (!validate()) {
+      return;
+    }
 
     setIsSubmitting(true);
 
     const details = itemRows
       .filter((r) => r.item)
       .map((r) => ({
-        ...(r.id ? { id: toInteger(r.id) } : {}),
+        ...(r.id
+          ? {
+              id: toInteger(r.id),
+            }
+          : {}),
+
         item: toInteger(r.item),
+
         bookStock: toNumber(r.bookStock),
+
         actualQty: toNumber(r.actualQty),
+
         difference: toNumber(r.difference),
+
         lcRate: toNumber(r.lcRate),
+
         rate: toNumber(r.rate),
+
         reasonCode: r.reasonCode || "",
+
         amount: toNumber(r.amount),
       }));
 
     const payload = {
-      ...(isEditMode && { id: editData.id }),
+      ...(isEditMode && {
+        id: editData.id,
+      }),
 
       active: form.active !== false,
 
       approvedByPM: form.approvedByPM || "Pending",
 
+      /*
+       * IMPORTANT:
+       * Belongs To sends the LOV description string.
+       * It does NOT send the LOV ID.
+       */
       belongsTo: form.belongsTo || "",
 
       branch: toInteger(form.branch),
@@ -779,8 +944,11 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
           "success",
         );
 
-        if (onSave) onSave(payload);
-        else onBack();
+        if (onSave) {
+          onSave(payload);
+        } else {
+          onBack();
+        }
       } else {
         const errorMessage =
           response?.paramObjectsMap?.errorMessage ||
@@ -812,12 +980,17 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
   const childTabConfig = {
     physicalStockDetail: {
       type: "table",
+
       rows: itemRows,
+
       handlers: {
         onCellChange: handleItemRowChange,
+
         onAddRow: addItemRow,
+
         onRemoveRow: removeItemRow,
       },
+
       columns: [
         {
           key: "item",
@@ -825,26 +998,67 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
           type: "select",
           options: itemOptions,
         },
-        { key: "itemDescription", label: "Item Description", readOnly: true },
-        { key: "unit", label: "Unit", readOnly: false },
-        { key: "bookStock", label: "Book Stock", type: "number" },
-        { key: "actualQty", label: "Actual Qty", type: "number" },
+
+        {
+          key: "itemDescription",
+          label: "Item Description",
+          readOnly: true,
+        },
+
+        {
+          key: "unit",
+          label: "Unit",
+          readOnly: false,
+        },
+
+        {
+          key: "bookStock",
+          label: "Book Stock",
+          type: "number",
+        },
+
+        {
+          key: "actualQty",
+          label: "Actual Qty",
+          type: "number",
+        },
+
         {
           key: "difference",
           label: "Difference",
           type: "number",
           readOnly: true,
         },
-        { key: "lcRate", label: "LC Rate", type: "number" },
-        { key: "rate", label: "Rate", type: "number" },
+
+        {
+          key: "lcRate",
+          label: "LC Rate",
+          type: "number",
+        },
+
+        {
+          key: "rate",
+          label: "Rate",
+          type: "number",
+        },
+
         {
           key: "reasonCode",
           label: "Reason Code",
         },
-        { key: "amount", label: "Amount", type: "number", readOnly: true },
+
+        {
+          key: "amount",
+          label: "Amount",
+          type: "number",
+          readOnly: true,
+        },
       ],
     },
-    summary: { type: "fields" },
+
+    summary: {
+      type: "fields",
+    },
   };
 
   const activeTabConfig = childTabConfig[activeChildTab];
@@ -854,6 +1068,10 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
       activeTabConfig.handlers.onAddRow();
     }
   };
+
+  /* ========================================================================= */
+  /* UI                                                                        */
+  /* ========================================================================= */
 
   return (
     <div className="p-2 max-w-7xl">
@@ -876,10 +1094,12 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
 
       {/* Main Card */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
-        {/* ---------------- Header Fields ---------------- */}
+        {/* Header Fields */}
         <div>
           <SectionHeader>Reconciliation Details</SectionHeader>
+
           <div className={fieldGrid}>
+            {/* Plant ID */}
             <Field
               type="select"
               label="Plant ID"
@@ -891,6 +1111,7 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
               required
             />
 
+            {/* Doc No */}
             <Field
               label="Doc No."
               name="docId"
@@ -899,6 +1120,7 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
               disabled
             />
 
+            {/* Location Type */}
             <Field
               type="select"
               label="Location Type"
@@ -910,6 +1132,7 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
               required
             />
 
+            {/* Location */}
             <Field
               type="select"
               label="Location"
@@ -922,6 +1145,7 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
               required
             />
 
+            {/* Doc Date */}
             <Field
               type="date"
               label="Doc. Date"
@@ -932,6 +1156,7 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
               required
             />
 
+            {/* Time */}
             <Field
               type="time"
               label="Time"
@@ -940,6 +1165,7 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
               onChange={handleFieldChange}
             />
 
+            {/* Ref No */}
             <Field
               label="Ref. No"
               name="refNo"
@@ -947,6 +1173,7 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
               onChange={handleFieldChange}
             />
 
+            {/* Ref Date */}
             <Field
               type="date"
               label="Ref. Date"
@@ -955,13 +1182,19 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
               onChange={handleFieldChange}
             />
 
+            {/* ============================================================= */}
+            {/* BELONGS TO - LOV DROPDOWN                                     */}
+            {/* ============================================================= */}
             <Field
+              type="select"
               label="Belongs to"
               name="belongsTo"
               value={form.belongsTo}
               onChange={handleFieldChange}
+              options={belongsToOptions}
             />
 
+            {/* Prepared By PM */}
             <Field
               label="Prepared By PM"
               name="preparedBy"
@@ -969,6 +1202,7 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
               onChange={handleFieldChange}
             />
 
+            {/* Financial Year */}
             <Field
               label="Financial Year"
               name="financialYear"
@@ -976,6 +1210,7 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
               onChange={handleFieldChange}
             />
 
+            {/* Approved By PM */}
             <Field
               label="Approved By PM"
               name="approvedByPM"
@@ -985,7 +1220,7 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
           </div>
         </div>
 
-        {/* ---------------- Child Tabs ---------------- */}
+        {/* Child Tabs */}
         <section className="mt-0 bg-white dark:bg-gray-800">
           <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 mb-0">
             <div className="flex overflow-x-auto">
@@ -1054,6 +1289,7 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
           )}
         </section>
 
+        {/* Buttons */}
         <FormButtons
           onCancel={onBack}
           onSave={handleSave}

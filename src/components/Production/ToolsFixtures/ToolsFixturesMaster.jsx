@@ -16,6 +16,11 @@ const ToolsFixturesMaster = () => {
     setScreen("form");
   };
 
+  const backToList = () => {
+    setEditData(null);
+    setScreen("list");
+  };
+
   return (
     <>
       {screen === "list" && (
@@ -27,7 +32,11 @@ const ToolsFixturesMaster = () => {
       )}
 
       {screen === "form" && (
-        <ToolsFixturesForm data={editData} onBack={() => setScreen("list")} />
+        <ToolsFixturesForm
+          data={editData}
+          onBack={backToList}
+          onSave={backToList}
+        />
       )}
     </>
   );

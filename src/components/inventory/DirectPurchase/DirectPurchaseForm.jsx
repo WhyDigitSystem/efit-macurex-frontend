@@ -1,10 +1,12 @@
 import { ArrowLeft, Save, X, Plus, Trash2, Copy } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import dayjs from "dayjs";
+
 import branchAPI from "../../../api/branchAPI";
 import { employeeAPI } from "../../../api/employeeAPI";
 import listOfValuesAPI from "../../../api/listOfValuesAPI";
 import directPurchaseAPI from "../../../api/Purchase/directPurchaseAPI";
+
 import { useToast } from "../../Toast/ToastContext";
 
 const controlClasses =
@@ -62,14 +64,6 @@ const toInteger = (value, fallback = 0) => {
 
   return Number.isFinite(number) ? number : fallback;
 };
-
-const BELONGS_TO_OPTIONS = [
-  "Domestic",
-  "Import",
-  "Company",
-  "Individual",
-  "Other",
-];
 
 const SUPP_TYPE_OPTIONS = ["Local", "Import"];
 
@@ -383,6 +377,19 @@ const DirectPurchaseForm = ({ data, onBack }) => {
 
   const [gstStateOptions, setGstStateOptions] = useState([]);
 
+  /*
+   * Belongs To is now loaded from the List of Values API.
+   *
+   * The value sent to backend is the LOV description itself,
+   * for example:
+   *
+   * Domestic
+   * Import
+   *
+   * NOT the LOV ID.
+   */
+  const [belongsToOptions, setBelongsToOptions] = useState([]);
+
   const [unitOptions, setUnitOptions] = useState(UNIT_FALLBACK_OPTIONS);
 
   /* ======================================================================== */
@@ -529,6 +536,56 @@ const DirectPurchaseForm = ({ data, onBack }) => {
   }, [ORG_ID]);
 
   /* ======================================================================== */
+  /* LOAD BELONGS TO */
+  /* ======================================================================== */
+
+  const loadBelongsTo = useCallback(async () => {
+    try {
+      if (!ORG_ID) {
+        console.warn("ORG_ID is missing. Cannot load Belongs To values.");
+
+        setBelongsToOptions([]);
+
+        return;
+      }
+
+      const response = await listOfValuesAPI.getListValuesGroup(
+        "BELONGS TO",
+        ORG_ID,
+      );
+
+      const list = Array.isArray(response)
+        ? response
+        : response?.paramObjectsMap?.listValues ||
+          response?.paramObjectsMap?.values ||
+          response?.paramObjectsMap?.listValueDetails ||
+          [];
+
+      const options = list
+        .map((item) => {
+          const description =
+            item?.valuesDescription ||
+            item?.valueDescription ||
+            item?.description ||
+            item?.value ||
+            "";
+
+          return {
+            value: description,
+            label: description,
+          };
+        })
+        .filter((item) => item.value);
+
+      setBelongsToOptions(options);
+    } catch (error) {
+      console.error("Failed to load Belongs To values:", error);
+
+      setBelongsToOptions([]);
+    }
+  }, [ORG_ID]);
+
+  /* ======================================================================== */
   /* LOAD SUPPLIERS */
   /* ======================================================================== */
 
@@ -619,7 +676,14 @@ const DirectPurchaseForm = ({ data, onBack }) => {
     loadEmployees();
     loadItemCategories();
     loadGstStates();
-  }, [loadBranches, loadEmployees, loadItemCategories, loadGstStates]);
+    loadBelongsTo();
+  }, [
+    loadBranches,
+    loadEmployees,
+    loadItemCategories,
+    loadGstStates,
+    loadBelongsTo,
+  ]);
 
   /* ======================================================================== */
   /* BRANCH DEPENDENT MASTER LOAD */
@@ -1111,7 +1175,14 @@ const DirectPurchaseForm = ({ data, onBack }) => {
 
     /*
      * IMPORTANT:
-     * This follows the backend payload structure supplied by you.
+     *
+     * belongsTo is the LOV DESCRIPTION.
+     *
+     * Example:
+     * "Domestic"
+     * "Import"
+     *
+     * Do NOT convert it to Number().
      */
 
     const payload = {
@@ -1163,11 +1234,6 @@ const DirectPurchaseForm = ({ data, onBack }) => {
 
       supplierName: form.supplierName || "",
 
-      /*
-       * Additional Direct Purchase header
-       * fields used by this form.
-       */
-
       taxStructure: form.taxStructure || "",
 
       tariffHeading: form.tariffHeading || "",
@@ -1182,10 +1248,6 @@ const DirectPurchaseForm = ({ data, onBack }) => {
 
       supplierCode: form.supplierCode || "",
 
-      /*
-       * Summary values
-       */
-
       basicAmount: toNumber(summary.basicAmount || grossAmount),
 
       discount: toNumber(summary.discount),
@@ -1196,12 +1258,6 @@ const DirectPurchaseForm = ({ data, onBack }) => {
 
       totalAmount: toNumber(summary.totalAmount || finalTotal),
     };
-
-    /*
-     * Remove undefined fields.
-     * This prevents "id": undefined
-     * from being sent on create.
-     */
 
     Object.keys(payload).forEach((key) => {
       if (payload[key] === undefined) {
@@ -1226,24 +1282,9 @@ const DirectPurchaseForm = ({ data, onBack }) => {
     try {
       const payload = buildPayload();
 
-      /*
-       * FILE DEFAULT
-       *
-       * If no file is uploaded:
-       * files = []
-       *
-       * This avoids passing null/undefined
-       * to the API.
-       */
-
       const files = attachments
         .filter((attachment) => attachment?.file instanceof File)
         .map((attachment) => attachment.file);
-
-      /*
-       * If there are no files,
-       * files will simply be [].
-       */
 
       const finalFiles = Array.isArray(files) ? files : [];
 
@@ -2082,7 +2123,7 @@ const DirectPurchaseForm = ({ data, onBack }) => {
             </select>
           </div>
 
-          {/* Belongs To */}
+          {/* Belongs To - LOV API */}
 
           <div>
             <label className={labelClasses}>Belongs To</label>
@@ -2095,9 +2136,9 @@ const DirectPurchaseForm = ({ data, onBack }) => {
             >
               <option value="">Select</option>
 
-              {BELONGS_TO_OPTIONS.map((option) => (
-                <option key={option} value={option}>
-                  {option}
+              {belongsToOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
                 </option>
               ))}
             </select>

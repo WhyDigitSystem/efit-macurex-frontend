@@ -1,6 +1,11 @@
 import React, { useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
+import toolsFixtureAPI from "../../../api/Production/toolsFixtureAPI";
 
+const toInteger = (value, fallback = 0) => {
+  const number = parseInt(value, 10);
+  return Number.isFinite(number) ? number : fallback;
+};
 
 const ToolsFixturesList = ({ onAddNew, onEdit, onBack }) => {
   const [toolData, setToolData] = useState([]);
@@ -9,31 +14,50 @@ const ToolsFixturesList = ({ onAddNew, onEdit, onBack }) => {
   const loadTools = async () => {
     setLoading(true);
     try {
-      const orgId = localStorage.getItem("orgId");
-      const branchId = localStorage.getItem("branchId");
+      const orgId = toInteger(localStorage.getItem("orgId"));
+      const branchId = toInteger(localStorage.getItem("branchId"));
 
-      const response = await toolsFixtureAPI.getToolsByOrgId(orgId, branchId);
+      const response = await toolsFixtureAPI.getToolMasterByOrgId(
+        branchId,
+        orgId,
+      );
+
+      // "No Tool Master Details Found" comes back as a well-formed error
+      // response, not a thrown error, so handle it gracefully rather than
+      // letting it fall through to the catch block below.
+      if (response?.status === false) {
+        setToolData([]);
+        return;
+      }
+
+      const list =
+        response?.paramObjectsMap?.toolMasterVO ||
+        response?.paramObjectsMap?.mapp ||
+        response?.paramObjectsMap?.toolMasterList ||
+        (Array.isArray(response) ? response : []);
 
       // Transform API response to match the table format
-      const transformedData = (response || []).map((item) => ({
+      const transformedData = (list || []).map((item) => ({
         id: item.id || 0,
         plantName: item.branch?.branchName || "",
-        type: item.type || "",
+        type: item.type?.description || item.type || "",
         department: item.department?.departmentName || "",
         toolNo: item.toolNo || "",
-        toolDescription: item.toolDescription || "",
+        toolDescription: item.toolDescription || item.toolName || "",
         productionWorkOrderNo: item.productionWorkOrderNo || "",
-        toolCategory: item.toolCategory?.description || "",
-        locationName: item.locationName || "",
+        toolCategory: item.toolCategory?.description || item.toolCategory || "",
+        locationName:
+          item.location?.description || item.presentLocation?.description || "",
         drawingNo: item.drawingNo || "",
         serialNo: item.serialNo || "",
         manufacturedBy: item.manufacturedBy || "",
-        section: item.section?.description || "",
+        section: item.section?.description || item.section || "",
         status: item.status || "",
-        madeIn: item.madeIn || "",
-        toolOwnerName: item.toolOwnerName || "",
-        presentLocation: item.presentLocation || "",
-        totalCost: item.totalToolCost || 0,
+        madeIn: item.madeIn?.description || item.madeIn || "",
+        toolOwnerName:
+          item.toolIncharge?.description || item.toolOwnerName || "",
+        presentLocation: item.presentLocation?.description || "",
+        totalCost: item.toolCost ?? item.totalToolCost ?? 0,
         cavityNumber: item.cavityNumber || "",
         active: item.active === "Active" || item.active === true,
       }));
@@ -53,9 +77,26 @@ const ToolsFixturesList = ({ onAddNew, onEdit, onBack }) => {
     loadTools();
   }, []);
 
-  const handleEdit = (row) => {
-    const originalData = toolData.find((item) => item.id === row.id);
-    onEdit(originalData);
+  const handleEdit = async (row) => {
+    try {
+      const response = await toolsFixtureAPI.getToolMasterById(row.id);
+
+      if (response?.status === false) {
+        onEdit({ id: row.id });
+        return;
+      }
+
+      const record =
+        response?.paramObjectsMap?.toolMasterVO ||
+        response?.paramObjectsMap?.mapp ||
+        response?.paramObjectsMap ||
+        response;
+
+      onEdit(record && typeof record === "object" ? record : { id: row.id });
+    } catch (error) {
+      console.error("Failed to load Tool/Fixture for edit:", error);
+      onEdit({ id: row.id });
+    }
   };
 
   const columns = [
