@@ -1,7 +1,11 @@
-import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { ArrowLeft, Save, X, Plus, Trash2, Eye } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useForm, Controller, useFieldArray } from "react-hook-form";
 import dayjs from "dayjs";
+import axios from "axios";
 import purchaseOrderAmendmentAPI from "../../../api/Purchase/purchaseOrderAmendmentAPI";
+import branchAPI from "../../../api/branchAPI";
+import { partyMasterAPI } from "../../../api/partyMasterAPI";
 import { useToast } from "../../Toast/ToastContext";
 
 /* ---------------------------------------------------------------------------- */
@@ -9,191 +13,172 @@ import { useToast } from "../../Toast/ToastContext";
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
-  "bg-white dark:bg-gray-900 " +
-  "border-gray-300 dark:border-gray-600 " +
-  "text-gray-900 dark:text-gray-100 " +
-  "placeholder-gray-400 dark:placeholder-gray-500 " +
+  "bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 " +
+  "text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 " +
   "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
   "dark:focus:ring-blue-400 dark:focus:border-blue-400 " +
-  "disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed";
-
-const controlErrClasses =
-  "border-red-500 dark:border-red-500 focus:ring-red-500 focus:border-red-500";
-
-const cellInputClasses =
-  "w-full h-8 px-2 rounded border text-xs leading-none transition-colors " +
-  "bg-white dark:bg-gray-900 " +
-  "border-gray-300 dark:border-gray-600 " +
-  "text-gray-900 dark:text-gray-100 " +
-  "placeholder-gray-400 dark:placeholder-gray-500 " +
-  "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
-  "dark:focus:ring-blue-400 dark:focus:border-blue-400";
-
-const cellReadOnlyClasses =
-  "w-full h-8 px-2 rounded border text-xs leading-none " +
-  "bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 " +
-  "text-gray-500 dark:text-gray-400";
+  "[color-scheme:light] dark:[color-scheme:dark]";
 
 const labelClasses =
   "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
-const fieldGrid =
-  "grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-x-3 gap-y-2 items-start";
+const BELONGS_TO = ["Purchase", "Import", "Export"];
+const FREIGHT_TYPES = ["CIF", "FOB", "CFR", "EXW", "DDP", "ROAD"];
+const PACKING_TYPES = [
+  "Standard",
+  "Export",
+  "Waterproof",
+  "Wooden Crate",
+  "Pallet",
+];
+const MODE_OF_DISPATCH = [
+  "Road",
+  "Rail",
+  "Air",
+  "Sea",
+  "Road Transport",
+  "Courier",
+];
 
-/* ---------------------------------------------------------------------------- */
-/* Shared building blocks                                                      */
+const asId = (value) => {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "object") return value.id ?? "";
+  return value;
+};
 
-const Field = ({
-  label,
+const getDefaultValues = () => ({
+  id: "",
+  branch: "",
+  belongsTo: "Purchase",
+  amendmentNo: "",
+  amendmentDate: dayjs().format("YYYY-MM-DD"),
+  customer: "",
+  customerName: "",
+  poNo: "",
+  currency: "",
+  exchangeRate: "",
+  refNo: "",
+  refDate: "",
+  revisionNo: "",
+  active: true,
+  freightType: "",
+  packingType: "",
+  insuranceAmount: "",
+  modeOfDespatch: "",
+  taxDescription: "",
+  remarks: "",
+  details: [
+    {
+      id: "",
+      item: "",
+      itemCode: "",
+      itemName: "",
+      unit: "",
+      oldQty: "",
+      newQty: "",
+      oldRate: "",
+      newRate: "",
+      oldDeliveryDate: "",
+      newDeliveryDate: "",
+    },
+  ],
+  attachments: [{ file: null, existing: null }],
+});
+
+const fmtDate = (value) =>
+  value ? dayjs(value).format("YYYY-MM-DD") : "";
+
+/* Helper Components (mirror Quotation) */
+const SelectField = ({
+  control,
   name,
-  value,
-  onChange,
-  error,
-  required,
-  type = "text",
+  label,
   options,
-  className = "",
-  disabled = false,
-  placeholder,
+  required,
+  errors,
+  disabled,
 }) => {
-  if (type === "select") {
-    return (
-      <div className={`w-full ${className}`}>
-        <label className={labelClasses}>
-          {label}
-          {required && <span className="text-red-500"> *</span>}
-        </label>
-
-        <select
-          name={name}
-          value={value}
-          onChange={onChange}
-          disabled={disabled}
-          className={`${controlClasses} ${error ? controlErrClasses : ""}`}
-        >
-          <option value="">Select {label}</option>
-          {(options || []).map((opt) => (
-            <option key={opt} value={opt}>
-              {opt}
-            </option>
-          ))}
-        </select>
-
-        {error && (
-          <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
-            {error}
-          </p>
-        )}
-      </div>
-    );
-  }
-
-  if (type === "textarea") {
-    return (
-      <div className={`w-full ${className}`}>
-        <label className={labelClasses}>
-          {label}
-          {required && <span className="text-red-500"> *</span>}
-        </label>
-
-        <textarea
-          name={name}
-          value={value}
-          onChange={onChange}
-          disabled={disabled}
-          rows={1}
-          className={
-            "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors resize-none pt-1 scrollbar-hide " +
-            "bg-white dark:bg-gray-900 " +
-            `${error ? controlErrClasses : "border-gray-300 dark:border-gray-600"} ` +
-            "text-gray-900 dark:text-gray-100 " +
-            "placeholder-gray-400 dark:placeholder-gray-500 " +
-            "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
-            "dark:focus:ring-blue-400 dark:focus:border-blue-400"
-          }
-        />
-
-        {error && (
-          <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
-            {error}
-          </p>
-        )}
-      </div>
-    );
-  }
-
+  const errorMessage = errors?.[name]?.message;
   return (
-    <div className={`w-full ${className}`}>
+    <div>
       <label className={labelClasses}>
-        {label}
-        {required && <span className="text-red-500"> *</span>}
+        {label} {required && <span className="text-red-500">*</span>}
       </label>
-
-      <input
-        type={type}
+      <Controller
         name={name}
-        value={value}
-        onChange={onChange}
-        disabled={disabled}
-        placeholder={placeholder}
-        className={`${controlClasses} ${error ? controlErrClasses : ""}`}
+        control={control}
+        rules={required ? { required: `${label} is required` } : undefined}
+        render={({ field }) => (
+          <select
+            {...field}
+            disabled={disabled}
+            className={`${controlClasses} ${
+              errorMessage ? "border-red-500 focus:border-red-500" : ""
+            }`}
+          >
+            <option value="">Select {label}</option>
+            {(options || []).map((opt) => (
+              <option
+                key={typeof opt === "object" ? opt.value : opt}
+                value={typeof opt === "object" ? opt.value : opt}
+              >
+                {typeof opt === "object" ? opt.label : opt}
+              </option>
+            ))}
+          </select>
+        )}
       />
-
-      {error && (
-        <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
-          {error}
-        </p>
+      {errorMessage && (
+        <p className="text-red-500 text-[11px]">{errorMessage}</p>
       )}
     </div>
   );
 };
 
-const SectionHeader = ({ children }) => (
-  <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">
-    {children}
-  </h3>
-);
-
-const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
-  <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
-    <button
-      onClick={onCancel}
-      disabled={isSubmitting}
-      className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-    >
-      <X className="h-3 w-3" />
-      Cancel
-    </button>
-
-    <button
-      onClick={onSave}
-      disabled={isSubmitting}
-      className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-    >
-      <Save className="h-3 w-3" />
-      {isSubmitting ? "Saving..." : saveLabel}
-    </button>
-  </div>
-);
-
-const ToggleButton = ({ value, onChange }) => (
-  <button
-    type="button"
-    onClick={() => onChange(!value)}
-    className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${
-      value ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
-    }`}
-  >
-    <span
-      className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${
-        value ? "translate-x-6" : "translate-x-0.5"
-      }`}
-    />
-  </button>
-);
-
-/* ---------------------------------------------------------------------------- */
-/* Table helpers                                                                */
+const InputField = ({
+  control,
+  name,
+  label,
+  type = "text",
+  required,
+  placeholder,
+  errors,
+  disabled,
+  step,
+  value,
+}) => {
+  const errorMessage = errors?.[name]?.message;
+  return (
+    <div>
+      <label className={labelClasses}>
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      <Controller
+        name={name}
+        control={control}
+        rules={
+          required ? { required: `${label} is required` } : undefined
+        }
+        render={({ field }) => (
+          <input
+            {...field}
+            type={type}
+            step={step}
+            value={value !== undefined ? value : field.value}
+            className={`${controlClasses} ${
+              errorMessage ? "border-red-500 focus:border-red-500" : ""
+            }`}
+            placeholder={placeholder}
+            disabled={disabled}
+          />
+        )}
+      />
+      {errorMessage && (
+        <p className="text-red-500 text-[11px]">{errorMessage}</p>
+      )}
+    </div>
+  );
+};
 
 const TableWrapper = ({ children }) => (
   <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
@@ -222,574 +207,1094 @@ const TableHead = ({ headers }) => (
   </thead>
 );
 
-const TableRow = ({ children, index, onRemove, disabled }) => (
+const TableRow = ({
+  children,
+  index,
+  onRemove,
+  disabled,
+showDelete = true,
+  showPreview = false,
+  previewDisabled = false,
+  onPreview,
+}) => (
   <tr className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
     <td className="p-1 text-center font-medium dark:text-white">{index + 1}</td>
     {children}
-    <td className="p-1 text-center">
-      <button
-        type="button"
-        onClick={onRemove}
-        disabled={disabled}
-        className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-          disabled
-            ? "bg-gray-400 cursor-not-allowed"
-            : "bg-red-600 hover:bg-red-700"
-        }`}
-      >
-        <Trash2 size={10} />
-      </button>
-    </td>
+    {showPreview && (
+      <td className="p-1 text-center whitespace-nowrap">
+        <button
+          type="button"
+          onClick={onPreview}
+          disabled={previewDisabled}
+          className={`h-5 w-5 rounded text-white flex items-center justify-center ${
+            previewDisabled
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-sky-600 hover:bg-sky-700"
+          }`}
+          title={previewDisabled ? "No file to preview" : "Preview"}
+        >
+        <Eye size={10} />
+        </button>
+      </td>
+    )}
+    {showDelete && (
+      <td className="p-1 text-center whitespace-nowrap">
+        <button
+          type="button"
+          onClick={onRemove}
+          disabled={disabled}
+          className={`h-5 w-5 rounded text-white flex items-center justify-center ${
+            disabled
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-red-600 hover:bg-red-700"
+          }`}
+        >
+          <Trash2 size={10} />
+        </button>
+      </td>
+    )}
   </tr>
 );
 
-const SelectCell = ({ value, onChange, options }) => (
-  <td className="p-1 align-top">
-    <select value={value} onChange={onChange} className={cellInputClasses}>
-      <option value="">-- Select --</option>
-      {(options || []).map((opt) => (
-        <option key={opt} value={opt}>
-          {opt}
-        </option>
-      ))}
-    </select>
-  </td>
-);
+const SelectCell = ({ control, name, options, required, errors }) => {
+  const errorMessage = errors?.[name]?.message;
+  return (
+    <td className="p-1 align-top">
+      <Controller
+        name={name}
+        control={control}
+        rules={required ? { required: "This field is required" } : undefined}
+        render={({ field }) => (
+          <select
+            {...field}
+            className={`${controlClasses} h-8 text-xs ${
+              errorMessage ? "border-red-500 focus:border-red-500" : ""
+            }`}
+          >
+            <option value="">Select an option</option>
+            {(options || []).map((opt) => (
+              <option
+                key={typeof opt === "object" ? opt.value : opt}
+                value={typeof opt === "object" ? opt.value : opt}
+              >
+                {typeof opt === "object" ? opt.label : opt}
+              </option>
+            ))}
+          </select>
+        )}
+      />
+      {errorMessage && (
+        <div className="text-red-500 text-[10px] mt-0.5 whitespace-nowrap">
+          {errorMessage}
+        </div>
+      )}
+    </td>
+  );
+};
 
-const InputCell = ({ value, onChange, type = "text", step }) => (
-  <td className="p-1 align-top">
-    <input
-      type={type}
-      step={step}
-      value={value ?? ""}
-      onChange={onChange}
-      className={cellInputClasses}
-    />
-  </td>
-);
-
-const ReadOnlyCell = ({ value }) => (
-  <td className="p-1 align-top">
-    <input value={value ?? ""} readOnly className={cellReadOnlyClasses} />
-  </td>
-);
-
-/* Generic dynamic table. Supports text / number / date / select / readonly. */
-const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
-  <TableWrapper>
-    <TableHead headers={["#", ...columns.map((c) => c.label), "Action"]} />
-    <tbody>
-      {rows.map((row, idx) => (
-        <TableRow
-          key={idx}
-          index={idx}
-          onRemove={() => onRemoveRow(idx)}
-          disabled={rows.length <= 1}
-        >
-          {columns.map((col) => {
-            if (col.type === "select") {
-              return (
-                <SelectCell
-                  key={col.key}
-                  value={row[col.key]}
-                  onChange={(e) => onCellChange(idx, col.key, e.target.value)}
-                  options={col.options}
-                />
-              );
-            }
-            if (col.readOnly) {
-              return <ReadOnlyCell key={col.key} value={row[col.key]} />;
-            }
-            return (
-              <InputCell
-                key={col.key}
-                value={row[col.key]}
-                type={
-                  col.type === "date"
-                    ? "date"
-                    : col.type === "number"
-                      ? "number"
-                      : "text"
-                }
-                step={col.step}
-                onChange={(e) => onCellChange(idx, col.key, e.target.value)}
-              />
-            );
-          })}
-        </TableRow>
-      ))}
-    </tbody>
-  </TableWrapper>
-);
-
-/* ---------------------------------------------------------------------------- */
-/* Options                                                                      */
-
-const PLANT_IDS = ["Plant 1", "Plant 2", "Plant 3"];
-const BELONGS_TO = ["Domestic", "Import", "Export"];
-const FREIGHT_TYPES = ["CIF", "FOB", "CFR", "EXW", "DDP"];
-const PACKING_TYPES = ["Standard", "Export", "Waterproof", "Pallet"];
-const MODE_OF_DISPATCH = ["Road", "Rail", "Air", "Sea", "Courier"];
-
-/* ---------------------------------------------------------------------------- */
-/* Empty state builders                                                        */
-
-const emptyHeader = () => ({
-  plantId: "",
-  belongsTo: "",
-  amendmentNo: "",
-  amendmentDate: dayjs().format("YYYY-MM-DD"),
-  partyCode: "",
-  partyName: "",
-  poNo: "",
-  poDate: "",
-  currency: "",
-  exchangeRate: 0,
-  refNo: "",
-  refDate: "",
-  revisionNo: 1,
-  active: true,
-  freightType: "",
-  packingType: "",
-  insuranceAmount: 0,
-  modeOfDispatch: "",
-  taxDescription: "",
-  remarks: "",
-});
-
-const emptyPoDetailRow = () => ({
-  id: Date.now() + 1,
-  slNo: 1,
-  itemCode: "",
-  itemName: "",
-  originalQty: 0,
-  amendmentQty: 0,
-  originalRate: 0,
-  amendmentRate: 0,
-  originalDeliveryDate: "",
-  amendmentDeliveryDate: "",
-});
-
-const fmtDate = (value) =>
-  value ? dayjs(value).format("YYYY-MM-DD") : "";
+const InputCell = ({
+  control,
+  name,
+  type = "text",
+  step,
+  placeholder,
+  required,
+  errors,
+  readOnly,
+  onChange,
+  overrideValue,
+}) => {
+  const errorMessage = errors?.[name]?.message;
+  return (
+    <td className="p-1 align-top">
+      <Controller
+        name={name}
+        control={control}
+        rules={required ? { required: "This field is required" } : undefined}
+        render={({ field }) => {
+          const hasOverride =
+            overrideValue !== undefined &&
+            overrideValue !== null &&
+            overrideValue !== "";
+          const effectiveValue = hasOverride
+            ? String(overrideValue)
+            : field.value;
+          const forceReadOnly = readOnly || (hasOverride && effectiveValue !== field.value);
+          return (
+            <input
+              {...field}
+              value={effectiveValue ?? ""}
+              type={type}
+              step={step}
+              readOnly={forceReadOnly}
+              className={`${controlClasses} ${
+                forceReadOnly ? "bg-gray-100 dark:bg-gray-800 text-gray-500" : ""
+              } ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
+              placeholder={placeholder}
+              onChange={(e) => {
+                field.onChange(e);
+                if (onChange) onChange(e, field);
+              }}
+            />
+          );
+        }}
+      />
+      {errorMessage && (
+        <div className="text-red-500 text-[10px] mt-0.5 whitespace-nowrap">
+          {errorMessage}
+        </div>
+      )}
+    </td>
+  );
+};
 
 /* ---------------------------------------------------------------------------- */
-
-const CHILD_TABS = [
-  { key: "poDetail", label: "PO Detail" },
-  { key: "summary", label: "Summary" },
-  { key: "attachment", label: "Attachment" },
-];
-
-const PO_DETAIL_COLUMNS = [
-  { key: "itemCode", label: "Item Code", readOnly: true },
-  { key: "itemName", label: "Item Name", readOnly: true },
-  { key: "originalQty", label: "Original Qty", readOnly: true },
-  {
-    key: "amendmentQty",
-    label: "Amendment Qty",
-    type: "number",
-    step: "0.001",
-  },
-  { key: "originalRate", label: "Original Rate", readOnly: true },
-  {
-    key: "amendmentRate",
-    label: "Amendment Rate",
-    type: "number",
-    step: "0.01",
-  },
-  {
-    key: "originalDeliveryDate",
-    label: "Original Delivery Date",
-    type: "date",
-    readOnly: true,
-  },
-  { key: "amendmentDeliveryDate", label: "Amendment Delivery Date", type: "date" },
-];
+/* Main Component                                                              */
 
 const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
   const { addToast } = useToast();
   const orgId = Number(localStorage.getItem("orgId")) || 0;
-  const branch = Number(localStorage.getItem("branchId")) || 1000000001;
+  const branchId = Number(localStorage.getItem("branchId")) || 1000000001;
   const loginUserName = localStorage.getItem("userName") || "SYSTEM";
 
-  const [activeTab, setActiveTab] = useState("poDetail");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [loadingPo, setLoadingPo] = useState(false);
-  const [poDetailError, setPoDetailError] = useState("");
-  const [fieldErrors, setFieldErrors] = useState({});
+  const isEditMode = Boolean(data?.id);
+  const dataLoadedRef = useRef(false);
+  const amendmentNoLoadedRef = useRef(false);
+  const fileInputRefs = useRef({});
+  const mappedItemsRef = useRef(new Set());
+  const currencyIdRef = useRef(null);
 
-  const [header, setHeader] = useState(() => {
-    const base = { ...emptyHeader(), ...data };
-    base.amendmentDate = base.amendmentDate
-      ? dayjs(base.amendmentDate).format("YYYY-MM-DD")
-      : dayjs().format("YYYY-MM-DD");
-    base.poDate = fmtDate(base.poDate);
-    base.refDate = fmtDate(base.refDate);
-    return base;
+  const [activeTab, setActiveTab] = useState("poDetail");
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const [branchOptions, setBranchOptions] = useState([]);
+  const [customerOptions, setCustomerOptions] = useState([]);
+  const [poOptions, setPoOptions] = useState([]);
+  const [belongsToOptions, setBelongsToOptions] = useState([]);
+  const [itemOptions, setItemOptions] = useState([]);
+  const [currencyOptions, setCurrencyOptions] = useState([]);
+  const [unitOptions, setUnitOptions] = useState([]);
+  const [preview, setPreview] = useState({
+    url: "",
+    name: "",
+    isImage: false,
+    loading: false,
+    error: "",
   });
 
-  const [poDetailRows, setPoDetailRows] = useState(
-    data?.poDetails?.length
-      ? data.poDetails.map((d) => ({
-          ...d,
-          originalDeliveryDate: fmtDate(d.originalDeliveryDate),
-          amendmentDeliveryDate: fmtDate(d.amendmentDeliveryDate),
-        }))
-      : [emptyPoDetailRow()],
-  );
+  const {
+    control,
+    handleSubmit,
+    watch,
+    setValue,
+    getValues,
+    reset,
+    formState: { errors },
+  } = useForm({
+    mode: "onTouched",
+    defaultValues: getDefaultValues(),
+  });
 
-  const [attachmentFiles, setAttachmentFiles] = useState(() => [
-    { id: Date.now(), file: null },
-  ]);
+  const detailsArray = useFieldArray({ control, name: "details" });
+  const attachmentArray = useFieldArray({ control, name: "attachments" });
 
-  /* ---------------- Header handlers ---------------- */
+  const watchDetails = watch("details");
+  const watchPoNo = watch("poNo");
+  const watchCustomer = watch("customer");
 
-  const handleHeaderChange = (e) => {
-    const { name, value } = e.target;
-    if (fieldErrors[name]) setFieldErrors((prev) => ({ ...prev, [name]: "" }));
-    setHeader((prev) => ({ ...prev, [name]: value }));
+  const getFieldArray = (tab) => {
+    switch (tab) {
+      case "poDetail":
+        return detailsArray;
+      case "attachment":
+        return attachmentArray;
+      default:
+        return detailsArray;
+    }
   };
 
-  /* ---------------- Lookups ---------------- */
+  /* ---------------- Master data dropdowns ---------------- */
 
-  const loadPartyName = useCallback(
-    async (code) => {
-      if (!code || !orgId) return;
+  const loadBranches = useCallback(async () => {
+    try {
+      const response = await branchAPI.getBranchByOrgId(orgId);
+      setBranchOptions(
+        (response || []).map((b) => ({ value: b.id, label: b.branchName })),
+      );
+    } catch (error) {
+      console.error("Failed to load branches:", error);
+      setBranchOptions([]);
+    }
+  }, [orgId]);
+
+  const loadCustomers = useCallback(async () => {
+    try {
+      const response = await partyMasterAPI.getPartyByOrgId(orgId, branchId);
+      setCustomerOptions(
+        (response || []).map((c) => ({
+          value: c.id ?? c.customerId ?? c.partyId,
+          label:
+            c.customerName ??
+            c.partyName ??
+            `${c.customerCode ?? ""} ${c.customerName ?? ""}`.trim(),
+          customerName:
+            c.customerName ??
+            c.partyName ??
+            `${c.customerCode ?? ""} ${c.customerName ?? ""}`.trim(),
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to load customers:", error);
+      setCustomerOptions([]);
+    }
+  }, [orgId, branchId]);
+
+  const loadItems = useCallback(
+    async (poNo) => {
+      if (!poNo) {
+        setItemOptions([]);
+        return;
+      }
       try {
-        const party = await purchaseOrderAmendmentAPI.getPartyByCode(code, orgId);
-        setHeader((prev) => ({
-          ...prev,
-          partyName: party?.partyName || party?.name || "",
-        }));
-      } catch {
-        setHeader((prev) => ({ ...prev, partyName: "" }));
+        const response = await purchaseOrderAmendmentAPI.getItemCodeDropdown(
+          branchId,
+          poNo,
+          orgId,
+        );
+        setItemOptions(
+          (response || []).map((item) => ({
+            value: item.id ?? item.itemCode,
+            label: item.itemCode || String(item.id ?? ""),
+            itemCode: item.itemCode || "",
+            itemDescription: item.itemDescription || "",
+            hsnSacCode: item.hsnSacCode || "",
+          })),
+        );
+      } catch (error) {
+        console.error("Failed to load items:", error);
+        if (!isEditMode) setItemOptions([]);
       }
     },
-    [orgId],
+    [orgId, branchId, isEditMode],
   );
 
-  useEffect(() => {
-    if (header.partyCode) {
-      const timer = setTimeout(() => loadPartyName(header.partyCode), 500);
-      return () => clearTimeout(timer);
+  const loadPoOptions = useCallback(async () => {
+    if (!branchId || !orgId || !watchCustomer) {
+      setPoOptions([]);
+      return;
     }
-  }, [header.partyCode, loadPartyName]);
-
-  const loadPoDetails = useCallback(
-    async (poNum) => {
-      if (!poNum || !orgId) return;
-      setLoadingPo(true);
-      try {
-        const items = await purchaseOrderAmendmentAPI.getPoDetails(
-          poNum,
-          orgId,
-          branch,
+    try {
+      const list =
+        await purchaseOrderAmendmentAPI.getPurchaseOrderDropdownForPurchaseOrderAmendment(
+          {
+            branch: branchId,
+            customerId: Number(watchCustomer),
+            orgId,
+          },
         );
-        if (items && items.length > 0) {
-          setHeader((prev) => ({
-            ...prev,
-            poDate: items[0].poDate
-              ? dayjs(items[0].poDate).format("YYYY-MM-DD")
-              : "",
-            currency: items[0].currency || "",
-          }));
-          const mapped = items.map((item, idx) => ({
-            id: item.id || Date.now() + idx,
-            slNo: idx + 1,
-            itemCode: item.itemCode || "",
-            itemName: item.itemName || "",
-            originalQty: item.quantity || item.qty || 0,
-            amendmentQty: item.quantity || item.qty || 0,
-            originalRate: item.rate || 0,
-            amendmentRate: item.rate || 0,
-            originalDeliveryDate: fmtDate(item.deliveryDate),
-            amendmentDeliveryDate: fmtDate(item.deliveryDate),
-          }));
-          setPoDetailRows(mapped);
-          setPoDetailError("");
+      setPoOptions(
+        list
+          .filter((po) => po?.docId)
+          .map((po) => ({
+            value: po.docId,
+            label: po.docId,
+            docId: po.docId,
+            id: po.id,
+          })),
+      );
+    } catch (error) {
+      console.error("Failed to load purchase orders:", error);
+      setPoOptions([]);
+    }
+  }, [orgId, branchId, watchCustomer]);
+
+  useEffect(() => {
+    loadBranches();
+    loadCustomers();
+    loadPoOptions();
+  }, [loadBranches, loadCustomers, loadPoOptions]);
+
+  useEffect(() => {
+    if (!branchId) return;
+    loadCustomers();
+    loadPoOptions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branchId, loadCustomers, loadPoOptions]);
+
+  useEffect(() => {
+    loadItems(watchPoNo);
+    const fetchCurrencyRate = async () => {
+      if (!watchPoNo) return;
+      try {
+        const currencyDetails = await purchaseOrderAmendmentAPI.getCurrencyExchangeRateforPurchaseOrderAmendment(
+          branchId,
+          watchPoNo,
+          orgId,
+        );
+        if (currencyDetails.length > 0) {
+          const first = currencyDetails[0];
+          setValue("currency", first.currency || "");
+          setValue("exchangeRate", first.exchangeRate ?? first.buyingExRate ?? 0);
         }
       } catch (error) {
-        console.error("Failed to load PO details:", error);
-      } finally {
-        setLoadingPo(false);
+        console.error("Failed to fetch currency exchange rate:", error);
       }
-    },
-    [orgId, branch],
-  );
+    };
+    fetchCurrencyRate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchPoNo]);
+
+  /* ---------------- Edit PO reconciliation ---------------- */
 
   useEffect(() => {
-    if (header.poNo) {
-      const timer = setTimeout(() => loadPoDetails(header.poNo), 500);
-      return () => clearTimeout(timer);
-    }
-  }, [header.poNo, loadPoDetails]);
-
-  /* ---------------- PO Detail row handlers ---------------- */
-
-  const handleCellChange = (idx, key, value) => {
-    setPoDetailRows((prev) =>
-      prev.map((row, i) => (i === idx ? { ...row, [key]: value } : row)),
+    if (!isEditMode || !data) return;
+    if (!poOptions.length) return;
+    const savedPoNo = data?.purchaseordernumber;
+    if (!savedPoNo) return;
+    const match = poOptions.find(
+      (po) =>
+        String(po?.docId) === String(savedPoNo) ||
+        String(po?.id) === String(savedPoNo),
     );
-  };
+    if (match) setValue("poNo", match.docId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [isEditMode, poOptions, data, setValue]);
 
-  const handleAddRow = () => {
-    setPoDetailRows((prev) => [
-      ...prev,
-      { ...emptyPoDetailRow(), id: Date.now(), slNo: prev.length + 1 },
-    ]);
-    setPoDetailError("");
-  };
+/* ---------------- Auto-set Currency & Exchange Rate on PO Select ----------------*/
 
-  const handleRemoveRow = (idx) => {
-    setPoDetailRows((prev) =>
-      prev.filter((_, i) => i !== idx).map((r, i) => ({ ...r, slNo: i + 1 })),
-    );
-  };
+  //  Fetches currency details from the backend when the PO No changes and stores
+  //  the currency ID (e.g. 10006000029203 for EURO) in a ref for use on submit.
 
-  /* ---------------- Attachments ---------------- */
+   useEffect(() => {
+     if (isEditMode) return; // only auto in create mode
+     if (!watchPoNo) {
+       setValue("currency", "");
+       setValue("exchangeRate", "");
+       currencyIdRef.current = null;
+       return;
+     }
+     purchaseOrderAmendmentAPI.getCurrencyExchangeRateforPurchaseOrderAmendment(
+       branchId,
+       watchPoNo,
+       orgId,
+     ).then((currencyDetails) => {
+       if (currencyDetails && currencyDetails.length > 0) {
+         const first = currencyDetails[0];
+         setValue("currency", first.currency || "");
+         setValue("exchangeRate", first.exchangeRate ?? first.buyingExRate ?? 0);
+         currencyIdRef.current = first.currencyId || null;
+       } else {
+         setValue("currency", "");
+         setValue("exchangeRate", "");
+         currencyIdRef.current = null;
+       }
+     }).catch((error) => {
+       console.error("Failed to fetch currency exchange rate:", error);
+       setValue("currency", "");
+       setValue("exchangeRate", "");
+       currencyIdRef.current = null;
+     });
+   }, [watchPoNo, isEditMode, branchId, orgId]);
 
-  const addAttachment = () => {
-    setAttachmentFiles((prev) => [...prev, { id: Date.now(), file: null }]);
-  };
-
-  const removeAttachment = (index) => {
-    setAttachmentFiles((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const updateAttachment = (index, file) => {
-    setAttachmentFiles((prev) => {
-      const updated = [...prev];
-      updated[index] = { ...updated[index], file };
-      return updated;
-    });
-  };
-
-  /* ---------------- Validation & Save ---------------- */
-
-  const validate = () => {
-    const errors = {};
-
-    if (!header.plantId) errors.plantId = "Plant Id is required";
-    if (!header.belongsTo) errors.belongsTo = "Belongs To is required";
-    if (!header.amendmentDate)
-      errors.amendmentDate = "Amendment Date is required";
-    if (!header.partyCode?.trim()) errors.partyCode = "Party Code is required";
-    if (!header.poNo?.trim()) errors.poNo = "PO No is required";
-
-    setFieldErrors(errors);
-
-    const hasValidRow = poDetailRows.some((r) => r.itemCode?.trim());
-    if (!hasValidRow) {
-      setPoDetailError("At least one PO detail item is required");
-      setActiveTab("poDetail");
-    } else {
-      setPoDetailError("");
-    }
-
-    return Object.keys(errors).length === 0 && hasValidRow;
-  };
-
-  const handleSave = async () => {
-    if (!validate()) return;
-
-    setIsSubmitting(true);
-
-    const isUpdate = Boolean(data?.id);
-
-    const payload = {
-      ...(isUpdate ? { id: data.id } : {}),
-      ...header,
-      amendmentNo:
-        header.amendmentNo || `AMD${dayjs().format("YYYYMMDDHHmmss")}`,
-      revisionNo: isUpdate ? Number(header.revisionNo) || 1 : 1,
+  /* ---------------- Fetch Belongs To list on mount ----------------
+   * Populates the belongsTo dropdown from the commonmaster API.
+   */
+  useEffect(() => {
+    purchaseOrderAmendmentAPI.getListValuesGroup(
+      "PURCHASE ORDER AMENDMENT",
       orgId,
-      branch,
-      createdBy: loginUserName,
-      poDetails: poDetailRows
-        .filter((r) => r.itemCode?.trim())
-        .map((d) => ({
-          ...d,
-          amendmentQty: Number(d.amendmentQty) || 0,
-          amendmentRate: Number(d.amendmentRate) || 0,
+    ).then((listValues) => {
+      setBelongsToOptions(
+        listValues.map((item) => ({
+          value: item.id,
+          label: item.valuesDescription,
+        }))
+      );
+    }).catch((error) => {
+      console.error("Failed to fetch belongs to list:", error);
+      setBelongsToOptions([
+        { value: "Purchase", label: "Purchase" },
+      ]);
+    });
+  }, [orgId]);
+
+  /* ---------------- Fetch Unit Master on mount ----------------
+   * Populates the unit dropdown from the commonmaster API.
+   */
+  useEffect(() => {
+    purchaseOrderAmendmentAPI.getUnitMasterByOrgId(orgId).then((unitList) => {
+      setUnitOptions(
+        unitList.map((item) => ({
+          value: item.id,
+          label: item.description,
+        }))
+      );
+    }).catch((error) => {
+      console.error("Failed to fetch unit master:", error);
+      setUnitOptions([
+        { value: 1694110000000, label: "BAGS" },
+      ]);
+    });
+  }, [orgId]);
+
+  /* ---------------- Edit data mapping ---------------- */
+
+  useEffect(() => {
+    if (!isEditMode || dataLoadedRef.current) return;
+
+    const src = data || {};
+
+    setValue("id", src.id ?? "");
+    setValue("branch", asId(src.branch));
+    setValue("belongsTo", src.belongsTo || "Purchase");
+    setValue("amendmentNo", src.docId || "");
+    setValue(
+      "amendmentDate",
+      src.docDate ? dayjs(src.docDate).format("YYYY-MM-DD") : dayjs().format("YYYY-MM-DD"),
+    );
+    setValue("customer", asId(src.customer));
+    setValue("customerName", src.customer?.customerName || "");
+    setValue("poNo", src.purchaseordernumber || "");
+    setValue("currency", src.currency || "");
+    setValue("exchangeRate", src.exchangeRate ?? "");
+    setValue("revisionNo", src.revisionNo ?? "");
+    setValue("active", src.active !== false);
+    setValue("freightType", src.freightType || "");
+    setValue("packingType", src.packingType || "");
+    setValue("insuranceAmount", src.insuranceAmount ?? "");
+    setValue("modeOfDespatch", src.modeOfDespatch || "");
+    setValue("taxDescription", src.taxDescription || "");
+    setValue("remarks", src.remarks || "");
+
+    const details = (src.details || []).map((d) => ({
+      id: d.id ?? "",
+      item: asId(d.item),
+      itemCode: d.item?.itemCode || "",
+      itemName: d.item?.itemDescription || "",
+      unit: d.unit || "",
+      oldQty: d.oldQty ?? "",
+      newQty: d.newQty ?? "",
+      oldRate: d.oldRate ?? "",
+      newRate: d.newRate ?? "",
+      oldDeliveryDate: fmtDate(d.oldDeliveryDate),
+      newDeliveryDate: fmtDate(d.newDeliveryDate),
+    }));
+
+    setValue("details", details.length ? details : getDefaultValues().details);
+
+    mappedItemsRef.current = new Set(
+      details.map((d) => String(asId(d.item))).filter(Boolean),
+    );
+
+    const voItemOptions = (src.details || [])
+      .map((d) => d?.item)
+      .filter((it) => it && it.id != null)
+      .map((it) => ({
+        value: it.id,
+        label: it.itemCode || String(it.id),
+        itemCode: it.itemCode || "",
+        itemDescription: it.itemDescription || "",
+        hsnSacCode: it.hsn || it.hsnSacCode || "",
+      }));
+
+    if (voItemOptions.length) {
+      setItemOptions((prev) => {
+        const existing = new Set(prev.map((o) => String(o.value)));
+        const merged = [...prev];
+        voItemOptions.forEach((o) => {
+          if (!existing.has(String(o.value))) merged.push(o);
+        });
+        return merged;
+      });
+    }
+
+    if ((src.attachments || []).length) {
+      setValue(
+        "attachments",
+        src.attachments.map((a) => ({
+          file: null,
+          existing: a,
         })),
+      );
+    }
+
+    dataLoadedRef.current = true;
+  }, [isEditMode, data, setValue]);
+
+  /* ---------------- Amendment No auto-generation (Add) ---------------- */
+
+  useEffect(() => {
+    if (isEditMode || amendmentNoLoadedRef.current) return;
+
+    let cancelled = false;
+
+    const generateDocId = async () => {
+      try {
+        const docId = await purchaseOrderAmendmentAPI.getDocId({
+          financialYear: String(new Date().getFullYear()),
+          orgId,
+          screenCode: "POA",
+        });
+        if (!cancelled && docId) {
+          setValue("amendmentNo", docId);
+          amendmentNoLoadedRef.current = true;
+        }
+      } catch (error) {
+        console.error("Failed to generate Amendment No:", error);
+      }
     };
 
-    try {
-      const res = await purchaseOrderAmendmentAPI.createUpdate(payload);
-      if (res?.status) {
-        addToast(
-          isUpdate
-            ? "Amendment updated successfully"
-            : "Amendment created successfully",
-          "success",
-        );
-        onBack();
-      } else {
-        addToast(res?.message || "Failed to save amendment", "error");
+    generateDocId();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditMode, orgId, setValue]);
+
+  /* ---------------- Revision No auto-fill (Add) ---------------- */
+
+  useEffect(() => {
+    if (isEditMode || !watchPoNo) return;
+
+    let cancelled = false;
+
+    const loadRevisionNo = async () => {
+      try {
+        const revisionNo = await purchaseOrderAmendmentAPI.getRevisionNo({
+          branch: branchId,
+          orgId,
+          purchaseOrderNumber: watchPoNo,
+        });
+        if (!cancelled) {
+          setValue("revisionNo", revisionNo);
+        }
+      } catch (error) {
+        console.error("Failed to load Revision No:", error);
       }
-    } catch (error) {
-      addToast(error?.message || "Failed to save amendment", "error");
-    } finally {
-      setIsSubmitting(false);
+    };
+
+    loadRevisionNo();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditMode, watchPoNo, orgId, setValue]);
+
+  /* ---------------- Tab handlers ---------------- */
+
+  const handleAdd = (tab) => {
+    if (tab === "poDetail") {
+      detailsArray.append(
+        getDefaultValues().details[0],
+      );
+    } else if (tab === "attachment") {
+      attachmentArray.append({ file: null, existing: null });
     }
   };
 
-  const handleCancel = () => {
-    if (!isSubmitting) onBack();
+  const handleRemove = (tab, index) => {
+    getFieldArray(tab).remove(index);
   };
 
+  /* ---------------- Attachment preview ---------------- */
+
+  const getAttachmentName = (row) => {
+    if (!row) return "Attachment";
+    if (row.file && row.file instanceof File) {
+      return row.file.name || "Attachment";
+    }
+    const existing = row.existing;
+    if (existing && typeof existing === "object") {
+      return (
+        existing.name ||
+        existing.fileName ||
+        (existing.filePath || "").split("/").pop() ||
+        "Attachment"
+      );
+    }
+    if (existing && typeof existing === "string") {
+      return existing.split("/").pop() || existing;
+    }
+    return "Attachment";
+  };
+
+  const handleAttachmentPreview = async (row) => {
+    const name = getAttachmentName(row);
+
+    // New file (just chosen in this session) → local object URL, no auth needed
+    if (row.file && row.file instanceof File) {
+      const url = URL.createObjectURL(row.file);
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      setPreview({
+        url,
+        name,
+        isImage:
+          row.file.type?.startsWith("image/") ||
+          /\.(png|jpe?g|gif|bmp|webp)$/i.test(name),
+        loading: false,
+        error: "",
+      });
+      return;
+    }
+
+    // Existing attachment → fetch through authenticated download endpoint
+    const existing = row.existing;
+    let sourcePath = "";
+    if (existing && typeof existing === "object") {
+      sourcePath = existing.filePath || existing;
+    } else if (typeof existing === "string") {
+      sourcePath = existing;
+    }
+
+    if (!sourcePath) {
+      addToast("No file available to preview", "warning");
+      return;
+    }
+
+    setPreview({ url: "", name, isImage: false, loading: true, error: "" });
+
+    try {
+      const token =
+        localStorage.getItem("user.token") ||
+        localStorage.getItem("token") ||
+        localStorage.getItem("authToken") ||
+        JSON.parse(localStorage.getItem("user") || "{}")?.token;
+
+      const response = await axios.get(
+        `${
+          import.meta.env.VITE_API_URL
+        }/api/files/download?path=${encodeURIComponent(sourcePath)}`,
+        {
+          responseType: "blob",
+          headers: token
+            ? { Authorization: `Bearer ${token.replace("Bearer ", "")}` }
+            : undefined,
+        },
+      );
+
+      const blob = response.data;
+      if (!blob || blob.size === 0) {
+        setPreview({
+          url: "",
+          name,
+          isImage: false,
+          loading: false,
+          error: "Unable to load file",
+        });
+        return;
+      }
+
+      const url = URL.createObjectURL(blob);
+      setPreview({
+        url,
+        name,
+        isImage:
+          blob.type?.startsWith("image/") ||
+          /\.(png|jpe?g|gif|bmp|webp)$/i.test(name),
+        loading: false,
+        error: "",
+      });
+    } catch (error) {
+      if (error?.response?.status === 401) {
+        setPreview({
+          url: "",
+          name,
+          isImage: false,
+          loading: false,
+          error: "Unauthorized",
+        });
+      } else {
+        setPreview({
+          url: "",
+          name,
+          isImage: false,
+          loading: false,
+          error: "Failed to load file",
+        });
+      }
+    }
+  };
+
+  /* ---------------- Save ---------------- */
+
+  const onSubmit = async (formData) => {
+  setSaving(true);
+
+  try {
+    const isUpdate = Boolean(data?.id);
+
+    // Prepare Purchase Order Amendment data
+    const poAmendmentData = {
+      ...(isUpdate ? { id: data.id } : {}),
+
+      active: formData.active !== false,
+
+      belongsTo: formData.belongsTo || "Purchase",
+
+      branch: Number(formData.branch),
+
+      cancelRemarks: data?.cancelRemarks || "",
+
+      createdBy:
+        (isUpdate ? data?.createdBy : null) ||
+        localStorage.getItem("usersId") ||
+        loginUserName ||
+        "SYSTEM",
+
+      currency: currencyIdRef.current || 0,
+
+      customer: Number(formData.customer),
+
+      exchangeRate: Number(formData.exchangeRate || 0),
+
+      freightType: formData.freightType || "",
+
+      insuranceAmount: Number(formData.insuranceAmount || 0),
+
+      modeOfDespatch: formData.modeOfDespatch || "",
+
+      orgId: orgId,
+
+      packingType: formData.packingType || "",
+
+      purchaseordernumber: formData.poNo || "",
+
+      remarks: formData.remarks || "",
+
+      revisionNo: Number(formData.revisionNo || 1),
+
+      taxDescription: formData.taxDescription || "",
+
+      attachment: [],
+
+      details: (formData.details || [])
+        .filter((item) => item.item)
+        .map((item) => {
+          const unitMatch = unitOptions.find(
+            (u) => String(u.value) === String(item.unit),
+          );
+          return {
+            item: Number(item.item),
+
+            unit: unitMatch
+              ? Number(unitMatch.value)
+              : item.unit
+                ? Number(item.unit)
+                : null,
+
+            oldQty: Number(item.oldQty || 0),
+
+            newQty: Number(item.newQty || 0),
+
+            oldRate: Number(item.oldRate || 0),
+
+            newRate: Number(item.newRate || 0),
+
+            oldDeliveryDate: item.oldDeliveryDate || "",
+
+            newDeliveryDate: item.newDeliveryDate || "",
+          };
+        }),
+    };
+
+    // Create multipart FormData
+    const formDataToSend = new FormData();
+
+    // Convert PO Amendment JSON into Blob
+    const poAmendmentJSON = JSON.stringify(poAmendmentData);
+
+    const poAmendmentBlob = new Blob([poAmendmentJSON], {
+      type: "application/json",
+    });
+
+    // Append JSON DTO
+    formDataToSend.append(
+      "purchaseOrderAmendmentDto",
+      poAmendmentBlob,
+      "poAmendmentDTO.json",
+    );
+
+    // Add attachment files
+    const attachments = formData.attachments || [];
+
+    if (attachments.length > 0) {
+      for (let i = 0; i < attachments.length; i++) {
+        const attachment = attachments[i]?.file;
+
+        if (attachment instanceof File) {
+          // New file
+          formDataToSend.append(
+            "files",
+            attachment,
+            attachment.name,
+          );
+        } else if (
+          attachment &&
+          typeof attachment === "object" &&
+          attachment.filePath
+        ) {
+          // Existing file
+          console.log(
+            "Existing file:",
+            attachment.filePath,
+          );
+        } else if (
+          attachment &&
+          typeof attachment === "string"
+        ) {
+          // Existing file path
+          console.log(
+            "Existing file path:",
+            attachment,
+          );
+        }
+      }
+    }
+
+    // Debug - JSON data
+    console.log(
+      "Sending PO Amendment data:",
+      poAmendmentData,
+    );
+
+    // Debug - Multipart contents
+    for (const [key, value] of formDataToSend.entries()) {
+      console.log("FormData:", key, value);
+    }
+
+    // Call API
+    const response =
+      await purchaseOrderAmendmentAPI.createUpdate(
+        formDataToSend,
+      );
+
+    console.log(
+      "Full PO Amendment API Response:",
+      response,
+    );
+
+    // Check API success
+    const isSuccess =
+      response?.status === true ||
+      response?.success === true ||
+      response?.status === "SUCCESS" ||
+      response?.status === 200 ||
+      response?.statusCode === 200 ||
+      response?.statusFlag === "Ok";
+
+    if (isSuccess) {
+      addToast(
+        response?.paramObjectsMap?.message ||
+          (isUpdate
+            ? "Amendment updated successfully"
+            : "Amendment created successfully"),
+        "success",
+      );
+
+      reset(getDefaultValues());
+
+      onBack();
+    } else {
+      const errorMessage =
+        response?.message ||
+        response?.paramObjectsMap?.message ||
+        response?.errorMessage ||
+        response?.error ||
+        "Failed to save amendment";
+
+      addToast(errorMessage, "error");
+    }
+  } catch (error) {
+    console.error(
+      "Error saving PO amendment:",
+      error,
+    );
+
+    const errorMessage =
+      error?.response?.data?.message ||
+      error?.response?.data?.paramObjectsMap?.message ||
+      error?.message ||
+      "Failed to save amendment. Please try again.";
+
+    addToast(errorMessage, "error");
+  } finally {
+    setSaving(false);
+  }
+};
+
+  /* ---------------- Item autofill ---------------- */
+
+  useEffect(() => {
+    watchDetails?.forEach((row, index) => {
+      if (!row?.item) return;
+      const selectedItem = itemOptions.find(
+        (item) => String(item.value) === String(row.item),
+      );
+      if (selectedItem) {
+        const isMapped = mappedItemsRef.current.has(String(row.item));
+        if (isMapped && (row.itemCode || row.itemName)) return;
+        setValue(`details.${index}.itemCode`, selectedItem.itemCode || "");
+        setValue(
+          `details.${index}.itemName`,
+          selectedItem.itemDescription || "",
+        );
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchDetails, itemOptions, setValue]);
+
+  /* ---------------- Customer Name autofill ---------------- */
+
+  useEffect(() => {
+    if (!watchCustomer) {
+      setValue("customerName", "");
+      return;
+    }
+    const selected = customerOptions.find(
+      (c) => String(c.value) === String(watchCustomer),
+    );
+    if (selected) {
+      setValue("customerName", selected.customerName || selected.label || "");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchCustomer, customerOptions, setValue]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-500 dark:text-gray-400">
+          Loading amendment data...
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="p-2 max-w-7xl">
+    <div className="w-full mx-auto p-2 max-w-7xl relative">
       {/* Header */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onBack}
-            className="p-1 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </button>
-
-          <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-            {data
-              ? "Edit Purchase Order Amendment"
-              : "Add Purchase Order Amendment"}
-          </h2>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <label className={labelClasses}>Active</label>
-          <ToggleButton
-            value={header.active}
-            onChange={(v) => setHeader((prev) => ({ ...prev, active: v }))}
-          />
-        </div>
+      <div className="flex items-center gap-2 mb-3">
+        <button
+          onClick={onBack}
+          className="p-1 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </button>
+        <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+          {data?.id ? "Edit Purchase Order Amendment" : "Add Purchase Order Amendment"}
+        </h2>
       </div>
 
       {/* Main Card */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
-        {/* ---------------- Header Info ---------------- */}
-        <div>
-          <SectionHeader>Purchase Order Amendment Details</SectionHeader>
-          <div className={fieldGrid}>
-            <Field
-              type="select"
-              label="Plant Id"
-              name="plantId"
-              value={header.plantId}
-              onChange={handleHeaderChange}
-              error={fieldErrors.plantId}
-              options={PLANT_IDS}
-              required
-            />
-            <Field
-              type="select"
-              label="Belongs To"
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-3">
+        {/* Header Fields */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+          <SelectField
+            control={control}
+            name="branch"
+            label="Branch"
+            options={branchOptions}
+            required
+            errors={errors}
+          />
+<SelectField
+              control={control}
               name="belongsTo"
-              value={header.belongsTo}
-              onChange={handleHeaderChange}
-              error={fieldErrors.belongsTo}
-              options={BELONGS_TO}
-              required
+              label="Belongs To"
+              options={belongsToOptions}
+              errors={errors}
             />
-            <Field
-              label="Amendment No"
-              name="amendmentNo"
-              value={header.amendmentNo}
-              onChange={handleHeaderChange}
-              disabled
-              placeholder="Auto-generated"
-            />
-            <Field
-              type="date"
-              label="Amendment Date"
-              name="amendmentDate"
-              value={header.amendmentDate}
-              onChange={handleHeaderChange}
-              error={fieldErrors.amendmentDate}
-              required
-            />
-            <Field
-              label="Party Code"
-              name="partyCode"
-              value={header.partyCode}
-              onChange={handleHeaderChange}
-              error={fieldErrors.partyCode}
-              required
-            />
-            <Field
-              label="Party Name"
-              name="partyName"
-              value={header.partyName}
-              onChange={handleHeaderChange}
-              disabled
-            />
-            <Field
-              label="PO No"
-              name="poNo"
-              value={header.poNo}
-              onChange={handleHeaderChange}
-              error={fieldErrors.poNo}
-              required
-            />
-            <Field
-              type="date"
-              label="PO Date"
-              name="poDate"
-              value={header.poDate}
-              onChange={handleHeaderChange}
-              disabled
-            />
-            <Field
-              label="Currency"
-              name="currency"
-              value={header.currency}
-              onChange={handleHeaderChange}
-              disabled
-            />
-            <Field
-              type="number"
-              label="Exchange Rate"
-              name="exchangeRate"
-              value={header.exchangeRate}
-              onChange={handleHeaderChange}
-            />
-            <Field
-              label="Ref No"
-              name="refNo"
-              value={header.refNo}
-              onChange={handleHeaderChange}
-            />
-            <Field
-              type="date"
-              label="Ref Date"
-              name="refDate"
-              value={header.refDate}
-              onChange={handleHeaderChange}
-            />
-            <Field
-              type="number"
-              label="Revision No"
-              name="revisionNo"
-              value={header.revisionNo}
-              onChange={handleHeaderChange}
-              disabled
-            />
-          </div>
+
+          <SelectField
+            control={control}
+            name="customer"
+            label="Customer"
+            options={customerOptions}
+            required
+            errors={errors}
+          />
+
+          <InputField
+            control={control}
+            name="amendmentDate"
+            label="Amendment Date"
+            type="date"
+            required
+            errors={errors}
+          />
+
+          <InputField
+            control={control}
+            name="amendmentNo"
+            label="Amendment No"
+            disabled
+            value={getValues("amendmentNo") || "Auto"}
+            errors={errors}
+          />
+
+           <SelectField
+            control={control}
+            name="poNo"
+            label="PO No"
+            required
+            errors={errors}
+            options={poOptions}
+            placeholder="Select PO No"
+          />
+
+          <InputField
+            control={control}
+            name="customerName"
+            label="Customer Name"
+            errors={errors}
+            placeholder="Auto-filled"
+            disabled
+          />
+
+          <InputField
+            control={control}
+            name="currency"
+            label="Currency"
+            placeholder="Enter currency"
+            errors={errors}
+          />
+
+          <InputField
+            control={control}
+            name="exchangeRate"
+            label="Exchange Rate"
+            type="number"
+            step="0.01"
+            errors={errors}
+          />
+
+          <InputField
+            control={control}
+            name="revisionNo"
+            label="Revision No"
+            type="number"
+            errors={errors}
+            disabled
+          />
         </div>
 
-        {/* ---------------- Child Tabs ---------------- */}
+        {/* Child Tables */}
         <section className="mt-0 bg-white dark:bg-gray-800">
           {/* Tabs */}
           <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 mb-0">
             <div className="flex">
-              {CHILD_TABS.map((tab) => (
+              {[
+                { key: "poDetail", label: "PO Detail" },
+                { key: "summary", label: "Summary" },
+                { key: "attachment", label: "Attachment" },
+              ].map((tab) => (
                 <button
                   key={tab.key}
                   type="button"
                   onClick={() => setActiveTab(tab.key)}
-                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${
+                  className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${
                     activeTab === tab.key
                       ? "bg-blue-600 text-white"
                       : "text-gray-600 dark:text-gray-300"
@@ -799,153 +1304,237 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
                 </button>
               ))}
             </div>
-
-            <div className="flex items-center gap-2">
-              {activeTab === "poDetail" && loadingPo && (
-                <span className="text-xs text-gray-500">
-                  Loading PO details...
-                </span>
-              )}
-              {activeTab === "poDetail" && (
-                <button
-                  type="button"
-                  onClick={handleAddRow}
-                  className="h-6 w-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-colors"
-                >
-                  <Plus size={12} />
-                </button>
-              )}
-              {activeTab === "attachment" && (
-                <button
-                  type="button"
-                  onClick={addAttachment}
-                  className="h-6 w-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-colors"
-                >
-                  <Plus size={12} />
-                </button>
-              )}
-            </div>
+            {activeTab !== "summary" && (
+              <button
+                type="button"
+                onClick={() => handleAdd(activeTab)}
+                className="h-6 w-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-colors"
+              >
+                <Plus size={12} />
+              </button>
+            )}
           </div>
 
-          {/* PO Detail tab */}
+          {/* Tab Content - PO Detail */}
           {activeTab === "poDetail" && (
             <div className="pt-3">
-              <DynamicTable
-                columns={PO_DETAIL_COLUMNS}
-                rows={poDetailRows}
-                onCellChange={handleCellChange}
-                onRemoveRow={handleRemoveRow}
-              />
-              {poDetailError && (
-                <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
-                  {poDetailError}
-                </p>
-              )}
+              <TableWrapper>
+                <TableHead
+                  headers={[
+                    "S.No",
+                    <>Item <span className="text-red-500">*</span></>,
+                    "Item Code",
+                    "Item Name",
+                    "Unit",
+                    "Old Qty",
+                    "New Qty",
+                    "Old Rate",
+                    "New Rate",
+                    "Old Delivery Date",
+                    "New Delivery Date",
+                    "Action",
+                  ]}
+                />
+                <tbody>
+                  {detailsArray.fields.map((field, index) => {
+                    const selectedItem = itemOptions.find(
+                      (o) =>
+                        o.value != null && String(o.value) === String(field.item),
+                    );
+                    return (
+                    <TableRow
+                      key={field.id}
+                      index={index}
+                      onRemove={() => handleRemove("poDetail", index)}
+                      disabled={detailsArray.fields.length <= 1}
+                    >
+                      <SelectCell
+                        control={control}
+                        name={`details.${index}.item`}
+                        options={itemOptions}
+                        required
+                        errors={errors}
+                      />
+                      <InputCell
+                        control={control}
+                        name={`details.${index}.itemCode`}
+                        placeholder="Item Code"
+                        readOnly
+                        overrideValue={selectedItem?.itemCode}
+                        errors={errors}
+                      />
+                      <InputCell
+                        control={control}
+                        name={`details.${index}.itemName`}
+                        placeholder="Item Name"
+                        overrideValue={selectedItem?.itemDescription}
+                        errors={errors}
+                      />
+                      <SelectField
+                          control={control}
+                          name={`details.${index}.unit`}
+                          options={unitOptions}
+                          errors={errors}
+                        />
+                      <InputCell
+                        control={control}
+                        name={`details.${index}.oldQty`}
+                        type="number"
+                        step="0.001"
+                        placeholder="Old Qty"
+                        errors={errors}
+                      />
+                      <InputCell
+                        control={control}
+                        name={`details.${index}.newQty`}
+                        type="number"
+                        step="0.001"
+                        placeholder="New Qty"
+                        errors={errors}
+                      />
+                      <InputCell
+                        control={control}
+                        name={`details.${index}.oldRate`}
+                        type="number"
+                        step="0.01"
+                        placeholder="Old Rate"
+                        errors={errors}
+                      />
+                      <InputCell
+                        control={control}
+                        name={`details.${index}.newRate`}
+                        type="number"
+                        step="0.01"
+                        placeholder="New Rate"
+                        errors={errors}
+                      />
+                      <InputCell
+                        control={control}
+                        name={`details.${index}.oldDeliveryDate`}
+                        type="date"
+                        errors={errors}
+                      />
+                      <InputCell
+                        control={control}
+                        name={`details.${index}.newDeliveryDate`}
+                        type="date"
+                        errors={errors}
+                      />
+                    </TableRow>
+                    );
+                  })}
+                </tbody>
+              </TableWrapper>
             </div>
           )}
 
-          {/* Summary tab */}
+          {/* Tab Content - Summary */}
           {activeTab === "summary" && (
-            <div className="pt-3">
-              <div className={fieldGrid}>
-                <Field
-                  type="select"
-                  label="Freight Type"
-                  name="freightType"
-                  value={header.freightType}
-                  onChange={handleHeaderChange}
-                  options={FREIGHT_TYPES}
-                />
-                <Field
-                  type="select"
-                  label="Packing Type"
-                  name="packingType"
-                  value={header.packingType}
-                  onChange={handleHeaderChange}
-                  options={PACKING_TYPES}
-                />
-                <Field
-                  type="number"
-                  label="Insurance Amount"
-                  name="insuranceAmount"
-                  value={header.insuranceAmount}
-                  onChange={handleHeaderChange}
-                />
-                <Field
-                  type="select"
-                  label="Mode of Dispatch"
-                  name="modeOfDispatch"
-                  value={header.modeOfDispatch}
-                  onChange={handleHeaderChange}
-                  options={MODE_OF_DISPATCH}
-                />
-                <Field
-                  label="Tax Description"
-                  name="taxDescription"
-                  value={header.taxDescription}
-                  onChange={handleHeaderChange}
-                />
-                <Field
-                  type="textarea"
-                  label="Remarks"
-                  name="remarks"
-                  value={header.remarks}
-                  onChange={handleHeaderChange}
-                  className="col-span-2 md:col-span-2 xl:col-span-2"
-                />
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-3">
+              <SelectField
+                control={control}
+                name="freightType"
+                label="Freight Type"
+                options={FREIGHT_TYPES}
+                errors={errors}
+              />
+              <SelectField
+                control={control}
+                name="packingType"
+                label="Packing Type"
+                options={PACKING_TYPES}
+                errors={errors}
+              />
+              <InputField
+                control={control}
+                name="insuranceAmount"
+                label="Insurance Amount"
+                type="number"
+                step="0.01"
+                errors={errors}
+              />
+              <SelectField
+                control={control}
+                name="modeOfDespatch"
+                label="Mode of Despatch"
+                options={MODE_OF_DISPATCH}
+                errors={errors}
+              />
+              <InputField
+                control={control}
+                name="taxDescription"
+                label="Tax Description"
+                errors={errors}
+                placeholder="Enter tax description"
+              />
+              <InputField
+                control={control}
+                name="remarks"
+                label="Remarks"
+                errors={errors}
+                placeholder="Enter remarks"
+              />
             </div>
           )}
 
-          {/* Attachment tab */}
+          {/* Tab Content - Attachment */}
           {activeTab === "attachment" && (
             <div className="pt-3 space-y-2">
               <TableWrapper>
-                <TableHead headers={["#", "Document", "Action"]} />
+                <TableHead headers={["S.No", "Document", "Preview", "Action"]} />
                 <tbody>
-                  {attachmentFiles.map((att, index) => (
-                    <tr
-                      key={att.id}
-                      className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"
+                  {attachmentArray.fields.map((field, index) => (
+                    <TableRow
+                      key={field.id}
+                      index={index}
+                      onRemove={() => handleRemove("attachment", index)}
+                      disabled={attachmentArray.fields.length <= 1}
+                      showPreview
+                      previewDisabled={
+                        !field.file &&
+                        !field.existing &&
+                        !fileInputRefs.current[field.id]?.files?.[0]
+                      }
+                      onPreview={() => {
+                        const domFile =
+                          fileInputRefs.current[field.id]?.files?.[0] || null;
+                        handleAttachmentPreview({
+                          ...field,
+                          file: field.file || domFile,
+                        });
+                      }}
                     >
-                      <td className="p-1 text-center font-medium dark:text-white">
-                        {index + 1}
-                      </td>
                       <td className="p-1">
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="file"
-                            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                            onChange={(e) =>
-                              updateAttachment(
-                                index,
-                                e.target.files?.[0] || null,
-                              )
-                            }
-                            className={`${controlClasses} h-8 text-xs file:mr-2 file:px-2 file:py-0.5 file:rounded file:border-0 file:bg-blue-600 file:text-white hover:file:bg-blue-700`}
+                        {!field.existing && (
+                          <Controller
+                            name={`attachments.${index}.file`}
+                            control={control}
+                            render={({ field: f }) => (
+                              <input
+                                type="file"
+                                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                                className={`${controlClasses} h-9 text-xs file:mr-3 file:px-2 sm:file:px-3 file:py-1 file:rounded file:border-0 file:bg-blue-600 file:text-white hover:file:bg-blue-700`}
+                                ref={(el) =>
+                                  (fileInputRefs.current[field.id] = el)
+                                }
+                                onChange={(e) => {
+                                  f.onChange(e.target.files?.[0] || null);
+                                }}
+                              />
+                            )}
                           />
-                          {att.file && (
-                            <span className="text-[10px] text-gray-500 truncate max-w-[160px]">
-                              {att.file.name}
-                            </span>
-                          )}
-                        </div>
+                        )}
+                        {field.file || field.existing ? (
+                          <span className="block mt-1 text-[10px] text-blue-600 dark:text-blue-400 truncate max-w-[200px]">
+                            {getAttachmentName(field)}
+                          </span>
+                        ) : (
+                          <p className="mt-1 text-[10px] text-gray-400">
+                            No file chosen
+                          </p>
+                        )}
                       </td>
-                      <td className="p-1 text-center">
-                        <button
-                          type="button"
-                          onClick={() => removeAttachment(index)}
-                          disabled={attachmentFiles.length <= 1}
-                          className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-                            attachmentFiles.length <= 1
-                              ? "bg-gray-400 cursor-not-allowed"
-                              : "bg-red-600 hover:bg-red-700"
-                          }`}
-                        >
-                          <Trash2 size={10} />
-                        </button>
-                      </td>
-                    </tr>
+                    </TableRow>
                   ))}
                 </tbody>
               </TableWrapper>
@@ -956,12 +1545,89 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
           )}
         </section>
 
-        <FormButtons
-          onCancel={handleCancel}
-          onSave={handleSave}
-          isSubmitting={isSubmitting}
-          saveLabel={data ? "Update" : "Save"}
-        />
+        {/* Preview popup */}
+        {(preview.url || preview.loading || preview.error) && (
+          <div
+            className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-3 sm:p-6"
+            onClick={() =>
+              setPreview({
+                url: "",
+                name: "",
+                isImage: false,
+                loading: false,
+                error: "",
+              })
+            }
+          >
+            <div
+              className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 dark:border-gray-700">
+                <span className="text-xs font-medium truncate dark:text-white">
+                  {preview.name}
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setPreview({
+                      url: "",
+                      name: "",
+                      isImage: false,
+                      loading: false,
+                      error: "",
+                    })
+                  }
+                  className="text-xs text-red-600 hover:underline dark:text-red-400"
+                >
+                  Close
+                </button>
+              </div>
+              <div className="flex-1 overflow-auto p-2">
+                {preview.loading ? (
+                  <p className="py-10 text-center text-xs text-gray-500 dark:text-gray-400">
+                    Loading preview...
+                  </p>
+                ) : preview.error ? (
+                  <p className="py-10 text-center text-xs font-medium text-red-600 dark:text-red-400">
+                    {preview.error}
+                  </p>
+                ) : preview.isImage ? (
+                  <img
+                    src={preview.url}
+                    alt={preview.name}
+                    className="mx-auto max-w-full"
+                  />
+                ) : (
+                  <iframe
+                    src={preview.url}
+                    title={preview.name}
+                    className="w-full h-[65vh] sm:h-[72vh] rounded border dark:border-gray-700"
+                  />
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Buttons */}
+        <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
+          <button
+            onClick={onBack}
+            disabled={saving}
+            className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+          >
+            <X className="h-3 w-3" /> Cancel
+          </button>
+          <button
+            onClick={handleSubmit(onSubmit)}
+            disabled={saving}
+            className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+          >
+            <Save className="h-3 w-3" />{" "}
+            {saving ? "Saving..." : data?.id ? "Update" : "Save"}
+          </button>
+        </div>
       </div>
     </div>
   );

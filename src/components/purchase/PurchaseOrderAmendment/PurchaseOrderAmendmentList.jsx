@@ -17,20 +17,45 @@ const PurchaseOrderAmendmentList = ({
   const { addToast } = useToast();
 
   const orgId = Number(localStorage.getItem("orgId")) || 0;
-  const branch = Number(localStorage.getItem("branchId")) || 1000000001;
 
   const loadData = useCallback(async () => {
     if (!orgId) return;
     setLoading(true);
     try {
-      const list = await purchaseOrderAmendmentAPI.getAll(orgId, branch);
-      setData(list);
+      const list = await purchaseOrderAmendmentAPI.getAll(orgId);
+
+      const transformedData = (list || []).map((item) => ({
+        id: item.id,
+        amendmentNo: item.docId || "",
+        amendmentDate: item.docDate || "",
+        poNo: item.purchaseordernumber || "",
+        partyName: item.customer?.customerName || "",
+        partyCode: item.customer?.customerCode || "",
+        branch: item.branch?.branchName || "",
+        revisionNo: item.revisionNo ?? "",
+        active: item.active,
+        details: item.details || [],
+        attachments: item.attachments || [],
+        remarks: item.remarks || "",
+        freightType: item.freightType || "",
+        packingType: item.packingType || "",
+        insuranceAmount: item.insuranceAmount ?? "",
+        modeOfDespatch: item.modeOfDespatch || "",
+        taxDescription: item.taxDescription || "",
+        cancelRemarks: item.cancelRemarks || "",
+        createdBy: item.createdBy || "",
+      }));
+
+      transformedData.sort((a, b) => (b.id || 0) - (a.id || 0));
+
+      setData(transformedData);
     } catch (error) {
       console.error("Failed to load PO amendments:", error);
+      setData([]);
     } finally {
       setLoading(false);
     }
-  }, [orgId, branch]);
+  }, [orgId]);
 
   useEffect(() => {
     loadData();
@@ -52,7 +77,6 @@ const PurchaseOrderAmendmentList = ({
   };
 
   const columns = [
-    { key: "sno", label: "#", type: "text" },
     {
       key: "amendmentNo",
       label: "Amendment No",
@@ -62,7 +86,7 @@ const PurchaseOrderAmendmentList = ({
     {
       key: "amendmentDate",
       label: "Amendment Date",
-      type: "text",
+      type: "date",
       accessor: (row) => row.amendmentDate || "",
     },
     {
@@ -81,7 +105,7 @@ const PurchaseOrderAmendmentList = ({
       key: "revisionNo",
       label: "Revision",
       type: "text",
-      accessor: (row) => row.revisionNo || "",
+      accessor: (row) => row.revisionNo ?? "",
     },
     {
       key: "status",
@@ -105,6 +129,12 @@ const PurchaseOrderAmendmentList = ({
 
   const searchFields = ["amendmentNo", "poNo", "partyName"];
 
+  const filterOptions = [
+    { value: "all", label: "All", activeValue: "All" },
+    { value: "active", label: "Active", activeValue: "Active" },
+    { value: "inactive", label: "Inactive", activeValue: "Active" },
+  ];
+
   return (
     <>
       <CommonListViewTable
@@ -114,6 +144,8 @@ const PurchaseOrderAmendmentList = ({
         loading={loading}
         columns={columns}
         searchFields={searchFields}
+        filterOptions={filterOptions}
+        defaultFilter="all"
         onAddNew={onAddNew}
         onEdit={onEdit}
         onBack={onBack}

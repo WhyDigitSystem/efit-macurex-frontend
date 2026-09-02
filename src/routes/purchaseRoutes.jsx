@@ -9,6 +9,7 @@ import LocalPurchaseOrderMaster from "../components/purchase/localPurchaseOrder/
 import ExcelPurchaseOrderMaster from "../components/purchase/excelPurchaseOrder/ExcelPurchaseOrderMaster";
 import ImportPurchaseOrderMaster from "../components/purchase/importPurchaseOrder/ImportPurchaseOrderMaster";
 import PurchaseOrderMaster from "../components/purchase/purchaseOrder/PurchaseOrderMaster";
+import PurchaseOrderAmendmentMaster from "../components/purchase/PurchaseOrderAmendment/PurchaseOrderAmendmentMaster";
 
 const purchaseRoutes = [
   {
@@ -60,6 +61,11 @@ const purchaseRoutes = [
     path: "/purchaseorder",
     label: "Purchase Order",
     element: <PurchaseOrderMaster />,
+  },
+  {
+    path: "/purchaseorderamendment",
+    label: "Purchase Order Amendment",
+    element: <PurchaseOrderAmendmentMaster />,
   },
 ];
 
