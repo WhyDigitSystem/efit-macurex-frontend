@@ -21,9 +21,7 @@ const PhysicalStockReconciliationList = ({
 
       if (!ORG_ID || !BRANCH_ID) {
         setReconciliationData([]);
-
         toast.error("Organization or Branch is missing");
-
         return;
       }
 
@@ -33,9 +31,11 @@ const PhysicalStockReconciliationList = ({
           BRANCH_ID,
         );
 
-      const sortedData = (response || []).sort(
-        (a, b) => (b.id || 0) - (a.id || 0),
-      );
+      console.log("Physical Stock Reconciliation List:", response);
+
+      const list = Array.isArray(response) ? response : [];
+
+      const sortedData = [...list].sort((a, b) => (b.id || 0) - (a.id || 0));
 
       setReconciliationData(sortedData);
     } catch (error) {
@@ -102,13 +102,13 @@ const PhysicalStockReconciliationList = ({
       type: "status",
 
       statusVariants: {
-        true: {
+        Active: {
           label: "Active",
           className:
             "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
         },
 
-        false: {
+        Inactive: {
           label: "Inactive",
           className:
             "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
@@ -127,22 +127,26 @@ const PhysicalStockReconciliationList = ({
   const searchFields = ["docId", "refNo", "belongsTo", "preparedBy"];
 
   const filterOptions = [
-    { value: "all", label: "All", field: null },
+    {
+      value: "all",
+      label: "All",
+      field: null,
+    },
 
     {
       value: "active",
       label: "Active",
       field: "active",
-      filterValue: true,
-      activeValue: true,
+      filterValue: "Active",
+      activeValue: "Active",
     },
 
     {
       value: "inactive",
       label: "Inactive",
       field: "active",
-      filterValue: false,
-      activeValue: false,
+      filterValue: "Inactive",
+      activeValue: "Inactive",
     },
   ];
 

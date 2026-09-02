@@ -553,7 +553,7 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
       try {
         const docId =
           await physicalStockReconciliationAPI.getReconciliationDocId({
-            financialYear: form.financialYear,
+            financialYear: toInteger(String(form.financialYear).split("-")[0]),
             orgId: ORG_ID,
           });
 
@@ -740,7 +740,7 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
 
       docId: form.docId || "",
 
-      financialYear: form.financialYear,
+      financialYear: toInteger(String(form.financialYear).split("-")[0]),
 
       location: toInteger(form.location),
 

@@ -65,17 +65,18 @@ export const physicalStockReconciliationAPI = {
       const res = await apiClient.get(
         "/api/purchasedeliveryschedule/getPhysicalStockReConcilationByOrgId",
         {
-          params: { orgId, branch },
+          params: {
+            orgId: Number(orgId),
+            branch: Number(branch),
+          },
         },
       );
 
       const data = res?.data ?? res;
 
-      return (
-        data?.paramObjectsMap?.physicalStockReConcilationList ||
-        data?.paramObjectsMap?.reConcilationList ||
-        []
-      );
+      console.log("GET Physical Stock Reconciliation Response:", data);
+
+      return data?.paramObjectsMap?.physicalStockReConcilationVO || [];
     } catch (error) {
       console.error(
         "Error fetching physical stock reconciliation list:",
