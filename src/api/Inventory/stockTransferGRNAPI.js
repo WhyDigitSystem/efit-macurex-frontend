@@ -1,146 +1,143 @@
 import apiClient from "../apiClient";
 
-const stockTransferGRNAPI = {
-  getAll: async (orgId, branch) => {
-    try {
-      const res = await apiClient.get("/api/dev/getStockTransferGRNMasterByOrgId", {
-        params: { orgId, branch },
-      });
-      return res?.paramObjectsMap?.stockTransferGRNMasterList || [];
-    } catch (error) {
-      console.error("Error fetching Stock Transfer GRN records:", error);
-      throw error;
-    }
+/* ========================================================================= */
+/* STOCK TRANSFER GRN API                                                    */
+/* ========================================================================= */
+
+const stockTransferGrnAPI = {
+  /* ----------------------------------------------------------------------- */
+  /* DOC ID GENERATION                                                       */
+  /* ----------------------------------------------------------------------- */
+
+  getStockTransferGrnDocId: async (orgId, financialYear) => {
+    return apiClient.get("/api/grn/getStockTransferGrnDocId", {
+      params: { orgId, financialYear },
+    });
   },
 
-  getById: async (id) => {
-    try {
-      const res = await apiClient.get("/api/dev/getStockTransferGRNMasterById", {
-        params: { id },
-      });
-      return res?.paramObjectsMap?.stockTransferGRNMasterVO || null;
-    } catch (error) {
-      console.error("Error fetching Stock Transfer GRN by ID:", error);
-      throw error;
-    }
+  /* ----------------------------------------------------------------------- */
+  /* LIST / SINGLE RECORD                                                    */
+  /* ----------------------------------------------------------------------- */
+
+  getStockTransferGrnByOrgId: async (orgId, branch) => {
+    return apiClient.get("/api/grn/getStockTransferGrnByOrgId", {
+      params: { orgId, branch },
+    });
   },
 
-  createUpdate: async (payload) => {
-    try {
-      const res = await apiClient.post("/api/dev/createUpdateStockTransferGRNMaster", payload);
-      return res;
-    } catch (error) {
-      console.error("Error saving Stock Transfer GRN:", error);
-      throw error;
-    }
+  getStockTransferGrnById: async (id) => {
+    return apiClient.get("/api/grn/getStockTransferGrnById", {
+      params: { id },
+    });
   },
 
-  cancelGRN: async (id, cancelRemarks) => {
-    try {
-      const res = await apiClient.put("/api/dev/cancelStockTransferGRNMaster", null, {
-        params: { id, cancelRemarks },
-      });
-      return res;
-    } catch (error) {
-      console.error("Error cancelling Stock Transfer GRN:", error);
-      throw error;
-    }
+  /* ----------------------------------------------------------------------- */
+  /* SUPPLIER                                                                */
+  /* ----------------------------------------------------------------------- */
+
+  getSupplierDetailsForGrn: async (branch, orgId) => {
+    return apiClient.get("/api/grn/getSupplierDetailsForGrn", {
+      params: { branch, orgId },
+    });
   },
 
-  getPlants: async (orgId) => {
-    try {
-      const res = await apiClient.get("/api/dev/getPlantMasterByOrgId", {
-        params: { orgId },
-      });
-      return res?.paramObjectsMap?.plantList || [];
-    } catch (error) {
-      console.error("Error fetching plants:", error);
-      throw error;
-    }
+  /* ----------------------------------------------------------------------- */
+  /* GATE PASS                                                               */
+  /* ----------------------------------------------------------------------- */
+
+  getGatePassDocIdDetailsForStockTransfer: async (
+    branch,
+    orgId,
+    supplierCode,
+  ) => {
+    return apiClient.get("/api/grn/getGatePassDocIdDetailsForStockTransfer", {
+      params: { branch, orgId, supplierCode },
+    });
   },
 
-  getLocations: async (orgId) => {
-    try {
-      const res = await apiClient.get("/api/dev/getLocationByOrgId", {
-        params: { orgId },
-      });
-      return res?.paramObjectsMap?.locationList || [];
-    } catch (error) {
-      console.error("Error fetching locations:", error);
-      throw error;
-    }
+  /* ----------------------------------------------------------------------- */
+  /* PURCHASE ORDER / SCHEDULE                                               */
+  /* ----------------------------------------------------------------------- */
+
+  getPurchaseOrderNumberStockTransfer: async (branch, orgId, supplierCode) => {
+    return apiClient.get("/api/grn/getPurchaseOrderNumberStockTransfer", {
+      params: { branch, orgId, supplierCode },
+    });
   },
 
-  getSuppliers: async (orgId) => {
-    try {
-      const res = await apiClient.get("/api/dev/getPartyMasterByOrgId", {
-        params: { orgId },
-      });
-      return res?.paramObjectsMap?.partyList || [];
-    } catch (error) {
-      console.error("Error fetching suppliers:", error);
-      throw error;
-    }
+  getScheduleDocIdStockTransfer: async (
+    branch,
+    orgId,
+    purchaseOrderNo,
+    supplierCode,
+  ) => {
+    return apiClient.get("/api/grn/getScheduleDocIdStockTransfer", {
+      params: { branch, orgId, purchaseOrderNo, supplierCode },
+    });
   },
 
-  getGSTStates: async () => {
-    try {
-      const res = await apiClient.get("/api/dev/getGSTStateMaster", {});
-      return res?.paramObjectsMap?.gstStateList || [];
-    } catch (error) {
-      console.error("Error fetching GST states:", error);
-      throw error;
-    }
+  /* ----------------------------------------------------------------------- */
+  /* LOCATION                                                                */
+  /* ----------------------------------------------------------------------- */
+
+  /*
+   * NOTE: endpoint path not confirmed from Swagger — adjust if your
+   * backend exposes this differently.
+   */
+  /* ----------------------------------------------------------------------- */
+  /* LOCATION                                                                */
+  /* ----------------------------------------------------------------------- */
+
+  getLocationDetails: async (branch, orgId) => {
+    return apiClient.get("/api/grn/getLocationDetails", {
+      params: {
+        branch: Number(branch),
+        orgId: Number(orgId),
+      },
+    });
   },
 
-  getItems: async (orgId) => {
-    try {
-      const res = await apiClient.get("/api/dev/getItemMasterByOrgId", {
-        params: { orgId },
-      });
-      return res?.paramObjectsMap?.itemMasterList || [];
-    } catch (error) {
-      console.error("Error fetching items:", error);
-      throw error;
-    }
+  /* ----------------------------------------------------------------------- */
+  /* CURRENCY                                                                */
+  /* ----------------------------------------------------------------------- */
+
+  getCurrency: async (orgid) => {
+    return apiClient.get("/api/commonmaster/currency", {
+      params: { orgid },
+    });
   },
 
-  getPurchaseOrders: async (orgId, branch) => {
-    try {
-      const res = await apiClient.get("/api/dev/getPurchaseOrderByOrgId", {
-        params: { orgId, branch },
-      });
-      return res?.paramObjectsMap?.purchaseOrderList || [];
-    } catch (error) {
-      console.error("Error fetching purchase orders:", error);
-      throw error;
-    }
-  },
+  /* ----------------------------------------------------------------------- */
+  /* CREATE / UPDATE                                                         */
+  /* ----------------------------------------------------------------------- */
 
-  uploadAttachment: async (formData) => {
-    try {
-      const res = await apiClient.post("/api/dev/uploadStockTransferGRNAttachment", formData, {
+  createUpdateStockTransferGrn: async (payload, files = []) => {
+    if (files && files.length > 0) {
+      const formData = new FormData();
+
+      formData.append(
+        "dto",
+        new Blob([JSON.stringify(payload)], { type: "application/json" }),
+      );
+
+      files.forEach((file) => formData.append("files", file));
+
+      return apiClient.post("/api/grn/createUpdateStockTransferGrn", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      return res;
-    } catch (error) {
-      console.error("Error uploading attachment:", error);
-      throw error;
     }
+
+    return apiClient.post("/api/grn/createUpdateStockTransferGrn", payload);
   },
 
-  downloadAttachment: async (attachmentId) => {
-    try {
-      const res = await apiClient.get("/api/dev/downloadStockTransferGRNAttachment", {
-        params: { attachmentId },
-        responseType: "blob",
-      });
-      return res;
-    } catch (error) {
-      console.error("Error downloading attachment:", error);
-      throw error;
-    }
+  /* ----------------------------------------------------------------------- */
+  /* FILE VIEW                                                               */
+  /* ----------------------------------------------------------------------- */
+
+  getViewFileUrl: (filePath) => {
+    const base = apiClient?.defaults?.baseURL || "";
+    return `${base}/api/grn/viewFile?filePath=${encodeURIComponent(filePath)}`;
   },
 };
 
-export default stockTransferGRNAPI;
+export default stockTransferGrnAPI;
