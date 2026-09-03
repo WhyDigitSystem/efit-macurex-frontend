@@ -16,11 +16,12 @@ import itemAPI from "../../../api/itemAPI";
 import { departmentAPI } from "../../../api/departmentAPI";
 import employeeAPI from "../../../api/employeeAPI";
 import { partyMasterAPI } from "../../../api/partyMasterAPI";
+import unitMasterAPI from "../../../api/unitAPI";
 
 import toolsFixtureAPI from "../../../api/Production/toolsFixtureAPI";
 
-/* ============================================================================
-   SHARED DESIGN
+/* ============================================================================ 
+   SHARED DESIGN 
 ============================================================================ */
 
 const controlClasses =
@@ -39,8 +40,8 @@ const labelClasses =
 const fieldGrid =
   "grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-x-3 gap-y-2 items-start";
 
-/* ============================================================================
-   FIELD
+/* ============================================================================ 
+   FIELD 
 ============================================================================ */
 
 const Field = ({
@@ -153,8 +154,8 @@ const Field = ({
   );
 };
 
-/* ============================================================================
-   SECTION HEADER
+/* ============================================================================ 
+   SECTION HEADER 
 ============================================================================ */
 
 const SectionHeader = ({ children }) => (
@@ -163,8 +164,8 @@ const SectionHeader = ({ children }) => (
   </h3>
 );
 
-/* ============================================================================
-   BUTTONS
+/* ============================================================================ 
+   BUTTONS 
 ============================================================================ */
 
 const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
@@ -191,8 +192,8 @@ const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
   </div>
 );
 
-/* ============================================================================
-   STATIC OPTIONS
+/* ============================================================================ 
+   STATIC OPTIONS 
 ============================================================================ */
 
 const YES_NO = [
@@ -206,8 +207,8 @@ const YES_NO = [
   },
 ];
 
-/* ============================================================================
-   EMPTY STATES
+/* ============================================================================ 
+   EMPTY STATES 
 ============================================================================ */
 
 const emptyBasicInfo = () => ({
@@ -272,8 +273,8 @@ const emptyHistoryRow = () => ({
   remarks: "",
 });
 
-/* ============================================================================
-   TABS
+/* ============================================================================ 
+   TABS 
 ============================================================================ */
 
 const CHILD_TABS = [
@@ -307,11 +308,32 @@ const CHILD_TABS = [
   },
 ];
 
-/* ============================================================================
-   HELPERS
+/* ============================================================================ 
+   HELPERS 
 ============================================================================ */
 
 const todayISO = () => new Date().toISOString().split("T")[0];
+
+/*
+ * Converts an empty/unselected dropdown value to null instead of 0.
+ * Foreign-key fields on the backend (branch, department, type, etc.)
+ * are typically Long references — sending 0 for "not selected" is
+ * usually treated as an invalid/non-existent id and can cause a 400,
+ * where null is accepted as "no value".
+ */
+const toNullableNumber = (value) => {
+  if (
+    value === null ||
+    value === undefined ||
+    value === "" ||
+    Number.isNaN(Number(value)) ||
+    Number(value) === 0
+  ) {
+    return null;
+  }
+
+  return Number(value);
+};
 
 const getMasterId = (value) => {
   if (value === null || value === undefined) {
@@ -358,8 +380,8 @@ const getMasterName = (value) => {
   return String(value);
 };
 
-/* ============================================================================
-   COMPONENT
+/* ============================================================================ 
+   COMPONENT 
 ============================================================================ */
 
 const ToolsFixturesForm = ({ data, onBack }) => {
@@ -377,8 +399,8 @@ const ToolsFixturesForm = ({ data, onBack }) => {
 
   const [toastMessage, setToastMessage] = useState(null);
 
-  /* ==========================================================================
-     MASTER DATA
+  /* ========================================================================== 
+     MASTER DATA 
   ========================================================================== */
 
   const [listOfValuesData, setListOfValuesData] = useState({});
@@ -393,8 +415,12 @@ const ToolsFixturesForm = ({ data, onBack }) => {
 
   const [customerData, setCustomerData] = useState([]);
 
-  /* ==========================================================================
-     FORM STATE
+  const [presentLocationData, setPresentLocationData] = useState([]);
+
+  const [unitData, setUnitData] = useState([]);
+
+  /* ========================================================================== 
+     FORM STATE 
   ========================================================================== */
 
   const [basic, setBasic] = useState({
@@ -430,8 +456,8 @@ const ToolsFixturesForm = ({ data, onBack }) => {
     data?.technicalDetailRows || [],
   );
 
-  /* ==========================================================================
-     IMAGE
+  /* ========================================================================== 
+     IMAGE 
   ========================================================================== */
 
   const [imageInfo, setImageInfo] = useState({
@@ -440,8 +466,8 @@ const ToolsFixturesForm = ({ data, onBack }) => {
     previewUrl: data?.image?.previewUrl || "",
   });
 
-  /* ==========================================================================
-     ATTACHMENTS
+  /* ========================================================================== 
+     ATTACHMENTS 
   ========================================================================== */
 
   const [attachedRows, setAttachedRows] = useState(
@@ -450,8 +476,8 @@ const ToolsFixturesForm = ({ data, onBack }) => {
 
   const [isDragging, setIsDragging] = useState(false);
 
-  /* ==========================================================================
-     LOV OPTIONS
+  /* ========================================================================== 
+     LOV OPTIONS 
   ========================================================================== */
 
   const toolTypeOptions = listOfValuesData.toolType || [];
@@ -460,14 +486,17 @@ const ToolsFixturesForm = ({ data, onBack }) => {
 
   const modeOfPurchaseOptions = listOfValuesData.modeOfPurchase || [];
 
+  const lifeTypeOptions = listOfValuesData.lifeType || [];
+
   const LIST_OF_VALUES_GROUPS = {
     toolType: "TYPE",
     madeIn: "MADE IN",
     modeOfPurchase: "MODE OF PURCHASE",
+    lifeType: "LIFE TYPE",
   };
 
-  /* ==========================================================================
-     LOAD BRANCHES
+  /* ========================================================================== 
+     LOAD BRANCHES 
   ========================================================================== */
 
   const loadBranches = useCallback(async () => {
@@ -478,8 +507,6 @@ const ToolsFixturesForm = ({ data, onBack }) => {
 
     try {
       const response = await branchAPI.getBranchByOrgId(orgId);
-
-      console.log("Branch Master response:", response);
 
       const branches = Array.isArray(response)
         ? response
@@ -500,17 +527,14 @@ const ToolsFixturesForm = ({ data, onBack }) => {
             .filter((item) => item.value !== "")
         : [];
 
-      console.log("Plant options:", options);
-
       setPlantData(options);
     } catch (error) {
-      console.error("Failed to load branches:", error);
       setPlantData([]);
     }
   }, [orgId]);
 
-  /* ==========================================================================
-     LOAD DEPARTMENTS
+  /* ========================================================================== 
+     LOAD DEPARTMENTS 
   ========================================================================== */
 
   const loadDepartments = useCallback(async () => {
@@ -521,8 +545,6 @@ const ToolsFixturesForm = ({ data, onBack }) => {
 
     try {
       const response = await departmentAPI.getAllDepartments(orgId);
-
-      console.log("Department Master response:", response);
 
       const departments = Array.isArray(response)
         ? response
@@ -543,17 +565,14 @@ const ToolsFixturesForm = ({ data, onBack }) => {
             .filter((item) => item.value !== "")
         : [];
 
-      console.log("Department options:", options);
-
       setDepartmentData(options);
     } catch (error) {
-      console.error("Failed to load departments:", error);
       setDepartmentData([]);
     }
   }, [orgId]);
 
-  /* ==========================================================================
-     LOAD ITEMS
+  /* ========================================================================== 
+     LOAD ITEMS 
   ========================================================================== */
 
   const loadItems = useCallback(async () => {
@@ -564,8 +583,6 @@ const ToolsFixturesForm = ({ data, onBack }) => {
 
     try {
       const response = await itemAPI.getItems(orgId, branch);
-
-      console.log("Item Master response:", response);
 
       const items = Array.isArray(response)
         ? response
@@ -592,20 +609,17 @@ const ToolsFixturesForm = ({ data, onBack }) => {
             .filter((item) => item.value !== "")
         : [];
 
-      console.log("Item options:", options);
-
       setItemData(options);
     } catch (error) {
-      console.error("Failed to load items:", error);
       setItemData([]);
     }
   }, [orgId, branch]);
 
-  /* ==========================================================================
-     LOAD ALL EMPLOYEES
-     
-     Tool/Fixture Incharge:
-     API = employeeAPI.getEmployeeByOrgId(orgId)
+  /* ========================================================================== 
+     LOAD ALL EMPLOYEES 
+ 
+     Tool/Fixture Incharge: 
+     API = employeeAPI.getEmployeeByOrgId(orgId) 
   ========================================================================== */
 
   const loadEmployees = useCallback(async () => {
@@ -616,10 +630,6 @@ const ToolsFixturesForm = ({ data, onBack }) => {
 
     try {
       const response = await employeeAPI.getEmployeeByOrgId(orgId);
-
-      console.log("================ EMPLOYEE MASTER RESPONSE ================");
-      console.log(response);
-      console.log("==========================================================");
 
       const employees = Array.isArray(response)
         ? response
@@ -649,31 +659,22 @@ const ToolsFixturesForm = ({ data, onBack }) => {
             .filter((item) => item.value !== "")
         : [];
 
-      console.log(
-        "================ TOOL/FIXTURE INCHARGE OPTIONS ================",
-      );
-      console.log(options);
-      console.log(
-        "================================================================",
-      );
-
       setEmployeeData(options);
     } catch (error) {
-      console.error("Failed to load employees:", error);
       setEmployeeData([]);
     }
   }, [orgId]);
 
-  /* ==========================================================================
-     LOAD ALL CUSTOMERS
-     
-     Used for:
-     
-     1. Tool/Fixture Ownership
-     2. Purchase From
-     
-     API:
-     partyMasterAPI.getPartyByOrgId(orgId, branch)
+  /* ========================================================================== 
+     LOAD ALL CUSTOMERS 
+ 
+     Used for: 
+ 
+     1. Tool/Fixture Ownership 
+     2. Purchase From 
+ 
+     API: 
+     partyMasterAPI.getPartyByOrgId(orgId, branch) 
   ========================================================================== */
 
   const loadCustomers = useCallback(async () => {
@@ -684,14 +685,6 @@ const ToolsFixturesForm = ({ data, onBack }) => {
 
     try {
       const response = await partyMasterAPI.getPartyByOrgId(orgId, branch);
-
-      console.log(
-        "================ PARTY / CUSTOMER MASTER RESPONSE ================",
-      );
-      console.log(response);
-      console.log(
-        "===================================================================",
-      );
 
       const customers = Array.isArray(response)
         ? response
@@ -723,23 +716,95 @@ const ToolsFixturesForm = ({ data, onBack }) => {
             .filter((item) => item.value !== "")
         : [];
 
-      console.log(
-        "================ TOOL/FIXTURE OWNERSHIP / PURCHASE FROM OPTIONS ================",
-      );
-      console.log(options);
-      console.log(
-        "================================================================================",
-      );
-
       setCustomerData(options);
     } catch (error) {
-      console.error("Failed to load customers:", error);
       setCustomerData([]);
     }
   }, [orgId, branch]);
 
-  /* ==========================================================================
-     LOAD LIST OF VALUES
+  /* ========================================================================== 
+     LOAD UNIT MASTER 
+ 
+     Unit (Technical Detail): 
+     API = unitMasterAPI.getUnits(orgId) 
+     -> GET /api/commonmaster/getUnitMasterByOrgId?orgId=... 
+ 
+     Option value is the unit's id; the label shown is unitId 
+     (e.g. "KGS", "NOS"), not the longer description. 
+  ========================================================================== */
+
+  const loadUnitMaster = useCallback(async () => {
+    if (!orgId) {
+      setUnitData([]);
+      return;
+    }
+
+    try {
+      const units = await unitMasterAPI.getUnits(orgId);
+
+      const options = Array.isArray(units)
+        ? units
+            .map((item) => ({
+              value: item.id ?? "",
+              label: item.unitId || item.description || String(item.id ?? ""),
+            }))
+            .filter((item) => item.value !== "")
+        : [];
+
+      setUnitData(options);
+    } catch (error) {
+      setUnitData([]);
+    }
+  }, [orgId]);
+
+  /* ========================================================================== 
+     LOAD PRESENT LOCATION OPTIONS 
+ 
+     Present Location: 
+     API = toolsFixtureAPI.getLocationForToolMaster(branch, orgId) 
+ 
+     Scoped to the Plant ID currently selected on the form 
+     (basic.plantId), since a tool's present location should follow 
+     whichever plant/branch is chosen, not the logged-in user's branch. 
+ 
+     The API now returns a real locationId alongside locationName, so 
+     the option value is the locationId (used as-is for both the 
+     "Location" and "Present Location" dropdowns). 
+  ========================================================================== */
+
+  const loadPresentLocationOptions = useCallback(async () => {
+    if (!orgId || !basic.plantId) {
+      setPresentLocationData([]);
+      return;
+    }
+
+    try {
+      const response = await toolsFixtureAPI.getLocationForToolMaster(
+        basic.plantId,
+        orgId,
+      );
+
+      const locations = Array.isArray(response)
+        ? response
+        : response?.paramObjectsMap?.locationList || [];
+
+      const options = Array.isArray(locations)
+        ? locations
+            .map((item) => ({
+              value: item.locationId ?? item.id ?? "",
+              label: item.locationName || String(item.locationId ?? ""),
+            }))
+            .filter((item) => item.value !== "")
+        : [];
+
+      setPresentLocationData(options);
+    } catch (error) {
+      setPresentLocationData([]);
+    }
+  }, [orgId, basic.plantId]);
+
+  /* ========================================================================== 
+     LOAD LIST OF VALUES 
   ========================================================================== */
 
   const loadListOfValuesData = useCallback(async () => {
@@ -758,8 +823,6 @@ const ToolsFixturesForm = ({ data, onBack }) => {
               group,
               Number(orgId),
             );
-
-            console.log(`LOV response - ${group}:`, response);
 
             const values = Array.isArray(response)
               ? response
@@ -782,21 +845,17 @@ const ToolsFixturesForm = ({ data, onBack }) => {
                   .filter((item) => item.value !== "")
               : [];
           } catch (error) {
-            console.error(`${group} failed`, error);
-
             result[key] = [];
           }
         }),
       );
 
       setListOfValuesData(result);
-    } catch (error) {
-      console.error("Error loading ListOfValues:", error);
-    }
+    } catch (error) {}
   }, [orgId]);
 
-  /* ==========================================================================
-     LOAD MASTER DATA
+  /* ========================================================================== 
+     LOAD MASTER DATA 
   ========================================================================== */
 
   useEffect(() => {
@@ -806,6 +865,7 @@ const ToolsFixturesForm = ({ data, onBack }) => {
     loadItems();
     loadEmployees();
     loadCustomers();
+    loadUnitMaster();
   }, [
     loadListOfValuesData,
     loadBranches,
@@ -813,10 +873,19 @@ const ToolsFixturesForm = ({ data, onBack }) => {
     loadItems,
     loadEmployees,
     loadCustomers,
+    loadUnitMaster,
   ]);
 
-  /* ==========================================================================
-     FETCH TOOL MASTER
+  /* ========================================================================== 
+     LOAD PRESENT LOCATION (depends on selected Plant ID) 
+  ========================================================================== */
+
+  useEffect(() => {
+    loadPresentLocationOptions();
+  }, [loadPresentLocationOptions]);
+
+  /* ========================================================================== 
+     FETCH TOOL MASTER 
   ========================================================================== */
 
   const mapApiResponseToForm = useCallback(
@@ -868,7 +937,21 @@ const ToolsFixturesForm = ({ data, onBack }) => {
 
           toolOwnerName: apiData.toolOwnerName || "",
 
-          presentLocation: getMasterId(apiData.presentLocation),
+          /*
+           * Present Location comes back from getToolMasterById as an
+           * object ({ locationId, locationName }); use the locationId
+           * so it matches the option values from
+           * getLocationForToolMaster.
+           */
+          presentLocation:
+            apiData.presentLocation &&
+            typeof apiData.presentLocation === "object"
+              ? String(
+                  apiData.presentLocation.locationId ??
+                    apiData.presentLocation.id ??
+                    "",
+                )
+              : apiData.presentLocation || "",
 
           remarks: apiData.remarks || "",
         },
@@ -899,8 +982,8 @@ const ToolsFixturesForm = ({ data, onBack }) => {
           cavityNumber: apiData.cavityNumber || "",
         },
 
-        /* ====================================================================
-           TECHNICAL DETAILS
+        /* ==================================================================== 
+           TECHNICAL DETAILS 
         ==================================================================== */
 
         technicalDetailRows: Array.isArray(
@@ -943,8 +1026,8 @@ const ToolsFixturesForm = ({ data, onBack }) => {
             }))
           : [],
 
-        /* ====================================================================
-           SPARE DETAILS
+        /* ==================================================================== 
+           SPARE DETAILS 
         ==================================================================== */
 
         spareDetails: Array.isArray(apiData.toolMasterSpareDetailsDTO)
@@ -979,8 +1062,8 @@ const ToolsFixturesForm = ({ data, onBack }) => {
             }))
           : [],
 
-        /* ====================================================================
-           COMPONENT OUTPUT
+        /* ==================================================================== 
+           COMPONENT OUTPUT 
         ==================================================================== */
 
         componentOutput: Array.isArray(
@@ -1016,8 +1099,8 @@ const ToolsFixturesForm = ({ data, onBack }) => {
             })
           : [],
 
-        /* ====================================================================
-           MACHINE HISTORY
+        /* ==================================================================== 
+           MACHINE HISTORY 
         ==================================================================== */
 
         machineHistory: Array.isArray(
@@ -1043,8 +1126,8 @@ const ToolsFixturesForm = ({ data, onBack }) => {
             }))
           : [],
 
-        /* ====================================================================
-           IMAGE
+        /* ==================================================================== 
+           IMAGE 
         ==================================================================== */
 
         image: {
@@ -1061,8 +1144,8 @@ const ToolsFixturesForm = ({ data, onBack }) => {
               : apiData.image || "",
         },
 
-        /* ====================================================================
-           ATTACHMENTS
+        /* ==================================================================== 
+           ATTACHMENTS 
         ==================================================================== */
 
         attached: Array.isArray(apiData.toolMasterAttachementDTO)
@@ -1092,14 +1175,6 @@ const ToolsFixturesForm = ({ data, onBack }) => {
 
       try {
         const response = await toolsFixtureAPI.getToolMasterById(id);
-
-        console.log(
-          "================ TOOL MASTER GET RESPONSE ================",
-        );
-        console.log(response);
-        console.log(
-          "==========================================================",
-        );
 
         const apiData =
           response?.paramObjectsMap?.toolMaster ||
@@ -1158,8 +1233,6 @@ const ToolsFixturesForm = ({ data, onBack }) => {
 
         setAttachedRows(formData.attached || []);
       } catch (error) {
-        console.error("Error fetching tool/fixture data:", error);
-
         const message =
           error?.paramObjectsMap?.errorMessage ||
           error?.paramObjectsMap?.message ||
@@ -1179,8 +1252,8 @@ const ToolsFixturesForm = ({ data, onBack }) => {
     [mapApiResponseToForm],
   );
 
-  /* ==========================================================================
-     EDIT DATA
+  /* ========================================================================== 
+     EDIT DATA 
   ========================================================================== */
 
   useEffect(() => {
@@ -1189,8 +1262,8 @@ const ToolsFixturesForm = ({ data, onBack }) => {
     }
   }, [data, fetchToolData]);
 
-  /* ==========================================================================
-     CHANGE HANDLERS
+  /* ========================================================================== 
+     CHANGE HANDLERS 
   ========================================================================== */
 
   const makeChangeHandler = (setter) => (e) => {
@@ -1215,8 +1288,29 @@ const ToolsFixturesForm = ({ data, onBack }) => {
 
   const handleTechnicalInfoChange = makeChangeHandler(setTechnicalInfo);
 
-  /* ==========================================================================
-     COMPONENT ITEM CHANGE
+  /* ========================================================================== 
+     TECHNICAL DETAIL CHANGE (Life Type, Unit, etc.) 
+ 
+     Only one technical-detail record is supported per tool (see the 
+     note in buildPayload), so this always edits index 0, creating it 
+     if it doesn't exist yet. 
+  ========================================================================== */
+
+  const handleTechnicalDetailChange = (field, value) => {
+    setTechnicalDetailRows((previous) => {
+      const rows = previous.length ? [...previous] : [{}];
+
+      rows[0] = {
+        ...rows[0],
+        [field]: value,
+      };
+
+      return rows;
+    });
+  };
+
+  /* ========================================================================== 
+     COMPONENT ITEM CHANGE 
   ========================================================================== */
 
   const handleComponentItemChange = (index, value) => {
@@ -1241,8 +1335,8 @@ const ToolsFixturesForm = ({ data, onBack }) => {
     );
   };
 
-  /* ==========================================================================
-     SPARE CHANGE
+  /* ========================================================================== 
+     SPARE CHANGE 
   ========================================================================== */
 
   const handleSpareChange = (index, field, value) => {
@@ -1258,8 +1352,8 @@ const ToolsFixturesForm = ({ data, onBack }) => {
     );
   };
 
-  /* ==========================================================================
-     HISTORY CHANGE
+  /* ========================================================================== 
+     HISTORY CHANGE 
   ========================================================================== */
 
   const handleHistoryChange = (index, field, value) => {
@@ -1275,8 +1369,8 @@ const ToolsFixturesForm = ({ data, onBack }) => {
     );
   };
 
-  /* ==========================================================================
-     IMAGE
+  /* ========================================================================== 
+     IMAGE 
   ========================================================================== */
 
   const handleImageFileChange = (e) => {
@@ -1297,8 +1391,8 @@ const ToolsFixturesForm = ({ data, onBack }) => {
     }));
   };
 
-  /* ==========================================================================
-     ATTACHMENTS
+  /* ========================================================================== 
+     ATTACHMENTS 
   ========================================================================== */
 
   const handleAttachedFiles = (fileList) => {
@@ -1329,8 +1423,8 @@ const ToolsFixturesForm = ({ data, onBack }) => {
     handleAttachedFiles(e.dataTransfer.files);
   };
 
-  /* ==========================================================================
-     VALIDATION
+  /* ========================================================================== 
+     VALIDATION 
   ========================================================================== */
 
   const validate = () => {
@@ -1369,8 +1463,8 @@ const ToolsFixturesForm = ({ data, onBack }) => {
     return Object.keys(errors).length === 0;
   };
 
-  /* ==========================================================================
-     FINANCIAL YEAR
+  /* ========================================================================== 
+     FINANCIAL YEAR 
   ========================================================================== */
 
   const getFinancialYear = () => {
@@ -1386,85 +1480,97 @@ const ToolsFixturesForm = ({ data, onBack }) => {
     return `${year}-${String(year + 1).slice(-2)}`;
   };
 
-  /* ==========================================================================
-     BUILD PAYLOAD
+  /* ========================================================================== 
+     BUILD PAYLOAD 
   ========================================================================== */
 
   const buildPayload = () => {
-    const technicalDTO =
-      technicalDetailRows.length > 0
-        ? technicalDetailRows.map((row) => ({
-            ...row,
+    /* ======================================================================== 
+       TECHNICAL DETAIL FIELDS 
+ 
+       IMPORTANT: on /api/toolmaster/updateCreateToolMaster these fields 
+       live directly on the ROOT ToolMasterDTO — there is no 
+       "toolMasterTechnicalInfoDetailsDTO" array in that endpoint's 
+       schema (confirm against swagger). Sending them nested caused the 
+       backend to reject the whole request with a 400, since the flat 
+       fields it actually expects (completedLifeCycle, lifeOfTool, 
+       lifeType, toolFixtureCost, toolWeight, unit, etc.) were never 
+       present at the root. We flatten a single technical-detail object 
+       onto the payload root instead. 
+ 
+       technicalDetailRows[0] is used as the source since the backend 
+       only supports one set of these values per tool; the array is 
+       kept in local state only in case a future screen needs to show 
+       history of technical-detail edits. 
+    ======================================================================== */
 
-            completedLifeCycle: Number(row.completedLifeCycle || 0),
+    const technicalDetail = technicalDetailRows[0] || {};
 
-            lifeType: Number(row.lifeType || 0),
+    const technicalFlatFields = {
+      completedLifeCycle: Number(technicalDetail.completedLifeCycle || 0),
 
-            noOfStokesCompleted: Number(row.noOfStokesCompleted || 0),
+      lifeOfTool: technicalDetail.lifeOfTool || "",
 
-            reconditionFreq: Number(row.reconditionFreq || 0),
+      lifeType: toNullableNumber(technicalDetail.lifeType),
 
-            setUpTimeInMinutes: Number(row.setUpTimeInMinutes || 0),
+      noOfStokesCompleted: Number(technicalDetail.noOfStokesCompleted || 0),
 
-            strokesCompletedAfterReconditioning: Number(
-              row.strokesCompletedAfterReconditioning || 0,
-            ),
+      reconditionFreq: Number(technicalDetail.reconditionFreq || 0),
 
-            toolFixtureAmortizedRecovered: Number(
-              row.toolFixtureAmortizedRecovered || 0,
-            ),
+      reconditionedDate: technicalDetail.reconditionedDate || todayISO(),
 
-            toolFixtureCost:
-              technicalInfo.toolCost !== "" &&
-              technicalInfo.toolCost !== null &&
-              technicalInfo.toolCost !== undefined
-                ? Number(technicalInfo.toolCost)
-                : Number(row.toolFixtureCost || 0),
+      setUpTimeInMinutes: Number(technicalDetail.setUpTimeInMinutes || 0),
 
-            toolWeight: Number(row.toolWeight || 0),
+      strokesCompletedAfterReconditioning: Number(
+        technicalDetail.strokesCompletedAfterReconditioning || 0,
+      ),
 
-            unit: Number(row.unit || 0),
-          }))
-        : [
-            {
-              completedLifeCycle: 0,
+      technicalSpecification: technicalDetail.technicalSpecification || "",
 
-              lifeOfTool: "",
+      toolFixtureAmortizedRecovered: Number(
+        technicalDetail.toolFixtureAmortizedRecovered || 0,
+      ),
 
-              lifeType: 0,
+      /*
+       * Tool Cost on the Technical Info tab doubles as the backend's
+       * "toolFixtureCost" unless a more specific stored value exists
+       * for this row.
+       */
+      toolFixtureCost:
+        technicalInfo.toolCost !== "" &&
+        technicalInfo.toolCost !== null &&
+        technicalInfo.toolCost !== undefined
+          ? Number(technicalInfo.toolCost)
+          : Number(technicalDetail.toolFixtureCost || 0),
 
-              noOfStokesCompleted: 0,
+      toolFixtureSize: technicalDetail.toolFixtureSize || "",
 
-              reconditionFreq: 0,
+      toolMadeOf: technicalDetail.toolMadeOf || "",
 
-              reconditionedDate: todayISO(),
+      toolWeight: Number(technicalDetail.toolWeight || 0),
 
-              setUpTimeInMinutes: 0,
-
-              strokesCompletedAfterReconditioning: 0,
-
-              technicalSpecification: "",
-
-              toolFixtureAmortizedRecovered: 0,
-
-              toolFixtureCost: technicalInfo.toolCost
-                ? Number(technicalInfo.toolCost)
-                : 0,
-
-              toolFixtureSize: "",
-
-              toolMadeOf: "",
-
-              toolWeight: 0,
-
-              unit: 0,
-            },
-          ];
+      unit: toNullableNumber(technicalDetail.unit),
+    };
 
     const payload = {
-      /* ======================================================================
-         PARENT
+      /* ====================================================================== 
+         FLATTENED TECHNICAL DETAIL FIELDS (see note above) 
       ====================================================================== */
+
+      ...technicalFlatFields,
+
+      /* ====================================================================== 
+         PARENT 
+         (keys ordered to match the /updateCreateToolMaster payload shape) 
+      ====================================================================== */
+
+      active: basic.active === "YES",
+
+      branch: toNullableNumber(basic.plantId),
+
+      cancelRemarks: "",
+
+      cavityNumber: technicalInfo.cavityNumber || "",
 
       ...(data?.id
         ? {
@@ -1472,21 +1578,13 @@ const ToolsFixturesForm = ({ data, onBack }) => {
           }
         : {}),
 
-      active: basic.active === "YES",
-
-      branch: basic.plantId ? Number(basic.plantId) : 0,
-
-      cancelRemarks: "",
-
-      cavityNumber: technicalInfo.cavityNumber || "",
-
       createdBy:
         localStorage.getItem("userName") ||
         localStorage.getItem("username") ||
         localStorage.getItem("usersId") ||
         "",
 
-      department: basic.department ? Number(basic.department) : 0,
+      department: toNullableNumber(basic.department),
 
       drawingNo: technicalInfo.drawingNo || "",
 
@@ -1494,33 +1592,35 @@ const ToolsFixturesForm = ({ data, onBack }) => {
 
       image: imageInfo.name || "",
 
-      location: toolsInfo.location ? Number(toolsInfo.location) : 0,
+      location: toNullableNumber(toolsInfo.location),
 
-      madeIn: technicalInfo.madeIn ? Number(technicalInfo.madeIn) : 0,
+      madeIn: toNullableNumber(technicalInfo.madeIn),
 
       manufacturedBy: technicalInfo.manufacturedBy || "",
 
-      modeOfPurchase: technicalInfo.modeOfPurchase
-        ? Number(technicalInfo.modeOfPurchase)
-        : 0,
+      modeOfPurchase: toNullableNumber(technicalInfo.modeOfPurchase),
 
       orgId: Number(orgId),
 
       pmchecklistNo: toolsInfo.pmCheckListNo || "",
 
-      presentLocation: toolsInfo.presentLocation
-        ? Number(toolsInfo.presentLocation)
-        : 0,
-
-      /* ======================================================================
-         CUSTOMER ID
-         
-         Purchase From
+      /* ====================================================================== 
+         PRESENT LOCATION 
+ 
+         Selected via getLocationForToolMaster; guarded so a 
+         non-numeric option value (e.g. a location name, until the 
+         backend returns a real id) doesn't send NaN. 
       ====================================================================== */
 
-      purchaseFrom: technicalInfo.purchaseFrom
-        ? Number(technicalInfo.purchaseFrom)
-        : 0,
+      presentLocation: toNullableNumber(toolsInfo.presentLocation),
+
+      /* ====================================================================== 
+         CUSTOMER ID 
+ 
+         Purchase From 
+      ====================================================================== */
+
+      purchaseFrom: toNullableNumber(technicalInfo.purchaseFrom),
 
       remarks: toolsInfo.remarks || "",
 
@@ -1541,34 +1641,34 @@ const ToolsFixturesForm = ({ data, onBack }) => {
 
       toolDescription: basic.toolDescription || "",
 
-      /* ======================================================================
-         EMPLOYEE ID
-         
-         Tool/Fixture Incharge
+      /* ====================================================================== 
+         EMPLOYEE ID 
+ 
+         Tool/Fixture Incharge 
       ====================================================================== */
 
-      toolIncharge: toolsInfo.toolIncharge ? Number(toolsInfo.toolIncharge) : 0,
+      toolIncharge: toNullableNumber(toolsInfo.toolIncharge),
 
       toolName: basic.toolName || "",
 
       toolNo: basic.toolNo || "",
 
-      /* ======================================================================
-         CUSTOMER ID
-         
-         Tool/Fixture Ownership
+      /* ====================================================================== 
+         CUSTOMER ID 
+ 
+         Tool/Fixture Ownership 
       ====================================================================== */
 
-      toolOwnership: toolsInfo.toolOwnership
-        ? Number(toolsInfo.toolOwnership)
-        : 0,
+      toolOwnership: toNullableNumber(toolsInfo.toolOwnership),
 
       toolUsedFor: toolsInfo.toolUsedFor || "",
 
       toolOwnerName: toolsInfo.toolOwnerName || "",
 
-      /* ======================================================================
-         ATTACHMENTS
+      type: toNullableNumber(basic.type),
+
+      /* ====================================================================== 
+         ATTACHMENTS 
       ====================================================================== */
 
       toolMasterAttachementDTO: attachedRows
@@ -1585,8 +1685,8 @@ const ToolsFixturesForm = ({ data, onBack }) => {
           name: row.name || row.fileName || "",
         })),
 
-      /* ======================================================================
-         COMPONENT OUTPUT
+      /* ====================================================================== 
+         COMPONENT OUTPUT 
       ====================================================================== */
 
       toolMasterComponentOutPutDetailsDTO: componentRows
@@ -1598,11 +1698,11 @@ const ToolsFixturesForm = ({ data, onBack }) => {
               }
             : {}),
 
-          item: row.itemCode ? Number(row.itemCode) : 0,
+          item: toNullableNumber(row.itemCode),
         })),
 
-      /* ======================================================================
-         MACHINE HISTORY
+      /* ====================================================================== 
+         MACHINE HISTORY 
       ====================================================================== */
 
       toolMasterMachineHistoryDetailsDTO: historyRows
@@ -1622,7 +1722,7 @@ const ToolsFixturesForm = ({ data, onBack }) => {
               }
             : {}),
 
-          changedDate: row.changedDate || todayISO(),
+          changedDate: row.changedDate || row.date || todayISO(),
 
           cost:
             row.cost !== "" && row.cost !== null && row.cost !== undefined
@@ -1638,8 +1738,8 @@ const ToolsFixturesForm = ({ data, onBack }) => {
           remarks: row.remarks || "",
         })),
 
-      /* ======================================================================
-         SPARE DETAILS
+      /* ====================================================================== 
+         SPARE DETAILS 
       ====================================================================== */
 
       toolMasterSpareDetailsDTO: spareRows
@@ -1670,23 +1770,17 @@ const ToolsFixturesForm = ({ data, onBack }) => {
 
           serialNo: row.serialNo || "",
 
-          sparePartId: row.sparePartId ? Number(row.sparePartId) : 0,
+          sparePartId: toNullableNumber(row.sparePartId),
 
           warrantyTillDate: row.warrantyTillDate || "",
         })),
-
-      /* ======================================================================
-         TECHNICAL INFO
-      ====================================================================== */
-
-      toolMasterTechnicalInfoDetailsDTO: technicalDTO,
     };
 
     return payload;
   };
 
-  /* ==========================================================================
-     SAVE
+  /* ========================================================================== 
+     SAVE 
   ========================================================================== */
 
   const handleSave = async () => {
@@ -1695,61 +1789,72 @@ const ToolsFixturesForm = ({ data, onBack }) => {
     }
 
     setIsSubmitting(true);
-
     setToastMessage(null);
 
     try {
       const payload = buildPayload();
 
-      console.log("================ TOOL MASTER PAYLOAD ================");
-
-      console.log(JSON.stringify(payload, null, 2));
-
-      console.log("======================================================");
-
-      /* ======================================================================
-         FILES
-      ====================================================================== */
+      /*
+       * ============================================================
+       * FILES
+       * ============================================================
+       */
 
       const files = [];
 
+      // Main image
       if (imageInfo?.file instanceof File) {
         files.push(imageInfo.file);
       }
 
+      // Attachments
       attachedRows.forEach((row) => {
         if (row?.file instanceof File) {
           files.push(row.file);
         }
       });
 
-      console.log(
-        "Tool Master Files:",
-        files.map((file) => file.name),
-      );
-
-      /* ======================================================================
-         CREATE / UPDATE
-      ====================================================================== */
+      /*
+       * ============================================================
+       * CREATE / UPDATE
+       * ============================================================
+       */
 
       const response = await toolsFixtureAPI.createUpdateToolMaster(
         payload,
         files,
       );
 
-      console.log("Tool Master Response:", response);
+      /*
+       * ============================================================
+       * BACKEND RESPONSE
+       *
+       * Backend returns:
+       *
+       * {
+       *   message: "...",
+       *   toolMasterVO: {...}
+       * }
+       *
+       * It does NOT return status=true.
+       * ============================================================
+       */
 
       const success =
-        response?.status === true ||
-        String(response?.statusFlag).toLowerCase() === "ok";
+        !!response &&
+        (!!response?.toolMasterVO ||
+          !!response?.message ||
+          response?.status === true ||
+          String(response?.statusFlag).toLowerCase() === "ok");
 
       if (success) {
         setToastMessage({
           type: "success",
-
-          message: data?.id
-            ? "Tool/Fixture Updated Successfully!"
-            : "Tool/Fixture Saved Successfully!",
+          message:
+            response?.message ||
+            (data?.id
+              ? "Tool/Fixture Updated Successfully!"
+              : "Tool/Fixture Saved Successfully!"),
         });
 
         setTimeout(() => {
@@ -1759,9 +1864,14 @@ const ToolsFixturesForm = ({ data, onBack }) => {
         return;
       }
 
+      /*
+       * ============================================================
+       * NORMAL ERROR RESPONSE
+       * ============================================================
+       */
+
       setToastMessage({
         type: "error",
-
         message:
           response?.paramObjectsMap?.errorMessage ||
           response?.paramObjectsMap?.message ||
@@ -1770,16 +1880,37 @@ const ToolsFixturesForm = ({ data, onBack }) => {
           "Failed to save Tool/Fixture",
       });
     } catch (error) {
-      console.error("Error saving Tool/Fixture:", error);
+      /*
+       * ============================================================
+       * SPRING VALIDATION ERRORS
+       * ============================================================
+       */
 
-      console.error("Backend error:", error?.response?.data || error);
+      const backendData = error?.response?.data;
+
+      const backendErrors = backendData?.errors;
+
+      const backendErrorText =
+        Array.isArray(backendErrors) && backendErrors.length
+          ? backendErrors
+              .map(
+                (e) =>
+                  e?.longMessage ||
+                  e?.shortMessage ||
+                  e?.logMessage ||
+                  e?.errorCode ||
+                  "",
+              )
+              .filter(Boolean)
+              .join("; ")
+          : "";
 
       const message =
-        error?.paramObjectsMap?.errorMessage ||
-        error?.paramObjectsMap?.message ||
-        error?.errorMessage ||
-        error?.response?.data?.paramObjectsMap?.errorMessage ||
-        error?.response?.data?.message ||
+        backendErrorText ||
+        backendData?.paramObjectsMap?.errorMessage ||
+        backendData?.paramObjectsMap?.message ||
+        backendData?.errorMessage ||
+        backendData?.message ||
         error?.message ||
         "Error saving Tool/Fixture";
 
@@ -1792,8 +1923,8 @@ const ToolsFixturesForm = ({ data, onBack }) => {
     }
   };
 
-  /* ==========================================================================
-     LOADING
+  /* ========================================================================== 
+     LOADING 
   ========================================================================== */
 
   if (isLoading) {
@@ -1812,14 +1943,14 @@ const ToolsFixturesForm = ({ data, onBack }) => {
     );
   }
 
-  /* ==========================================================================
-     UI
+  /* ========================================================================== 
+     UI 
   ========================================================================== */
 
   return (
     <div className="p-2 max-w-7xl">
-      {/* ======================================================================
-         TOAST
+      {/* ====================================================================== 
+         TOAST 
       ====================================================================== */}
 
       {toastMessage && (
@@ -1834,8 +1965,8 @@ const ToolsFixturesForm = ({ data, onBack }) => {
         </div>
       )}
 
-      {/* ======================================================================
-         HEADER
+      {/* ====================================================================== 
+         HEADER 
       ====================================================================== */}
 
       <div className="flex items-center gap-2 mb-3">
@@ -1853,8 +1984,9 @@ const ToolsFixturesForm = ({ data, onBack }) => {
       </div>
 
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
-        {/* ====================================================================
-           TOOL / FIXTURE DETAILS
+        {/* ==================================================================== 
+           TOOL / FIXTURE DETAILS 
+           (fields ordered to match the /updateCreateToolMaster payload) 
         ==================================================================== */}
 
         <div>
@@ -1863,23 +1995,22 @@ const ToolsFixturesForm = ({ data, onBack }) => {
           <div className={fieldGrid}>
             <Field
               type="select"
+              label="Active"
+              name="active"
+              value={basic.active}
+              onChange={handleBasicChange}
+              options={YES_NO}
+              required
+            />
+
+            <Field
+              type="select"
               label="Plant ID"
               name="plantId"
               value={basic.plantId}
               onChange={handleBasicChange}
               error={fieldErrors.plantId}
               options={plantData}
-              required
-            />
-
-            <Field
-              type="select"
-              label="Type"
-              name="type"
-              value={basic.type}
-              onChange={handleBasicChange}
-              error={fieldErrors.type}
-              options={toolTypeOptions}
               required
             />
 
@@ -1895,19 +2026,21 @@ const ToolsFixturesForm = ({ data, onBack }) => {
             />
 
             <Field
-              label="Tool No./Fixture No."
-              name="toolNo"
-              value={basic.toolNo}
+              label="Status"
+              name="status"
+              value={basic.status}
               onChange={handleBasicChange}
-              error={fieldErrors.toolNo}
+              error={fieldErrors.status}
               required
             />
 
             <Field
-              label="Tool/Fixtures Name"
-              name="toolName"
-              value={basic.toolName}
+              label="Tool/Fixture Category"
+              name="toolCategory"
+              value={basic.toolCategory}
               onChange={handleBasicChange}
+              error={fieldErrors.toolCategory}
+              required
             />
 
             <Field
@@ -1921,37 +2054,36 @@ const ToolsFixturesForm = ({ data, onBack }) => {
             />
 
             <Field
-              label="Tool/Fixture Category"
-              name="toolCategory"
-              value={basic.toolCategory}
+              label="Tool/Fixtures Name"
+              name="toolName"
+              value={basic.toolName}
               onChange={handleBasicChange}
-              error={fieldErrors.toolCategory}
-              required
             />
 
             <Field
-              label="Status"
-              name="status"
-              value={basic.status}
+              label="Tool No./Fixture No."
+              name="toolNo"
+              value={basic.toolNo}
               onChange={handleBasicChange}
-              error={fieldErrors.status}
+              error={fieldErrors.toolNo}
               required
             />
 
             <Field
               type="select"
-              label="Active"
-              name="active"
-              value={basic.active}
+              label="Type"
+              name="type"
+              value={basic.type}
               onChange={handleBasicChange}
-              options={YES_NO}
+              error={fieldErrors.type}
+              options={toolTypeOptions}
               required
             />
           </div>
         </div>
 
-        {/* ====================================================================
-           TABS
+        {/* ==================================================================== 
+           TABS 
         ==================================================================== */}
 
         <section className="mt-4 bg-white dark:bg-gray-800">
@@ -1975,12 +2107,25 @@ const ToolsFixturesForm = ({ data, onBack }) => {
           </div>
 
           <div className="mt-2">
-            {/* ================================================================
-               TOOLS
+            {/* ================================================================ 
+               TOOLS 
+               (fields ordered to match the payload: location, 
+               pmchecklistNo, presentLocation, remarks, toolIncharge, 
+               toolOwnership, toolUsedFor) 
             ================================================================ */}
 
             {activeChildTab === "tools" && (
               <div className={fieldGrid}>
+                <Field
+                  type="select"
+                  label="Location"
+                  name="location"
+                  value={toolsInfo.location}
+                  onChange={handleToolsInfoChange}
+                  options={presentLocationData}
+                  disabled={!basic.plantId}
+                />
+
                 <Field
                   label="PM Check List No."
                   name="pmCheckListNo"
@@ -1988,22 +2133,41 @@ const ToolsFixturesForm = ({ data, onBack }) => {
                   onChange={handleToolsInfoChange}
                 />
 
+                {/* ============================================================ 
+                   PRESENT LOCATION 
+ 
+                   API: 
+                   toolsFixtureAPI.getLocationForToolMaster(branch, orgId) 
+ 
+                   Options refresh whenever the Plant ID above changes. 
+                ============================================================ */}
+
                 <Field
                   type="select"
-                  label="Location"
-                  name="location"
-                  value={toolsInfo.location}
+                  label="Present Location"
+                  name="presentLocation"
+                  value={toolsInfo.presentLocation}
                   onChange={handleToolsInfoChange}
-                  options={plantData}
+                  options={presentLocationData}
+                  disabled={!basic.plantId}
                 />
 
-                {/* ============================================================
-                   TOOL / FIXTURE INCHARGE
+                <Field
+                  type="textarea"
+                  label="Remarks"
+                  name="remarks"
+                  value={toolsInfo.remarks}
+                  onChange={handleToolsInfoChange}
+                  className="col-span-2 md:col-span-4 xl:col-span-6"
+                />
 
-                   ALL EMPLOYEES
-                   
-                   API:
-                   employeeAPI.getEmployeeByOrgId(orgId)
+                {/* ============================================================ 
+                   TOOL / FIXTURE INCHARGE 
+ 
+                   ALL EMPLOYEES 
+ 
+                   API: 
+                   employeeAPI.getEmployeeByOrgId(orgId) 
                 ============================================================ */}
 
                 <Field
@@ -2015,20 +2179,13 @@ const ToolsFixturesForm = ({ data, onBack }) => {
                   options={employeeData}
                 />
 
-                <Field
-                  label="Tool/Fixture Used For"
-                  name="toolUsedFor"
-                  value={toolsInfo.toolUsedFor}
-                  onChange={handleToolsInfoChange}
-                />
-
-                {/* ============================================================
-                   TOOL / FIXTURE OWNERSHIP
-
-                   ALL CUSTOMERS
-                   
-                   API:
-                   partyMasterAPI.getPartyByOrgId(orgId, branch)
+                {/* ============================================================ 
+                   TOOL / FIXTURE OWNERSHIP 
+ 
+                   ALL CUSTOMERS 
+ 
+                   API: 
+                   partyMasterAPI.getPartyByOrgId(orgId, branch) 
                 ============================================================ */}
 
                 <Field
@@ -2048,55 +2205,34 @@ const ToolsFixturesForm = ({ data, onBack }) => {
                 />
 
                 <Field
-                  type="number"
-                  label="Present Location"
-                  name="presentLocation"
-                  value={toolsInfo.presentLocation}
+                  label="Tool/Fixture Used For"
+                  name="toolUsedFor"
+                  value={toolsInfo.toolUsedFor}
                   onChange={handleToolsInfoChange}
-                />
-
-                <Field
-                  type="textarea"
-                  label="Remarks"
-                  name="remarks"
-                  value={toolsInfo.remarks}
-                  onChange={handleToolsInfoChange}
-                  className="col-span-2 md:col-span-4 xl:col-span-6"
                 />
               </div>
             )}
 
-            {/* ================================================================
-               TECHNICAL INFO
+            {/* ================================================================ 
+               TECHNICAL INFO 
+               (fields ordered to match the payload: cavityNumber, 
+               drawingNo, madeIn, manufacturedBy, modeOfPurchase, 
+               purchaseFrom, section, serialNo, toolCost) 
             ================================================================ */}
 
             {activeChildTab === "technicalInfo" && (
               <div className={fieldGrid}>
                 <Field
+                  label="Cavity Number"
+                  name="cavityNumber"
+                  value={technicalInfo.cavityNumber}
+                  onChange={handleTechnicalInfoChange}
+                />
+
+                <Field
                   label="Drawing No"
                   name="drawingNo"
                   value={technicalInfo.drawingNo}
-                  onChange={handleTechnicalInfoChange}
-                />
-
-                <Field
-                  label="Serial No"
-                  name="serialNo"
-                  value={technicalInfo.serialNo}
-                  onChange={handleTechnicalInfoChange}
-                />
-
-                <Field
-                  label="Manufactured By"
-                  name="manufacturedBy"
-                  value={technicalInfo.manufacturedBy}
-                  onChange={handleTechnicalInfoChange}
-                />
-
-                <Field
-                  label="Section"
-                  name="section"
-                  value={technicalInfo.section}
                   onChange={handleTechnicalInfoChange}
                 />
 
@@ -2109,10 +2245,26 @@ const ToolsFixturesForm = ({ data, onBack }) => {
                   options={madeInOptions}
                 />
 
-                {/* ============================================================
-                   PURCHASE FROM
+                <Field
+                  label="Manufactured By"
+                  name="manufacturedBy"
+                  value={technicalInfo.manufacturedBy}
+                  onChange={handleTechnicalInfoChange}
+                />
 
-                   ALL CUSTOMERS
+                <Field
+                  type="select"
+                  label="Mode Of Purchase"
+                  name="modeOfPurchase"
+                  value={technicalInfo.modeOfPurchase}
+                  onChange={handleTechnicalInfoChange}
+                  options={modeOfPurchaseOptions}
+                />
+
+                {/* ============================================================ 
+                   PURCHASE FROM 
+ 
+                   ALL CUSTOMERS 
                 ============================================================ */}
 
                 <Field
@@ -2125,12 +2277,17 @@ const ToolsFixturesForm = ({ data, onBack }) => {
                 />
 
                 <Field
-                  type="select"
-                  label="Mode Of Purchase"
-                  name="modeOfPurchase"
-                  value={technicalInfo.modeOfPurchase}
+                  label="Section"
+                  name="section"
+                  value={technicalInfo.section}
                   onChange={handleTechnicalInfoChange}
-                  options={modeOfPurchaseOptions}
+                />
+
+                <Field
+                  label="Serial No"
+                  name="serialNo"
+                  value={technicalInfo.serialNo}
+                  onChange={handleTechnicalInfoChange}
                 />
 
                 <Field
@@ -2141,17 +2298,48 @@ const ToolsFixturesForm = ({ data, onBack }) => {
                   onChange={handleTechnicalInfoChange}
                 />
 
+                {/* ============================================================ 
+                   LIFE TYPE 
+ 
+                   API: 
+                   listOfValuesAPI.getListValuesGroup("LIFE TYPE", orgId) 
+                ============================================================ */}
+
                 <Field
-                  label="Cavity Number"
-                  name="cavityNumber"
-                  value={technicalInfo.cavityNumber}
-                  onChange={handleTechnicalInfoChange}
+                  type="select"
+                  label="Life Type"
+                  name="lifeType"
+                  value={technicalDetailRows[0]?.lifeType ?? ""}
+                  onChange={(e) =>
+                    handleTechnicalDetailChange("lifeType", e.target.value)
+                  }
+                  options={lifeTypeOptions}
+                />
+
+                {/* ============================================================ 
+                   UNIT 
+ 
+                   API: 
+                   listOfValuesAPI.getUnitMasterByOrgId(orgId) 
+ 
+                   Option value is the unit's id; label shown is unitId. 
+                ============================================================ */}
+
+                <Field
+                  type="select"
+                  label="Unit"
+                  name="unit"
+                  value={technicalDetailRows[0]?.unit ?? ""}
+                  onChange={(e) =>
+                    handleTechnicalDetailChange("unit", e.target.value)
+                  }
+                  options={unitData}
                 />
               </div>
             )}
 
-            {/* ================================================================
-               SPARE DETAILS
+            {/* ================================================================ 
+               SPARE DETAILS 
             ================================================================ */}
 
             {activeChildTab === "spareDetails" && (
@@ -2361,8 +2549,8 @@ const ToolsFixturesForm = ({ data, onBack }) => {
               </div>
             )}
 
-            {/* ================================================================
-               COMPONENT OUTPUT
+            {/* ================================================================ 
+               COMPONENT OUTPUT 
             ================================================================ */}
 
             {activeChildTab === "componentOutput" && (
@@ -2481,8 +2669,8 @@ const ToolsFixturesForm = ({ data, onBack }) => {
               </div>
             )}
 
-            {/* ================================================================
-               MACHINE HISTORY
+            {/* ================================================================ 
+               MACHINE HISTORY 
             ================================================================ */}
 
             {activeChildTab === "machineHistory" && (
@@ -2657,8 +2845,8 @@ const ToolsFixturesForm = ({ data, onBack }) => {
               </div>
             )}
 
-            {/* ================================================================
-               IMAGE
+            {/* ================================================================ 
+               IMAGE 
             ================================================================ */}
 
             {activeChildTab === "image" && (
@@ -2711,8 +2899,8 @@ const ToolsFixturesForm = ({ data, onBack }) => {
               </div>
             )}
 
-            {/* ================================================================
-               ATTACHED
+            {/* ================================================================ 
+               ATTACHED 
             ================================================================ */}
 
             {activeChildTab === "attached" && (
@@ -2829,8 +3017,8 @@ const ToolsFixturesForm = ({ data, onBack }) => {
           </div>
         </section>
 
-        {/* ====================================================================
-           BUTTONS
+        {/* ==================================================================== 
+           BUTTONS 
         ==================================================================== */}
 
         <FormButtons

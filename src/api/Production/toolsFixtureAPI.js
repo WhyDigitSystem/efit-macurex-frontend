@@ -1,7 +1,5 @@
 import apiClient from "../apiClient";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL;
-
 const toolsFixtureAPI = {
   createUpdateToolMaster: async (toolMasterData, files = []) => {
     try {
@@ -11,107 +9,83 @@ const toolsFixtureAPI = {
         type: "application/json",
       });
 
-      formData.append("toolMaster", toolMasterBlob, "toolMasterDTO.json");
+      formData.append("toolMasterVO", toolMasterBlob, "toolMasterVO.json");
 
-      files.forEach((file) => {
-        if (file) {
-          formData.append("files", file, file.name);
+      if (Array.isArray(files)) {
+        files.forEach((file) => {
+          if (file instanceof File) {
+            formData.append("files", file, file.name);
+          }
+        });
+      }
+
+      for (const [key, value] of formData.entries()) {
+        if (value instanceof File) {
+          console.log(key, "FILE:", value.name, value.type, value.size);
+        } else {
+          console.log(key, value);
         }
-      });
+      }
 
       const response = await apiClient.post(
-        `${API_BASE_URL}/api/toolmaster/updateCreateToolMaster`,
+        "/api/toolmaster/updateCreateToolMaster",
         formData,
-        {
-          headers: {
-            "Content-Type": "multipart/form-data",
-          },
-        },
       );
 
       return response?.data ?? response;
     } catch (error) {
-      console.error(
-        "Error saving Tool/Fixture:",
-        error?.response?.data || error,
-      );
+      console.error("================ TOOL MASTER SAVE ERROR ================");
+
+      console.error("Status:", error?.response?.status);
+      console.error("Data:", error?.response?.data);
+      console.error("Message:", error?.message);
+      console.error("Request URL:", error?.config?.url);
+      console.error("Request Headers:", error?.config?.headers);
 
       throw error;
     }
   },
-
-  /* ================================================================
-     GET TOOL / FIXTURE BY ID
-
-     Swagger: GET /api/toolmaster/getToolMasterById?id=...
-  ================================================================ */
 
   getToolMasterById: async (id) => {
-    try {
-      const response = await apiClient.get(
-        `/api/toolmaster/getToolMasterById`,
-        {
-          params: {
-            id,
-          },
-        },
-      );
+    const response = await apiClient.get("/api/toolmaster/getToolMasterById", {
+      params: { id },
+    });
 
-      return response?.data ?? response;
-    } catch (error) {
-      console.error(
-        "Error fetching Tool/Fixture:",
-        error?.response?.data || error,
-      );
-
-      throw error;
-    }
+    return response?.data ?? response;
   },
-
-  /* ================================================================
-     GET TOOL / FIXTURE LIST BY ORG
-
-     Swagger: GET /api/toolmaster/getToolMasterByOrgId?branch=...&orgId=...
-  ================================================================ */
 
   getToolMasterByOrgId: async (branch, orgId) => {
-    try {
-      const response = await apiClient.get(
-        `/api/toolmaster/getToolMasterByOrgId`,
-        {
-          params: {
-            branch,
-            orgId,
-          },
+    const response = await apiClient.get(
+      "/api/toolmaster/getToolMasterByOrgId",
+      {
+        params: {
+          branch,
+          orgId,
         },
-      );
+      },
+    );
 
-      return response?.data ?? response;
-    } catch (error) {
-      console.error(
-        "Error fetching Tool/Fixture list:",
-        error?.response?.data || error,
-      );
-
-      throw error;
-    }
+    return response?.data ?? response;
   },
 
-  /* ================================================================
-     VIEW ATTACHMENT
+  getLocationForToolMaster: async (branch, orgId) => {
+    const response = await apiClient.get(
+      "/api/toolmaster/getLocationForToolMaster",
+      {
+        params: {
+          branch,
+          orgId,
+        },
+      },
+    );
 
-     NOTE: This path is not in the swagger doc you shared (only the
-     three endpoints above were). It's guessed to mirror
-     purchaseOrderAPI.getViewFileUrl — confirm the real path on your
-     backend and adjust if it differs.
-  ================================================================ */
+    return response?.data ?? response;
+  },
 
   getViewFileUrl: (filePath) => {
-    if (!filePath) {
-      return "";
-    }
+    if (!filePath) return "";
 
-    const cleanPath = String(filePath).replace(/^\/+/, "");
+    const cleanPath = String(filePath).replace(/\\/g, "/").replace(/^\/+/, "");
 
     return `${API_BASE_URL}/api/toolmaster/viewFile/${cleanPath}`;
   },
