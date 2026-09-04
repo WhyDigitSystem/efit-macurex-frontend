@@ -1,9 +1,7 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import JobOrderAmendmentList from "./JobOrderAmendmentList";
 import JobOrderAmendmentForm from "./JobOrderAmendmentForm";
-import jobOrderAmendmentAPI from "../../../api/jobOrderAmendmentAPI";
-import { toast } from "../../../utils/toast";
 
 const JobOrderAmendmentMaster = () => {
   const navigate = useNavigate();
@@ -11,32 +9,24 @@ const JobOrderAmendmentMaster = () => {
   const [editData, setEditData] = useState(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  const ORG_ID = localStorage.getItem("orgId");
-  const BRANCH_ID = localStorage.getItem("branchId");
-
   const handleAddNew = () => {
     setEditData(null);
     setView("form");
   };
 
-  // Pencil icon click -> fetch fresh data by orgId, find the matching record, open form
-  const handleEdit = useCallback(
-    async (row) => {
-      try {
-        const records = await jobOrderAmendmentAPI.getJobOrderAmendmentByOrgId(
-          ORG_ID,
-          BRANCH_ID,
-        );
-        const fresh = records.find((r) => r.id === row.id) || row;
-        setEditData(fresh);
-        setView("form");
-      } catch (error) {
-        console.error("Failed to fetch job order amendment for edit:", error);
-        toast.error("Failed to load job order amendment details");
-      }
-    },
-    [ORG_ID, BRANCH_ID],
-  );
+  /*
+   * Pencil icon click -> open the form with just the row's id.
+   *
+   * JobOrderAmendmentForm fetches the full record itself via
+   * jobOrderAmendmentAPI.getJobOrderAmendmentById(id) (same pattern as
+   * the Tool Master form's fetchToolData), so we don't need to
+   * re-fetch the whole org list here just to find one row — the list
+   * row may not carry the full jobOrderAmendmentDetails[] anyway.
+   */
+  const handleEdit = (row) => {
+    setEditData({ id: row.id });
+    setView("form");
+  };
 
   const handleBack = () => {
     setEditData(null);

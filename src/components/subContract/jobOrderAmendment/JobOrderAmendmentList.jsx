@@ -1,24 +1,91 @@
 import { useCallback, useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
-import jobOrderAmendmentAPI from "../../../api/jobOrderAmendmentAPI";
+import jobOrderAmendmentAPI from "../../../api/SubContract/jobOrderAmendmentAPI";
 import { toast } from "../../../utils/toast";
 
-const JobOrderAmendmentList = ({ onAddNew, onEdit, refreshTrigger, onBack }) => {
+/* ================================================================
+   FIELD EXTRACTION HELPERS
+
+   The list endpoint (getJobOrderAmendmentByOrgIdAndBranch) wasn't
+   fully documented in the swagger you shared — its example response
+   just showed an empty array. Real rows may come back with "customer"
+   as a nested object ({ id, customerName, ... }) the same way
+   ToolMasterVO nests branch/department/etc., or as a flat id.
+   These helpers handle either shape so the table doesn't break.
+================================================================ */
+
+const getEntityId = (value) => {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "object") {
+    return String(value.id ?? value.customerId ?? "");
+  }
+  return String(value);
+};
+
+const getEntityName = (value) => {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "object") {
+    return value.customerName || value.name || "";
+  }
+  return "";
+};
+
+const normalizeActive = (active) => {
+  if (typeof active === "boolean") {
+    return active ? "Active" : "Inactive";
+  }
+  const asString = String(active || "").toLowerCase();
+  return asString === "active" || asString === "true" ? "Active" : "Inactive";
+};
+
+const mapRecordForList = (record) => ({
+  ...record,
+
+  id: record.id,
+
+  docId: record.docId || "",
+
+  docDate: record.docDate || record.createdOn || "",
+
+  partyId: getEntityId(record.customer ?? record.partyId),
+
+  partyName: record.partyName || getEntityName(record.customer) || "",
+
+  jobOrderNo: record.jobOrderNo || "",
+
+  jobOrderDate: record.jobOrderDate || "",
+
+  revisionNo: record.revisionNo ?? "",
+
+  active: normalizeActive(record.active),
+});
+
+const JobOrderAmendmentList = ({
+  onAddNew,
+  onEdit,
+  refreshTrigger,
+  onBack,
+}) => {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const ORG_ID = localStorage.getItem("orgId");
-  const BRANCH_ID = localStorage.getItem("branchId");
+  const ORG_ID = Number(localStorage.getItem("orgId")) || 0;
+  const BRANCH_ID = Number(localStorage.getItem("branchId")) || 0;
 
   const loadRecords = useCallback(async () => {
     try {
       setLoading(true);
+
       const data = await jobOrderAmendmentAPI.getJobOrderAmendmentByOrgId(
         ORG_ID,
         BRANCH_ID,
       );
-      data.sort((a, b) => (b.id || 0) - (a.id || 0));
-      setRecords(data);
+
+      const mapped = (Array.isArray(data) ? data : [])
+        .map(mapRecordForList)
+        .sort((a, b) => (b.id || 0) - (a.id || 0));
+
+      setRecords(mapped);
     } catch (error) {
       console.error("Failed to load job order amendments:", error);
       setRecords([]);

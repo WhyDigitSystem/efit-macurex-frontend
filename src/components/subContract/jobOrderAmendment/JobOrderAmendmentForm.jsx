@@ -1,14 +1,7 @@
-import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Save, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import jobOrderAmendmentAPI from "../../../api/jobOrderAmendmentAPI";
-import jobOrderAPI from "../../../api/jobOrderAPI";
-import partyMasterAPI from "../../../api/partyMasterAPI";
-import itemAPI from "../../../api/itemAPI";
-import unitMasterAPI from "../../../api/unitAPI";
+import jobOrderAmendmentAPI from "../../../api/SubContract/jobOrderAmendmentAPI";
 import { useToast } from "../../Toast/ToastContext";
-
-/* ---------------------------------------------------------------------------- */
-/* Shared design tokens                                                        */
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -43,12 +36,12 @@ const labelClasses =
 const fieldGrid =
   "grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-x-4 gap-y-3 items-start";
 
-// Spacious grid used inside the child tabs so fields breathe more.
 const subTabFieldGrid =
   "grid grid-cols-[repeat(auto-fit,minmax(210px,1fr))] gap-x-5 gap-y-4 items-start";
 
-/* ---------------------------------------------------------------------------- */
-/* Shared building blocks                                                      */
+/* ----------------------------------------------------------------------------
+   Shared building blocks
+---------------------------------------------------------------------------- */
 
 const Field = ({
   label,
@@ -72,15 +65,15 @@ const Field = ({
 
         <select
           name={name}
-          value={value}
+          value={value ?? ""}
           onChange={onChange}
           disabled={disabled}
           className={`${controlClasses} ${error ? controlErrClasses : ""}`}
         >
           <option value="">-- Select --</option>
           {(options || []).map((opt) => (
-            <option key={opt.value ?? opt} value={opt.value ?? opt}>
-              {opt.label ?? opt}
+            <option key={String(opt.value)} value={opt.value}>
+              {opt.label}
             </option>
           ))}
         </select>
@@ -104,7 +97,7 @@ const Field = ({
 
         <textarea
           name={name}
-          value={value}
+          value={value ?? ""}
           onChange={onChange}
           rows={1}
           className={
@@ -137,7 +130,7 @@ const Field = ({
       <input
         type={type}
         name={name}
-        value={value}
+        value={value ?? ""}
         onChange={onChange}
         disabled={disabled}
         className={`${controlClasses} ${error ? controlErrClasses : ""}`}
@@ -161,6 +154,7 @@ const SectionHeader = ({ children }) => (
 const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
   <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
     <button
+      type="button"
       onClick={onCancel}
       disabled={isSubmitting}
       className="flex items-center gap-1 px-3 py-1.5 rounded text-xs whitespace-nowrap border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
@@ -170,6 +164,7 @@ const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
     </button>
 
     <button
+      type="button"
       onClick={onSave}
       disabled={isSubmitting}
       className="flex items-center gap-1 px-3 py-1.5 rounded text-xs whitespace-nowrap text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
@@ -180,121 +175,104 @@ const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
   </div>
 );
 
-/* ---------------------------------------------------------------------------- */
-/* Table helpers                                                               */
+/* ----------------------------------------------------------------------------
+   Line items table (read-only item/unit, editable qty)
+---------------------------------------------------------------------------- */
 
-const TableWrapper = ({ children }) => (
+const ItemDetailsTable = ({ rows, onQtyChange }) => (
   <div className="w-full overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
-    <table className="w-full min-w-max text-xs">{children}</table>
+    <table className="w-full min-w-max text-xs">
+      <thead className="bg-gray-100 dark:bg-gray-700">
+        <tr>
+          <th className="p-2 w-8 text-center dark:text-white">#</th>
+          <th className="p-2 text-left dark:text-white">Item Code</th>
+          <th className="p-2 text-left dark:text-white">Item Description</th>
+          <th className="p-2 text-left dark:text-white">Unit</th>
+          <th className="p-2 text-left dark:text-white">Old Qty</th>
+          <th className="p-2 text-left dark:text-white">New Qty</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {rows.length === 0 && (
+          <tr>
+            <td
+              colSpan={6}
+              className="p-3 text-center text-gray-400 dark:text-gray-500"
+            >
+              Select a Job Order No to load its line items
+            </td>
+          </tr>
+        )}
+
+        {rows.map((row, idx) => (
+          <tr
+            key={row.item ?? idx}
+            className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"
+          >
+            <td className="p-2 text-center font-medium dark:text-white">
+              {idx + 1}
+            </td>
+
+            <td className="p-2 align-top">
+              <input
+                type="text"
+                value={row.itemCode || ""}
+                readOnly
+                className={cellReadOnlyClasses}
+              />
+            </td>
+
+            <td className="p-2 align-top">
+              <input
+                type="text"
+                value={row.itemDescription || ""}
+                readOnly
+                className={cellReadOnlyClasses}
+              />
+            </td>
+
+            <td className="p-2 align-top">
+              <input
+                type="text"
+                value={row.unitDescription || ""}
+                readOnly
+                className={cellReadOnlyClasses}
+              />
+            </td>
+
+            <td className="p-2 align-top">
+              <input
+                type="number"
+                value={row.oldQty}
+                onChange={(e) => onQtyChange(idx, "oldQty", e.target.value)}
+                className={cellInputClasses}
+              />
+            </td>
+
+            <td className="p-2 align-top">
+              <input
+                type="number"
+                value={row.newQty}
+                onChange={(e) => onQtyChange(idx, "newQty", e.target.value)}
+                className={cellInputClasses}
+              />
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   </div>
 );
 
-const TableHead = ({ headers }) => (
-  <thead className="bg-gray-100 dark:bg-gray-700">
-    <tr>
-      {headers.map((h, i) => (
-        <th
-          key={i}
-          className={`p-2 whitespace-nowrap ${
-            i === 0
-              ? "w-8 text-center"
-              : i === headers.length - 1
-                ? "w-20 text-left"
-                : "text-left"
-          } dark:text-white`}
-        >
-          {h}
-        </th>
-      ))}
-    </tr>
-  </thead>
-);
-
-const TableRow = ({ children, index, onRemove, disabled }) => (
-  <tr className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-    <td className="p-2 text-center font-medium dark:text-white">{index + 1}</td>
-    {children}
-    <td className="p-2 text-center">
-      <button
-        type="button"
-        onClick={onRemove}
-        disabled={disabled}
-        className={`h-6 w-6 rounded text-white flex items-center justify-center ${
-          disabled
-            ? "bg-gray-400 cursor-not-allowed"
-            : "bg-red-600 hover:bg-red-700"
-        }`}
-      >
-        <Trash2 size={12} />
-      </button>
-    </td>
-  </tr>
-);
-
-/* Generic dynamic table. Supports text / select / readonly columns.
-   Options may be plain strings or { value, label } objects. */
-const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
-  <TableWrapper>
-    <TableHead headers={["#", ...columns.map((c) => c.label), "Action"]} />
-    <tbody>
-      {rows.map((row, idx) => (
-        <TableRow
-          key={idx}
-          index={idx}
-          onRemove={() => onRemoveRow(idx)}
-          disabled={rows.length <= 1}
-        >
-          {columns.map((col) =>
-            col.type === "select" ? (
-              <td className="p-2 align-top" key={col.key}>
-                <select
-                  value={row[col.key]}
-                  onChange={(e) => onCellChange(idx, col.key, e.target.value)}
-                  className={cellInputClasses}
-                >
-                  <option value="">-- Select --</option>
-                  {(col.options || []).map((opt) => (
-                    <option key={opt.value ?? opt} value={opt.value ?? opt}>
-                      {opt.label ?? opt}
-                    </option>
-                  ))}
-                </select>
-              </td>
-            ) : (
-              <td className="p-2 align-top" key={col.key}>
-                <input
-                  type={col.type === "date" ? "date" : "text"}
-                  value={row[col.key]}
-                  readOnly={col.readOnly}
-                  onChange={(e) => onCellChange(idx, col.key, e.target.value)}
-                  className={
-                    col.readOnly ? cellReadOnlyClasses : cellInputClasses
-                  }
-                />
-              </td>
-            ),
-          )}
-        </TableRow>
-      ))}
-    </tbody>
-  </TableWrapper>
-);
-
-/* ---------------------------------------------------------------------------- */
-/* Options                                                                      */
+/* ----------------------------------------------------------------------------
+   Options / helpers
+---------------------------------------------------------------------------- */
 
 const CHILD_TABS = [
-  { key: "jobOrderDetails", label: "Job Order Details", kind: "table" },
-  { key: "jobOrderSummary", label: "Job Order Summary", kind: "fields" },
+  { key: "jobOrderDetails", label: "Job Order Details" },
+  { key: "jobOrderSummary", label: "Job Order Summary" },
 ];
-
-const emptyJobOrderDetailRow = () => ({
-  itemCode: "",
-  itemDescription: "",
-  unit: "",
-  oldQty: "",
-  newQty: "",
-});
 
 const emptySummary = () => ({
   oldDeliveryDate: "",
@@ -308,10 +286,57 @@ const todayStr = () => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
 
-const autoDocId = () =>
-  `JOA-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, "0")}${String(new Date().getDate()).padStart(2, "0")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
+const getFinancialYear = () => {
+  const stored =
+    localStorage.getItem("finYear") || localStorage.getItem("financialYear");
 
-/* ---------------------------------------------------------------------------- */
+  if (stored) {
+    return String(stored).trim();
+  }
+
+  return String(new Date().getFullYear());
+};
+
+const toNumberOrEmpty = (value) => {
+  if (value === "" || value === null || value === undefined) {
+    return "";
+  }
+
+  const num = Number(value);
+
+  return Number.isNaN(num) ? "" : num;
+};
+
+/* ================================================================
+   FIELD EXTRACTION HELPERS FOR THE EDIT-MODE GET RESPONSE
+
+   getJobOrderAmendmentById's exact shape wasn't in the swagger doc
+   shared (only the create/update DTO was), so — same as the Tool
+   Master form — these handle both "customer"/"item"/"unit" coming
+   back as a nested object (e.g. { id, customerName }) or as a flat
+   numeric id, so the form doesn't break either way.
+================================================================ */
+
+const getEntityId = (value) => {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "object") {
+    return value.id ?? value.customerId ?? value.itemId ?? value.unitId ?? "";
+  }
+  return value;
+};
+
+const getEntityField = (value, ...keys) => {
+  if (value && typeof value === "object") {
+    for (const key of keys) {
+      if (value[key]) return value[key];
+    }
+  }
+  return "";
+};
+
+/* ==============================================================================
+   COMPONENT
+============================================================================== */
 
 const JobOrderAmendmentForm = ({ data, onBack }) => {
   const [orgId] = useState(Number(localStorage.getItem("orgId")) || 0);
@@ -320,160 +345,372 @@ const JobOrderAmendmentForm = ({ data, onBack }) => {
 
   const [activeChildTab, setActiveChildTab] = useState("jobOrderDetails");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
 
-  const [partyOptions, setPartyOptions] = useState([]);
+  /* ==========================================================================
+     MASTER DATA
+  ========================================================================== */
+
+  const [customerOptions, setCustomerOptions] = useState([]);
+  const [customerMap, setCustomerMap] = useState({});
+
   const [jobOrderOptions, setJobOrderOptions] = useState([]);
   const [jobOrderMap, setJobOrderMap] = useState({});
-  const [itemOptions, setItemOptions] = useState([]);
-  const [itemMasterMap, setItemMasterMap] = useState({});
-  const [unitOptions, setUnitOptions] = useState([]);
+
+  /* ==========================================================================
+     FORM STATE
+  ========================================================================== */
 
   const [header, setHeader] = useState(() => ({
-    partyId: data?.partyId || "",
-    partyName: data?.partyName || "",
-    jobOrderNo: data?.jobOrderNo || "",
-    jobOrderDate: data?.jobOrderDate || "",
-    docId: data?.docId || (data ? "" : autoDocId()),
-    docDate: data?.docDate || todayStr(),
-    revisionNo: data?.revisionNo ?? 1,
-    active: data?.active !== false,
+    partyId: "",
+    partyName: "",
+    jobOrderNo: "",
+    jobOrderDate: "",
+    docId: "",
+    docDate: todayStr(),
+    revisionNo: "",
+    active: true,
   }));
 
-  const [jobOrderDetailRows, setJobOrderDetailRows] = useState(
-    data?.jobOrderDetails?.length
-      ? data.jobOrderDetails
-      : [emptyJobOrderDetailRow()],
-  );
-  const [summary, setSummary] = useState({
-    ...emptySummary(),
-    ...data?.summary,
-  });
+  const [itemDetailRows, setItemDetailRows] = useState([]);
 
-  /* ---------------- Lookup loading ---------------- */
+  const [summary, setSummary] = useState(emptySummary());
 
-  const loadParties = useCallback(async () => {
-    try {
-      const res = await partyMasterAPI.getPartyByOrgId(orgId, branch);
-      setPartyOptions(
-        (res || []).map((p) => ({
-          value: p.id,
-          label: p.customerName || p.docId || p.id,
-        })),
-      );
-    } catch (error) {
-      console.error("Failed to load party options:", error);
-      setPartyOptions([]);
+  /* ==========================================================================
+     STEP 1 — LOAD CUSTOMERS (Party Id / Party Name)
+
+     API: jobOrderAmendmentAPI.getCustomerForSupplierRateContract(branch, orgId)
+  ========================================================================== */
+
+  const loadCustomers = useCallback(async () => {
+    if (!orgId || !branch) {
+      setCustomerOptions([]);
+      setCustomerMap({});
+      return;
     }
-  }, [orgId, branch]);
 
-  const loadJobOrders = useCallback(async () => {
     try {
-      const res = await jobOrderAPI.getJobOrderByOrgId(orgId, branch);
+      const customers =
+        await jobOrderAmendmentAPI.getCustomerForSupplierRateContract(
+          branch,
+          orgId,
+        );
+
       const map = {};
-      const options = (res || []).map((jo) => {
-        map[jo.jobOrderNo] = jo;
-        return { value: jo.jobOrderNo, label: jo.jobOrderNo };
-      });
-      setJobOrderOptions(options);
-      setJobOrderMap(map);
+
+      const options = customers
+        .map((c) => {
+          const id = c.customerId ?? c.id ?? "";
+
+          map[id] = c;
+
+          return {
+            value: id,
+            label: c.customerName || c.customerCode || String(id),
+          };
+        })
+        .filter((opt) => opt.value !== "");
+
+      setCustomerOptions(options);
+      setCustomerMap(map);
     } catch (error) {
-      console.error("Failed to load job order options:", error);
-      setJobOrderOptions([]);
-      setJobOrderMap({});
+      console.error("Failed to load customers:", error);
+      setCustomerOptions([]);
+      setCustomerMap({});
     }
   }, [orgId, branch]);
 
-  const loadItems = useCallback(async () => {
-    try {
-      const res = await itemAPI.getItems(orgId, branch);
-      const map = {};
-      const options = (res || []).map((it) => {
-        map[it.itemCode] = it;
-        return { value: it.itemCode, label: it.itemCode };
-      });
-      setItemOptions(options);
-      setItemMasterMap(map);
-    } catch (error) {
-      console.error("Failed to load item options:", error);
-      setItemOptions([]);
-      setItemMasterMap({});
-    }
-  }, [orgId, branch]);
+  /* ==========================================================================
+     DOC ID (informational only — not part of the save payload)
 
-  const loadUnits = useCallback(async () => {
+     API: jobOrderAmendmentAPI.getJobOrderAmendmentDocId(financialYear, orgId)
+  ========================================================================== */
+
+  const loadDocId = useCallback(async () => {
+    if (!orgId || data?.id) {
+      // Skip for edit mode — the doc id already exists on the record.
+      return;
+    }
+
     try {
-      const res = await unitMasterAPI.getUnits(branch, orgId);
-      setUnitOptions(
-        (res || []).map((u) => ({
-          value: u.id,
-          label: u.unitId,
-        })),
+      const docId = await jobOrderAmendmentAPI.getJobOrderAmendmentDocId(
+        getFinancialYear(),
+        orgId,
       );
+
+      setHeader((prev) => ({ ...prev, docId }));
     } catch (error) {
-      console.error("Failed to load unit options:", error);
-      setUnitOptions([]);
+      console.error("Failed to load job order amendment doc id:", error);
     }
-  }, [orgId, branch]);
+  }, [orgId, data?.id]);
 
   useEffect(() => {
-    if (orgId && branch) {
-      loadParties();
-      loadJobOrders();
-      loadItems();
-      loadUnits();
-    }
-  }, [orgId, branch, loadParties, loadJobOrders, loadItems, loadUnits]);
+    loadCustomers();
+    loadDocId();
+  }, [loadCustomers, loadDocId]);
 
-  /* ---------------- Handlers ---------------- */
+  /* ==========================================================================
+     STEP 2 — LOAD JOB ORDER NO / DATE FOR SELECTED CUSTOMER
+
+     API: jobOrderAmendmentAPI.getJobOrderNoAndDateForJobOrderAmd(
+            branch, customer, orgId)
+  ========================================================================== */
+
+  const loadJobOrdersForCustomer = useCallback(
+    async (customerId) => {
+      if (!orgId || !branch || !customerId) {
+        setJobOrderOptions([]);
+        setJobOrderMap({});
+        return;
+      }
+
+      try {
+        const jobOrders =
+          await jobOrderAmendmentAPI.getJobOrderNoAndDateForJobOrderAmd(
+            branch,
+            customerId,
+            orgId,
+          );
+
+        const map = {};
+
+        const options = jobOrders
+          .map((jo) => {
+            map[jo.jobOrderNo] = jo;
+
+            return {
+              value: jo.jobOrderNo,
+              label: jo.jobOrderNo,
+            };
+          })
+          .filter((opt) => opt.value);
+
+        setJobOrderOptions(options);
+        setJobOrderMap(map);
+      } catch (error) {
+        console.error("Failed to load job orders for customer:", error);
+        setJobOrderOptions([]);
+        setJobOrderMap({});
+      }
+    },
+    [orgId, branch],
+  );
+
+  /* ==========================================================================
+     STEP 3 + 4 — REVISION NO & LINE ITEMS FOR SELECTED JOB ORDER
+
+     APIs:
+       jobOrderAmendmentAPI.getNextRevisionNoForJobOrderAmd(
+         branch, jobOrderNo, orgId)
+       jobOrderAmendmentAPI.getJobOrderItemDetailsForJobOrderAmd(
+         branch, customer, jobOrderNo, orgId)
+  ========================================================================== */
+
+  const loadRevisionAndItems = useCallback(
+    async (jobOrderNo, customerId) => {
+      if (!orgId || !branch || !jobOrderNo || !customerId) {
+        return;
+      }
+
+      try {
+        const revisionNo =
+          await jobOrderAmendmentAPI.getNextRevisionNoForJobOrderAmd(
+            branch,
+            jobOrderNo,
+            orgId,
+          );
+
+        setHeader((prev) => ({ ...prev, revisionNo }));
+      } catch (error) {
+        console.error("Failed to load next revision no:", error);
+      }
+
+      try {
+        const items =
+          await jobOrderAmendmentAPI.getJobOrderItemDetailsForJobOrderAmd(
+            branch,
+            customerId,
+            jobOrderNo,
+            orgId,
+          );
+
+        const rows = items.map((row) => ({
+          item: row.item,
+          itemCode: row.itemCode || "",
+          itemDescription: row.itemDescription || "",
+          unit: row.unit,
+          unitDescription: row.unitDescription || "",
+          oldQty: toNumberOrEmpty(row.oldQty ?? row.qty ?? row.orderQty ?? ""),
+          newQty: toNumberOrEmpty(row.oldQty ?? row.qty ?? row.orderQty ?? ""),
+        }));
+
+        setItemDetailRows(rows);
+
+        // Old Delivery Date comes from the item-level deliveryDate;
+        // all lines on one job order share the same delivery date.
+        const deliveryDate = items[0]?.deliveryDate || "";
+
+        setSummary((prev) => ({
+          ...prev,
+          oldDeliveryDate: deliveryDate,
+        }));
+      } catch (error) {
+        console.error("Failed to load job order item details:", error);
+        setItemDetailRows([]);
+      }
+    },
+    [orgId, branch],
+  );
+
+  /* ==========================================================================
+     EDIT MODE — FETCH FULL RECORD BY ID
+
+     Master passes just { id } for edit; this loads the full DTO via
+     getJobOrderAmendmentById, populates the form, then re-runs the
+     Job Order dropdown load for that customer so the header stays
+     interactive after loading.
+  ========================================================================== */
+
+  const fetchAmendmentData = useCallback(
+    async (id) => {
+      setIsLoading(true);
+
+      try {
+        const response =
+          await jobOrderAmendmentAPI.getJobOrderAmendmentById(id);
+
+        const apiData =
+          response?.paramObjectsMap?.jobOrderAmendmentVO ||
+          response?.paramObjectsMap?.jobOrderAmendment ||
+          response?.paramObjectsMap ||
+          response;
+
+        if (!apiData || response?.status === false) {
+          addToast("Job Order Amendment data not found");
+          return;
+        }
+
+        const partyId = getEntityId(apiData.customer ?? apiData.partyId);
+
+        setHeader({
+          partyId,
+          partyName:
+            apiData.partyName ||
+            getEntityField(apiData.customer, "customerName", "name"),
+          jobOrderNo: apiData.jobOrderNo || "",
+          jobOrderDate: apiData.jobOrderDate || "",
+          docId: apiData.docId || "",
+          docDate: apiData.docDate || todayStr(),
+          revisionNo: apiData.revisionNo ?? "",
+          active: apiData.active !== false,
+        });
+
+        const details = Array.isArray(apiData.jobOrderAmendmentDetails)
+          ? apiData.jobOrderAmendmentDetails
+          : [];
+
+        setItemDetailRows(
+          details.map((row) => ({
+            item: getEntityId(row.item),
+            itemCode: getEntityField(row.item, "itemCode"),
+            itemDescription: getEntityField(row.item, "itemDescription"),
+            unit: getEntityId(row.unit),
+            unitDescription: getEntityField(
+              row.unit,
+              "unitDescription",
+              "unitId",
+            ),
+            oldQty: toNumberOrEmpty(row.oldQty),
+            newQty: toNumberOrEmpty(row.newQty),
+          })),
+        );
+
+        setSummary({
+          oldDeliveryDate: apiData.oldDeliveryDate || "",
+          newDeliveryDate: apiData.newDeliveryDate || "",
+          remarks: apiData.remarks || "",
+        });
+
+        // Repopulate the Job Order No dropdown for this customer so
+        // the header select stays usable after loading existing data.
+        if (partyId) {
+          loadJobOrdersForCustomer(partyId);
+        }
+      } catch (error) {
+        console.error("Error fetching job order amendment:", error);
+
+        addToast(
+          error?.response?.data?.message ||
+            error?.message ||
+            "Failed to load Job Order Amendment for editing",
+        );
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [addToast, loadJobOrdersForCustomer],
+  );
+
+  useEffect(() => {
+    if (data?.id) {
+      fetchAmendmentData(data.id);
+    }
+  }, [data, fetchAmendmentData]);
+
+  /* ==========================================================================
+     CHANGE HANDLERS
+  ========================================================================== */
 
   const handleHeaderChange = (e) => {
     const { name, value } = e.target;
-    if (fieldErrors[name]) setFieldErrors((prev) => ({ ...prev, [name]: "" }));
-    setHeader((prev) => {
-      const next = { ...prev, [name]: value };
 
-      if (name === "partyId") {
-        const party = partyOptions.find((p) => p.value === value);
-        next.partyName = party?.label || "";
+    if (fieldErrors[name]) {
+      setFieldErrors((prev) => ({ ...prev, [name]: "" }));
+    }
+
+    if (name === "partyId") {
+      const customer = customerMap[value];
+
+      setHeader((prev) => ({
+        ...prev,
+        partyId: value,
+        partyName: customer?.customerName || "",
+        jobOrderNo: "",
+        jobOrderDate: "",
+        revisionNo: "",
+      }));
+
+      setItemDetailRows([]);
+      setSummary(emptySummary());
+      setJobOrderOptions([]);
+      setJobOrderMap({});
+
+      loadJobOrdersForCustomer(value);
+
+      return;
+    }
+
+    if (name === "jobOrderNo") {
+      const jobOrder = jobOrderMap[value];
+
+      setHeader((prev) => ({
+        ...prev,
+        jobOrderNo: value,
+        jobOrderDate: jobOrder?.jobOrderDate || "",
+        revisionNo: "",
+      }));
+
+      setItemDetailRows([]);
+
+      if (value) {
+        loadRevisionAndItems(value, header.partyId);
       }
 
-      if (name === "jobOrderNo") {
-        const job = jobOrderMap[value];
-        if (job) {
-          next.jobOrderDate = job.date || job.jobOrderDate || "";
-          const latestRevision =
-            Number(job.revisionNo || job.amendmentRevision || 0) || 0;
-          next.revisionNo =
-            latestRevision > 0 ? latestRevision + 1 : prev.revisionNo || 1;
-          setSummary((s) => ({
-            ...s,
-            oldDeliveryDate:
-              job.terms?.deliveryDate || job.deliveryDate || s.oldDeliveryDate,
-          }));
-          const details = job.orderDetails || [];
-          setJobOrderDetailRows(
-            details.length
-              ? details.map((d) => {
-                  const code = d.incomingItem || d.itemCode || "";
-                  return {
-                    itemCode: code,
-                    itemDescription:
-                      d.itemDescription ||
-                      itemMasterMap[code]?.itemDescription ||
-                      "",
-                    unit: d.unit || itemMasterMap[code]?.primaryUnits?.id || "",
-                    oldQty: d.orderQty ?? d.oldQty ?? "",
-                    newQty: d.orderQty ?? d.newQty ?? "",
-                  };
-                })
-              : [emptyJobOrderDetailRow()],
-          );
-        }
-      }
+      return;
+    }
 
-      return next;
-    });
+    setHeader((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSummaryChange = (e) => {
@@ -481,128 +718,226 @@ const JobOrderAmendmentForm = ({ data, onBack }) => {
     setSummary((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleCellChange = (idx, key, value) => {
-    setJobOrderDetailRows((prev) =>
-      prev.map((row, i) => {
-        if (i !== idx) return row;
-        let next = { ...row, [key]: value };
-        if (key === "itemCode") {
-          const item = itemMasterMap[value];
-          next = {
-            ...next,
-            itemDescription: item?.itemDescription || "",
-            unit: item?.primaryUnits?.id || "",
-          };
-        }
-        return next;
-      }),
+  const handleQtyChange = (idx, field, value) => {
+    setItemDetailRows((prev) =>
+      prev.map((row, i) =>
+        i === idx ? { ...row, [field]: toNumberOrEmpty(value) } : row,
+      ),
     );
   };
 
-  const handleAddRow = () =>
-    setJobOrderDetailRows((prev) => [...prev, emptyJobOrderDetailRow()]);
-  const handleRemoveRow = (idx) =>
-    setJobOrderDetailRows((prev) => prev.filter((_, i) => i !== idx));
-
-  /* ---------------- Validation & Save ---------------- */
+  /* ==========================================================================
+     VALIDATION
+  ========================================================================== */
 
   const validate = () => {
     const errors = {};
 
     if (!header.partyId) errors.partyId = "Party Id is required";
-    if (!header.partyName?.trim()) errors.partyName = "Party Name is required";
     if (!header.jobOrderNo) errors.jobOrderNo = "Job Order No is required";
     if (!header.jobOrderDate)
       errors.jobOrderDate = "Job Order Date is required";
-    if (!header.docId?.trim()) errors.docId = "Doc Id is required";
-    if (!header.docDate) errors.docDate = "Doc Date is required";
     if (header.revisionNo === "" || header.revisionNo === null)
       errors.revisionNo = "Revision No is required";
 
-    const hasValidRow = jobOrderDetailRows.some(
-      (r) => r.itemCode && Number(r.newQty) > 0,
+    const hasValidRow = itemDetailRows.some(
+      (r) => r.item && Number(r.newQty) > 0,
     );
-    if (!hasValidRow)
-      errors.jobOrderDetails =
-        "Add at least one item with an Item Code and a New Qty greater than 0";
+
+    if (!hasValidRow) {
+      errors.itemDetails =
+        "At least one line item must have a New Qty greater than 0";
+    }
 
     if (
       summary.oldDeliveryDate &&
       summary.newDeliveryDate &&
       summary.newDeliveryDate < summary.oldDeliveryDate
-    )
+    ) {
       errors.newDeliveryDate =
         "New Delivery Date cannot be before Old Delivery Date";
+    }
 
     setFieldErrors(errors);
+
     return Object.keys(errors).length === 0;
   };
 
+  /* ==========================================================================
+     BUILD PAYLOAD
+
+     MATCHES SWAGGER: PUT /api/subContract/createUpdateJobOrderAmendment
+
+     {
+       active, branch, cancelRemarks, createdBy, customer,
+       financialYear, id, jobOrderAmendmentDetails: [{ item, newQty,
+       oldQty, unit }], jobOrderDate, jobOrderNo, newDeliveryDate,
+       oldDeliveryDate, orgId, remarks, revisionNo
+     }
+
+     IMPORTANT: do not add docId, docDate, partyName, itemCode, etc.
+     to this object — none of them exist in the schema above and
+     sending extras (or omitting a required key) is what causes the
+     backend to reject the request.
+  ========================================================================== */
+
+  const buildPayload = () => {
+    const isUpdate = Boolean(data?.id);
+
+    return {
+      active: Boolean(header.active),
+
+      branch,
+
+      cancelRemarks: "",
+
+      createdBy:
+        localStorage.getItem("userName") ||
+        localStorage.getItem("username") ||
+        localStorage.getItem("usersId") ||
+        "",
+
+      customer: Number(header.partyId),
+
+      financialYear: getFinancialYear(),
+
+      // Only send id on update — omit it entirely for create so the
+      // backend doesn't mistake this for an update-of-record-0.
+      ...(isUpdate ? { id: Number(data.id) } : {}),
+
+      jobOrderAmendmentDetails: itemDetailRows
+        .filter((row) => row.item)
+        .map((row) => ({
+          item: Number(row.item),
+          newQty: Number(row.newQty) || 0,
+          oldQty: Number(row.oldQty) || 0,
+          unit: Number(row.unit),
+        })),
+
+      jobOrderDate: header.jobOrderDate,
+
+      jobOrderNo: header.jobOrderNo,
+
+      newDeliveryDate: summary.newDeliveryDate || null,
+
+      oldDeliveryDate: summary.oldDeliveryDate || null,
+
+      orgId,
+
+      remarks: summary.remarks || "",
+
+      revisionNo: String(header.revisionNo ?? ""),
+    };
+  };
+
+  /* ==========================================================================
+     SAVE
+  ========================================================================== */
+
   const handleSave = async () => {
-    if (!validate()) return;
+    if (!validate()) {
+      return;
+    }
 
     setIsSubmitting(true);
 
-    const isUpdate = Boolean(data?.id);
-
-    const payload = {
-      ...(isUpdate ? { id: data.id } : {}),
-      orgId,
-      branch,
-      ...header,
-      revisionNo: Number(header.revisionNo) || 0,
-      jobOrderDetails: jobOrderDetailRows.filter((r) => r.itemCode?.trim()),
-      summary,
-      createdBy: isUpdate
-        ? data?.createdBy || localStorage.getItem("usersId")
-        : localStorage.getItem("usersId"),
-      ...(isUpdate ? { updatedBy: localStorage.getItem("usersId") } : {}),
-    };
-
     try {
+      const payload = buildPayload();
+
+      console.log(
+        "================ JOB ORDER AMENDMENT PAYLOAD ================",
+      );
+      console.log(JSON.stringify(payload, null, 2));
+      console.log(
+        "===============================================================",
+      );
+
       const response =
         await jobOrderAmendmentAPI.createUpdateJobOrderAmendment(payload);
 
-      if (response?.status) {
+      const success =
+        response?.status === true ||
+        String(response?.statusFlag).toLowerCase() === "ok";
+
+      if (success) {
         addToast(
           response?.paramObjectsMap?.message ||
-            (isUpdate
+            (data?.id
               ? "Job Order Amendment updated successfully!"
               : "Job Order Amendment created successfully!"),
         );
+
         onBack?.();
-      } else {
-        addToast(
-          response?.errors?.[0]?.shortMessage ||
-            response?.errors?.[0]?.longMessage ||
-            response?.message ||
-            "Failed to save Job Order Amendment.",
-        );
+
+        return;
       }
-    } catch (err) {
-      console.error("Save Job Order Amendment Error:", err);
-      if (err.response?.data) {
-        addToast(
-          err.response.data.message ||
-            err.response.data.statusMessage ||
-            err.response.data.error ||
-            JSON.stringify(err.response.data),
-        );
-      } else {
-        addToast("Something went wrong.");
-      }
+
+      addToast(
+        response?.errors?.[0]?.shortMessage ||
+          response?.errors?.[0]?.longMessage ||
+          response?.paramObjectsMap?.message ||
+          "Failed to save Job Order Amendment.",
+      );
+    } catch (error) {
+      console.error("Save Job Order Amendment Error:", error);
+
+      const backendErrors = error?.response?.data?.errors;
+
+      const backendErrorText =
+        Array.isArray(backendErrors) && backendErrors.length
+          ? backendErrors
+              .map(
+                (e) =>
+                  e?.longMessage ||
+                  e?.shortMessage ||
+                  e?.logMessage ||
+                  e?.errorCode ||
+                  "",
+              )
+              .filter(Boolean)
+              .join("; ")
+          : "";
+
+      addToast(
+        backendErrorText ||
+          error?.response?.data?.message ||
+          error?.message ||
+          "Something went wrong.",
+      );
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const activeTabMeta = CHILD_TABS.find((t) => t.key === activeChildTab);
+  /* ==========================================================================
+     LOADING
+  ========================================================================== */
+
+  if (isLoading) {
+    return (
+      <div className="w-full p-2 relative">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto" />
+
+            <p className="mt-4 text-gray-600 dark:text-gray-400">
+              Loading Job Order Amendment data...
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* ==========================================================================
+     UI
+  ========================================================================== */
 
   return (
     <div className="w-full p-2">
-      {/* Header */}
       <div className="flex items-center gap-2 mb-3">
         <button
+          type="button"
           onClick={onBack}
           className="p-1 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white transition-colors"
         >
@@ -614,11 +949,14 @@ const JobOrderAmendmentForm = ({ data, onBack }) => {
         </h2>
       </div>
 
-      {/* Main Card */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
-        {/* ---------------- Header Info ---------------- */}
+        {/* ==================================================================
+           HEADER
+        ================================================================== */}
+
         <div>
           <SectionHeader>Job Order Amendment</SectionHeader>
+
           <div className={fieldGrid}>
             <Field
               type="select"
@@ -627,18 +965,18 @@ const JobOrderAmendmentForm = ({ data, onBack }) => {
               value={header.partyId}
               onChange={handleHeaderChange}
               error={fieldErrors.partyId}
-              options={partyOptions}
+              options={customerOptions}
               required
             />
+
             <Field
               label="Party Name"
               name="partyName"
               value={header.partyName}
-              onChange={handleHeaderChange}
-              error={fieldErrors.partyName}
-              required
+              onChange={() => {}}
               disabled
             />
+
             <Field
               type="select"
               label="Job Order No"
@@ -647,51 +985,56 @@ const JobOrderAmendmentForm = ({ data, onBack }) => {
               onChange={handleHeaderChange}
               error={fieldErrors.jobOrderNo}
               options={jobOrderOptions}
+              disabled={!header.partyId}
               required
             />
+
             <Field
               type="date"
               label="Job Order Date"
               name="jobOrderDate"
               value={header.jobOrderDate}
-              onChange={handleHeaderChange}
+              onChange={() => {}}
               error={fieldErrors.jobOrderDate}
+              disabled
               required
             />
+
             <Field
               label="Doc Id"
               name="docId"
               value={header.docId}
-              onChange={handleHeaderChange}
-              error={fieldErrors.docId}
-              required
-              disabled={!data}
+              onChange={() => {}}
+              disabled
             />
+
             <Field
               type="date"
               label="Doc Date"
               name="docDate"
               value={header.docDate}
-              onChange={handleHeaderChange}
-              error={fieldErrors.docDate}
-              required
+              onChange={() => {}}
               disabled
             />
+
             <Field
-              type="number"
               label="Revision No"
               name="revisionNo"
               value={header.revisionNo}
-              onChange={handleHeaderChange}
+              onChange={() => {}}
               error={fieldErrors.revisionNo}
+              disabled
+              required
             />
           </div>
         </div>
 
-        {/* ---------------- Child Tabs ---------------- */}
+        {/* ==================================================================
+           TABS
+        ================================================================== */}
+
         <section className="mt-0 bg-white dark:bg-gray-800">
-          {/* Tabs */}
-          <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 mb-0">
+          <div className="flex items-center border-b border-gray-200 dark:border-gray-700 mb-0">
             <div className="flex flex-wrap">
               {CHILD_TABS.map((tab) => (
                 <button
@@ -708,56 +1051,23 @@ const JobOrderAmendmentForm = ({ data, onBack }) => {
                 </button>
               ))}
             </div>
-
-            {activeTabMeta.kind === "table" && (
-              <button
-                type="button"
-                onClick={handleAddRow}
-                className="h-6 w-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-colors"
-              >
-                <Plus size={12} />
-              </button>
-            )}
           </div>
 
-          {/* Job Order Details tab */}
           {activeChildTab === "jobOrderDetails" && (
             <div className="pt-3">
-              <DynamicTable
-                columns={[
-                  {
-                    key: "itemCode",
-                    label: "Item Code",
-                    type: "select",
-                    options: itemOptions,
-                  },
-                  {
-                    key: "itemDescription",
-                    label: "Item Description",
-                    readOnly: true,
-                  },
-                  {
-                    key: "unit",
-                    label: "Unit",
-                    type: "select",
-                    options: unitOptions,
-                  },
-                  { key: "oldQty", label: "Old Qty", readOnly: true },
-                  { key: "newQty", label: "New Qty" },
-                ]}
-                rows={jobOrderDetailRows}
-                onCellChange={handleCellChange}
-                onRemoveRow={handleRemoveRow}
+              <ItemDetailsTable
+                rows={itemDetailRows}
+                onQtyChange={handleQtyChange}
               />
-              {fieldErrors.jobOrderDetails && (
+
+              {fieldErrors.itemDetails && (
                 <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
-                  {fieldErrors.jobOrderDetails}
+                  {fieldErrors.itemDetails}
                 </p>
               )}
             </div>
           )}
 
-          {/* Job Order Summary tab */}
           {activeChildTab === "jobOrderSummary" && (
             <div className="pt-3">
               <div className={subTabFieldGrid}>
@@ -766,8 +1076,10 @@ const JobOrderAmendmentForm = ({ data, onBack }) => {
                   label="Old Delivery Date"
                   name="oldDeliveryDate"
                   value={summary.oldDeliveryDate}
-                  onChange={handleSummaryChange}
+                  onChange={() => {}}
+                  disabled
                 />
+
                 <Field
                   type="date"
                   label="New Delivery Date"
@@ -776,6 +1088,7 @@ const JobOrderAmendmentForm = ({ data, onBack }) => {
                   onChange={handleSummaryChange}
                   error={fieldErrors.newDeliveryDate}
                 />
+
                 <Field
                   type="textarea"
                   label="Remarks"
