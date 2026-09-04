@@ -4,14 +4,13 @@ import { useForm, Controller, useFieldArray } from "react-hook-form";
 import dayjs from "dayjs";
 import { useToast } from "../../Toast/ToastContext";
 import salesReturnAPI from "../../../api/Sales/salesReturnAPI";
+import listOfValuesAPI from "../../../api/listOfValuesAPI";
 import branchAPI from "../../../api/branchAPI";
 import locationMasterAPI from "../../../api/locationMasterAPI";
-import partyMasterAPI from "../../../api/partyMasterAPI";
-import itemAPI from "../../../api/itemAPI";
-import unitMasterAPI from "../../../api/unitAPI";
 import { stateAPI } from "../../../api/stateAPI";
 import { employeeAPI } from "../../../api/employeeAPI";
 import docTypeMappingAPI from "../../../api/docTypeMappingAPI";
+import dailyExchangeRateAPI from "../../../api/dailyExchangeRateAPI";
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -224,20 +223,26 @@ const InputCell = ({
 
 const BELONGS_TO = ["Appliances", "Bosch"];
 const YES_NO = ["Yes", "No"];
-const INVOICE_REF_TYPES = ["Sales Invoice", "Credit Note", "Debit Note", "Challan"];
-const RETURN_TYPES = ["Quality Issue", "Damage", "Excess Supply", "Wrong Delivery", "Other"];
-const CURRENCY = ["INR", "USD", "EUR", "GBP"];
-const TAX_TYPES = ["SGST", "IGST"];
+const INVOICE_REF_TYPES = ["With Our Invoice"," Without Our Invoice"];
+const CURRENCY = [""];
+
+const roundHalfUp = (value, decimals = 2) => {
+  const factor = 10 ** decimals;
+  return Math.round((value + Number.EPSILON) * factor) / factor;
+};
 
 // ===================== Default Values =====================
 
 const getDefaultItemRow = () => ({
+  itemId: "",
   itemCode: "",
   itemDescription: "",
+  hsnId: "",
   hsCode: "",
   taxType: "",
   taxPercentage: "",
   unit: "",
+  unitDescription: "",
   stock: 0,
   qtySold: 0,
   receivedQty: 0,
@@ -245,9 +250,15 @@ const getDefaultItemRow = () => ({
   rateInCurrency: 0,
   amountInCurrency: 0,
   amount: 0,
+  sgstRate: 0,
+  cgstRate: 0,
+  igstRate: 0,
 });
 
 const getDefaultTaxRow = () => ({
+  particulars: "",
+  amount: 0,
+  glAccountName: "",
   sgstRate: 0,
   sgstAmount: 0,
   cgstRate: 0,
@@ -270,8 +281,10 @@ const getDefaultValues = () => ({
   invoiceDate: "",
   gatePassNo: "",
   returnType: "",
-  currency: "INR",
-  exchangeRate: 1,
+  currency: "",
+  currencyId: "",
+  exchangeRateId: "",
+  exchangeRate: 0,
   docNo: "",
   customerInvoiceNo: "",
   customerInvoiceDate: "",
@@ -333,63 +346,79 @@ const SalesReturnForm = ({ data, onBack }) => {
   const [locationOptions, setLocationOptions] = useState([]);
   const [itemOptions, setItemOptions] = useState([]);
   const [itemMap, setItemMap] = useState({});
-  const [unitOptions, setUnitOptions] = useState([]);
   const [stateOptions, setStateOptions] = useState([]);
   const [invoiceOptions, setInvoiceOptions] = useState([]);
   const [gatePassOptions, setGatePassOptions] = useState([]);
   const [employeeOptions, setEmployeeOptions] = useState([]);
-
+  const [returnTypeOptions, setReturnTypeOptions] = useState([]);
+  const [currencyOptions, setCurrencyOptions] = useState(CURRENCY);
+  const [buyingExRate, setBuyingExRate] = useState(0);
+  const currencyMap = useRef({});
+  const baseItemOptions = useRef([]);
+  const baseItemMap = useRef({});
   const defaults = useCallback(() => {
     const base = getDefaultValues();
     if (data) {
       base.plantId = data.branch?.id ?? data.plantId ?? "";
       base.belongsTo = data.belongsTo || "";
-      base.customerId = data.customer?.id ?? data.customerId ?? "";
+      base.customerId = data.customer?.customerId ?? data.customer?.id ?? data.customerId ?? "";
       base.customerName = data.customer?.customerName || data.customerName || "";
       base.customerCode = data.customer?.customerCode || data.customerCode || "";
       base.locationId = data.location?.id ?? data.locationId ?? "";
       base.refNo = data.refNo || "";
       base.refDate = data.refDate || dayjs().format("YYYY-MM-DD");
-      base.invoiceRefType = data.invoiceRefType || "";
+      base.invoiceRefType = data.invoiceReferenceType || data.invoiceRefType || "";
       base.invoiceNo = data.invoiceNo || "";
       base.invoiceDate = data.invoiceDate || "";
       base.gatePassNo = data.gatePassNo || "";
       base.returnType = data.returnType || "";
-      base.currency = data.currency || "INR";
+      base.currency = data.currency?.currencyName || data.currency || "INR";
+      base.currencyId = data.currencyId || data.currency?.id || "";
+      base.exchangeRateId = data.exchangeRateId || "";
       base.exchangeRate = data.exchangeRate || 1;
-      base.docNo = data.docNo || data.salesReturnNo || "";
+      base.docNo = data.docId || data.docNo || data.salesReturnNo || "";
       base.customerInvoiceNo = data.customerInvoiceNo || "";
       base.customerInvoiceDate = data.customerInvoiceDate || "";
-      base.date = data.date || data.salesReturnDate || dayjs().format("YYYY-MM-DD");
-      base.approvedByAccounts = data.approvedByAccounts === true ? "Yes" : data.approvedByAccounts === false ? "No" : data.approvedByAccounts || "No";
-      base.partyGSTState = data.customer?.state || data.partyGSTState || "";
-      base.isIGSTApplicable = data.isIgstApplicable === true ? "Yes" : data.isIgstApplicable === false ? "No" : data.isIGSTApplicable || "No";
-      base.gstinNo = data.customer?.customerGstNo || data.gstinNo || "";
+      base.date = data.date || data.docDate || data.salesReturnDate || dayjs().format("YYYY-MM-DD");
+      base.approvedByAccounts = data.approvedByAccounts === "true" ? "Yes" : data.approvedByAccounts === false ? "No" : (data.approvedByAccounts || "No");
+      base.partyGSTState = data.customer?.gstState || data.partyGSTState || "";
+      const igst = data.igstApplicable === true || data.isIgstApplicable === true;
+      base.isIGSTApplicable = igst ? "Yes" : "No";
+      base.gstinNo = data.customer?.gstNo || data.gstinNo || "";
       base.taxCode = data.taxCode || "";
       base.narration = data.narration || "";
 
-      if (data.items?.length > 0 || data.salesReturnItemDetailsDTO?.length > 0) {
-        const src = data.items || data.salesReturnItemDetailsDTO || [];
+      if (data.salesReturnDetails?.length > 0 || data.items?.length > 0 || data.salesReturnItemDetailsDTO?.length > 0) {
+        const src = data.salesReturnDetails || data.items || data.salesReturnItemDetailsDTO || [];
         base.items = src.map((it) => ({
-          itemCode: it.item?.id ?? it.itemCode ?? "",
+          itemId: it.item ?? it.item?.id ?? it.itemId ?? "",
+          itemCode: it.item ?? it.item?.id ?? it.itemId ?? "",
           itemDescription: it.item?.itemDescription || it.itemDescription || "",
-          hsCode: it.hsnCode || it.hsCode || "",
+          hsnId: it.hsnId ?? "",
+          hsCode: (it.hsnSacCode ?? it.hsnCode ?? it.hsCode ?? it.hsnId) || "",
           taxType: it.taxType || "",
           taxPercentage: it.taxPercentage || "",
-          unit: it.item?.unit?.id ?? it.unit ?? "",
+          unit: it.unit?.id ?? it.unitId ?? it.unit ?? "",
+          unitDescription: it.unit?.unitDescription || it.unitDescription || "",
           stock: it.stock || 0,
           qtySold: it.qtySold || 0,
           receivedQty: it.receivedQty || it.qty || 0,
           rate: it.rate || 0,
-          rateInCurrency: it.rateInCurrency || 0,
-          amountInCurrency: it.amountInCurrency || 0,
+          rateInCurrency: it.rateInSelectedCurrency || it.rateInCurrency || 0,
+          amountInCurrency: it.amountInSelectedCurrency || it.amountInCurrency || 0,
           amount: it.amount || 0,
+          sgstRate: it.sgstRate || 0,
+          cgstRate: it.cgstRate || 0,
+          igstRate: it.igstRate || 0,
         }));
       }
 
-      if (data.taxDetails?.length > 0 || data.salesReturnTaxDetailsDTO?.length > 0) {
-        const src = data.taxDetails || data.salesReturnTaxDetailsDTO || [];
+      if (data.salesReturnTaxDetails?.length > 0 || data.taxDetails?.length > 0 || data.salesReturnTaxDetailsDTO?.length > 0) {
+        const src = data.salesReturnTaxDetails || data.taxDetails || data.salesReturnTaxDetailsDTO || [];
         base.taxDetails = src.map((t) => ({
+          particulars: t.particulars || "",
+          amount: t.amount ?? 0,
+          glAccountName: t.glAccountName || "",
           sgstRate: t.sgstRate || 0,
           sgstAmount: t.sgstAmount || 0,
           cgstRate: t.cgstRate || 0,
@@ -420,6 +449,8 @@ const SalesReturnForm = ({ data, onBack }) => {
   const watchCurrency = watch("currency");
   const watchExchangeRate = watch("exchangeRate");
   const watchCustomerId = watch("customerId");
+  const watchInvoiceRefType = watch("invoiceRefType");
+  const watchInvoiceNo = watch("invoiceNo");
 
   // ---- Auto-calculate amounts ----
   useEffect(() => {
@@ -432,12 +463,17 @@ const SalesReturnForm = ({ data, onBack }) => {
       if (Number(row.amount) !== amt) {
         setValue(`items.${idx}.amount`, amt, { shouldDirty: true });
       }
-      const exRate = Number(watchExchangeRate) || 1;
-      if (Number(row.rateInCurrency) !== rate / exRate) {
-        setValue(`items.${idx}.rateInCurrency`, rate / exRate, { shouldDirty: true });
-      }
-      if (Number(row.amountInCurrency) !== amt / exRate) {
-        setValue(`items.${idx}.amountInCurrency`, amt / exRate, { shouldDirty: true });
+      const exRate = Number(watchExchangeRate) || 0;
+      let rateInCurr = 0;
+      if (exRate !== 0 && row.rate != null) {
+        rateInCurr = roundHalfUp(rate / exRate, 2);
+        const amtInCurr = qty * rateInCurr;
+        if (Number(row.rateInCurrency) !== rateInCurr) {
+          setValue(`items.${idx}.rateInCurrency`, rateInCurr, { shouldDirty: true });
+        }
+        if (Number(row.amountInCurrency) !== amtInCurr) {
+          setValue(`items.${idx}.amountInCurrency`, amtInCurr, { shouldDirty: true });
+        }
       }
       net += amt;
     });
@@ -462,8 +498,12 @@ const SalesReturnForm = ({ data, onBack }) => {
     });
     const existing = getValues("taxDetails") || [];
     const first = existing[0] || getDefaultTaxRow();
+    const taxTotal = sgstTotal + cgstTotal + igstTotal;
     const updated = {
       ...first,
+      particulars: first.particulars || (watchIsIGST === "Yes" ? "IGST" : "CGST + SGST"),
+      amount: first.amount ?? taxTotal,
+      glAccountName: first.glAccountName || "",
       sgstRate: watchIsIGST === "Yes" ? 0 : (watchItems[0] ? (Number(watchItems[0].taxPercentage) || 0) / 2 : 0),
       sgstAmount: sgstTotal,
       cgstRate: watchIsIGST === "Yes" ? 0 : (watchItems[0] ? (Number(watchItems[0].taxPercentage) || 0) / 2 : 0),
@@ -476,17 +516,35 @@ const SalesReturnForm = ({ data, onBack }) => {
     }
   }, [watchItems, watchIsIGST, taxArray, getValues]);
 
+  // ---- Set item CGST/SGST/IGST rates based on IGST applicability ----
+  useEffect(() => {
+    if (!watchItems?.length) return;
+    watchItems.forEach((row, idx) => {
+      const taxPct = Number(row.taxPercentage) || 0;
+      if (watchIsIGST === "No") {
+        const split = roundHalfUp(taxPct / 2, 2);
+        if (Number(row.sgstRate) !== split) setValue(`items.${idx}.sgstRate`, split, { shouldDirty: true });
+        if (Number(row.cgstRate) !== split) setValue(`items.${idx}.cgstRate`, split, { shouldDirty: true });
+        if (Number(row.igstRate) !== 0) setValue(`items.${idx}.igstRate`, 0, { shouldDirty: true });
+      } else if (watchIsIGST === "Yes") {
+        if (Number(row.igstRate) !== taxPct) setValue(`items.${idx}.igstRate`, taxPct, { shouldDirty: true });
+        if (Number(row.sgstRate) !== 0) setValue(`items.${idx}.sgstRate`, 0, { shouldDirty: true });
+        if (Number(row.cgstRate) !== 0) setValue(`items.${idx}.cgstRate`, 0, { shouldDirty: true });
+      }
+    });
+  }, [watchItems, watchIsIGST, setValue]);
+
   // ---- Data loading ----
   useEffect(() => {
     if (orgId) {
       loadPlants();
       loadCustomers();
       loadLocations();
-      loadItems();
-      loadUnits();
       loadStates();
       loadEmployees();
-      loadGatePasses();
+      loadInvoices();
+      loadReturnTypes();
+      loadInvoiceItems();
     }
   }, [orgId, branchId]);
 
@@ -496,6 +554,25 @@ const SalesReturnForm = ({ data, onBack }) => {
       loadSalesReturnData(data);
     }
   }, [data]);
+
+  // ---- Auto-fetch Doc ID for new Sales Return ----
+  useEffect(() => {
+    if (data?.id) return;
+    let active = true;
+    const loadDocId = async () => {
+      try {
+        const financialYear = new Date().getFullYear().toString();
+        const docId = await salesReturnAPI.getSalesReturnDocId(orgId, financialYear);
+        if (active && docId) {
+          setValue("docNo", docId, { shouldDirty: true });
+        }
+      } catch (error) {
+        console.error("Error fetching Sales Return DocId:", error);
+      }
+    };
+    if (orgId) loadDocId();
+    return () => { active = false; };
+  }, [orgId, data?.id, setValue]);
 
   const loadPlants = useCallback(async () => {
     try {
@@ -514,15 +591,15 @@ const SalesReturnForm = ({ data, onBack }) => {
 
   const loadCustomers = useCallback(async () => {
     try {
-      const res = await partyMasterAPI.getPartyByOrgId(orgId, branchId);
+      const res = await salesReturnAPI.getCustomerDetailsForSalesRejectionInvoice(orgId, branchId);
       setCustomerOptions(
         (res || []).map((c) => ({
-          value: c.id,
-          label: c.customerCode || c.docId || c.id,
+          value: c.customerId ?? c.id,
+          label: c.customerCode || c.customerId,
           customerName: c.customerName || "",
           customerCode: c.customerCode || "",
-          partyGSTState: c.gstState?.stateName || "",
-          isIGSTApplicable: c.gstApplicable || false,
+          partyGSTState: c.gstState || "",
+          isIGSTApplicable: c.igstApplicable === true,
           gstnNo: c.gstNo || "",
         })),
       );
@@ -531,29 +608,9 @@ const SalesReturnForm = ({ data, onBack }) => {
 
   const loadLocations = useCallback(async () => {
     try {
-      const res = await locationMasterAPI.getLocationMasterByOrgId(orgId, branchId);
-      setLocationOptions((res || []).map((l) => ({ value: l.id, label: l.locationName || l.locationCode || l.id })));
+      const res = await salesReturnAPI.getLocationBySalesReturnOrgId(orgId, branchId);
+      setLocationOptions((res || []).map((l) => ({ value: l.id, label: l.locationName || l.locationCode || l.locationId || l.id })));
     } catch { setLocationOptions([]); }
-  }, [orgId, branchId]);
-
-  const loadItems = useCallback(async () => {
-    try {
-      const res = await itemAPI.getItems(orgId, branchId);
-      const map = {};
-      const options = (res || []).map((it) => {
-        map[it.id] = it;
-        return { value: it.id, label: it.itemCode };
-      });
-      setItemOptions(options);
-      setItemMap(map);
-    } catch { setItemOptions([]); setItemMap({}); }
-  }, [orgId, branchId]);
-
-  const loadUnits = useCallback(async () => {
-    try {
-      const res = await unitMasterAPI.getUnits(branchId, orgId);
-      setUnitOptions((res || []).map((u) => ({ value: u.id, label: u.unitId })));
-    } catch { setUnitOptions([]); }
   }, [orgId, branchId]);
 
   const loadStates = useCallback(async () => {
@@ -570,66 +627,206 @@ const SalesReturnForm = ({ data, onBack }) => {
     } catch { setEmployeeOptions([]); }
   }, [orgId]);
 
-  const loadGatePasses = useCallback(async () => {
+  const loadGatePasses = useCallback(async (customer, invno, type) => {
+    if (!customer || !invno || !type) {
+      setGatePassOptions([]);
+      return;
+    }
     try {
-      const res = await salesReturnAPI.getGatePassByOrgId(orgId, branchId);
-      setGatePassOptions((res || []).map((g) => ({ value: g.id || g.gatePassNo, label: g.gatePassNo || g.id })));
+      const res = await salesReturnAPI.getGateInwardForSalesReturn(
+        orgId, branchId, customer, invno, type,
+      );
+      setGatePassOptions(
+        (res || []).map((g) => ({
+          value: g.gateInwardDocId || g.gateInwardId,
+          label: g.gateInwardDocId || g.gateInwardId,
+          gateInwardId: g.gateInwardId,
+        })),
+      );
     } catch { setGatePassOptions([]); }
   }, [orgId, branchId]);
+
+  const loadInvoices = useCallback(async () => {
+    try {
+      const res = await salesReturnAPI.getSalesRejectionInvoiceForSalesReturn(orgId, branchId);
+      setInvoiceOptions(
+        (res || []).map((inv) => ({ value: inv.docId, label: inv.docId, docType: inv.docType, docDate: inv.docDate })),
+      );
+    } catch { setInvoiceOptions([]); }
+  }, [orgId, branchId]);
+
+  const loadInvoiceItems = useCallback(async () => {
+    try {
+      const res = await salesReturnAPI.getItemDetailsForSalesReturn(orgId, branchId);
+      const map = {};
+      const options = (res || []).map((it) => {
+        map[it.itemId] = it;
+        return { value: it.itemId, label: it.itemCode };
+      });
+      baseItemOptions.current = options;
+      baseItemMap.current = map;
+      setItemOptions(options);
+      setItemMap(map);
+    } catch { setItemOptions([]); setItemMap({}); }
+  }, [orgId, branchId]);
+
+  const loadInvoiceSpecificItems = useCallback(async (invoiceNo, mode) => {
+    if (!invoiceNo) {
+      setItemOptions(baseItemOptions.current);
+      setItemMap(baseItemMap.current);
+      return;
+    }
+    let invoiceItems = [];
+    try {
+      invoiceItems = (await salesReturnAPI.getSalesRejectionInvoiceItemDetailsForSalesReturn(orgId, branchId, invoiceNo)) || [];
+    } catch { invoiceItems = []; }
+
+    if (mode === "without") {
+      setItemOptions(baseItemOptions.current);
+      setItemMap(baseItemMap.current);
+      const currentItems = getValues("items") || [];
+      const firstRow = currentItems[0];
+      if ((!currentItems.length || !firstRow?.itemCode) && baseItemOptions.current.length > 0) {
+        applySelectedItem(0, baseItemMap.current[baseItemOptions.current[0].value]);
+      }
+      return;
+    }
+
+    setItemOptions(baseItemOptions.current);
+    setItemMap(baseItemMap.current);
+
+    const firstInvoiceItem = invoiceItems.length > 0 ? invoiceItems[0] : null;
+    const defaultItem = firstInvoiceItem || (baseItemOptions.current.length > 0 ? baseItemMap.current[baseItemOptions.current[0].value] : null);
+    itemsArray.replace([getDefaultItemRow()]);
+    if (defaultItem) {
+      applySelectedItem(0, defaultItem);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgId, branchId]);
+
+  const loadCurrencies = useCallback(async (customerId) => {
+    if (!customerId) {
+      setCurrencyOptions(CURRENCY);
+      currencyMap.current = {};
+      return;
+    }
+    try {
+      const res = await salesReturnAPI.getCurrencyForSalesRejectionInvoice(orgId, branchId, customerId);
+      const map = {};
+      const options = (res || []).map((c) => {
+        map[c.currency] = { currencyId: c.currencyId, exchangeRateId: c.exchangeRateId, exchangeRate: c.exchangeRate };
+        return { value: c.currency, label: c.currency };
+      });
+      currencyMap.current = map;
+      setCurrencyOptions(options);
+    } catch {
+      setCurrencyOptions([]);
+      currencyMap.current = {};
+    }
+  }, [orgId, branchId]);
+
+  const loadReturnTypes = useCallback(async () => {
+    try {
+      const res = await listOfValuesAPI.getListValuesGroup("SALSE RETURN", orgId);
+      setReturnTypeOptions(
+        (res || []).map((r) => ({ value: r.valuesDescription || r.id, label: r.valuesDescription || r.id })),
+      );
+    } catch { setReturnTypeOptions([]); }
+  }, [orgId]);
+
+  // ---- Load Gate Passes based on customer + invoice ref type + invoice ----
+  useEffect(() => {
+    if (watchCustomerId && watchInvoiceNo && watchInvoiceRefType) {
+      loadGatePasses(watchCustomerId, watchInvoiceNo, watchInvoiceRefType.trim());
+    } else {
+      setGatePassOptions([]);
+    }
+  }, [watchCustomerId, watchInvoiceNo, watchInvoiceRefType, loadGatePasses]);
+
+  // ---- Auto-set exchange rate when a currency is selected ----
+  useEffect(() => {
+    if (!watchCurrency) return;
+    const entry = currencyMap.current[watchCurrency];
+    if (entry) {
+      if (Number(entry.exchangeRate) && Number(watchExchangeRate) !== Number(entry.exchangeRate)) {
+        setValue("exchangeRate", Number(entry.exchangeRate), { shouldDirty: true });
+      }
+      if (String(getValues("currencyId")) !== String(entry.currencyId)) {
+        setValue("currencyId", entry.currencyId, { shouldDirty: true });
+      }
+      if (String(getValues("exchangeRateId")) !== String(entry.exchangeRateId)) {
+        setValue("exchangeRateId", entry.exchangeRateId, { shouldDirty: true });
+      }
+    }
+  }, [watchCurrency, watchExchangeRate, setValue, getValues]);
 
   const loadSalesReturnData = async (raw) => {
     setLoading(true);
     try {
       const response = await salesReturnAPI.getSalesReturnById(raw.id);
-      const sr = response?.paramObjectsMap?.salesReturnResponseVO;
+      const sr = response?.paramObjectsMap?.salesReturn || response?.paramObjectsMap?.salesReturnResponseVO;
       if (!sr) { addToast("Failed to load data", "error"); return; }
 
       setValue("plantId", sr.branch?.id || sr.plantId || "");
       setValue("belongsTo", sr.belongsTo || "");
-      setValue("customerId", sr.customer?.id || sr.customerId || "");
+      setValue("customerId", sr.customer?.customerId ?? sr.customer?.id ?? sr.customerId ?? "");
       setValue("customerName", sr.customer?.customerName || sr.customerName || "");
       setValue("customerCode", sr.customer?.customerCode || sr.customerCode || "");
       setValue("locationId", sr.location?.id || sr.locationId || "");
       setValue("refNo", sr.refNo || "");
       setValue("refDate", sr.refDate || "");
-      setValue("invoiceRefType", sr.invoiceRefType || "");
+      setValue("invoiceRefType", sr.invoiceReferenceType || sr.invoiceRefType || "");
       setValue("invoiceNo", sr.invoiceNo || "");
       setValue("invoiceDate", sr.invoiceDate || "");
       setValue("gatePassNo", sr.gatePassNo || "");
       setValue("returnType", sr.returnType || "");
-      setValue("currency", sr.currency || "INR");
+      setValue("currency", sr.currency?.currencyName || sr.currency || "INR");
+      setValue("currencyId", sr.currency?.id || sr.currencyId || "");
+      setValue("exchangeRateId", sr.exchangeRateId || "");
       setValue("exchangeRate", sr.exchangeRate || 1);
-      setValue("docNo", sr.docNo || sr.salesReturnNo || "");
+      setValue("docNo", sr.docId || sr.docNo || sr.salesReturnNo || "");
       setValue("customerInvoiceNo", sr.customerInvoiceNo || "");
       setValue("customerInvoiceDate", sr.customerInvoiceDate || "");
-      setValue("date", sr.date || sr.salesReturnDate || "");
-      setValue("approvedByAccounts", sr.approvedByAccounts === true ? "Yes" : sr.approvedByAccounts === false ? "No" : sr.approvedByAccounts || "No");
-      setValue("partyGSTState", sr.customer?.state || sr.partyGSTState || "");
-      setValue("isIGSTApplicable", sr.isIgstApplicable === true ? "Yes" : sr.isIgstApplicable === false ? "No" : sr.isIGSTApplicable || "No");
-      setValue("gstinNo", sr.customer?.customerGstNo || sr.gstinNo || "");
+      setValue("date", sr.date || sr.docDate || sr.salesReturnDate || "");
+      setValue("approvedByAccounts", sr.approvedByAccounts === true ? "Yes" : sr.approvedByAccounts === false ? "No" : (sr.approvedByAccounts || "No"));
+      setValue("partyGSTState", sr.customer?.gstState || sr.partyGSTState || "");
+      const igst = sr.igstApplicable === true || sr.isIgstApplicable === true;
+      setValue("isIGSTApplicable", igst ? "Yes" : "No");
+      setValue("gstinNo", sr.customer?.gstNo || sr.gstinNo || "");
       setValue("taxCode", sr.taxCode || "");
       setValue("narration", sr.narration || "");
 
-      if (sr.salesReturnItemDetailsDTO?.length > 0) {
-        itemsArray.replace(sr.salesReturnItemDetailsDTO.map((it) => ({
-          itemCode: it.item?.id || it.itemCode || "",
+      if (sr.salesReturnDetails?.length > 0 || sr.salesReturnItemDetailsDTO?.length > 0) {
+        const src = sr.salesReturnDetails || sr.salesReturnItemDetailsDTO || [];
+        itemsArray.replace(src.map((it) => ({
+          itemId: it.item ?? it.item?.id ?? it.itemId ?? "",
+          itemCode: it.item ?? it.item?.id ?? it.itemId ?? "",
           itemDescription: it.item?.itemDescription || it.itemDescription || "",
-          hsCode: it.hsnCode || it.hsCode || "",
+          hsnId: it.hsnId ?? "",
+          hsCode: it.hsnSacCode ?? it.hsnCode ?? it.hsCode ?? it.hsnId ?? "",
           taxType: it.taxType || "",
           taxPercentage: it.taxPercentage || "",
-          unit: it.unit || "",
+          unit: it.unit?.id ?? it.unitId ?? it.unit ?? "",
+          unitDescription: it.unit?.unitDescription || it.unitDescription || "",
           stock: it.stock || 0,
           qtySold: it.qtySold || 0,
           receivedQty: it.receivedQty || it.qty || 0,
           rate: it.rate || 0,
-          rateInCurrency: it.rateInCurrency || 0,
-          amountInCurrency: it.amountInCurrency || 0,
+          rateInCurrency: it.rateInSelectedCurrency || it.rateInCurrency || 0,
+          amountInCurrency: it.amountInSelectedCurrency || it.amountInCurrency || 0,
           amount: it.amount || 0,
+          sgstRate: it.sgstRate || 0,
+          cgstRate: it.cgstRate || 0,
+          igstRate: it.igstRate || 0,
         })));
       }
 
-      if (sr.salesReturnTaxDetailsDTO?.length > 0) {
-        taxArray.replace(sr.salesReturnTaxDetailsDTO.map((t) => ({
+      if (sr.salesReturnTaxDetails?.length > 0 || sr.salesReturnTaxDetailsDTO?.length > 0) {
+        const src = sr.salesReturnTaxDetails || sr.salesReturnTaxDetailsDTO || [];
+        taxArray.replace(src.map((t) => ({
+          particulars: t.particulars || "",
+          amount: t.amount ?? 0,
+          glAccountName: t.glAccountName || "",
           sgstRate: t.sgstRate || 0,
           sgstAmount: t.sgstAmount || 0,
           cgstRate: t.cgstRate || 0,
@@ -654,18 +851,63 @@ const SalesReturnForm = ({ data, onBack }) => {
     const igst = cust?.isIGSTApplicable === true ? "Yes" : "No";
     setValue("isIGSTApplicable", igst, { shouldDirty: true });
     setValue("gstinNo", cust?.gstnNo || "", { shouldDirty: true });
+    setValue("currency", "", { shouldDirty: true });
+    setValue("currencyId", "", { shouldDirty: true });
+    setValue("exchangeRateId", "", { shouldDirty: true });
+    setValue("exchangeRate", 1, { shouldDirty: true });
+    loadCurrencies(id);
   };
+
+  const clearItemFields = useCallback((idx) => {
+    setValue(`items.${idx}.itemId`, "", { shouldDirty: true });
+    setValue(`items.${idx}.itemCode`, "", { shouldDirty: true });
+    setValue(`items.${idx}.itemDescription`, "", { shouldDirty: true });
+    setValue(`items.${idx}.hsnId`, "", { shouldDirty: true });
+    setValue(`items.${idx}.hsCode`, "", { shouldDirty: true });
+    setValue(`items.${idx}.unit`, "", { shouldDirty: true });
+    setValue(`items.${idx}.unitDescription`, "", { shouldDirty: true });
+    setValue(`items.${idx}.qtySold`, 0, { shouldDirty: true });
+    setValue(`items.${idx}.receivedQty`, 0, { shouldDirty: true });
+    setValue(`items.${idx}.rate`, 0, { shouldDirty: true });
+    setValue(`items.${idx}.stock`, 0, { shouldDirty: true });
+    setValue(`items.${idx}.taxType`, "", { shouldDirty: true });
+    setValue(`items.${idx}.taxPercentage`, 0, { shouldDirty: true });
+    setValue(`items.${idx}.sgstRate`, 0, { shouldDirty: true });
+    setValue(`items.${idx}.cgstRate`, 0, { shouldDirty: true });
+    setValue(`items.${idx}.igstRate`, 0, { shouldDirty: true });
+    setValue(`items.${idx}.rateInCurrency`, 0, { shouldDirty: true });
+    setValue(`items.${idx}.amountInCurrency`, 0, { shouldDirty: true });
+    setValue(`items.${idx}.amount`, 0, { shouldDirty: true });
+  }, [setValue]);
+
+  const applySelectedItem = useCallback((idx, item) => {
+    if (!item) return;
+    setValue(`items.${idx}.itemId`, item.itemId ?? item.itemCode ?? "", { shouldDirty: true });
+    setValue(`items.${idx}.itemCode`, item.itemId ?? item.itemCode ?? "", { shouldDirty: true });
+    setValue(`items.${idx}.itemDescription`, item.itemDescription || "", { shouldDirty: true });
+    setValue(`items.${idx}.hsnId`, item.hsnId ?? "", { shouldDirty: true });
+    setValue(`items.${idx}.hsCode`, item.hsnSacCode ?? item.hsnId ?? item.hsCode ?? "", { shouldDirty: true });
+    setValue(`items.${idx}.unit`, item.unitId ?? item.unit ?? "", { shouldDirty: true });
+    setValue(`items.${idx}.unitDescription`, item.unitDescription || item.unitCode || "", { shouldDirty: true });
+    setValue(`items.${idx}.qtySold`, item.qtySold || 0, { shouldDirty: true });
+    setValue(`items.${idx}.rate`, item.newRate ?? item.rate ?? 0, { shouldDirty: true });
+    setValue(`items.${idx}.stock`, item.stock || 0, { shouldDirty: true });
+    const igst = Number(item.igstRate) > 0;
+    const taxType = igst ? "IGST" : "SGST";
+    setValue(`items.${idx}.taxType`, taxType, { shouldDirty: true });
+    setValue(`items.${idx}.taxPercentage`, item.igstRate || item.sgstRate || item.cgstRate || 0, { shouldDirty: true });
+    setValue(`items.${idx}.sgstRate`, item.sgstRate || 0, { shouldDirty: true });
+    setValue(`items.${idx}.cgstRate`, item.cgstRate || 0, { shouldDirty: true });
+    setValue(`items.${idx}.igstRate`, item.igstRate || 0, { shouldDirty: true });
+  }, [setValue]);
 
   const handleItemChange = (idx, field, value) => {
     setValue(`items.${idx}.${field}`, value, { shouldDirty: true });
     if (field === "itemCode") {
-      const item = itemMap[value];
-      if (item) {
-        setValue(`items.${idx}.itemDescription`, item.itemDescription || "", { shouldDirty: true });
-        setValue(`items.${idx}.hsCode`, item.itemHsn?.hsnCode || "", { shouldDirty: true });
-        setValue(`items.${idx}.unit`, item.primaryUnits?.id || "", { shouldDirty: true });
-        const taxType = watchIsIGST === "Yes" ? "IGST" : "SGST";
-        setValue(`items.${idx}.taxType`, taxType, { shouldDirty: true });
+      if (!value) {
+        clearItemFields(idx);
+      } else {
+        applySelectedItem(idx, itemMap[value]);
       }
     }
   };
@@ -674,6 +916,19 @@ const SalesReturnForm = ({ data, onBack }) => {
   const handleRemoveItem = (idx) => { if (itemsArray.fields.length > 1) itemsArray.remove(idx); };
   const handleAddTax = () => { taxArray.append(getDefaultTaxRow()); };
   const handleRemoveTax = (idx) => { if (taxArray.fields.length > 1) taxArray.remove(idx); };
+
+  // ---- Load items: always base list; merge invoice items per invoice ref type ----
+  useEffect(() => {
+    const type = (watchInvoiceRefType || "").trim().toLowerCase();
+    const isWith = type.includes("with");
+    const isWithout = type.includes("without");
+    if ((isWith || isWithout) && watchInvoiceNo) {
+      loadInvoiceSpecificItems(watchInvoiceNo, isWith && !isWithout ? "with" : "without");
+    } else {
+      setItemOptions(baseItemOptions.current);
+      setItemMap(baseItemMap.current);
+    }
+  }, [watchInvoiceRefType, watchInvoiceNo, loadInvoiceSpecificItems]);
 
   // ---- Validation ----
   const validate = () => {
@@ -701,65 +956,59 @@ const SalesReturnForm = ({ data, onBack }) => {
     if (!validate()) return;
     setSaving(true);
     const isUpdate = Boolean(data?.id);
+    const financialYear = localStorage.getItem("finYear") || new Date().getFullYear().toString();
 
     const payload = {
       active: true,
       orgId,
-      branchId: Number(formData.plantId || branchId),
+      branch: Number(formData.plantId || branchId),
       belongsTo: formData.belongsTo || "",
-      customerId: Number(formData.customerId),
-      customerName: formData.customerName || "",
-      customerCode: formData.customerCode || "",
-      locationId: Number(formData.locationId) || 0,
-      refNo: formData.refNo || "",
-      refDate: formatDateForAPI(formData.refDate) || "",
-      invoiceRefType: formData.invoiceRefType || "",
-      invoiceNo: formData.invoiceNo || "",
-      invoiceDate: formatDateForAPI(formData.invoiceDate) || "",
-      gatePassNo: formData.gatePassNo || "",
-      returnType: formData.returnType || "",
-      currency: formData.currency || "INR",
-      exchangeRate: Number(formData.exchangeRate) || 1,
-      docNo: formData.docNo || "",
-      customerInvoiceNo: formData.customerInvoiceNo || "",
+      customer: Number(formData.customerId) || 0,
       customerInvoiceDate: formatDateForAPI(formData.customerInvoiceDate) || "",
-      date: formatDateForAPI(formData.date) || "",
-      approvedByAccounts: formData.approvedByAccounts === "Yes",
-      partyGSTState: formData.partyGSTState || "",
-      isIgstApplicable: formData.isIGSTApplicable || "No",
-      gstinNo: formData.gstinNo || "",
-      taxCode: formData.taxCode || "",
-      netAmount: Number(formData.netAmount) || 0,
-      amountInWords: formData.amountInWords || "",
+      customerInvoiceNo: formData.customerInvoiceNo || "",
+      exchangeRate: Number(formData.exchangeRateId) || 0,
+      financialYear,
+      gatePassNo: formData.gatePassNo || "",
+      igstApplicable: formData.isIGSTApplicable === "Yes",
+      invoiceDate: formatDateForAPI(formData.invoiceDate) || "",
+      invoiceNo: formData.invoiceNo || "",
+      invoiceReferenceType: formData.invoiceRefType || "",
+      location: Number(formData.locationId) || 0,
       narration: formData.narration || "",
+      netAmount: Number(formData.netAmount) || 0,
+      returnType: formData.returnType || "",
+      amountInWords: formData.amountInWords || "",
+      approvedByAccounts: String(formData.approvedByAccounts || "No"),
+      currency: Number(formData.currencyId) || 0,
+      cancelRemarks: "",
       createdBy: usersId || "admin",
       updatedBy: usersId || "admin",
-      screenCode: "SALES_RETURN",
-      screenName: "Sales Return",
-      salesReturnItemDetailsDTO: (formData.items || [])
+      salesReturnDetails: (formData.items || [])
         .filter((r) => r.itemCode)
         .map((item) => ({
-          item: Number(item.itemCode) || 0,
-          itemDescription: item.itemDescription || "",
-          hsnCode: item.hsCode || "",
+          item: Number(item.itemId ?? item.itemCode) || 0,
+          hsnSacCode: Number(item.hsnId ?? item.hsCode) || 0,
           taxType: item.taxType || "",
-          taxPercentage: Number(item.taxPercentage) || 0,
+          taxPercentage: String(item.taxPercentage || ""),
           unit: Number(item.unit) || 0,
           stock: Number(item.stock) || 0,
           qtySold: Number(item.qtySold) || 0,
           receivedQty: Number(item.receivedQty) || 0,
           rate: Number(item.rate) || 0,
-          rateInCurrency: Number(item.rateInCurrency) || 0,
-          amountInCurrency: Number(item.amountInCurrency) || 0,
+          rateInSelectedCurrency: Number(item.rateInCurrency) || 0,
+          amountInSelectedCurrency: Number(item.amountInCurrency) || 0,
+          sgstRate: Number(item.sgstRate) || 0,
+          sgstAmount: 0,
+          cgstRate: Number(item.cgstRate) || 0,
+          cgstAmount: 0,
+          igstRate: Number(item.igstRate) || 0,
+          igstAmount: 0,
           amount: Number(item.amount) || 0,
         })),
-      salesReturnTaxDetailsDTO: (formData.taxDetails || []).map((t) => ({
-        sgstRate: Number(t.sgstRate) || 0,
-        sgstAmount: Number(t.sgstAmount) || 0,
-        cgstRate: Number(t.cgstRate) || 0,
-        cgstAmount: Number(t.cgstAmount) || 0,
-        igstRate: Number(t.igstRate) || 0,
-        igstAmount: Number(t.igstAmount) || 0,
+      salesReturnTaxDetails: (formData.taxDetails || []).map((t) => ({
+        particulars: t.particulars || "",
+        amount: Number(t.amount ?? t.sgstAmount + t.cgstAmount + t.igstAmount) || 0,
+        glAccountName: t.glAccountName || "",
       })),
     };
 
@@ -801,14 +1050,12 @@ const SalesReturnForm = ({ data, onBack }) => {
       />
       <InputField control={control} name="customerName" label="Customer Name" required errors={errors} readOnly />
       <SelectField control={control} name="locationId" label="Location ID" options={locationOptions} required errors={errors} />
-      <InputField control={control} name="refNo" label="Ref. No" errors={errors} />
-      <InputField control={control} name="refDate" label="Ref. Date" type="date" required errors={errors} />
       <SelectField control={control} name="invoiceRefType" label="Invoice Ref. Type" options={INVOICE_REF_TYPES} required errors={errors} />
       <SelectField control={control} name="invoiceNo" label="Invoice No" options={invoiceOptions} errors={errors} />
       <InputField control={control} name="invoiceDate" label="Invoice Date" type="date" errors={errors} readOnly />
       <SelectField control={control} name="gatePassNo" label="Gate Pass No" options={gatePassOptions} required errors={errors} />
-      <SelectField control={control} name="returnType" label="Return Type" options={RETURN_TYPES} required errors={errors} />
-      <SelectField control={control} name="currency" label="Currency" options={CURRENCY} required errors={errors} />
+      <SelectField control={control} name="returnType" label="Return Type" options={returnTypeOptions} required errors={errors} />
+      <SelectField control={control} name="currency" label="Currency" options={currencyOptions} required errors={errors} disabled={Boolean(watchCustomerId) && currencyOptions.length === 0} />
       <InputField control={control} name="exchangeRate" label="Exchange Rate" type="number" step="0.01" errors={errors} />
       <InputField control={control} name="docNo" label="Doc No" required errors={errors} readOnly={!data} />
       <InputField control={control} name="customerInvoiceNo" label="Customer Invoice No" errors={errors} />
@@ -818,7 +1065,6 @@ const SalesReturnForm = ({ data, onBack }) => {
       <InputField control={control} name="partyGSTState" label="Party GST State" required errors={errors} readOnly />
       <SelectField control={control} name="isIGSTApplicable" label="Is IGST Applicable?" options={YES_NO} required errors={errors} />
       <InputField control={control} name="gstinNo" label="GSTIN No" errors={errors} readOnly />
-      <InputField control={control} name="taxCode" label="Tax Code" errors={errors} />
     </div>
   );
 
@@ -826,7 +1072,7 @@ const SalesReturnForm = ({ data, onBack }) => {
   const renderReturnDetailsTab = () => {
     const showSGST = watchIsIGST !== "Yes";
     const showIGST = watchIsIGST === "Yes";
-    const baseHeaders = ["S.No", "Item Code *", "Description", "HSN/SAC", "Tax Type *", "Tax %", "Unit *", "Stock", "Qty Sold", "Rec'd Qty *", "Rate", "Rate (Curr)", "Amt (Curr)", "Amount"];
+    const baseHeaders = ["S.No", "Item Code *", "Description", "HSN/SAC", "Tax %", "Unit *", "Stock", "Qty Sold", "Rec'd Qty *", "Rate", "Rate (currency)", "Amt (Currency)", "Amount"];
     let taxCols = [];
     if (showSGST) taxCols = ["SGST Rate", "SGST Amt", "CGST Rate", "CGST Amt"];
     else if (showIGST) taxCols = ["IGST Rate", "IGST Amt"];
@@ -848,11 +1094,10 @@ const SalesReturnForm = ({ data, onBack }) => {
                 <SelectCell control={control} name={`items.${index}.itemCode`} options={itemOptions} errors={errors} onChange={(v) => handleItemChange(index, "itemCode", v)} />
                 <InputCell control={control} name={`items.${index}.itemDescription`} readOnly errors={errors} />
                 <InputCell control={control} name={`items.${index}.hsCode`} errors={errors} />
-                <SelectCell control={control} name={`items.${index}.taxType`} options={TAX_TYPES} errors={errors} />
                 <InputCell control={control} name={`items.${index}.taxPercentage`} type="number" step="0.01" placeholder="0.00" errors={errors} readOnly />
-                <SelectCell control={control} name={`items.${index}.unit`} options={unitOptions} errors={errors} />
-                <InputCell control={control} name={`items.${index}.stock`} type="number" errors={errors} readOnly />
-                <InputCell control={control} name={`items.${index}.qtySold`} type="number" errors={errors} readOnly />
+                <InputCell control={control} name={`items.${index}.unitDescription`} readOnly errors={errors} />
+                <InputCell control={control} name={`items.${index}.stock`} type="number" step="0.001" errors={errors} />
+                <InputCell control={control} name={`items.${index}.qtySold`} type="number" errors={errors} />
                 <InputCell control={control} name={`items.${index}.receivedQty`} type="number" step="0.001" errors={errors} />
                 <InputCell control={control} name={`items.${index}.rate`} type="number" step="0.01" errors={errors} />
                 <InputCell control={control} name={`items.${index}.rateInCurrency`} type="number" step="0.01" readOnly errors={errors} />
@@ -888,11 +1133,14 @@ const SalesReturnForm = ({ data, onBack }) => {
           <Plus size={12} />
         </button>
       </div>
-      <TableWrapper>
-        <TableHead headers={["S.No", "SGST Rate", "SGST Amount", "CGST Rate", "CGST Amount", "IGST Rate", "IGST Amount", "Action"]} />
+        <TableWrapper>
+        <TableHead headers={["S.No", "Particulars", "Amount", "GL Account", "SGST Rate", "SGST Amount", "CGST Rate", "CGST Amount", "IGST Rate", "IGST Amount", "Action"]} />
         <tbody>
           {taxArray.fields.map((field, index) => (
             <TableRow key={field.id} index={index} onRemove={() => handleRemoveTax(index)} disabled={taxArray.fields.length <= 1}>
+              <InputCell control={control} name={`taxDetails.${index}.particulars`} errors={errors} />
+              <InputCell control={control} name={`taxDetails.${index}.amount`} type="number" step="0.01" errors={errors} />
+              <InputCell control={control} name={`taxDetails.${index}.glAccountName`} errors={errors} />
               <InputCell control={control} name={`taxDetails.${index}.sgstRate`} type="number" step="0.01" errors={errors} />
               <InputCell control={control} name={`taxDetails.${index}.sgstAmount`} type="number" step="0.01" readOnly errors={errors} />
               <InputCell control={control} name={`taxDetails.${index}.cgstRate`} type="number" step="0.01" errors={errors} />

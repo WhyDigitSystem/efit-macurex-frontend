@@ -23,7 +23,7 @@ const SalesReturnMaster = () => {
       try {
         setLoadingEdit(true);
         const response = await salesReturnAPI.getSalesReturnById(row.id);
-        const fresh = response?.paramObjectsMap?.salesReturnResponseVO || row;
+        const fresh = response?.paramObjectsMap?.salesReturn || response?.paramObjectsMap?.salesReturnResponseVO || row;
         setEditData(fresh);
         setView("form");
       } catch (error) {

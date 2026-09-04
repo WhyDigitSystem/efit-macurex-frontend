@@ -20,6 +20,7 @@ const SalesReturnList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
       const response = await salesReturnAPI.getSalesReturnByOrgId(ORG_ID, BRANCH_ID);
 
       const list =
+        response?.paramObjectsMap?.salesReturn ||
         response?.paramObjectsMap?.salesReturnList ||
         response?.paramObjectsMap?.salesReturnResponseVO ||
         [];
@@ -34,7 +35,7 @@ const SalesReturnList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
             plantName: item.branchName || item.branch?.branchName || "",
             returnType: item.returnType || "",
             invoiceNo: item.invoiceNo || "",
-            currency: item.currency || "INR",
+            currency: item.currency?.currencyName || item.currency || "INR",
             netAmount: item.netAmount || item.totalAmount || 0,
             active: item.active,
             _raw: item,

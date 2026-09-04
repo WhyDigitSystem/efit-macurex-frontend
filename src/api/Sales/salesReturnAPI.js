@@ -5,7 +5,7 @@ const salesReturnAPI = {
   getSalesReturnByOrgId: async (orgId, branchId) => {
     try {
       const response = await apiClient.get(
-        `/api/transaction/getSalesReturnByOrgId?orgId=${orgId}&branchId=${branchId}`,
+        `api/transaction/getSalesReturnByOrgIdAndBranch?branch=${branchId}&orgId=${orgId}`,
       );
       return response;
     } catch (error) {
@@ -28,7 +28,7 @@ const salesReturnAPI = {
 
   createUpdateSalesReturn: async (payload) => {
     try {
-      const response = await apiClient.post(
+      const response = await apiClient.put(
         `/api/transaction/createUpdateSalesReturn`,
         payload,
       );
@@ -39,12 +39,12 @@ const salesReturnAPI = {
     }
   },
 
-  getSalesReturnDocId: async (orgId, branchId, financialYear) => {
+  getSalesReturnDocId: async (orgId, financialYear) => {
     try {
       const response = await apiClient.get(
-        `/api/transaction/getSalesReturnDocId?orgId=${orgId}&branchId=${branchId}&financialYear=${financialYear}`,
+        `/api/transaction/getSalesReturnDocId?financialYear=${financialYear}&orgId=${orgId}`,
       );
-      return response?.paramObjectsMap?.docId || "";
+      return response?.paramObjectsMap?.salesReturnDocId || "";
     } catch (error) {
       console.error("Error fetching sales return doc id:", error);
       throw error;
@@ -97,6 +97,94 @@ const salesReturnAPI = {
     } catch (error) {
       console.error("Error fetching gate pass list:", error);
       throw error;
+    }
+  },
+
+  getSalesRejectionInvoiceForSalesReturn: async (orgId, branchId) => {
+    try {
+      const response = await apiClient.get(
+        `/api/transaction/getSalesRejectionInvoiceforSalesReturn?branch=${branchId}&orgId=${orgId}`,
+      );
+      return response?.paramObjectsMap?.salesRejectionInvoice || [];
+    } catch (error) {
+      console.error("Error fetching sales rejection invoice dropdown:", error);
+      return [];
+    }
+  },
+
+  getCustomerDetailsForSalesRejectionInvoice: async (orgId, branchId) => {
+    try {
+      const response = await apiClient.get(
+        `/api/transaction/getCustomerDetailsforSalesRejectionInvoice?branch=${branchId}&orgId=${orgId}`,
+      );
+      return response?.paramObjectsMap?.customerDetails || [];
+    } catch (error) {
+      console.error("Error fetching customer details For sales return:", error);
+      return [];
+    }
+  },
+
+  getGateInwardForSalesReturn: async (orgId, branchId, customer, invno, type) => {
+    try {
+      const response = await apiClient.get(
+        `/api/transaction/getGateInwardForSalesReturn?branch=${branchId}&customer=${customer}&invno=${encodeURIComponent(invno || "")}&orgId=${orgId}&type=${encodeURIComponent(type || "")}`,
+      );
+      return response?.paramObjectsMap?.gateInwardDetails || [];
+    } catch (error) {
+      console.error("Error fetching gate inward for sales return:", error);
+      return [];
+    }
+  },
+
+  getCurrencyForSalesRejectionInvoice: async (orgId, branchId, customer) => {
+    try {
+      const response = await apiClient.get(
+        `/api/transaction/getCurrencyforSalesRejectionInv?branch=${branchId}&customer=${customer}&orgId=${orgId}`,
+      );
+      return response?.paramObjectsMap?.currencyDetails || [];
+    } catch (error) {
+      console.error("Error fetching currency for sales return:", error);
+      return [];
+    }
+  },
+
+  getLocationBySalesReturnOrgId: async (orgId, branchId) => {
+    try {
+      const response = await apiClient.get(
+        `/api/commonmaster/getLocationByOrgId?branch=${branchId}&orgId=${orgId}`,
+      );
+      return (
+        response?.paramObjectsMap?.transportList ||
+        response?.paramObjectsMap?.locationList ||
+        []
+      );
+    } catch (error) {
+      console.error("Error fetching locations for sales return:", error);
+      return [];
+    }
+  },
+
+  getSalesRejectionInvoiceItemDetailsForSalesReturn: async (orgId, branchId, invoiceNo) => {
+    try {
+      const response = await apiClient.get(
+        `/api/transaction/getSalesRejectionInvoiceItemDetailsForSalesRetuen?branch=${branchId}&invoiceNo=${encodeURIComponent(invoiceNo || "")}&orgId=${orgId}`,
+      );
+      return response?.paramObjectsMap?.itemDetails || [];
+    } catch (error) {
+      console.error("Error fetching sales rejection invoice item details:", error);
+      return [];
+    }
+  },
+
+  getItemDetailsForSalesReturn: async (orgId, branchId) => {
+    try {
+      const response = await apiClient.get(
+        `/api/transaction/getItemDetailsForSalesReturn?branch=${branchId}&orgId=${orgId}`,
+      );
+      return response?.paramObjectsMap?.itemDetails || [];
+    } catch (error) {
+      console.error("Error fetching item details for sales return:", error);
+      return [];
     }
   },
 };
