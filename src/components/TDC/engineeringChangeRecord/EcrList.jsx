@@ -1,32 +1,51 @@
 import { useCallback, useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import engineeringChangeRecordAPI from "../../../api/TDC/engineeringChangeRecordAPI";
-import { toast } from "../../../utils/toast";
+import { useToast } from "../../../components/Toast/ToastContext";
 
-const EcrList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
+const EcrList = ({ onAddNew, onEdit, onBack, refreshTrigger, loadingEdit }) => {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
-
-  const ORG_ID = localStorage.getItem("orgId");
-  const BRANCH_ID = localStorage.getItem("branchId");
+  const [orgId, setOrgId] = useState(localStorage.getItem("orgId"));
+  const [branchId, setBranchId] = useState(localStorage.getItem("branchId"));
 
   const loadRecords = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await engineeringChangeRecordAPI.getEcrByOrgId(
-        ORG_ID,
-        BRANCH_ID,
+      const data = await engineeringChangeRecordAPI.getEngineeringChangeRecordByOrgId(
+        orgId,
+        branchId,
       );
-      data.sort((a, b) => (b.id || 0) - (a.id || 0));
-      setRecords(data);
+      const transformedData = (data || []).map((item) => ({
+        id: item.id,
+        ecrNo: item.ecrNo || item.id,
+        ecrDate: item.docDate
+          ? String(item.docDate).slice(0, 10)
+          : item.ecrDate
+            ? String(item.ecrDate).slice(0, 10)
+            : "",
+        plantId: item.branch?.branchName || item.branch?.branchCode || item.plantName || item.branch?.id || "",
+        fromDepartment: item.fromDepartment,
+        customerName: item.customerName || item.customer || "",
+        requestedBy: item.requestedBy?.employeeName || item.requestedBy || "",
+        reasonForChange: item.reasonForChange || "",
+        productDescription: item.productDescription || item.partDescription || "",
+        engineeringDrawingChange: item.engineeringDrawingChange || "",
+        bomChange: item.bomChange || "",
+        customerApproval: item.customerApproval || "",
+        active: item.active,
+        _raw: item,
+      }));
+      transformedData.sort((a, b) => (b.id || 0) - (a.id || 0));
+      setRecords(transformedData);
     } catch (error) {
       console.error("Failed to load engineering change records:", error);
       setRecords([]);
-      toast.error("Failed to fetch Engineering Change Records");
+      addToast("Failed to fetch Engineering Change Records", "error");
     } finally {
       setLoading(false);
     }
-  }, [ORG_ID, BRANCH_ID]);
+  }, [orgId, branchId]);
 
   useEffect(() => {
     loadRecords();
@@ -49,19 +68,13 @@ const EcrList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     {
       key: "plantId",
       label: "Plant",
-      accessor: (row) =>
-        typeof row.plantId === "object"
-          ? row.plantId.branchName || row.plantId.id
-          : row.plantName || row.plantId,
+      accessor: (row) => row.plantId,
       type: "text",
     },
     {
       key: "fromDepartment",
       label: "From Department",
-      accessor: (row) =>
-        typeof row.fromDepartment === "object"
-          ? row.fromDepartment.departmentName || row.fromDepartment.id
-          : row.fromDepartment,
+      accessor: (row) => row.fromDepartment,
       type: "text",
     },
     {
@@ -137,10 +150,7 @@ const EcrList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     "ecrNo",
     "ecrDate",
     "plantId",
-    "plantId.branchName",
-    "plantName",
     "fromDepartment",
-    "fromDepartment.departmentName",
     "customerName",
     "requestedBy",
     "reasonForChange",
@@ -169,28 +179,38 @@ const EcrList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   ];
 
   return (
-    <CommonListViewTable
-      title="Engineering Change Record"
-      data={records}
-      loading={loading}
-      columns={columns}
-      searchFields={searchFields}
-      filterOptions={filterOptions}
-      defaultFilter="all"
-      onBack={onBack}
-      onAddNew={onAddNew}
-      onEdit={onEdit}
-      onView={false}
-      showSerialNumber={true}
-      itemsPerPageOptions={[5, 10, 20, 50, 100]}
-      defaultItemsPerPage={10}
-      emptyMessage="No Engineering Change Records found"
-      loadingMessage="Loading Engineering Change Records..."
-      enableRefresh={true}
-      onRefresh={loadRecords}
-      enableExport={true}
-      exportFileName="EngineeringChangeRecords"
-    />
+    <>
+      {loadingEdit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white dark:bg-gray-800 rounded-lg px-6 py-4 shadow-xl text-sm text-gray-700 dark:text-gray-200 flex items-center gap-3">
+            <span className="h-5 w-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            Loading details...
+          </div>
+        </div>
+      )}
+      <CommonListViewTable
+        title="Engineering Change Record"
+        data={records}
+        loading={loading}
+        columns={columns}
+        searchFields={searchFields}
+        filterOptions={filterOptions}
+        defaultFilter="all"
+        onBack={onBack}
+        onAddNew={onAddNew}
+        onEdit={onEdit}
+        onView={false}
+        showSerialNumber={true}
+        itemsPerPageOptions={[5, 10, 20, 50, 100]}
+        defaultItemsPerPage={10}
+        emptyMessage="No Engineering Change Records found"
+        loadingMessage="Loading Engineering Change Records..."
+        enableRefresh={true}
+        onRefresh={loadRecords}
+        enableExport={true}
+        exportFileName="EngineeringChangeRecords"
+      />
+    </>
   );
 };
 

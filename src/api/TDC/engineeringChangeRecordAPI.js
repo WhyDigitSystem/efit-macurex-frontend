@@ -1,32 +1,59 @@
 // engineeringChangeRecordAPI.js
 import apiClient from "../apiClient";
 
-/* Engineering Change Record (ECR) API
-   Mirrors the commonmaster/dev API convention used across this app.
-   The backend persists the ECR header, product/part details, TDC
-   department notes, remarks and PDF attachments in a single transaction
-   and keeps the complete change history for approval tracking
-   (server-side validation). */
 const engineeringChangeRecordAPI = {
-  // Get Engineering Change Records by Organization ID
-  getEcrByOrgId: async (orgId, branch) => {
+
+  // Get a single Engineering Change Record by ID
+  getEcrById: async (id) => {
     try {
       const res = await apiClient.get(
-        `/api/dev/getEngineeringChangeRecordByOrgId?branch=${branch}&orgId=${orgId}`,
+        `/api/toolmaster/getEngineeringChangeRecordById?id=${id}`,
       );
-      return res?.paramObjectsMap?.engineeringChangeRecordEntryVO || [];
+      return res?.paramObjectsMap?.engineeringChangeRecordVO || null;
+    } catch (error) {
+      console.error("Error fetching engineering change record by id:", error);
+      throw error;
+    }
+  },
+
+  // Generate the Engineering Change Record Doc Id (ECR No)
+  getEcrDocId: async (orgId) => {
+    try {
+      const financialYear = localStorage.getItem("finYear") || String(new Date().getFullYear());
+      const res = await apiClient.get(
+        `/api/toolmaster/getEngineeringChangeRecordDocId?financialYear=${financialYear}&orgId=${orgId}`,
+      );
+      return res?.paramObjectsMap?.engineeringChangeRecordDocId || "";
+    } catch (error) {
+      console.error("Error generating engineering change record doc id:", error);
+      throw error;
+    }
+  },
+
+  // Get Engineering Change Records by Organization ID (toolmaster endpoint)
+  getEngineeringChangeRecordByOrgId: async (orgId, branch) => {
+    try {
+      const res = await apiClient.get(
+        `/api/toolmaster/getEngineeringChangeRecordByOrgId?branch=${branch}&orgId=${orgId}`,
+      );
+      return res?.paramObjectsMap?.engineeringChangeRecordVO || [];
     } catch (error) {
       console.error("Error fetching engineering change records:", error);
       throw error;
     }
   },
 
-  // Create / Update Engineering Change Record
-  createUpdateEcr: async (payload) => {
+  // Create / Update Engineering Change Record (multipart: JSON blob + files)
+  createUpdateEcr: async (formData) => {
     try {
-      const res = await apiClient.put(
-        "/api/dev/updateCreateEngineeringChangeRecord",
-        payload,
+      const res = await apiClient.post(
+        "/api/toolmaster/updateCreateEngineeringChangeRecord",
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        },
       );
       return res;
     } catch (error) {

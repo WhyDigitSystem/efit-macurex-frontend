@@ -1,42 +1,42 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import EcrList from "./EcrList";
 import EcrForm from "./EcrForm";
 import engineeringChangeRecordAPI from "../../../api/TDC/engineeringChangeRecordAPI";
-import { toast } from "../../../utils/toast";
 
 const EcrMaster = () => {
   const navigate = useNavigate();
   const [view, setView] = useState("list"); // "list" | "form"
   const [editData, setEditData] = useState(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-
-  const ORG_ID = localStorage.getItem("orgId");
-  const BRANCH_ID = localStorage.getItem("branchId");
+  const [loadingEdit, setLoadingEdit] = useState(false);
 
   const handleAddNew = () => {
     setEditData(null);
     setView("form");
   };
 
-  // Pencil icon click -> fetch fresh data by orgId, find the matching record, open form
-  const handleEdit = useCallback(
-    async (row) => {
-      try {
-        const records = await engineeringChangeRecordAPI.getEcrByOrgId(
-          ORG_ID,
-          BRANCH_ID,
-        );
-        const fresh = records.find((r) => r.id === row.id) || row;
-        setEditData(fresh);
-        setView("form");
-      } catch (error) {
-        console.error("Failed to fetch ECR for edit:", error);
-        toast.error("Failed to load Engineering Change Record details");
-      }
-    },
-    [ORG_ID, BRANCH_ID],
-  );
+  const handleEdit = async (row) => {
+    const id = row?.id ?? row?._raw?.id;
+    if (!id) {
+      setEditData(row?._raw || row);
+      setView("form");
+      return;
+    }
+
+    setLoadingEdit(true);
+    try {
+      const record = await engineeringChangeRecordAPI.getEcrById(id);
+      setEditData(record);
+      setView("form");
+    } catch (error) {
+      console.error("Failed to load Engineering Change Record details:", error);
+      setEditData(row?._raw || row);
+      setView("form");
+    } finally {
+      setLoadingEdit(false);
+    }
+  };
 
   const handleBack = () => {
     setEditData(null);
@@ -60,6 +60,7 @@ const EcrMaster = () => {
       onEdit={handleEdit}
       onBack={handleNavigateHome}
       refreshTrigger={refreshTrigger}
+      loadingEdit={loadingEdit}
     />
   );
 };

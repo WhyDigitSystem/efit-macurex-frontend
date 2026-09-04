@@ -4,9 +4,10 @@ import {
   X,
   Plus,
   Trash2,
-  UploadCloud,
+  Eye,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import axios from "axios";
 import dayjs from "dayjs";
 import { useToast } from "../../Toast/ToastContext";
 import engineeringChangeRecordAPI from "../../../api/TDC/engineeringChangeRecordAPI";
@@ -14,6 +15,7 @@ import branchAPI from "../../../api/branchAPI";
 import locationMasterAPI from "../../../api/locationMasterAPI";
 import { departmentAPI } from "../../../api/departmentAPI";
 import itemAPI from "../../../api/itemAPI";
+import { employeeAPI } from "../../../api/employeeAPI";
 
 /* ---------------------------------------------------------------------------- */
 /* Shared design tokens                                                        */
@@ -245,24 +247,52 @@ const TableHead = ({ headers }) => (
   </thead>
 );
 
-const TableRow = ({ children, index, onRemove, disabled }) => (
+const TableRow = ({
+  children,
+  index,
+  onRemove,
+  disabled,
+  showDelete = true,
+  showPreview = false,
+  previewDisabled = false,
+  onPreview,
+}) => (
   <tr className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
     <td className="p-2 text-center font-medium dark:text-white">{index + 1}</td>
     {children}
-    <td className="p-2 text-center">
-      <button
-        type="button"
-        onClick={onRemove}
-        disabled={disabled}
-        className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-          disabled
-            ? "bg-gray-400 cursor-not-allowed"
-            : "bg-red-600 hover:bg-red-700"
-        }`}
-      >
-        <Trash2 size={10} />
-      </button>
-    </td>
+    {showPreview && (
+      <td className="p-2 text-center whitespace-nowrap">
+        <button
+          type="button"
+          onClick={onPreview}
+          disabled={previewDisabled}
+          className={`h-5 w-5 rounded text-white flex items-center justify-center ${
+            previewDisabled
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-sky-600 hover:bg-sky-700"
+          }`}
+          title={previewDisabled ? "No file to preview" : "Preview"}
+        >
+          <Eye size={10} />
+        </button>
+      </td>
+    )}
+    {showDelete && (
+      <td className="p-2 text-center whitespace-nowrap">
+        <button
+          type="button"
+          onClick={onRemove}
+          disabled={disabled}
+          className={`h-5 w-5 rounded text-white flex items-center justify-center ${
+            disabled
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-red-600 hover:bg-red-700"
+          }`}
+        >
+          <Trash2 size={10} />
+        </button>
+      </td>
+    )}
   </tr>
 );
 
@@ -315,80 +345,16 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
   </TableWrapper>
 );
 
-/* File upload cell: drag-and-drop or click-to-upload. Displays the chosen
-   file name; supports both new Files and existing names during edit. */
-const UploadCell = ({ file, onFileChange, error }) => {
-  const inputRef = useRef(null);
-  const [dragOver, setDragOver] = useState(false);
-
-  const displayName =
-    file instanceof File ? file.name : file || "Click or drop a file";
-
-  return (
-    <td className="p-2 align-top">
-      <div
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragOver(true);
-        }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setDragOver(false);
-          const f = e.dataTransfer.files?.[0];
-          if (f) onFileChange(f);
-        }}
-        onClick={() => inputRef.current?.click()}
-        className={`flex items-center gap-2 rounded-md border-2 border-dashed px-3 py-2 cursor-pointer transition-colors ${
-          dragOver
-            ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
-            : error
-              ? "border-red-500"
-              : "border-gray-300 dark:border-gray-600 hover:border-blue-400"
-        }`}
-      >
-        <UploadCloud className="h-3.5 w-3.5 text-gray-400 dark:text-gray-500 shrink-0" />
-        <span className="text-[11px] text-gray-500 dark:text-gray-400 truncate">
-          {displayName}
-        </span>
-      </div>
-
-      <input
-        ref={inputRef}
-        type="file"
-        accept="application/pdf"
-        className="hidden"
-        onChange={(e) => {
-          if (e.target.files?.[0]) onFileChange(e.target.files[0]);
-          e.target.value = "";
-        }}
-      />
-
-      {error && (
-        <p className="text-[10px] text-red-500 dark:text-red-400 mt-0.5">
-          {error}
-        </p>
-      )}
-    </td>
-  );
-};
-
 /* ---------------------------------------------------------------------------- */
 /* Options                                                                      */
 
 const YES_NO = ["Yes", "No"];
+const APPROVAL_STATUS = ["REQUIRED", "NOT REQUIRED"];
 const DEPARTMENTS = ["Design", "Purchase", "Stores", "Quality", "Production"];
-const REQUESTED_BY = [
-  "Design Engineer",
-  "Quality Engineer",
-  "Production Manager",
-  "Purchase Manager",
-];
-const APPROVED_BY = ["Chief Engineer", "Quality Head", "Design Head"];
 
 const CHILD_TABS = [
   { key: "productNo", label: "Product No", kind: "fields" },
-  { key: "partDetail", label: "Part Detail", kind: "table" },
+  { key: "partDetail", label: "Part Detail", kind: "fields" },
   { key: "tdcDepartment", label: "For TDC Department", kind: "fields" },
   { key: "remarks", label: "Remarks", kind: "fields" },
   { key: "pdfAttachment", label: "Pdf Attachment", kind: "table" },
@@ -400,13 +366,11 @@ const emptyPartRow = () => ({
 });
 
 const emptyPdfRow = () => ({
+  rowId: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
   attachDrawingCopy: null,
 });
 
 const fmtDate = (value) => (value ? dayjs(value).format("YYYY-MM-DD") : "");
-
-const generateEcrNo = () =>
-  `ECR-${dayjs().format("YYYYMMDD")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
 
 /* ---------------------------------------------------------------------------- */
 
@@ -430,37 +394,54 @@ const EcrForm = ({ data, onBack }) => {
 
   const [plantOptions, setPlantOptions] = useState([]);
   const [departmentOptions, setDepartmentOptions] = useState([]);
+  const [requestedByOptions, setRequestedByOptions] = useState([]);
   const [productOptions, setProductOptions] = useState([]);
   const [productMap, setProductMap] = useState({});
-  const [partOptions, setPartOptions] = useState([]);
-  const [partMap, setPartMap] = useState({});
 
   const [header, setHeader] = useState(() => {
     const base = {
-      plantId: data?.plantId?.id ?? data?.plantId ?? "",
-      ecrNo: data?.ecrNo || (data ? "" : generateEcrNo()),
-      ecrDate: data?.ecrDate || dayjs().format("YYYY-MM-DD"),
+      plantId: data?.plantId?.id ?? data?.plantId ?? data?.branch?.id ?? "",
+      ecrNo: data?.ecrNo || data?.docId || "",
+      ecrDate: data?.ecrDate || data?.docDate || dayjs().format("YYYY-MM-DD"),
       fromDepartment: data?.fromDepartment?.id ?? data?.fromDepartment ?? "",
       customerName: data?.customerName || "",
-      requestedBy: data?.requestedBy || "",
+      requestedBy:
+        data?.requestedBy?.id ??
+        data?.requestedBy?.employeeId ??
+        data?.requestedBy ?? "",
       reasonForChange: data?.reasonForChange || "",
       productDescription: data?.productDescription || "",
       engineeringDrawingChange: data?.engineeringDrawingChange || "",
       bomChange: data?.bomChange || "",
       customerApproval: data?.customerApproval || "",
       drawingWhichRequiredChange: data?.drawingWhichRequiredChange || "",
-      documentsWhichRequireChange: data?.documentsWhichRequireChange || "",
+      documentsWhichRequireChange:
+        data?.documentsWhichRequireChange ||
+        data?.documentWhichRequiredChange ||
+        "",
       active: data?.active !== false,
     };
     base.ecrDate = fmtDate(base.ecrDate);
     return base;
   });
 
-  const [productNo, setProductNo] = useState(data?.productNo || "");
-
-  const [partRows, setPartRows] = useState(
-    data?.partDetails?.length ? data.partDetails : [emptyPartRow()],
+  const [customerProductNo, setCustomerProductNo] = useState(
+    data?.customerProductNo || data?.productNo || "",
   );
+
+  const [companyProductNo, setCompanyProductNo] = useState(
+    data?.companyProductNo || "",
+  );
+
+  const [partRows, setPartRows] = useState(() => {
+    if (Array.isArray(data?.partDetails) && data.partDetails.length > 0) {
+      return data.partDetails;
+    }
+    if (data?.partNo) {
+      return [{ partNo: data.partNo, partDescription: data.partDescription || "" }];
+    }
+    return [emptyPartRow()];
+  });
 
   const [tdc, setTdc] = useState({
     departmentNotes: data?.tdcDepartment?.departmentNotes || "",
@@ -468,20 +449,46 @@ const EcrForm = ({ data, onBack }) => {
   });
 
   const [remarks, setRemarks] = useState({
-    accepted: data?.remarks?.accepted || "",
-    rejected: data?.remarks?.rejected || "",
-    approvedBy: data?.remarks?.approvedBy || "",
-    approvalStatus: data?.remarks?.approvalStatus || "",
+    accepted: data?.remarks?.accepted ?? data?.accepted ?? "",
+    rejected: data?.remarks?.rejected ?? data?.rejected ?? "",
+    approvedBy:
+      data?.remarks?.approvedBy ??
+      data?.approvedBy?.id ??
+      data?.approvedBy?.employeeId ??
+      data?.approvedBy?.employeeName ??
+      data?.approvedBy ??
+      "",
+    approvalStatus:
+      data?.remarks?.approvalStatus ?? data?.approved ?? data?.macurex ?? "",
     remarks: data?.remarks?.remarks || "",
   });
 
-  const [pdfRows, setPdfRows] = useState(
-    data?.pdfAttachments?.length
-      ? data.pdfAttachments.map((p) => ({
-          attachDrawingCopy: p.fileName || p.attachDrawingCopy || null,
-        }))
-      : [emptyPdfRow()],
-  );
+  const [pdfRows, setPdfRows] = useState(() => {
+    const existing = data?.engineeringChangeRecordAttachmentDTO?.length
+      ? data.engineeringChangeRecordAttachmentDTO
+      : data?.pdfAttachments?.length
+        ? data.pdfAttachments
+        : [];
+    if (existing.length) {
+      return existing.map((p) => ({
+        rowId: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        attachDrawingCopy: {
+          fileName: p.name || p.fileName || p.attachDrawingCopy || "",
+          filePath: p.filePath || "",
+        },
+      }));
+    }
+    return [emptyPdfRow()];
+  });
+
+  const [preview, setPreview] = useState({
+    url: "",
+    name: "",
+    isImage: false,
+    loading: false,
+    error: "",
+  });
+  const fileInputRefs = useRef({});
 
   /* ---------------- Lookup loading ---------------- */
 
@@ -527,6 +534,21 @@ const EcrForm = ({ data, onBack }) => {
     }
   }, [orgId, branch]);
 
+  const loadEmployees = useCallback(async () => {
+    try {
+      const res = await employeeAPI.getEmployeeByOrgId(orgId);
+      setRequestedByOptions(
+        (res || []).map((emp) => ({
+          value: emp.id,
+          label: emp.employeeName || emp.employeeId || emp.id,
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to load employee options:", error);
+      setRequestedByOptions([]);
+    }
+  }, [orgId]);
+
   const loadItems = useCallback(async () => {
     try {
       const res = await itemAPI.getItems(orgId, branch);
@@ -537,12 +559,9 @@ const EcrForm = ({ data, onBack }) => {
       });
       setProductOptions(options);
       setProductMap(map);
-      setPartOptions(options);
-      setPartMap(map);
     } catch (error) {
       console.error("Failed to load product/part options:", error);
       setProductOptions([]);
-      setPartOptions([]);
     }
   }, [orgId, branch]);
 
@@ -553,9 +572,28 @@ const EcrForm = ({ data, onBack }) => {
   useEffect(() => {
     if (orgId && branch) {
       loadDepartments();
+      loadEmployees();
       loadItems();
     }
-  }, [orgId, branch, loadDepartments, loadItems]);
+  }, [orgId, branch, loadDepartments, loadEmployees, loadItems]);
+
+  // Generate the ECR No from the backend on Add
+  useEffect(() => {
+    if (data) return; // only generate on Add
+    if (!orgId) return;
+    let cancelled = false;
+    engineeringChangeRecordAPI
+      .getEcrDocId(orgId)
+      .then((docId) => {
+        if (!cancelled && docId) {
+          setHeader((prev) => ({ ...prev, ecrNo: docId }));
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [data, orgId]);
 
   /* ---------------- Handlers ---------------- */
 
@@ -580,37 +618,32 @@ const EcrForm = ({ data, onBack }) => {
   };
 
   const handleProductChange = (e) => {
-    const value = e.target.value;
+    const { name, value } = e.target;
     if (fieldErrors.productNo)
       setFieldErrors((prev) => ({ ...prev, productNo: "" }));
-    setProductNo(value);
-    const item = productMap[value];
-    if (item?.itemDescription) {
-      setHeader((prev) => ({
-        ...prev,
-        productDescription: item.itemDescription,
-      }));
+    if (name === "companyProductNo") {
+      setCompanyProductNo(value);
+    } else {
+      setCustomerProductNo(value);
+      const item = productMap[value];
+      if (item?.itemDescription) {
+        setHeader((prev) => ({
+          ...prev,
+          productDescription: item.itemDescription,
+        }));
+      }
     }
   };
 
-  const handlePartCellChange = (idx, key, value) => {
-    setPartRows((prev) =>
-      prev.map((row, i) => {
-        if (i !== idx) return row;
-        let next = { ...row, [key]: value };
-        if (key === "partNo") {
-          const item = partMap[value];
-          next.partDescription = item?.itemDescription || "";
-        }
-        return next;
-      }),
-    );
+  const handlePartFieldChange = (e) => {
+    const { name, value } = e.target;
+    if (fieldErrors.partDetails)
+      setFieldErrors((prev) => ({ ...prev, partDetails: "" }));
+    setPartRows((prev) => {
+      if (!prev.length) return [{ [name]: value, partNo: "", partDescription: "" }];
+      return prev.map((row, i) => (i === 0 ? { ...row, [name]: value } : row));
+    });
   };
-
-  const handleAddPartRow = () =>
-    setPartRows((prev) => [...prev, emptyPartRow()]);
-  const handleRemovePartRow = (idx) =>
-    setPartRows((prev) => prev.filter((_, i) => i !== idx));
 
   const handlePdfFileChange = (idx, file) => {
     setPdfRows((prev) =>
@@ -624,6 +657,107 @@ const EcrForm = ({ data, onBack }) => {
     setPdfRows((prev) => [...prev, emptyPdfRow()]);
   const handleRemovePdfRow = (idx) =>
     setPdfRows((prev) => prev.filter((_, i) => i !== idx));
+
+  const getAttachmentName = (file) => {
+    if (!file) return "Attachment";
+    if (file instanceof File) return file.name || "Attachment";
+    if (typeof file === "string") return file.split("/").pop() || file;
+    if (typeof file === "object") {
+      return (
+        file.name ||
+        file.fileName ||
+        (file.filePath || "").split("/").pop() ||
+        "Attachment"
+      );
+    }
+    return "Attachment";
+  };
+
+  const closePreview = () =>
+    setPreview({ url: "", name: "", isImage: false, loading: false, error: "" });
+
+  const handlePdfPreview = async (row, domFile) => {
+    const file = row.attachDrawingCopy || domFile;
+    const name = getAttachmentName(file);
+
+    if (file instanceof File) {
+      const url = URL.createObjectURL(file);
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      setPreview({
+        url,
+        name,
+        isImage:
+          file.type?.startsWith("image/") ||
+          /\.(png|jpe?g|gif|bmp|webp)$/i.test(name),
+        loading: false,
+        error: "",
+      });
+      return;
+    }
+
+    const sourcePath =
+      typeof file === "object"
+        ? file.filePath || file.fileName || ""
+        : typeof file === "string"
+          ? file
+          : "";
+
+    if (!sourcePath) {
+      addToast("No file available to preview", "warning");
+      return;
+    }
+
+    setPreview({ url: "", name, isImage: false, loading: true, error: "" });
+
+    try {
+      const token =
+        localStorage.getItem("user.token") ||
+        localStorage.getItem("token") ||
+        localStorage.getItem("authToken") ||
+        JSON.parse(localStorage.getItem("user") || "{}")?.token;
+
+      const response = await axios.get(
+        `${import.meta.env.VITE_API_URL}/api/files/download?path=${encodeURIComponent(sourcePath)}`,
+        {
+          responseType: "blob",
+          headers: token
+            ? { Authorization: `Bearer ${token.replace("Bearer ", "")}` }
+            : undefined,
+        },
+      );
+
+      const blob = response.data;
+      if (!blob || blob.size === 0) {
+        setPreview({
+          url: "",
+          name,
+          isImage: false,
+          loading: false,
+          error: "Unable to load file",
+        });
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      setPreview({
+        url,
+        name,
+        isImage:
+          blob.type?.startsWith("image/") ||
+          /\.(png|jpe?g|gif|bmp|webp)$/i.test(name),
+        loading: false,
+        error: "",
+      });
+    } catch (error) {
+      setPreview({
+        url: "",
+        name,
+        isImage: false,
+        loading: false,
+        error:
+          error?.response?.status === 401 ? "Unauthorized" : "Failed to load file",
+      });
+    }
+  };
 
   /* ---------------- Validation & Save ---------------- */
 
@@ -642,8 +776,6 @@ const EcrForm = ({ data, onBack }) => {
       errors.engineeringDrawingChange =
         "Engineering Drawing Change is required";
     if (!header.bomChange) errors.bomChange = "BOM Change is required";
-
-    if (!productNo) errors.productNo = "Product No is required";
 
     const hasValidPart = partRows.some((r) => r.partNo);
     if (!hasValidPart)
@@ -667,32 +799,55 @@ const EcrForm = ({ data, onBack }) => {
 
     const isUpdate = Boolean(data?.id);
 
-    // Single-transaction payload: header + product/part details + TDC
-    // department notes + remarks + PDF attachments. The backend keeps the
-    // complete change history with approval tracking (server-side validation).
+    const firstPart = partRows.find((r) => r.partNo?.trim()) || partRows[0] || {};
+
+    const financialYear =
+      localStorage.getItem("finYear") || String(new Date().getFullYear());
+
+    // Build the Engineering Change Record payload matching the backend VO.
     const payload = {
       ...(isUpdate ? { id: data.id } : {}),
-      orgId,
+      accepted: remarks.accepted || "",
+      active: header.active !== false,
+      approved: remarks.approvalStatus || "",
+      approvedBy: Number(remarks.approvedBy) || 0,
+      bomChange: header.bomChange || "",
       branch,
-      ...header,
-      productNo,
-      partDetails: partRows.filter((r) => r.partNo?.trim()),
-      tdcDepartment: tdc,
-      remarks,
-      pdfAttachments: pdfRows
-        .filter((r) => r.attachDrawingCopy)
-        .map((r) => ({
-          fileName:
-            r.attachDrawingCopy instanceof File
-              ? r.attachDrawingCopy.name
-              : r.attachDrawingCopy,
-        })),
-      createdBy: isUpdate ? data?.createdBy || usersId : usersId,
-      ...(isUpdate ? { updatedBy: usersId } : {}),
+      cancelRemarks: data?.cancelRemarks || "",
+      createdBy: usersId || "",
+      customer: header.customerName || "",
+      customerApproval: header.customerApproval || "",
+      customerName: header.customerName || "",
+      customerProductNo: customerProductNo || "",
+      companyProductNo: companyProductNo || "",
+      documentWhichRequiredChange: header.documentsWhichRequireChange || "",
+      drawingWhichRequiredChange: header.drawingWhichRequiredChange || "",
+      engineeringDrawingChange: header.engineeringDrawingChange || "",
+      financialYear,
+      fromDepartment: header.fromDepartment || "",
+      macurex: data?.macurex || "",
+      orgId,
+      partDescription: firstPart.partDescription || "",
+      partNo: firstPart.partNo || "",
+      productDescription: header.productDescription || "",
+      reasonForChange: header.reasonForChange || "",
+      rejected: remarks.rejected || "",
+      requestedBy: Number(header.requestedBy) || 0,
     };
 
+    // Build multipart form data: JSON blob + attachment files
+    const formData = new FormData();
+    formData.append(
+      "engineeringChangeRecordVO",
+      new Blob([JSON.stringify(payload)], { type: "application/json" }),
+    );
+
+    pdfRows
+      .filter((r) => r.attachDrawingCopy instanceof File)
+      .forEach((r) => formData.append("files", r.attachDrawingCopy));
+
     try {
-      const response = await engineeringChangeRecordAPI.createUpdateEcr(payload);
+      const response = await engineeringChangeRecordAPI.createUpdateEcr(formData);
 
       if (response?.status) {
         addToast(
@@ -806,7 +961,7 @@ const EcrForm = ({ data, onBack }) => {
               value={header.requestedBy}
               onChange={handleHeaderChange}
               error={fieldErrors.requestedBy}
-              options={REQUESTED_BY}
+              options={requestedByOptions}
               required
             />
             <Field
@@ -818,12 +973,10 @@ const EcrForm = ({ data, onBack }) => {
               error={fieldErrors.reasonForChange}
               required
             />
-            <Field
-              label="Product Description"
-              name="productDescription"
-              value={header.productDescription}
-              onChange={handleHeaderChange}
-            />
+            
+
+
+
             <Field
               type="select"
               label="Engineering Drawing Change"
@@ -843,26 +996,6 @@ const EcrForm = ({ data, onBack }) => {
               error={fieldErrors.bomChange}
               options={YES_NO}
               required
-            />
-            <Field
-              type="select"
-              label="Customer Approval"
-              name="customerApproval"
-              value={header.customerApproval}
-              onChange={handleHeaderChange}
-              options={YES_NO}
-            />
-            <Field
-              label="Drawing Which Required Change"
-              name="drawingWhichRequiredChange"
-              value={header.drawingWhichRequiredChange}
-              onChange={handleHeaderChange}
-            />
-            <Field
-              label="Documents Which Require Change"
-              name="documentsWhichRequireChange"
-              value={header.documentsWhichRequireChange}
-              onChange={handleHeaderChange}
             />
           </div>
         </div>
@@ -891,11 +1024,7 @@ const EcrForm = ({ data, onBack }) => {
             {activeTabMeta.kind === "table" && (
               <button
                 type="button"
-                onClick={
-                  activeChildTab === "partDetail"
-                    ? handleAddPartRow
-                    : handleAddPdfRow
-                }
+                onClick={handleAddPdfRow}
                 className="h-6 w-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-colors"
               >
                 <Plus size={12} />
@@ -908,14 +1037,20 @@ const EcrForm = ({ data, onBack }) => {
             <div className="pt-3">
               <div className={subTabFieldGrid}>
                 <Field
-                  type="select"
-                  label="Product No"
-                  name="productNo"
-                  value={productNo}
+                  type="text"
+                  label="Customer Product No"
+                  name="customerProductNo"
+                  value={customerProductNo}
                   onChange={handleProductChange}
-                  error={fieldErrors.productNo}
                   options={productOptions}
-                  required
+                />
+
+                <Field
+                  type="text"
+                  label="Company Product NO"
+                  name="companyProductNo"
+                  value={companyProductNo}
+                  onChange={handleProductChange}
                 />
               </div>
             </div>
@@ -924,24 +1059,24 @@ const EcrForm = ({ data, onBack }) => {
           {/* Part Detail tab */}
           {activeChildTab === "partDetail" && (
             <div className="pt-3">
-              <DynamicTable
-                columns={[
-                  {
-                    key: "partNo",
-                    label: "Part No",
-                    type: "select",
-                    options: partOptions,
-                  },
-                  {
-                    key: "partDescription",
-                    label: "Part Description",
-                    readOnly: true,
-                  },
-                ]}
-                rows={partRows}
-                onCellChange={handlePartCellChange}
-                onRemoveRow={handleRemovePartRow}
-              />
+              <div className={subTabFieldGrid}>
+                <Field
+                  type="text"
+                  label="Part No"
+                  name="partNo"
+                  value={partRows[0]?.partNo || ""}
+                  onChange={handlePartFieldChange}
+                />
+
+                <Field
+                  type="text"
+                  label="Part Description"
+                  name="partDescription"
+                  value={partRows[0]?.partDescription || ""}
+                  onChange={handlePartFieldChange}
+                />
+              </div>
+
               {fieldErrors.partDetails && (
                 <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
                   {fieldErrors.partDetails}
@@ -955,20 +1090,26 @@ const EcrForm = ({ data, onBack }) => {
             <div className="pt-3">
               <div className={subTabFieldGrid}>
                 <Field
-                  type="textarea"
-                  label="Department Notes"
-                  name="departmentNotes"
-                  value={tdc.departmentNotes}
-                  onChange={handleTdcChange}
+                  type="select"
+                  label="Customer Approval"
+                  name="customerApproval"
+                  value={header.customerApproval}
+                  onChange={handleHeaderChange}
+                  options={APPROVAL_STATUS}
                 />
                 <Field
-                  type="select"
-                  label="Action Required"
-                  name="actionRequired"
-                  value={tdc.actionRequired}
-                  onChange={handleTdcChange}
-                  options={YES_NO}
+                  label="Drawing Which Required Change"
+                  name="drawingWhichRequiredChange"
+                  value={header.drawingWhichRequiredChange}
+                  onChange={handleHeaderChange}
                 />
+                <Field
+                  label="Documents Which Require Change"
+                  name="documentsWhichRequireChange"
+                  value={header.documentsWhichRequireChange}
+                  onChange={handleHeaderChange}
+                />
+               
               </div>
             </div>
           )}
@@ -999,7 +1140,7 @@ const EcrForm = ({ data, onBack }) => {
                   name="approvedBy"
                   value={remarks.approvedBy}
                   onChange={handleRemarksFieldChange}
-                  options={APPROVED_BY}
+                  options={requestedByOptions}
                 />
                 <div>
                   <ToggleField
@@ -1010,43 +1151,73 @@ const EcrForm = ({ data, onBack }) => {
                     options={["Yes", "No"]}
                   />
                 </div>
-                <Field
-                  type="textarea"
-                  label="Remarks"
-                  name="remarks"
-                  value={remarks.remarks}
-                  onChange={handleRemarksFieldChange}
-                />
               </div>
             </div>
           )}
 
           {/* Pdf Attachment tab */}
           {activeChildTab === "pdfAttachment" && (
-            <div className="pt-3">
+            <div className="pt-3 space-y-2">
               <TableWrapper>
-                <TableHead headers={["#", "Attach Drawing Copy", "Action"]} />
+                <TableHead headers={["#", "Document", "Preview", "Action"]} />
                 <tbody>
                   {pdfRows.map((row, idx) => (
                     <TableRow
-                      key={idx}
+                      key={row.rowId ?? idx}
                       index={idx}
-                      onRemove={handleRemovePdfRow}
+                      onRemove={() => handleRemovePdfRow(idx)}
                       disabled={pdfRows.length <= 1}
+                      showPreview
+                      previewDisabled={
+                        !row.attachDrawingCopy &&
+                        !fileInputRefs.current[row.rowId]?.files?.[0]
+                      }
+                      onPreview={() => {
+                        const domFile = fileInputRefs.current[row.rowId]?.files?.[0] || null;
+                        handlePdfPreview(row, row.attachDrawingCopy || domFile);
+                      }}
                     >
-                      <UploadCell
-                        file={row.attachDrawingCopy}
-                        onFileChange={(f) => handlePdfFileChange(idx, f)}
-                        error={
-                          fieldErrors.pdfAttachments && pdfRows.length === 1
-                            ? fieldErrors.pdfAttachments
-                            : ""
-                        }
-                      />
+                      <td className="p-2 align-top">
+                        <div className="relative w-full">
+                          <input
+                            ref={(el) => (fileInputRefs.current[row.rowId] = el)}
+                            type="file"
+                            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                            className="absolute inset-0 w-full h-9 opacity-0 cursor-pointer"
+                            onChange={(e) => {
+                              handlePdfFileChange(
+                                idx,
+                                e.target.files?.[0] || null,
+                              );
+                            }}
+                          />
+                          <div
+                            className={`${cellInputClasses} h-9 flex items-center gap-2 pr-1`}
+                          >
+                            <span className="inline-flex items-center px-2 h-6 rounded bg-blue-600 text-white text-[11px] whitespace-nowrap">
+                              Browse
+                            </span>
+                            <span
+                              className={`flex-1 truncate text-xs ${
+                                row.attachDrawingCopy
+                                  ? "text-gray-900 dark:text-gray-100"
+                                  : "text-gray-400 dark:text-gray-500"
+                              }`}
+                            >
+                              {row.attachDrawingCopy
+                                ? getAttachmentName(row.attachDrawingCopy)
+                                : "No file chosen"}
+                            </span>
+                          </div>
+                        </div>
+                      </td>
                     </TableRow>
                   ))}
                 </tbody>
               </TableWrapper>
+              <p className="text-[10px] text-gray-400">
+                Supported formats: PDF, DOC, DOCX, JPG, PNG
+              </p>
               {fieldErrors.pdfAttachments && (
                 <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
                   {fieldErrors.pdfAttachments}
@@ -1055,6 +1226,55 @@ const EcrForm = ({ data, onBack }) => {
             </div>
           )}
         </section>
+
+        {/* Preview popup */}
+        {(preview.url || preview.loading || preview.error) && (
+          <div
+            className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-3 sm:p-6"
+            onClick={closePreview}
+          >
+            <div
+              className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 dark:border-gray-700">
+                <span className="text-xs font-medium truncate dark:text-white">
+                  {preview.name}
+                </span>
+                <button
+                  type="button"
+                  onClick={closePreview}
+                  className="text-xs text-red-600 hover:underline dark:text-red-400"
+                >
+                  Close
+                </button>
+              </div>
+              <div className="flex-1 overflow-auto p-2">
+                {preview.loading ? (
+                  <p className="py-10 text-center text-xs text-gray-500 dark:text-gray-400">
+                    Loading preview...
+                  </p>
+                ) : preview.error ? (
+                  <p className="py-10 text-center text-xs font-medium text-red-600 dark:text-red-400">
+                    {preview.error}
+                  </p>
+                ) : preview.isImage ? (
+                  <img
+                    src={preview.url}
+                    alt={preview.name}
+                    className="mx-auto max-w-full"
+                  />
+                ) : (
+                  <iframe
+                    src={preview.url}
+                    title={preview.name}
+                    className="w-full h-[65vh] sm:h-[72vh] rounded border dark:border-gray-700"
+                  />
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         <FormButtons
           onCancel={onBack}
