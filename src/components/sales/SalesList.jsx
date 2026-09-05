@@ -88,12 +88,6 @@ const SECTIONS = [
         screenCode: "SALES_REJECTION_INVOICE",
       },
       {
-        name: "Other Sales Invoice",
-        icon: Receipt,
-        path: "/othersalesinvoice",
-        screenCode: "OTHER_SALES_INVOICE",
-      },
-      {
         name: "Stock Transfer Challan",
         icon: PackageSearch,
         path: "/stocktransferchallan",

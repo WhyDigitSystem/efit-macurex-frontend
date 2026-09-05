@@ -3,7 +3,6 @@ import IssueMaster from "../components/inventory/issue/IssueMaster";
 import PhysicalStockReconciliationMaster from "../components/inventory/physicalStockReconciliation/PhysicalStockReconciliationMaster";
 import ReceiptMaster from "../components/inventory/receipt/ReceiptMaster";
 import StockTransferMaster from "../components/inventory/stockTransfer/StockTransferMaster";
-import SubContractingGrnMaster from "../components/inventory/subContractingGrn/SubContractingGrnMaster";
 import DirectPurchaseMaster from "../components/inventory/DirectPurchase/DirectPurchaseMaster";
 import StockTransferGRNMaster from "../components/inventory/stockTransferGRN/StockTransferGRNMaster";
 import GoodsReceivedNoteMaster from "../components/inventory/GoodsReceivedNote/GoodsReceivedNoteMaster";
@@ -34,11 +33,6 @@ const inventoryRoutes = [
     path: "/receipts",
     label: "Receipts",
     element: <ReceiptMaster />,
-  },
-  {
-    path: "/subcontractinggrn",
-    label: "Sub contracting GRN",
-    element: <SubContractingGrnMaster />,
   },
   {
     path: "/directpurchase",

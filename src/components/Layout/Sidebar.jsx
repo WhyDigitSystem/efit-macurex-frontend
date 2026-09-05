@@ -139,14 +139,14 @@ const Sidebar = () => {
             "bg-gradient-to-br from-cyan-600 to-sky-500 dark:from-cyan-500 dark:to-sky-400",
           screenCode: "QUALITY",
         },
-        {
-          name: "Labour Charges",
-          href: "/labourcharges",
-          icon: ShoppingCart,
-          bgColor:
-            "bg-gradient-to-br from-orange-600 to-amber-500 dark:from-orange-500 dark:to-amber-400",
-          screenCode: "LABOUR_CHARGES",
-        },
+        // {
+        //   name: "Labour Charges",
+        //   href: "/labourcharges",
+        //   icon: ShoppingCart,
+        //   bgColor:
+        //     "bg-gradient-to-br from-orange-600 to-amber-500 dark:from-orange-500 dark:to-amber-400",
+        //   screenCode: "LABOUR_CHARGES",
+        // },
         {
           name: "Security",
           href: "/security",
@@ -154,6 +154,14 @@ const Sidebar = () => {
           bgColor:
             "bg-gradient-to-br from-red-600 to-rose-500 dark:from-red-500 dark:to-rose-400",
           screenCode: "SECURITY",
+        },
+        {
+          name: "Unwanted Screens",
+          href: "/unwantedscreens",
+          icon: ShoppingCart,
+          bgColor:
+            "bg-gradient-to-br from-orange-600 to-amber-500 dark:from-orange-500 dark:to-amber-400",
+          screenCode: "Unwanted Screens",
         },
       ];
 

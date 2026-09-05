@@ -75,12 +75,6 @@ const SECTIONS = [
 
     items: [
       {
-        name: "Container848",
-        icon: Package,
-        path: "/container848",
-        screenCode: "CONTAINER848",
-      },
-      {
         name: "Delivery Challan Cum Gate Pass",
         icon: Truck,
         path: "/deliverychallancumgatepass",
@@ -97,12 +91,6 @@ const SECTIONS = [
         icon: SearchCheck,
         path: "/predeliveryinspectionreport",
         screenCode: "PRE_DELIVERY_INSPECTION_REPORT",
-      },
-      {
-        name: "Rejection Note Cum Gate Pass",
-        icon: FileX,
-        path: "/rejectionnotecumgatepass",
-        screenCode: "REJECTION_NOTE_CUM_GATE_PASS",
       },
       {
         name: "Inward Inspection",
@@ -135,28 +123,10 @@ const SECTIONS = [
         screenCode: "IN_PROCESS_INSPECTION",
       },
       {
-        name: "LC Material Inspection",
-        icon: Boxes,
-        path: "/lcmaterialinspection",
-        screenCode: "LC_MATERIAL_INSPECTION",
-      },
-      {
-        name: "Supplier Rating",
-        icon: Star,
-        path: "/supplierrating",
-        screenCode: "SUPPLIER_RATING",
-      },
-      {
         name: "Flash/NC Report",
         icon: TriangleAlert,
         path: "/flashncreport",
         screenCode: "FLASH_NC_REPORT",
-      },
-      {
-        name: "Flash/NC Report Details",
-        icon: List,
-        path: "/flashncreportdetails",
-        screenCode: "FLASH_NC_REPORT_DETAILS",
       },
       {
         name: "Problem Solving Entry",
@@ -183,22 +153,10 @@ const SECTIONS = [
         screenCode: "ZERO_KM_FAILURE_ENTRY",
       },
       {
-        name: "FMEA Entry",
-        icon: FileSpreadsheet,
-        path: "/fmeaentry",
-        screenCode: "FMEA_ENTRY",
-      },
-      {
         name: "Instrument Calibration",
         icon: Gauge,
         path: "/instrumentcalibration",
         screenCode: "INSTRUMENT_CALIBRATION",
-      },
-      {
-        name: "Vendor Quality Rating",
-        icon: Users,
-        path: "/vendorqualityrating",
-        screenCode: "VENDOR_QUALITY_RATING",
       },
       {
         name: "Vendor Complaint Entry",
@@ -211,12 +169,6 @@ const SECTIONS = [
         icon: Reply,
         path: "/supplierresponseentry",
         screenCode: "SUPPLIER_RESPONSE_ENTRY",
-      },
-      {
-        name: "Inward Insp",
-        icon: ClipboardCheck,
-        path: "/inwardinsp",
-        screenCode: "INWARD_INSP",
       },
       {
         name: "Daily Inspection Cum Rejection Data",

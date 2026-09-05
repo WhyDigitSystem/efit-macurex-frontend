@@ -5,6 +5,7 @@ import MaterialPlanningMaster from "../components/PPC/materialPlanning/MaterialP
 import TransferOrderMaster from "../components/PPC/transferOrder/TransferOrderMaster";
 import ProductionList from "../components/Production/ProductionList";
 import TdcList from "../components/TDC/TdcList";
+import UnwantedScreensList from "../components/unwantedScreen/UnwantedScreensList";
 import EcnMaster from "../components/TDC/engineeringChangeNote/EcnMaster";
 import EcrMaster from "../components/TDC/engineeringChangeRecord/EcrMaster";
 import EngineeringDeviationRequestMaster from "../components/TDC/engineeringDeviationRequest/EngineeringDeviationRequestMaster";
@@ -110,7 +111,7 @@ import DespatchInstruction from "../components/sales/despatchinstruction/Despatc
 import DocketInvoiceDetailsMaster from "../components/sales/docketInvoiceDetails/DocketInvoiceDetailsMaster";
 import Enquiry from "../components/sales/enquiry/Enquiry";
 import OrderAcceptance from "../components/sales/orderacceptance/OrderAcceptance";
-import OtherSalesInvoiceMasterScreen from "../components/sales/othersalesinvoice/OtherSalesInvoiceMasterScreen";
+import OtherSalesInvoiceMasterScreen from "../components/unwantedScreen/othersalesinvoice/OtherSalesInvoiceMasterScreen";
 import ProformaInvoice from "../components/sales/proformainvoice/ProformaInvoice";
 import Quotation from "../components/sales/quotation/Quotation";
 import SalesContract from "../components/sales/salescontract/SalesContract";
@@ -240,6 +241,11 @@ export const routesConfig = [
     element: <DrawingAttachmentMaster />,
   },
   { path: "/TDC", label: "TDC", element: <TdcList /> },
+  {
+    path: "/unwantedscreens",
+    label: "Unwanted Screens",
+    element: <UnwantedScreensList />,
+  },
   {
     path: "/engineeringchangerecord",
     label: "Engineering Change Record",

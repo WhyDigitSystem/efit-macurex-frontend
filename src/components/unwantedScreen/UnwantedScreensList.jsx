@@ -1,100 +1,18 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  ArrowLeftRight,
-  ClipboardList,
-  PackageMinus,
-  ScanSearch,
-  PackagePlus,
-  FileCheck,
-  FileWarning,
-  SearchCheck,
-  Factory,
-  Clock3,
-  Ship,
-  PackageCheck,
-  ShoppingCart,
-  Truck,
-  ShoppingBasket,
-} from "lucide-react";
+import { Receipt, Settings } from "lucide-react";
 import { hasScreenAccess } from "../../utils/accessControl";
 
 // Same section/item shape as menu-items config, so this page reads
-// like every other module page in the app (mirrors MastersList.js).
+// like every other module page in the app (mirrors TdcList.js).
 const SECTIONS = [
   {
     items: [
       {
-        name: "Stock Transfer",
-        icon: ArrowLeftRight,
-        path: "/stocktransfer",
-        screenCode: "STOCK_TRANSFER",
-      },
-      {
-        name: "Internal Indent",
-        icon: ClipboardList,
-        path: "/internalindent",
-        screenCode: "INTERNAL_INDENT",
-      },
-      {
-        name: "Issues",
-        icon: PackageMinus,
-        path: "/issues",
-        screenCode: "ISSUES",
-      },
-      {
-        name: "Physical Stock Re-Conciliation",
-        icon: ScanSearch,
-        path: "/physicalstockreconciliation",
-        screenCode: "PHYSICAL_STOCK_RECONCILIATION",
-      },
-      {
-        name: "Receipts",
-        icon: PackagePlus,
-        path: "/receipts",
-        screenCode: "RECEIPTS",
-      },
-      {
-        name: "Goods Received Note",
-        icon: FileCheck,
-        path: "/goodsreceivednote",
-        screenCode: "GOODS_RECEIVED_NOTE",
-      },
-      {
-        name: "Report For Qty Shortage",
-        icon: FileWarning,
-        path: "/reportforqtyshortage",
-        screenCode: "REPORT_FOR_QTY_SHORTAGE",
-      },
-      {
-        name: "Import GRN",
-        icon: Ship,
-        path: "/importgrn",
-        screenCode: "IMPORT_GRN",
-      },
-      {
-        name: "GRN Receipt (Bought Out/Sub Contract)",
-        icon: PackageCheck,
-        path: "/grnreceipt",
-        screenCode: "GRN_RECEIPT",
-      },
-      {
-        name: "Direct Purchase",
-        icon: ShoppingCart,
-        path: "/directpurchase",
-        screenCode: "DIRECT_PURCHASE",
-      },
-      {
-        name: "Stock Transfer GRN",
-        icon: Truck,
-        path: "/stocktransfergrn",
-        screenCode: "STOCK_TRANSFER_GRN",
-      },
-      {
-        name: "Open Stock Entry Master",
-        icon: Clock3,
-        path: "/openstockentrymaster",
-        screenCode: "OPEN_STOCK_ENTRY_MASTER",
+        name: "Other Sales Invoice",
+        icon: Receipt,
+        path: "/othersalesinvoice",
+        screenCode: "OTHER_SALES_INVOICE",
       },
     ],
   },
@@ -217,20 +135,6 @@ const getColorStyles = (color) => {
       iconBg:
         "bg-yellow-100 dark:bg-yellow-900/40 group-hover:bg-yellow-200 dark:group-hover:bg-yellow-800",
     },
-    slate: {
-      hover: "hover:bg-slate-50 dark:hover:bg-slate-900/30",
-      border: "hover:border-slate-300 dark:hover:border-slate-600",
-      text: "text-slate-600 dark:text-slate-400",
-      iconBg:
-        "bg-slate-100 dark:bg-slate-900/40 group-hover:bg-slate-200 dark:group-hover:bg-slate-800",
-    },
-    gray: {
-      hover: "hover:bg-gray-50 dark:hover:bg-gray-900/30",
-      border: "hover:border-gray-300 dark:hover:border-gray-600",
-      text: "text-gray-600 dark:text-gray-400",
-      iconBg:
-        "bg-gray-100 dark:bg-gray-900/40 group-hover:bg-gray-200 dark:group-hover:bg-gray-800",
-    },
   };
   return colors[color] || colors.blue;
 };
@@ -256,7 +160,7 @@ const ITEM_COLOR_PALETTE = [
   "yellow",
 ];
 
-const InventoryList = () => {
+const UnwantedScreensList = () => {
   const navigate = useNavigate();
   const userType = localStorage.getItem("userType")?.toUpperCase();
 
@@ -287,21 +191,21 @@ const InventoryList = () => {
         <>
           {/* Main Header */}
           <div className="flex items-center gap-2 mb-4">
-            <div className="p-1.5 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 shadow-sm">
-              <ShoppingBasket className="h-4 w-4 text-white" />
+            <div className="p-1.5 rounded-lg bg-gradient-to-br from-amber-600 to-orange-500 shadow-sm">
+              <Settings className="h-4 w-4 text-white" />
             </div>
 
             <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-              Inventory
+              Unwanted Screens
             </h2>
 
             <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
-              Manage inventory, stock movement, warehouse operations and
-              tracking
+              Screens not meant for regular use
             </span>
 
-            <div className="flex-1 h-px bg-gradient-to-r from-gray-200 to-transparent dark:from-gray-700" />
+            <div className="flex-1 h-px bg-gradient-to-r from-gray-200 to-transparent dark:from-gray-700"></div>
           </div>
+
           {/* Each section gets its own row heading (when it has a title)
               + each item card gets its own color */}
           {filteredSections.map((section, sectionIndex) => {
@@ -389,10 +293,10 @@ const InventoryList = () => {
         <div className="flex items-center justify-center h-[50vh]">
           <div className="text-center">
             <h2 className="text-base font-semibold text-gray-800 dark:text-white">
-              No purchase modules available
+              No unwanted screens available
             </h2>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              You do not have access to any purchase module.
+              You do not have access to any unwanted screens.
             </p>
           </div>
         </div>
@@ -429,4 +333,4 @@ if (typeof document !== "undefined") {
   document.head.appendChild(styleSheet);
 }
 
-export default InventoryList;
+export default UnwantedScreensList;

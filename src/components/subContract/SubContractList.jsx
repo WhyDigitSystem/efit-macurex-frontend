@@ -14,6 +14,7 @@ import {
   XCircle,
   Clock3,
   Package,
+  Factory,
 } from "lucide-react";
 import { hasScreenAccess } from "../../utils/accessControl";
 
@@ -87,6 +88,12 @@ const SECTIONS = [
         icon: XCircle,
         path: "/jobordershortclose",
         screenCode: "JOB_ORDER_SHORT_CLOSE",
+      },
+       {
+        name: "Sub Contracting GRN",
+        icon: Factory,
+        path: "/subcontractinggrn",
+        screenCode: "SUB_CONTRACTING_GRN",
       },
       {
         name: "DC For Capital Items",

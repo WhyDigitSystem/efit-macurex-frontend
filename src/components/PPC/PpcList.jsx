@@ -28,6 +28,12 @@ const SECTIONS = [
         screenCode: "TRANSFER_ORDERS",
       },
       {
+        name: "BOM Master",
+        icon: Boxes,
+        path: "/bommaster",
+        screenCode: "BOM_MASTER",
+      },
+      {
         name: "BOM Correction Request/Note",
         icon: FileEdit,
         path: "/bomcorrectionrequest",

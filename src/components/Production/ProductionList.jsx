@@ -108,24 +108,6 @@ const SECTIONS = [
         screenCode: "CONSUMPTION_ENTRY",
       },
       {
-        name: "Excess Utilisation Report",
-        icon: BarChart3,
-        path: "/excessutilisationreport",
-        screenCode: "EXCESS_UTILISATION_REPORT",
-      },
-      {
-        name: "Shop Floor Stock Statement",
-        icon: Warehouse,
-        path: "/shopfloorstockstatement",
-        screenCode: "SHOP_FLOOR_STOCK_STATEMENT",
-      },
-      {
-        name: "Report For Excess Consumption",
-        icon: FileText,
-        path: "/reportforexcessconsumption",
-        screenCode: "REPORT_FOR_EXCESS_CONSUMPTION",
-      },
-      {
         name: "Material Transfer/Return Note",
         icon: Repeat,
         path: "/materialtransferreturnnote",
@@ -168,22 +150,10 @@ const SECTIONS = [
         screenCode: "RECONCILE_CONSUMPTION_STOCK",
       },
       {
-        name: "Production Transfer Slip (Shop Floor)",
-        icon: Truck,
-        path: "/productiontransferslipshopfloor",
-        screenCode: "PRODUCTION_TRANSFER_SLIP_SHOP_FLOOR",
-      },
-      {
-        name: "Report For Consumption Entry",
+        name: "Process Sheet comp Routing Master",
         icon: FileSpreadsheet,
-        path: "/reportforconsumptionentry",
-        screenCode: "REPORT_FOR_CONSUMPTION_ENTRY",
-      },
-      {
-        name: "Exception Report - Not Enough Stock - Consumption",
-        icon: AlertTriangle,
-        path: "/exceptionreportconsumption",
-        screenCode: "EXCEPTION_REPORT_CONSUMPTION",
+        path: "/processsheetcomproutingmaster",
+        screenCode: "PROCESS_SHEET_COMP_ROUTING_MASTER",
       },
       {
         name: "Machine Setting Plan",
@@ -202,12 +172,6 @@ const SECTIONS = [
         icon: Boxes,
         path: "/productionbulkissues",
         screenCode: "PRODUCTION_BULK_ISSUES",
-      },
-      {
-        name: "Pending Bulk Issue",
-        icon: Clock3,
-        path: "/pendingbulkissue",
-        screenCode: "PENDING_BULK_ISSUE",
       },
       {
         name: "Production Schedule (for next 3 months)",
