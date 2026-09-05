@@ -28,7 +28,7 @@ const SECTIONS = [
         screenCode: "TRANSFER_ORDERS",
       },
       {
-        name: "BOM Master",
+        name: "Bill of Material",
         icon: Boxes,
         path: "/bommaster",
         screenCode: "BOM_MASTER",

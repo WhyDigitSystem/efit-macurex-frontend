@@ -1,4 +1,5 @@
 import PpcList from "../components/PPC/PpcList";
+import BomMasterMaster from "../components/PPC/bommaster/BomMasterMaster";
 import BomCorrectionRequestMaster from "../components/PPC/bomCorrectionRequest/BomCorrectionRequestMaster";
 import DrawingAttachmentMaster from "../components/PPC/drawingAttachment/DrawingAttachmentMaster";
 import MaterialPlanningMaster from "../components/PPC/materialPlanning/MaterialPlanningMaster";
@@ -229,6 +230,11 @@ export const routesConfig = [
     path: "/transferorders",
     label: "Transfer Orders",
     element: <TransferOrderMaster />,
+  },
+  {
+    path: "/bommaster",
+    label: "Bill of Material",
+    element: <BomMasterMaster />,
   },
   {
     path: "/bomcorrectionrequest",
