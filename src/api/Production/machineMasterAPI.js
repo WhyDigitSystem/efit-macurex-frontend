@@ -28,16 +28,34 @@ const machineMasterAPI = {
         }
     },
 
-    // Create or Update Machine Setting Plan
-    createUpdateMachineMaster: async (payload) => {
+    // Get Tool Categories for Machine Master
+    getToolCategoryforMachineMaster: async (applicableFor, orgId) => {
         try {
-            const response = await apiClient.put(
-                `/api/machineSettingPlan/createUpdate`,
-                payload
+            const response = await apiClient.get(
+                `/api/develop/getToolCategoryforMachineMaster?applicableFor=${applicableFor}&orgId=${orgId}`
             );
             return response;
         } catch (error) {
-            console.error("Error saving machine setting plan:", error);
+            console.error("Error fetching tool categories for machine master:", error);
+            throw error;
+        }
+    },
+
+    // Create or Update Machine Master with FormData
+    createUpdateMachineMaster: async (formData) => {
+        try {
+            const response = await apiClient.post(
+                `/api/develop/updateCreateMachineMaster`,
+                formData,
+                {
+                    headers: {
+                        "Content-Type": "multipart/form-data",
+                    },
+                }
+            );
+            return response;
+        } catch (error) {
+            console.error("Error saving machine master:", error);
             throw error;
         }
     },

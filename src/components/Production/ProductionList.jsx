@@ -53,6 +53,12 @@ const SECTIONS = [
         path: "/reasonmaster",
         screenCode: "REASON_MASTER",
       },
+      {
+        name: "Tool Category",
+        icon: MessageSquareWarning,
+        path: "/toolCategory",
+        screenCode: "TOOL_CATEGORY",
+      },
     ],
   },
 

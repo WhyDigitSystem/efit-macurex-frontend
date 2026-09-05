@@ -1,13 +1,15 @@
 import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
-import supplierRateContractAPI from "../../../api/supplierRateContractAPI";
+import { useCallback, useEffect, useState, useRef } from "react";
 import locationMasterAPI from "../../../api/locationMasterAPI";
 import branchAPI from "../../../api/branchAPI";
 import partyMasterAPI from "../../../api/partyMasterAPI";
 import itemAPI from "../../../api/itemAPI";
 import unitMasterAPI from "../../../api/unitAPI";
 import employeeAPI from "../../../api/employeeAPI";
+import { departmentAPI } from "../../../api/departmentAPI";
+import listOfValuesAPI from "../../../api/listOfValuesAPI";
 import { useToast } from "../../Toast/ToastContext";
+import supplierRateContractAPI from "../../../api/SubContract/supplierRateContractAPI";
 
 /* ---------------------------------------------------------------------------- */
 /* Shared design tokens                                                        */
@@ -197,13 +199,12 @@ const TableHead = ({ headers }) => (
       {headers.map((h, i) => (
         <th
           key={i}
-          className={`p-1 whitespace-nowrap ${
-            i === 0
-              ? "w-8 text-center"
-              : i === headers.length - 1
-                ? "w-20 text-left"
-                : "text-left"
-          } dark:text-white`}
+          className={`p-1 whitespace-nowrap ${i === 0
+            ? "w-8 text-center"
+            : i === headers.length - 1
+              ? "w-20 text-left"
+              : "text-left"
+            } dark:text-white`}
         >
           {h}
         </th>
@@ -221,11 +222,10 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
         type="button"
         onClick={onRemove}
         disabled={disabled}
-        className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-          disabled
-            ? "bg-gray-400 cursor-not-allowed"
-            : "bg-red-600 hover:bg-red-700"
-        }`}
+        className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
+          ? "bg-gray-400 cursor-not-allowed"
+          : "bg-red-600 hover:bg-red-700"
+          }`}
       >
         <Trash2 size={10} />
       </button>
@@ -235,76 +235,213 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
 
 /* Generic dynamic table. Supports text / select / date / readonly columns.
    Options may be plain strings or { value, label } objects. */
-const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
-  <TableWrapper>
-    <TableHead headers={["#", ...columns.map((c) => c.label), "Action"]} />
-    <tbody>
-      {rows.map((row, idx) => (
-        <TableRow
-          key={idx}
-          index={idx}
-          onRemove={() => onRemoveRow(idx)}
-          disabled={rows.length <= 1}
-        >
-          {columns.map((col) =>
-            col.type === "select" ? (
-              <td className="p-2 align-top" key={col.key}>
-                <select
-                  value={row[col.key]}
-                  onChange={(e) => onCellChange(idx, col.key, e.target.value)}
-                  className={cellInputClasses}
-                >
-                  <option value="">-- Select --</option>
-                  {(col.options || []).map((opt) => (
-                    <option key={opt.value ?? opt} value={opt.value ?? opt}>
-                      {opt.label ?? opt}
-                    </option>
-                  ))}
-                </select>
-              </td>
-            ) : (
-              <td className="p-2 align-top" key={col.key}>
-                <input
-                  type={col.type === "date" ? "date" : "text"}
-                  value={row[col.key]}
-                  readOnly={col.readOnly}
-                  onChange={(e) => onCellChange(idx, col.key, e.target.value)}
-                  className={
-                    col.readOnly ? cellReadOnlyClasses : cellInputClasses
-                  }
-                />
-              </td>
-            ),
-          )}
-        </TableRow>
-      ))}
-    </tbody>
-  </TableWrapper>
-);
+const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow, headerData = {} }) => {
+  const { isIgstApplicable } = headerData;
+  const taxType = isIgstApplicable === "YES" ? "IGST" : "SGST";
+
+  // Filter columns based on tax type
+  const visibleColumns = columns.filter((col) => {
+    if (taxType === "IGST") {
+      if (col.key === "sgstRate" || col.key === "sgstAmount" ||
+        col.key === "cgstRate" || col.key === "cgstAmount") {
+        return false;
+      }
+    }
+    if (taxType === "SGST") {
+      if (col.key === "igstRate" || col.key === "igstAmount") {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  return (
+    <TableWrapper>
+      <TableHead headers={["#", ...visibleColumns.map((c) => c.label), "Action"]} />
+      <tbody>
+        {rows.map((row, idx) => (
+          <TableRow
+            key={idx}
+            index={idx}
+            onRemove={() => onRemoveRow(idx)}
+            disabled={rows.length <= 1}
+          >
+            {visibleColumns.map((col) => {
+              if (col.type === "select") {
+                // Find the matching option for the current value
+                const currentValue = row[col.key] || "";
+                const matchedOption = (col.options || []).find(
+                  (opt) => String(opt.value) === String(currentValue) ||
+                    String(opt.itemCode) === String(currentValue) ||
+                    String(opt.label) === String(currentValue)
+                );
+                const selectValue = matchedOption ? matchedOption.value : currentValue;
+
+                return (
+                  <td className="p-2 align-top" key={col.key}>
+                    <select
+                      value={selectValue}
+                      onChange={(e) => {
+                        const selectedValue = e.target.value;
+                        const selectedItem = (col.options || []).find((opt) => {
+                          const optionValue =
+                            typeof opt === "object"
+                              ? opt.value
+                              : opt;
+
+                          const optionLabel =
+                            typeof opt === "object"
+                              ? opt.label ?? opt.valuesDescription ?? opt.value
+                              : opt;
+
+                          return (
+                            String(optionValue) === String(selectedValue) ||
+                            String(optionLabel) === String(selectedValue)
+                          );
+                        });
+
+                        onCellChange(
+                          idx,
+                          col.key,
+                          selectedValue,
+                          selectedItem
+                        );
+                      }}
+                      className={cellInputClasses}
+                    >
+                      <option value="">-- Select --</option>
+
+                      {(col.options || []).map((opt) => {
+                        const optionLabel =
+                          typeof opt === "object"
+                            ? opt.label ??
+                            opt.valuesDescription ??
+                            opt.value
+                            : opt;
+
+                        return (
+                          <option
+                            key={optionLabel}
+                            value={typeof opt === "object" ? opt.value : opt}
+                          >
+                            {optionLabel}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </td>
+                );
+              }
+
+              if (col.type === "file") {
+                return (
+                  <td className="p-2 align-top" key={col.key}>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            onCellChange(idx, col.key, file);
+                          }
+                        }}
+                        className="text-xs file:mr-2 file:px-2 file:py-1 file:rounded file:border-0 file:bg-blue-600 file:text-white hover:file:bg-blue-700"
+                      />
+                      {row[col.key] && typeof row[col.key] === 'object' && (
+                        <span className="text-xs text-gray-500">{row[col.key].name}</span>
+                      )}
+                    </div>
+                  </td>
+                );
+              }
+
+              if (col.type === "date") {
+                return (
+                  <td className="p-2 align-top" key={col.key}>
+                    <input
+                      type="date"
+                      value={row[col.key] || ""}
+                      onChange={(e) => onCellChange(idx, col.key, e.target.value)}
+                      className={cellInputClasses}
+                    />
+                  </td>
+                );
+              }
+
+              if (col.type === "textarea") {
+                return (
+                  <td className="p-2 align-top" key={col.key}>
+                    <textarea
+                      value={row[col.key] || ""}
+                      onChange={(e) => onCellChange(idx, col.key, e.target.value)}
+                      className={`${cellInputClasses} min-h-[60px] resize-y`}
+                      rows={2}
+                    />
+                  </td>
+                );
+              }
+
+              // Check if this is a tax column that should be disabled based on tax type
+              let isDisabled = col.readOnly || false;
+              if (taxType === "IGST") {
+                if (col.key === "sgstRate" || col.key === "sgstAmount" ||
+                  col.key === "cgstRate" || col.key === "cgstAmount") {
+                  isDisabled = true;
+                }
+              }
+              if (taxType === "SGST") {
+                if (col.key === "igstRate" || col.key === "igstAmount") {
+                  isDisabled = true;
+                }
+              }
+
+              return (
+                <td className="p-2 align-top" key={col.key}>
+                  <input
+                    type={col.type === "number" ? "number" : "text"}
+                    value={row[col.key] || ""}
+                    readOnly={isDisabled || col.readOnly}
+                    onChange={(e) => onCellChange(idx, col.key, e.target.value)}
+                    className={
+                      isDisabled || col.readOnly ? cellReadOnlyClasses : cellInputClasses
+                    }
+                  />
+                </td>
+              );
+            })}
+          </TableRow>
+        ))}
+      </tbody>
+    </TableWrapper>
+  );
+};
 
 /* ---------------------------------------------------------------------------- */
 /* Options                                                                      */
 
-const DEPARTMENTS = ["Purchase", "Stores", "Quality", "Production", "Finance"];
-const BELONGS_TO = ["APPLIANCES", "ELECTRICALS", "PACKAGING", "RAW MATERIAL"];
-const CONTRACT_FOR = ["Rate Contract", "Annual Rate Contract", "One Time"];
-const YES_NO = ["YES", "NO"];
 const TAX_CODES = ["TX-STD", "TX-ZERO", "TX-EXEMPT", "TX-COMP"];
-const SERVICE_NAMES = ["Amortization", "Machining", "Plating", "Assembly"];
 const SCOPE_OPTIONS = ["Local", "Inter-State", "SEZ", "Overseas"];
 const TAX_TYPES = ["SGST", "CGST", "IGST", "GST", "Exempt", "Nil Rated"];
-const PARTICULARS = ["Basic", "Freight", "Packing", "Insurance", "Discount"];
 const PAYMENT_TERMS = [
+  "40 Days",
   "Immediate",
+  "60 Days",
+  "With in 7 Days",
+  "Against Performa Invoice",
+  "45 Days Against Delivery",
   "15 Days",
   "30 Days",
   "45 Days",
-  "60 Days",
-  "Advance",
+  "50% Advance and Balance Against Completion",
+  "70 Days PDC",
+  "90 Days PDC",
+  "30 Days PDC",
 ];
-const FREIGHT_TYPES = ["Prepaid", "To Pay", "FOB", "CIF"];
-const PACKING_TYPES = ["Standard", "Export Worthy", "Custom", "None"];
+const FREIGHT_TYPES = ["Macurex", "Supplier"];
+const PACKING_TYPES = ["Macurex", "Supplier"];
 const MODE_OF_DESPATCH = ["Road", "Rail", "Air", "Sea", "Courier"];
+const YES_NO = ["YES", "NO"];
 
 const CHILD_TABS = [
   { key: "itemDetails", label: "Item Details", kind: "table" },
@@ -315,7 +452,8 @@ const CHILD_TABS = [
 const emptyItemDetailRow = () => ({
   itemCode: "",
   itemDescription: "",
-  purchaseUnit: "",
+  unit: "",
+  unitMasterId: "",
   platingType: "",
   thickness: "",
   rate: "",
@@ -327,12 +465,13 @@ const emptyItemDetailRow = () => ({
   igstAmount: "",
   validFrom: "",
   validTo: "",
-  totalAmortizationRate: "",
+  toolAmortizationRate: "",
 });
 
 const emptyTaxDetailRow = () => ({
   particular: "",
   amount: "",
+  isSystemRow: false,
 });
 
 const emptyTerms = () => ({
@@ -356,13 +495,11 @@ const todayStr = () => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
 
-const autoContractNo = () =>
-  `SRC-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, "0")}${String(new Date().getDate()).padStart(2, "0")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
-
 /* ---------------------------------------------------------------------------- */
 
 const SupplierRateContractForm = ({ data, onBack }) => {
   const [orgId] = useState(Number(localStorage.getItem("orgId")) || 0);
+  const [finYear] = useState(Number(localStorage.getItem("finYear")) || 0);
   const [branch] = useState(Number(localStorage.getItem("branchId")) || 0);
   const { addToast } = useToast();
 
@@ -373,32 +510,45 @@ const SupplierRateContractForm = ({ data, onBack }) => {
   const [activeChildTab, setActiveChildTab] = useState("itemDetails");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
+  const [isLoading, setIsLoading] = useState(false);
+  const isUpdatingRef = useRef(false);
 
   const [plantOptions, setPlantOptions] = useState([]);
+  const [departmentOptions, setDepartmentOptions] = useState([]);
+  const [belongsToOptions, setBelongsToOptions] = useState([]);
+  const [contractForOptions, setContractForOptions] = useState([]);
   const [vendorOptions, setVendorOptions] = useState([]);
   const [itemOptions, setItemOptions] = useState([]);
   const [itemMasterMap, setItemMasterMap] = useState({});
-  const [unitOptions, setUnitOptions] = useState([]);
   const [employeeOptions, setEmployeeOptions] = useState([]);
+  const [serviceOptions, setServiceOptions] = useState([]);
+  const [listOfValuesData, setListOfValuesData] = useState({});
 
   const [header, setHeader] = useState(() => ({
     plantId: data?.plantId || "",
     department: data?.department || "",
     belongsTo: data?.belongsTo || "",
-    contractNo: data?.contractNo || (data ? "" : autoContractNo()),
+    contractNo: data?.contractNo || "",
     contractDate: data?.contractDate || todayStr(),
     validFrom: data?.validFrom || "",
     validTo: data?.validTo || "",
     vendorId: data?.vendorId || "",
     vendorName: data?.vendorName || "",
+    vendorGstNo: data?.vendorGstNo || "",
+    vendorGstStateId: data?.vendorGstStateId || "",
+    vendorGstState: data?.vendorGstState || "",
+    vendorIgstApplicable: data?.vendorIgstApplicable || "",
     contractFor: data?.contractFor || "",
     deliveryDate: data?.deliveryDate || "",
     gstState: data?.gstState || "",
+    gstStateId: data?.gstStateId || "",
     isIgstApplicable: data?.isIgstApplicable || "",
     gstinNo: data?.gstinNo || "",
     taxCode: data?.taxCode || "",
     serviceName: data?.serviceName || "",
+    serviceId: data?.serviceId || "",
     hsnSacCode: data?.hsnSacCode || "",
+    hsnId: data?.hsnId || "",
     scope: data?.scope || "",
     scrap: data?.scrap || "",
     taxType: data?.taxType || "SGST",
@@ -416,6 +566,86 @@ const SupplierRateContractForm = ({ data, onBack }) => {
     ...emptyTerms(),
     ...data?.terms,
   });
+
+  /* ---------------- Transform Data for Form ---------------- */
+
+  // Transform the nested API response to flat structure for the form
+  const transformDataForForm = useCallback((apiData) => {
+    if (!apiData) return null;
+
+    return {
+      id: apiData.id,
+      plantId: apiData.branch?.id || "",
+      department: apiData.department?.id || "",
+      belongsTo: apiData.belongsTo || "",
+      contractNo: apiData.docId || "",
+      contractDate: apiData.docDate || "",
+      validFrom: apiData.validFrom || "",
+      validTo: apiData.validTo || "",
+      vendorId: apiData.customer?.customerId || "",
+      vendorName: apiData.customer?.customerName || "",
+      vendorGstNo: apiData.customer?.gstNo || "",
+      vendorGstStateId: apiData.gstState?.id || "",
+      vendorGstState: apiData.gstState?.gstState || "",
+      vendorIgstApplicable: apiData.igstApplicable ? "YES" : "NO",
+      contractFor: apiData.contractFor || "",
+      deliveryDate: apiData.deliveryDate || "",
+      gstState: apiData.gstState?.gstState || "",
+      gstStateId: apiData.gstState?.id || "",
+      isIgstApplicable: apiData.igstApplicable ? "YES" : "NO",
+      gstinNo: apiData.customer?.gstNo || "",
+      taxCode: apiData.taxCode || "",
+      serviceName: apiData.serviceName?.id || "",
+      serviceId: apiData.serviceName?.id || "",
+      hsnSacCode: apiData.hsnSacCode?.hsn || "",
+      hsnId: apiData.hsnSacCode?.id || "",
+      scope: apiData.scope || "",
+      scrap: apiData.scrap ? "YES" : "NO",
+      taxType: apiData.taxType || "SGST",
+      taxPct: apiData.taxPercentage || "",
+      active: apiData.active === "Active",
+      // Item details
+      itemDetails: apiData.supplierRateContractItemDetailsDTO?.map((item) => ({
+        itemCode: item.incomingItemCode?.itemCode || "",
+        itemDescription: item.incomingItemCode?.itemDescription || "",
+        unit: item.incomingItemCode?.unit?.unitId || "",
+        unitMasterId: item.incomingItemCode?.unit?.id || "",
+        platingType: item.platingType || "",
+        thickness: item.thickness || "",
+        rate: item.rate || "",
+        sgstRate: item.sgstRate || "",
+        sgstAmount: item.sgstAmount || "",
+        cgstRate: item.cgstRate || "",
+        cgstAmount: item.cgstAmount || "",
+        igstRate: item.igstRate || "",
+        igstAmount: item.igstAmount || "",
+        validFrom: item.validFrom || "",
+        validTo: item.validTo || "",
+        toolAmortizationRate: item.toolAmortizationRate || "",
+      })) || [],
+      // Tax details
+      taxDetails: apiData.supplierRateContractTaxDetailsDTO?.map((tax) => ({
+        particular: tax.particulars || "",
+        amount: tax.amount || "",
+        isSystemRow: ["Gross Amount", "IGST", "CGST", "SGST"].includes(tax.particulars || ""),
+      })) || [],
+      // Terms
+      terms: {
+        discountPct: apiData.discount || "",
+        paymentTerms: apiData.paymentsTerms || "",
+        deliveryTerms: apiData.deliveryTerms || "",
+        freight: apiData.freight || "",
+        freightType: apiData.freightType || "",
+        packingType: apiData.packingType || "",
+        insurance: apiData.insurance || "",
+        modeOfDespatch: apiData.modeOfDespatch || "",
+        inlandCharge: apiData.inlandCharge || "",
+        preparedBy: apiData.preparedBy?.employeeId || "",
+        authorizedBy: apiData.authoriedBy?.employeeId || "",
+        narration: apiData.narration || "",
+      },
+    };
+  }, []);
 
   /* ---------------- Lookup loading ---------------- */
 
@@ -444,13 +674,123 @@ const SupplierRateContractForm = ({ data, onBack }) => {
     }
   }, [orgId, isMacurex]);
 
+  const loadDepartments = useCallback(async () => {
+    try {
+      const res = await departmentAPI.getAllDepartments(orgId);
+      const deptList = res?.paramObjectsMap?.departmentVO || [];
+      setDepartmentOptions(
+        deptList.map((d) => ({
+          value: d.id,
+          label: d.departmentName || d.departmentCode || d.id,
+        }))
+      );
+    } catch (error) {
+      console.error("Failed to load department options:", error);
+      setDepartmentOptions([]);
+    }
+  }, [orgId]);
+
+  const loadBelongsTo = useCallback(async () => {
+    try {
+      const res = await listOfValuesAPI.getListValuesGroup("SDS BELONGS TO", orgId);
+      setBelongsToOptions(
+        (res || []).map((item) => ({
+          value: item.id,
+          label: item.valuesDescription || item.valueDescription || item.id,
+        }))
+      );
+    } catch (error) {
+      console.error("Failed to load belongs to options:", error);
+      setBelongsToOptions([]);
+    }
+  }, [orgId]);
+
+  const loadContractFor = useCallback(async () => {
+    try {
+      const res = await listOfValuesAPI.getListValuesGroup(
+        "CONTRACT_FOR",
+        orgId
+      );
+
+      setContractForOptions(
+        (res || []).map((item) => {
+          const valueDescription =
+            item.valuesDescription ||
+            item.valueDescription ||
+            item.label ||
+            "";
+
+          return {
+            value: valueDescription,
+            label: valueDescription,
+            id: item.id,
+          };
+        })
+      );
+    } catch (error) {
+      console.error("Failed to load contract for options:", error);
+      setContractForOptions([]);
+    }
+  }, [orgId]);
+
+  const loadListOfValuesData = useCallback(async () => {
+    try {
+      const groups = ["PARTICULARS"];
+      const result = {};
+
+      await Promise.all(
+        groups.map(async (group) => {
+          try {
+            const response =
+              await listOfValuesAPI.getListValuesGroup(
+                group,
+                orgId
+              );
+
+            let items = [];
+
+            if (response?.paramObjectsMap?.listValues) {
+              items = response.paramObjectsMap.listValues;
+            } else if (Array.isArray(response)) {
+              items = response;
+            }
+
+            result[group] = items.map((item) => {
+              const label =
+                item.valuesDescription ||
+                item.label ||
+                item.name ||
+                item.value ||
+                "";
+
+              return {
+                ...item,
+                value: label,
+                label: label,
+              };
+            });
+          } catch (err) {
+            console.error(`${group} failed`, err);
+            result[group] = [];
+          }
+        })
+      );
+
+      setListOfValuesData(result);
+    } catch (err) {
+      console.error("Error loading ListOfValues:", err);
+    }
+  }, [orgId]);
+
   const loadVendors = useCallback(async () => {
     try {
-      const res = await partyMasterAPI.getPartyByOrgId(orgId, branch);
+      const res = await supplierRateContractAPI.getCustomersForSupplierRateContract(branch, orgId);
+      const customerList = res?.paramObjectsMap?.customerList || [];
       setVendorOptions(
-        (res || []).map((v) => ({
-          value: v.id,
-          label: v.customerName || v.docId || v.id,
+        customerList.map((v) => ({
+          value: v.customerId,
+          label: `${v.customerCode} - ${v.customerName}`,
+          customer: v,
         })),
       );
     } catch (error) {
@@ -459,13 +799,39 @@ const SupplierRateContractForm = ({ data, onBack }) => {
     }
   }, [orgId, branch]);
 
-  const loadItems = useCallback(async () => {
+  const loadServices = useCallback(async () => {
     try {
-      const res = await itemAPI.getItems(orgId, branch);
+      const res = await supplierRateContractAPI.getServicesForSupplierRateContract(branch, orgId);
+      const serviceList = res?.paramObjectsMap?.serviceList || [];
+      setServiceOptions(
+        serviceList.map((s) => ({
+          value: s.serviceId,
+          label: `${s.serviceName} - ${s.serviceDescription || ''}`,
+          service: s,
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to load service options:", error);
+      setServiceOptions([]);
+    }
+  }, [orgId, branch]);
+
+  const loadItemDropdown = useCallback(async () => {
+    try {
+      const res = await supplierRateContractAPI.getSupplierRateContractItemDropdown(branch, orgId);
+      const itemDetails = res?.paramObjectsMap?.itemDetails || [];
       const map = {};
-      const options = (res || []).map((it) => {
-        map[it.itemCode] = it;
-        return { value: it.itemCode, label: it.itemCode };
+      const options = itemDetails.map((it) => {
+        map[it.item] = it;
+        return {
+          value: it.item,
+          label: `${it.item} - ${it.itemDesc || ''}`,
+          itemId: it.itemId,
+          itemDesc: it.itemDesc,
+          unitMasterId: it.unitmasterId,
+          unitId: it.unitId,
+          unitDescription: it.unitDescription,
+        };
       });
       setItemOptions(options);
       setItemMasterMap(map);
@@ -476,20 +842,25 @@ const SupplierRateContractForm = ({ data, onBack }) => {
     }
   }, [orgId, branch]);
 
-  const loadUnits = useCallback(async () => {
-    try {
-      const res = await unitMasterAPI.getUnits(branch, orgId);
-      setUnitOptions(
-        (res || []).map((u) => ({
-          value: u.id,
-          label: u.unitId,
-        })),
-      );
-    } catch (error) {
-      console.error("Failed to load unit options:", error);
-      setUnitOptions([]);
+  const loadDocId = useCallback(async () => {
+    if (data?.contractNo) {
+      return;
     }
-  }, [orgId, branch]);
+
+    try {
+      const currentYear = finYear || new Date().getFullYear();
+      const res = await supplierRateContractAPI.getSupplierRateContractDocId(currentYear, orgId);
+      const docId = res?.paramObjectsMap?.supplierRateContractDocId || "";
+      if (docId) {
+        setHeader((prev) => ({
+          ...prev,
+          contractNo: docId,
+        }));
+      }
+    } catch (error) {
+      console.error("Failed to load document ID:", error);
+    }
+  }, [orgId, data?.contractNo, finYear]);
 
   const loadEmployees = useCallback(async () => {
     try {
@@ -506,18 +877,225 @@ const SupplierRateContractForm = ({ data, onBack }) => {
     }
   }, [orgId]);
 
+  // Load all data when component mounts
   useEffect(() => {
-    if (orgId) loadPlants();
-  }, [orgId, loadPlants]);
-
-  useEffect(() => {
-    if (orgId && branch) {
-      loadVendors();
-      loadItems();
-      loadUnits();
+    if (!orgId) {
+      console.warn("No orgId found, skipping data loading");
+      return;
     }
-    if (orgId) loadEmployees();
-  }, [orgId, branch, loadVendors, loadItems, loadUnits, loadEmployees]);
+
+    const loadAllData = async () => {
+      setIsLoading(true);
+      try {
+        await Promise.all([
+          loadPlants(),
+          loadDepartments(),
+          loadBelongsTo(),
+          loadContractFor(),
+          loadDocId(),
+          loadVendors(),
+          loadServices(),
+          loadItemDropdown(),
+          loadEmployees(),
+          loadListOfValuesData(),
+        ]);
+      } catch (error) {
+        console.error("Error loading data:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadAllData();
+  }, [orgId, branch, loadPlants, loadDepartments, loadBelongsTo, loadContractFor, loadDocId, loadVendors, loadServices, loadItemDropdown, loadEmployees, loadListOfValuesData]);
+
+  // Populate form with data if provided
+  useEffect(() => {
+    if (data && data.id && itemOptions.length > 0) {
+      const transformedData = transformDataForForm(data);
+      if (transformedData) {
+        setHeader({
+          plantId: transformedData.plantId || "",
+          department: transformedData.department || "",
+          belongsTo: transformedData.belongsTo || "",
+          contractNo: transformedData.contractNo || "",
+          contractDate: transformedData.contractDate || todayStr(),
+          validFrom: transformedData.validFrom || "",
+          validTo: transformedData.validTo || "",
+          vendorId: transformedData.vendorId || "",
+          vendorName: transformedData.vendorName || "",
+          vendorGstNo: transformedData.vendorGstNo || "",
+          vendorGstStateId: transformedData.vendorGstStateId || "",
+          vendorGstState: transformedData.vendorGstState || "",
+          vendorIgstApplicable: transformedData.vendorIgstApplicable || "",
+          contractFor: transformedData.contractFor || "",
+          deliveryDate: transformedData.deliveryDate || "",
+          gstState: transformedData.gstState || "",
+          gstStateId: transformedData.gstStateId || "",
+          isIgstApplicable: transformedData.isIgstApplicable || "",
+          gstinNo: transformedData.gstinNo || "",
+          taxCode: transformedData.taxCode || "",
+          serviceName: transformedData.serviceName || "",
+          serviceId: transformedData.serviceId || "",
+          hsnSacCode: transformedData.hsnSacCode || "",
+          hsnId: transformedData.hsnId || "",
+          scope: transformedData.scope || "",
+          scrap: transformedData.scrap || "",
+          taxType: transformedData.taxType || "SGST",
+          taxPct: transformedData.taxPct || "",
+          active: transformedData.active !== false,
+        });
+
+        if (transformedData.itemDetails?.length) {
+          // Ensure itemCode matches the options value
+          const mappedItems = transformedData.itemDetails.map((item) => {
+            // Find matching option
+            const matchedOpt = itemOptions.find(
+              (opt) => String(opt.value) === String(item.itemCode) ||
+                String(opt.itemCode) === String(item.itemCode)
+            );
+            return {
+              ...item,
+              itemCode: matchedOpt ? matchedOpt.value : item.itemCode,
+            };
+          });
+          setItemDetailRows(mappedItems);
+        }
+
+        if (transformedData.taxDetails?.length) {
+          setTaxDetailRows(transformedData.taxDetails);
+        }
+
+        if (transformedData.terms) {
+          setTerms({
+            ...emptyTerms(),
+            ...transformedData.terms,
+          });
+        }
+      }
+    }
+  }, [data, itemOptions, transformDataForForm]);
+
+  // Calculate tax details
+  const calculateTaxDetails = useCallback(() => {
+    if (isUpdatingRef.current) return;
+
+    const totalAmount = itemDetailRows.reduce(
+      (sum, item) => sum + (Number(item.rate) || 0),
+      0,
+    );
+
+    const taxType = header.isIgstApplicable === "YES" ? "IGST" : "SGST";
+
+    let sgstTotal = 0,
+      cgstTotal = 0,
+      igstTotal = 0;
+
+    itemDetailRows.forEach((item) => {
+      sgstTotal += Number(item.sgstAmount) || 0;
+      cgstTotal += Number(item.cgstAmount) || 0;
+      igstTotal += Number(item.igstAmount) || 0;
+    });
+
+    const userAddedRows = taxDetailRows.filter(
+      (item) => !item.isSystemRow,
+    );
+
+    const systemRows = [];
+
+    systemRows.push({
+      particular: "Gross Amount",
+      amount: totalAmount,
+      isSystemRow: true,
+    });
+
+    if (taxType === "IGST") {
+      systemRows.push({
+        particular: "IGST",
+        amount: igstTotal,
+        isSystemRow: true,
+      });
+    } else {
+      systemRows.push({
+        particular: "SGST",
+        amount: sgstTotal,
+        isSystemRow: true,
+      });
+      systemRows.push({
+        particular: "CGST",
+        amount: cgstTotal,
+        isSystemRow: true,
+      });
+    }
+
+    const allTaxEntries = [...systemRows, ...userAddedRows];
+    setTaxDetailRows(allTaxEntries);
+  }, [itemDetailRows, taxDetailRows, header.isIgstApplicable]);
+
+  // Calculate row calculations
+  const calculateRowCalculation = useCallback((index) => {
+    if (isUpdatingRef.current) return;
+    isUpdatingRef.current = true;
+
+    try {
+      const rate = Number(itemDetailRows[index]?.rate) || 0;
+      const sgstRate = Number(itemDetailRows[index]?.sgstRate) || 0;
+      const cgstRate = Number(itemDetailRows[index]?.cgstRate) || 0;
+      const igstRate = Number(itemDetailRows[index]?.igstRate) || 0;
+      const toolAmortizationRate = Number(itemDetailRows[index]?.toolAmortizationRate) || 0;
+      const taxType = header.isIgstApplicable === "YES" ? "IGST" : "SGST";
+
+      let sgstAmount = 0,
+        cgstAmount = 0,
+        igstAmount = 0;
+
+      // Calculate tax amounts based on rate + tool amortization rate
+      const totalRate = rate + toolAmortizationRate;
+
+      if (taxType === "IGST") {
+        igstAmount = (totalRate * igstRate) / 100;
+      } else {
+        sgstAmount = (totalRate * sgstRate) / 100;
+        cgstAmount = (totalRate * cgstRate) / 100;
+      }
+
+      setItemDetailRows((prev) =>
+        prev.map((row, i) => {
+          if (i === index) {
+            return {
+              ...row,
+              sgstAmount: taxType === "SGST" ? sgstAmount : 0,
+              cgstAmount: taxType === "SGST" ? cgstAmount : 0,
+              igstAmount: taxType === "IGST" ? igstAmount : 0,
+            };
+          }
+          return row;
+        })
+      );
+
+      setTimeout(() => {
+        calculateTaxDetails();
+      }, 50);
+    } finally {
+      isUpdatingRef.current = false;
+    }
+  }, [header.isIgstApplicable, calculateTaxDetails, itemDetailRows]);
+
+  // Handle tax type change
+  const handleTaxTypeChange = useCallback((newTaxType) => {
+    setHeader((prev) => ({
+      ...prev,
+      taxType: newTaxType,
+      isIgstApplicable: newTaxType === "IGST" ? "YES" : "NO"
+    }));
+
+    // Recalculate all rows with new tax type
+    setTimeout(() => {
+      itemDetailRows.forEach((_, index) => {
+        calculateRowCalculation(index);
+      });
+    }, 100);
+  }, [itemDetailRows, calculateRowCalculation]);
 
   /* ---------------- Handlers ---------------- */
 
@@ -526,10 +1104,77 @@ const SupplierRateContractForm = ({ data, onBack }) => {
     if (fieldErrors[name]) setFieldErrors((prev) => ({ ...prev, [name]: "" }));
     setHeader((prev) => {
       const next = { ...prev, [name]: value };
+
       if (name === "vendorId") {
-        const vendor = vendorOptions.find((v) => v.value === value);
-        next.vendorName = vendor?.label || "";
+        const vendor = vendorOptions.find((v) => String(v.value) === String(value));
+        if (vendor?.customer) {
+          const customer = vendor.customer;
+          next.vendorName = customer.customerName || "";
+          next.vendorGstNo = customer.gstNo || "";
+          next.vendorGstStateId = customer.gstStateId || "";
+          next.vendorGstState = customer.gstState || "";
+          next.vendorIgstApplicable = customer.igstApplicable ? "YES" : "NO";
+
+          // Auto-populate GST State and IGST Applicable from vendor
+          if (customer.gstStateId) {
+            next.gstStateId = customer.gstStateId;
+            next.gstState = customer.gstState || "";
+          }
+          if (customer.igstApplicable !== undefined) {
+            next.isIgstApplicable = customer.igstApplicable ? "YES" : "NO";
+            next.taxType = customer.igstApplicable ? "IGST" : "SGST";
+          }
+          if (customer.gstNo) {
+            next.gstinNo = customer.gstNo;
+          }
+        }
       }
+
+      if (name === "serviceName") {
+        const service = serviceOptions.find((s) => String(s.value) === String(value));
+        if (service?.service) {
+          const serviceData = service.service;
+          next.serviceId = serviceData.serviceId || "";
+          next.hsnId = serviceData.hsnId || "";
+          next.hsnSacCode = serviceData.hsn || "";
+          next.taxPct = serviceData.rate || 0;
+
+          if (serviceData.igstRate && serviceData.igstRate > 0) {
+            next.isIgstApplicable = "YES";
+            next.taxType = "IGST";
+            setItemDetailRows((prev) =>
+              prev.map((row) => ({
+                ...row,
+                igstRate: serviceData.igstRate || 0,
+                sgstRate: 0,
+                cgstRate: 0,
+              }))
+            );
+          } else {
+            next.isIgstApplicable = "NO";
+            next.taxType = "SGST";
+            setItemDetailRows((prev) =>
+              prev.map((row) => ({
+                ...row,
+                sgstRate: serviceData.sgstRate || 0,
+                cgstRate: serviceData.cgstRate || 0,
+                igstRate: 0,
+              }))
+            );
+          }
+
+          setTimeout(() => {
+            itemDetailRows.forEach((_, index) => {
+              calculateRowCalculation(index);
+            });
+          }, 100);
+        }
+      }
+
+      if (name === "taxType") {
+        handleTaxTypeChange(value);
+      }
+
       return next;
     });
   };
@@ -540,7 +1185,7 @@ const SupplierRateContractForm = ({ data, onBack }) => {
     setTerms((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleItemCellChange = (idx, key, value) => {
+  const handleItemCellChange = (idx, key, value, selectedItem = null) => {
     setItemDetailRows((prev) =>
       prev.map((row, i) => {
         if (i !== idx) return row;
@@ -548,33 +1193,66 @@ const SupplierRateContractForm = ({ data, onBack }) => {
         let next = { ...row, [key]: value };
 
         if (key === "itemCode") {
-          const item = itemMasterMap[value];
-          next = {
-            ...next,
-            itemDescription: item?.itemDescription || "",
-            purchaseUnit: item?.primaryUnits?.id || "",
-          };
+          // If selectedItem is provided, use it
+          if (selectedItem) {
+            const item = selectedItem;
+            next = {
+              ...next,
+              itemCode: item.value || item.itemCode || "",
+              itemDescription: item.itemDesc || item.itemDescription || "",
+              unit: item.unitId || item.unit || "",
+              unitMasterId: item.unitMasterId || item.unitmasterId || "",
+            };
+          } else {
+            // If no selectedItem, try to find it from itemOptions
+            const foundItem = itemOptions.find(
+              (opt) => String(opt.value) === String(value) || String(opt.itemCode) === String(value)
+            );
+            if (foundItem) {
+              next = {
+                ...next,
+                itemCode: foundItem.value || foundItem.itemCode || "",
+                itemDescription: foundItem.itemDesc || foundItem.itemDescription || "",
+                unit: foundItem.unitId || foundItem.unit || "",
+                unitMasterId: foundItem.unitMasterId || foundItem.unitmasterId || "",
+              };
+            }
+          }
         }
 
         if (["rate", "sgstRate", "cgstRate", "igstRate"].includes(key)) {
           const rate = parseFloat(next.rate) || 0;
-          next.sgstAmount =
-            (parseFloat(next.sgstRate) || 0) && rate
-              ? (rate * (parseFloat(next.sgstRate) || 0) / 100).toFixed(2)
-              : "";
-          next.cgstAmount =
-            (parseFloat(next.cgstRate) || 0) && rate
-              ? (rate * (parseFloat(next.cgstRate) || 0) / 100).toFixed(2)
-              : "";
-          next.igstAmount =
-            (parseFloat(next.igstRate) || 0) && rate
-              ? (rate * (parseFloat(next.igstRate) || 0) / 100).toFixed(2)
-              : "";
+          const sgstRate = parseFloat(next.sgstRate) || 0;
+          const cgstRate = parseFloat(next.cgstRate) || 0;
+          const igstRate = parseFloat(next.igstRate) || 0;
+
+          const taxType =
+            header.isIgstApplicable === "YES" ? "IGST" : "SGST";
+
+          if (taxType === "IGST") {
+            next.sgstAmount = 0;
+            next.cgstAmount = 0;
+            next.igstAmount = (rate * igstRate) / 100;
+          } else {
+            next.sgstAmount = (rate * sgstRate) / 100;
+            next.cgstAmount = (rate * cgstRate) / 100;
+            next.igstAmount = 0;
+          }
+
+          // Tool Amortization Rate = CGST + SGST + IGST
+          next.toolAmortizationRate =
+            (Number(next.cgstAmount) || 0) +
+            (Number(next.sgstAmount) || 0) +
+            (Number(next.igstAmount) || 0);
         }
 
         return next;
-      }),
+      })
     );
+
+    setTimeout(() => {
+      calculateTaxDetails();
+    }, 100);
   };
 
   const handleTaxCellChange = (idx, key, value) => {
@@ -589,8 +1267,14 @@ const SupplierRateContractForm = ({ data, onBack }) => {
     setItemDetailRows((prev) => prev.filter((_, i) => i !== idx));
   const handleAddTaxRow = () =>
     setTaxDetailRows((prev) => [...prev, emptyTaxDetailRow()]);
-  const handleRemoveTaxRow = (idx) =>
+  const handleRemoveTaxRow = (idx) => {
+    const row = taxDetailRows[idx];
+    if (row?.isSystemRow) {
+      addToast("Cannot delete system calculated rows", "error");
+      return;
+    }
     setTaxDetailRows((prev) => prev.filter((_, i) => i !== idx));
+  };
 
   /* ---------------- Validation & Save ---------------- */
 
@@ -611,23 +1295,21 @@ const SupplierRateContractForm = ({ data, onBack }) => {
     if (!header.vendorId) errors.vendorId = "Vendor Id is required";
     if (!header.vendorName?.trim()) errors.vendorName = "Vendor Name is required";
     if (!header.contractFor) errors.contractFor = "Contract For is required";
-    if (!header.gstState?.trim()) errors.gstState = "GST State is required";
+    if (!header.gstStateId) errors.gstStateId = "GST State is required";
     if (!header.isIgstApplicable)
       errors.isIgstApplicable = "Is IGST Applicable is required";
-    if (!header.taxCode) errors.taxCode = "Tax Code is required";
     if (!header.taxType) errors.taxType = "Tax Type is required";
 
     const hasValidItemRow = itemDetailRows.some(
       (r) =>
         r.itemCode &&
-        r.purchaseUnit &&
         Number(r.rate) > 0 &&
         r.validFrom &&
         r.validTo,
     );
     if (!hasValidItemRow)
       errors.itemDetails =
-        "Add at least one item with Item Code, Purchase Unit, Rate, Valid From and Valid To";
+        "Add at least one item with Item Code, Rate, Valid From and Valid To";
 
     if (!terms.paymentTerms) errors.paymentTerms = "Payment Terms is required";
     if (!terms.modeOfDespatch)
@@ -638,64 +1320,124 @@ const SupplierRateContractForm = ({ data, onBack }) => {
   };
 
   const handleSave = async () => {
-    if (!validate()) return;
+    if (!validate()) {
+      const firstError = Object.values(fieldErrors)[0];
+      addToast(firstError, "error");
+      return;
+    }
 
     setIsSubmitting(true);
 
-    const isUpdate = Boolean(data?.id);
-
-    const payload = {
-      ...(isUpdate ? { id: data.id } : {}),
-      orgId,
-      branch,
-      ...header,
-      itemDetails: itemDetailRows.filter((r) => r.itemCode?.trim()),
-      taxDetails: taxDetailRows.filter((r) => r.particular?.trim()),
-      terms,
-      createdBy: isUpdate
-        ? data?.createdBy || localStorage.getItem("usersId")
-        : localStorage.getItem("usersId"),
-      ...(isUpdate ? { updatedBy: localStorage.getItem("usersId") } : {}),
-    };
-
     try {
-      const response =
-        await supplierRateContractAPI.createUpdateSupplierRateContract(payload);
+      const isUpdate = Boolean(data?.id);
 
-      if (response?.status) {
+      // Build the payload according to the API schema
+      const payload = {
+        active: header.active !== false,
+        belongsTo: header.belongsTo || "",
+        branch: Number(header.plantId),
+        cancelRemarks: "",
+        contractFor: header.contractFor || "",
+        createdBy: localStorage.getItem("usersId") || "SYSTEM",
+        customer: Number(header.vendorId) || 0,
+        deliveryDate: header.deliveryDate || "",
+        deliveryTerms: terms.deliveryTerms || "",
+        department: Number(header.department) || 0,
+        discount: Number(terms.discountPct) || 0,
+        financialYear: String(finYear) || new Date().getFullYear().toString(),
+        freight: Number(terms.freight) || 0,
+        freightType: terms.freightType || "",
+        gstState: Number(header.gstStateId) || 0,
+        hsnSacCode: Number(header.hsnId) || Number(header.hsnSacCode) || 0,
+        igstApplicable: header.isIgstApplicable === "YES",
+        inlandCharge: Number(terms.inlandCharge) || 0,
+        insurance: Number(terms.insurance) || 0,
+        modeOfDespatch: terms.modeOfDespatch || "",
+        narration: terms.narration || "",
+        orgId: orgId,
+        packingType: terms.packingType || "",
+        paymentsTerms: terms.paymentTerms || "",
+        preparedBy: Number(terms.preparedBy) || 0,
+        authoriedBy: Number(terms.authorizedBy) || 0,
+        scrap: header.scrap === "YES",
+        serviceName: Number(header.serviceId) || Number(header.serviceName) || 0,
+        taxPercentage: Number(header.taxPct) || 0,
+        taxType: header.taxType || "SGST",
+        validFrom: header.validFrom || "",
+        validTo: header.validTo || "",
+        ...(isUpdate ? { id: Number(data.id) } : {}),
+      };
+
+      // Add item details
+      payload.supplierRateContractItemDetailsDTO = itemDetailRows
+        .filter((row) => row.itemCode && row.itemCode.trim() !== "")
+        .map((row) => {
+          // Find the selected item to get the actual IDs
+          const selectedItem = itemOptions.find(
+            (opt) => opt.label === row.itemCode || opt.value === row.itemCode
+          );
+
+          return {
+            incomingItemCode: Number(selectedItem?.itemId) || Number(selectedItem?.value) || 0,
+            platingType: row.platingType || "",
+            purchaseUnit: Number(row.unitMasterId) || Number(selectedItem?.unitMasterId) || 0,
+            rate: Number(row.rate) || 0,
+            sgstRate: Number(row.sgstRate) || 0,
+            cgstRate: Number(row.cgstRate) || 0,
+            igstRate: Number(row.igstRate) || 0,
+            thickness: Number(row.thickness) || 0,
+            toolAmortizationRate: Number(row.toolAmortizationRate) || 0,
+            validFrom: row.validFrom || "",
+            validTo: row.validTo || "",
+          };
+        });
+
+      // Add tax details
+      payload.supplierRateContractTaxDetailsDTO = taxDetailRows
+        .filter((row) => row.particular && row.particular.trim() !== "")
+        .map((row) => ({
+          amount: Number(row.amount) || 0,
+          particulars: row.particular || "",
+        }));
+
+      console.log("Saving payload:", payload);
+
+      const response = await supplierRateContractAPI.createUpdateSupplierRateContract(payload);
+
+      console.log("API Response:", response);
+
+      const isSuccess = response?.status === true || response?.status === "Ok" || response?.status === "SUCCESS";
+
+      if (isSuccess) {
         addToast(
-          response?.paramObjectsMap?.message ||
-            (isUpdate
-              ? "Supplier Rate Contract updated successfully!"
-              : "Supplier Rate Contract created successfully!"),
+          isUpdate
+            ? "Supplier Rate Contract updated successfully!"
+            : "Supplier Rate Contract created successfully!",
+          "success"
         );
         onBack?.();
       } else {
-        addToast(
-          response?.errors?.[0]?.shortMessage ||
-            response?.errors?.[0]?.longMessage ||
-            response?.message ||
-            "Failed to save Supplier Rate Contract.",
-        );
+        const errorMessage = response?.paramObjectsMap?.message || response?.message || "Failed to save Supplier Rate Contract.";
+        addToast(errorMessage, "error");
       }
     } catch (err) {
-      console.error("Save Supplier Rate Contract Error:", err);
-      if (err.response?.data) {
-        addToast(
-          err.response.data.message ||
-            err.response.data.statusMessage ||
-            err.response.data.error ||
-            JSON.stringify(err.response.data),
-        );
-      } else {
-        addToast("Something went wrong.");
-      }
+      console.error("Save Error:", err);
+      const errorMessage = err?.response?.data?.message || err?.message || "Something went wrong";
+      addToast(errorMessage, "error");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const activeTabMeta = CHILD_TABS.find((t) => t.key === activeChildTab);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-500 dark:text-gray-400">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full p-2">
@@ -709,7 +1451,7 @@ const SupplierRateContractForm = ({ data, onBack }) => {
         </button>
 
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-          {data
+          {data && data.id
             ? "Edit Supplier Rate Contract"
             : "Add Supplier Rate Contract"}
         </h2>
@@ -738,7 +1480,7 @@ const SupplierRateContractForm = ({ data, onBack }) => {
               value={header.department}
               onChange={handleHeaderChange}
               error={fieldErrors.department}
-              options={DEPARTMENTS}
+              options={departmentOptions}
               required
             />
             <Field
@@ -747,7 +1489,7 @@ const SupplierRateContractForm = ({ data, onBack }) => {
               name="belongsTo"
               value={header.belongsTo}
               onChange={handleHeaderChange}
-              options={BELONGS_TO}
+              options={belongsToOptions}
             />
             <Field
               label="Contract No"
@@ -805,13 +1547,27 @@ const SupplierRateContractForm = ({ data, onBack }) => {
               disabled
             />
             <Field
+              label="Vendor GST No"
+              name="vendorGstNo"
+              value={header.vendorGstNo}
+              onChange={handleHeaderChange}
+              disabled
+            />
+            <Field
+              label="Vendor GST State"
+              name="vendorGstState"
+              value={header.vendorGstState}
+              onChange={handleHeaderChange}
+              disabled
+            />
+            <Field
               type="select"
               label="Contract For"
               name="contractFor"
               value={header.contractFor}
               onChange={handleHeaderChange}
               error={fieldErrors.contractFor}
-              options={CONTRACT_FOR}
+              options={contractForOptions}
               required
             />
             <Field
@@ -826,18 +1582,18 @@ const SupplierRateContractForm = ({ data, onBack }) => {
               name="gstState"
               value={header.gstState}
               onChange={handleHeaderChange}
-              error={fieldErrors.gstState}
+              error={fieldErrors.gstStateId}
               required
+              disabled
             />
             <Field
-              type="select"
               label="Is IGST Applicable"
               name="isIgstApplicable"
               value={header.isIgstApplicable}
               onChange={handleHeaderChange}
               error={fieldErrors.isIgstApplicable}
-              options={YES_NO}
               required
+              disabled
             />
             <Field
               label="GSTIN No"
@@ -847,35 +1603,18 @@ const SupplierRateContractForm = ({ data, onBack }) => {
             />
             <Field
               type="select"
-              label="Tax Code"
-              name="taxCode"
-              value={header.taxCode}
-              onChange={handleHeaderChange}
-              error={fieldErrors.taxCode}
-              options={TAX_CODES}
-              required
-            />
-            <Field
-              type="select"
               label="Service Name"
               name="serviceName"
               value={header.serviceName}
               onChange={handleHeaderChange}
-              options={SERVICE_NAMES}
+              options={serviceOptions}
             />
             <Field
               label="HSN/SAC Code"
               name="hsnSacCode"
               value={header.hsnSacCode}
               onChange={handleHeaderChange}
-            />
-            <Field
-              type="select"
-              label="Scope"
-              name="scope"
-              value={header.scope}
-              onChange={handleHeaderChange}
-              options={SCOPE_OPTIONS}
+              disabled
             />
             <Field
               type="select"
@@ -915,11 +1654,10 @@ const SupplierRateContractForm = ({ data, onBack }) => {
                   key={tab.key}
                   type="button"
                   onClick={() => setActiveChildTab(tab.key)}
-                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${
-                    activeChildTab === tab.key
-                      ? "bg-blue-600 text-white"
-                      : "text-gray-600 dark:text-gray-300"
-                  }`}
+                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${activeChildTab === tab.key
+                    ? "bg-blue-600 text-white"
+                    : "text-gray-600 dark:text-gray-300"
+                    }`}
                 >
                   {tab.label}
                 </button>
@@ -948,7 +1686,7 @@ const SupplierRateContractForm = ({ data, onBack }) => {
                 columns={[
                   {
                     key: "itemCode",
-                    label: "Incoming Item Code",
+                    label: "Incoming Item Code(s)",
                     type: "select",
                     options: itemOptions,
                   },
@@ -958,27 +1696,26 @@ const SupplierRateContractForm = ({ data, onBack }) => {
                     readOnly: true,
                   },
                   {
-                    key: "purchaseUnit",
+                    key: "unit",
                     label: "Purchase Unit",
-                    type: "select",
-                    options: unitOptions,
+                    readOnly: true,
                   },
                   { key: "platingType", label: "Plating Type" },
                   { key: "thickness", label: "Thickness" },
-                  { key: "rate", label: "Rate" },
-                  { key: "sgstRate", label: "SGST Rate" },
+                  { key: "rate", label: "Rate", type: "number" },
+                  { key: "sgstRate", label: "SGST Rate", type: "number" },
                   {
                     key: "sgstAmount",
                     label: "SGST Amount",
                     readOnly: true,
                   },
-                  { key: "cgstRate", label: "CGST Rate" },
+                  { key: "cgstRate", label: "CGST Rate", type: "number" },
                   {
                     key: "cgstAmount",
                     label: "CGST Amount",
                     readOnly: true,
                   },
-                  { key: "igstRate", label: "IGST Rate" },
+                  { key: "igstRate", label: "IGST Rate", type: "number" },
                   {
                     key: "igstAmount",
                     label: "IGST Amount",
@@ -987,13 +1724,16 @@ const SupplierRateContractForm = ({ data, onBack }) => {
                   { key: "validFrom", label: "Valid From", type: "date" },
                   { key: "validTo", label: "Valid To", type: "date" },
                   {
-                    key: "totalAmortizationRate",
-                    label: "Total Amortization Rate",
-                  },
+                    key: "toolAmortizationRate",
+                    label: "Tool Amortization Rate",
+                    type: "number",
+                    readOnly: true
+                  }
                 ]}
                 rows={itemDetailRows}
                 onCellChange={handleItemCellChange}
                 onRemoveRow={handleRemoveItemRow}
+                headerData={{ isIgstApplicable: header.isIgstApplicable }}
               />
               {fieldErrors.itemDetails && (
                 <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
@@ -1012,13 +1752,14 @@ const SupplierRateContractForm = ({ data, onBack }) => {
                     key: "particular",
                     label: "Particulars",
                     type: "select",
-                    options: PARTICULARS,
+                    options: listOfValuesData.PARTICULARS || [],
                   },
-                  { key: "amount", label: "Amount" },
+                  { key: "amount", label: "Amount", type: "number" },
                 ]}
                 rows={taxDetailRows}
                 onCellChange={handleTaxCellChange}
                 onRemoveRow={handleRemoveTaxRow}
+                headerData={{ isIgstApplicable: header.isIgstApplicable }}
               />
             </div>
           )}
@@ -1130,7 +1871,7 @@ const SupplierRateContractForm = ({ data, onBack }) => {
           onCancel={onBack}
           onSave={handleSave}
           isSubmitting={isSubmitting}
-          saveLabel={data ? "Update" : "Save"}
+          saveLabel={data && data.id ? "Update" : "Save"}
         />
       </div>
     </div>

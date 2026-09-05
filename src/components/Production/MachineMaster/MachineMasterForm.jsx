@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import dayjs from "dayjs";
 import {
     ArrowLeft,
     Save,
@@ -17,6 +18,10 @@ import employeeAPI from "../../../api/employeeAPI";
 import { departmentAPI } from "../../../api/departmentAPI";
 import locationMasterAPI from "../../../api/locationMasterAPI";
 import partyMasterAPI from "../../../api/partyMasterAPI";
+import countryAPI from "../../../api/countryAPI";
+import unitMasterAPI from "../../../api/unitAPI";
+import { itemAPI } from "../../../api/itemAPI";
+import toolCategoryAPI from "../../../api/Production/toolCategoryAPI";
 
 /* ---------------------------------------------------------------------------- */
 /* Shared design tokens                                                        */
@@ -85,6 +90,32 @@ const Field = ({
                         </option>
                     ))}
                 </select>
+
+                {error && (
+                    <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
+                        {error}
+                    </p>
+                )}
+            </div>
+        );
+    }
+
+    if (type === "date") {
+        return (
+            <div className={`w-full ${className}`}>
+                <label className={labelClasses}>
+                    {label}
+                    {required && <span className="text-red-500"> *</span>}
+                </label>
+
+                <input
+                    type="date"
+                    name={name}
+                    value={value}
+                    onChange={onChange}
+                    disabled={disabled}
+                    className={`${controlClasses} ${error ? controlErrClasses : ""}`}
+                />
 
                 {error && (
                     <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
@@ -197,6 +228,7 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
     </tr>
 );
 
+// Complete DynamicTable component with all field types
 const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
     <TableWrapper>
         <TableHead headers={["#", ...columns.map((c) => c.label), "Action"]} />
@@ -213,8 +245,18 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
                             return (
                                 <td className="p-2 align-top" key={col.key}>
                                     <select
-                                        value={row[col.key]}
-                                        onChange={(e) => onCellChange(idx, col.key, e.target.value)}
+                                        value={row[col.key] || ""}
+                                        onChange={(e) => {
+                                            const value = e.target.value;
+                                            if (col.key === "spareId" && col.options) {
+                                                const selectedItem = col.options.find(
+                                                    opt => String(opt.value) === String(value)
+                                                );
+                                                onCellChange(idx, col.key, value, selectedItem);
+                                            } else {
+                                                onCellChange(idx, col.key, value);
+                                            }
+                                        }}
                                         className={cellInputClasses}
                                     >
                                         <option value="">-- Select --</option>
@@ -233,8 +275,9 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
                                 <td className="p-2 align-top" key={col.key}>
                                     <div className="flex items-center gap-2">
                                         <input
+                                            key={`${idx}-${col.key}-${row[col.key] instanceof File ? row[col.key].name : 'file'}`}
                                             type="file"
-                                            accept="image/*"
+                                            accept={col.accept || "image/*"}
                                             onChange={(e) => {
                                                 const file = e.target.files?.[0];
                                                 if (file) {
@@ -243,10 +286,40 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
                                             }}
                                             className="text-xs file:mr-2 file:px-2 file:py-1 file:rounded file:border-0 file:bg-blue-600 file:text-white hover:file:bg-blue-700"
                                         />
-                                        {row[col.key] && typeof row[col.key] === 'object' && (
-                                            <span className="text-xs text-gray-500">{row[col.key].name}</span>
+                                        {row[col.key] && (
+                                            <span className="text-xs text-green-600 dark:text-green-400">
+                                                {row[col.key] instanceof File
+                                                    ? `📎 ${row[col.key].name}`
+                                                    : row[col.key].fileName || row[col.key].name || "File uploaded"}
+                                            </span>
                                         )}
                                     </div>
+                                </td>
+                            );
+                        }
+
+                        if (col.type === "date") {
+                            return (
+                                <td className="p-2 align-top" key={col.key}>
+                                    <input
+                                        type="date"
+                                        value={row[col.key] || ""}
+                                        onChange={(e) => onCellChange(idx, col.key, e.target.value)}
+                                        className={cellInputClasses}
+                                    />
+                                </td>
+                            );
+                        }
+
+                        if (col.type === "textarea") {
+                            return (
+                                <td className="p-2 align-top" key={col.key}>
+                                    <textarea
+                                        value={row[col.key] || ""}
+                                        onChange={(e) => onCellChange(idx, col.key, e.target.value)}
+                                        className={`${cellInputClasses} min-h-[60px] resize-y`}
+                                        rows={2}
+                                    />
                                 </td>
                             );
                         }
@@ -255,7 +328,7 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
                             <td className="p-2 align-top" key={col.key}>
                                 <input
                                     type={col.type === "number" ? "number" : "text"}
-                                    value={row[col.key]}
+                                    value={row[col.key] || ""}
                                     readOnly={col.readOnly}
                                     onChange={(e) => onCellChange(idx, col.key, e.target.value)}
                                     className={
@@ -278,6 +351,7 @@ const CHILD_TABS = [
     { key: "equipments", label: "Equipments" },
     { key: "technicalInfo", label: "Technical Info" },
     { key: "spareDetails", label: "Spare Details" },
+    { key: "machineHistory", label: "Machine History" },
     { key: "image", label: "Image" },
     { key: "pdfAttachment", label: "Pdf Attachment" },
 ];
@@ -291,9 +365,19 @@ const emptySpareRow = () => ({
     modelNo: "",
     serialNo: "",
     manufacturer: "",
-    warrantyTill: "",
+    warrantyTillDate: "",
     calibrationRequired: "",
+    lastCalibDate: "",
     nextCalibDate: "",
+});
+
+const emptyHistoryRow = () => ({
+    date: "",
+    description: "",
+    changedDate: "",
+    cost: "",
+    purpose: "",
+    remarks: "",
 });
 
 /* ---------------------------------------------------------------------------- */
@@ -324,6 +408,9 @@ const MachineMasterForm = ({ editData, editId, onBack, onSave }) => {
     const [pmCheckListOptions, setPmCheckListOptions] = useState([]);
     const [uomOptions, setUomOptions] = useState([]);
     const [spareOptions, setSpareOptions] = useState([]);
+    const [unitOptions, setUnitOptions] = useState([]);
+    const [itemOptions, setItemOptions] = useState([]);
+    const [toolCategoryOptions, setToolCategoryOptions] = useState([]);
 
     // Form state
     const [header, setHeader] = useState({
@@ -393,14 +480,48 @@ const MachineMasterForm = ({ editData, editId, onBack, onSave }) => {
     });
 
     const [spareRows, setSpareRows] = useState([emptySpareRow()]);
+    const [historyRows, setHistoryRows] = useState([emptyHistoryRow()]);
     const [imageRows, setImageRows] = useState([]);
     const [pdfRows, setPdfRows] = useState([]);
+
+    const formatDateForInput = (date) => {
+        if (!date) return "";
+        return dayjs(date).format("YYYY-MM-DD");
+    };
+
+    /* ---------------- Load Tool Categories based on Type ---------------- */
+
+    const loadToolCategories = useCallback(async (type) => {
+        if (!type) {
+            setToolCategoryOptions([]);
+            return;
+        }
+
+        try {
+            const response = await machineMasterAPI.getToolCategoryforMachineMaster(
+                type,
+                orgId
+            );
+            console.log("Tool Category Response for type:", type, response);
+
+            const toolCategoryList = response?.paramObjectsMap?.toolCategoryList || [];
+            setToolCategoryOptions(
+                toolCategoryList.map((item) => ({
+                    value: item.category,
+                    label: item.category || item.id,
+                    id: item.id
+                }))
+            );
+        } catch (error) {
+            console.error("Error loading tool categories:", error);
+            setToolCategoryOptions([]);
+        }
+    }, [orgId]);
 
     /* ---------------- Load lookups ---------------- */
 
     const loadLookups = useCallback(async () => {
         try {
-            // Load branches/plants
             const branches = await branchAPI.getBranchByOrgId(orgId);
             setPlantOptions(
                 (branches || []).map((b) => ({
@@ -409,7 +530,6 @@ const MachineMasterForm = ({ editData, editId, onBack, onSave }) => {
                 }))
             );
 
-            // Load departments from Department API
             const departments = await departmentAPI.getAllDepartments(orgId);
             const deptList = departments?.paramObjectsMap?.departmentVO || [];
             setDepartmentOptions(
@@ -419,25 +539,15 @@ const MachineMasterForm = ({ editData, editId, onBack, onSave }) => {
                 }))
             );
 
-            // Load types from LOV
             const types = await listOfValuesAPI.getListValuesGroup("MACHINE_TYPE", orgId);
             setTypeOptions(
                 (types || []).map((t) => ({
-                    value: t.id,
+                    value: t.valuesDescription || t.valueDescription || t.id,
                     label: t.valuesDescription || t.valueDescription || t.id,
+                    id: t.id
                 }))
             );
 
-            // Load categories from LOV
-            const categories = await listOfValuesAPI.getListValuesGroup("MACHINE_CATEGORY", orgId);
-            setCategoryOptions(
-                (categories || []).map((c) => ({
-                    value: c.id,
-                    label: c.valuesDescription || c.valueDescription || c.id,
-                }))
-            );
-
-            // Load locations from Location Master API
             const locations = await locationMasterAPI.getLocationMasterByOrgId(orgId, branchId);
             setLocationOptions(
                 (locations || []).map((l) => ({
@@ -446,7 +556,6 @@ const MachineMasterForm = ({ editData, editId, onBack, onSave }) => {
                 }))
             );
 
-            // Load employees
             const employees = await employeeAPI.getEmployeeByOrgId(orgId);
             setEmployeeOptions(
                 (employees || []).map((e) => ({
@@ -455,7 +564,6 @@ const MachineMasterForm = ({ editData, editId, onBack, onSave }) => {
                 }))
             );
 
-            // Load status from LOV
             const status = await listOfValuesAPI.getListValuesGroup("STATUS", orgId);
             setStatusOptions(
                 (status || []).map((s) => ({
@@ -464,16 +572,14 @@ const MachineMasterForm = ({ editData, editId, onBack, onSave }) => {
                 }))
             );
 
-            // Load country for Made In
-            const countries = await listOfValuesAPI.getListValuesGroup("COUNTRY", orgId);
+            const countries = await countryAPI.getCountries(orgId);
             setMadeInOptions(
                 (countries || []).map((c) => ({
                     value: c.id,
-                    label: c.valuesDescription || c.valueDescription || c.id,
+                    label: c.countryName || c.countryCode || c.id,
                 }))
             );
 
-            // Load purchased from options (from Party Master)
             const parties = await partyMasterAPI.getPartyByOrgId(orgId, branchId);
             setPurchasedFromOptions(
                 (parties || []).map((p) => ({
@@ -482,34 +588,31 @@ const MachineMasterForm = ({ editData, editId, onBack, onSave }) => {
                 }))
             );
 
-            // Load mode of purchase
-            const mode = await listOfValuesAPI.getListValuesGroup("MODE_OF_PURCHASE", orgId);
-            setModeOfPurchaseOptions(
-                (mode || []).map((m) => ({
-                    value: m.id,
-                    label: m.valuesDescription || m.valueDescription || m.id,
-                }))
-            );
-
-            // Load PM Check List
-            const pmCheck = await listOfValuesAPI.getListValuesGroup("PM_CHECK_LIST", orgId);
-            setPmCheckListOptions(
-                (pmCheck || []).map((p) => ({
-                    value: p.id,
-                    label: p.valuesDescription || p.valueDescription || p.id,
-                }))
-            );
-
-            // Load UOM
-            const uoms = await listOfValuesAPI.getListValuesGroup("UOM", orgId);
+            const units = await unitMasterAPI.getUnits(orgId);
             setUomOptions(
-                (uoms || []).map((u) => ({
+                (units || []).map((u) => ({
                     value: u.id,
-                    label: u.valuesDescription || u.valueDescription || u.id,
+                    label: u.unitId || u.id,
                 }))
             );
 
-            // Load spare options
+            setUnitOptions(
+                (units || []).map((u) => ({
+                    value: u.id,
+                    label: u.unitId || u.id,
+                }))
+            );
+
+            const items = await itemAPI.getItems(orgId, branchId);
+            setItemOptions(
+                (items || []).map((item) => ({
+                    value: item.id,
+                    label: `${item.itemCode} - ${item.itemDescription || ''}`,
+                    description: item.itemDescription || '',
+                    itemCode: item.itemCode || '',
+                }))
+            );
+
             const spares = await listOfValuesAPI.getListValuesGroup("SPARE", orgId);
             setSpareOptions(
                 (spares || []).map((s) => ({
@@ -601,16 +704,38 @@ const MachineMasterForm = ({ editData, editId, onBack, onSave }) => {
                     lifeCycleYear: data.lifeCycleYear || "",
                 });
 
+                if (data.type) {
+                    await loadToolCategories(data.type);
+                }
+
                 if (data.spareDetails?.length) {
-                    setSpareRows(data.spareDetails);
+                    const mappedSpares = data.spareDetails.map((item) => ({
+                        ...item,
+                        warrantyTillDate: formatDateForInput(item.warrantyTillDate),
+                        lastCalibDate: formatDateForInput(item.lastCalibDate),
+                        nextCalibDate: formatDateForInput(item.nextCalibDate),
+                    }));
+                    setSpareRows(mappedSpares);
+                }
+
+                if (data.historyDetails?.length) {
+                    setHistoryRows(data.historyDetails);
                 }
 
                 if (data.images?.length) {
-                    setImageRows(data.images);
+                    setImageRows(
+                        data.images.map((img) => ({
+                            image: img
+                        }))
+                    );
                 }
 
                 if (data.pdfAttachments?.length) {
-                    setPdfRows(data.pdfAttachments);
+                    setPdfRows(
+                        data.pdfAttachments.map((pdf) => ({
+                            pdf: pdf
+                        }))
+                    );
                 }
 
                 setDataLoadedRef(true);
@@ -621,7 +746,7 @@ const MachineMasterForm = ({ editData, editId, onBack, onSave }) => {
         } finally {
             setLoading(false);
         }
-    }, [addToast]);
+    }, [addToast, loadToolCategories]);
 
     useEffect(() => {
         loadLookups();
@@ -631,7 +756,6 @@ const MachineMasterForm = ({ editData, editId, onBack, onSave }) => {
         if (editId && !dataLoadedRef) {
             loadMachineData(editId);
         } else if (editData) {
-            // Populate from editData if provided
             setHeader({
                 plantId: editData.plantId || "",
                 department: editData.department || "",
@@ -698,12 +822,33 @@ const MachineMasterForm = ({ editData, editId, onBack, onSave }) => {
                 lifeCycleYear: editData.lifeCycleYear || "",
             });
 
+            if (editData.type) {
+                loadToolCategories(editData.type);
+            }
+
             if (editData.spareDetails?.length) {
-                setSpareRows(editData.spareDetails);
+                const mappedSpares = editData.spareDetails.map((item) => ({
+                    ...item,
+                    warrantyTillDate: formatDateForInput(item.warrantyTillDate),
+                    lastCalibDate: formatDateForInput(item.lastCalibDate),
+                    nextCalibDate: formatDateForInput(item.nextCalibDate),
+                }));
+                setSpareRows(mappedSpares);
+            }
+
+            if (editData.historyDetails?.length) {
+                setHistoryRows(editData.historyDetails);
             }
             setDataLoadedRef(true);
         }
-    }, [editData, editId, loadMachineData]);
+    }, [editData, editId, loadMachineData, loadToolCategories]);
+
+    // Load tool categories when type changes
+    useEffect(() => {
+        if (header.type) {
+            loadToolCategories(header.type);
+        }
+    }, [header.type, loadToolCategories]);
 
     /* ---------------- Handlers ---------------- */
 
@@ -712,12 +857,45 @@ const MachineMasterForm = ({ editData, editId, onBack, onSave }) => {
         if (fieldErrors[name]) {
             setFieldErrors((prev) => ({ ...prev, [name]: "" }));
         }
-        setHeader((prev) => ({ ...prev, [name]: value }));
+
+        if (name === "type") {
+            setHeader((prev) => ({
+                ...prev,
+                [name]: value,
+                machineInstrumentCategory: ""
+            }));
+        } else {
+            setHeader((prev) => ({ ...prev, [name]: value }));
+        }
     };
 
-    const handleSpareCellChange = (idx, key, value) => {
+    const handleSpareCellChange = (idx, key, value, selectedItem = null) => {
         setSpareRows((prev) =>
-            prev.map((row, i) => (i === idx ? { ...row, [key]: value } : row))
+            prev.map((row, i) => {
+                if (i === idx) {
+                    if (key === "spareId") {
+                        let description = "";
+                        if (selectedItem) {
+                            description = selectedItem.description || "";
+                            if (!description && selectedItem.label) {
+                                const parts = selectedItem.label.split(" - ");
+                                if (parts.length > 1) {
+                                    description = parts.slice(1).join(" - ");
+                                } else {
+                                    description = selectedItem.label;
+                                }
+                            }
+                        }
+                        return {
+                            ...row,
+                            spareId: value,
+                            spareDesc: description
+                        };
+                    }
+                    return { ...row, [key]: value };
+                }
+                return row;
+            })
         );
     };
 
@@ -730,10 +908,19 @@ const MachineMasterForm = ({ editData, editId, onBack, onSave }) => {
         setSpareRows((prev) => prev.filter((_, i) => i !== idx));
     };
 
-    const handleImageChange = (idx, file) => {
-        setImageRows((prev) =>
-            prev.map((row, i) => (i === idx ? { ...row, image: file } : row))
+    const handleHistoryCellChange = (idx, key, value) => {
+        setHistoryRows((prev) =>
+            prev.map((row, i) => (i === idx ? { ...row, [key]: value } : row))
         );
+    };
+
+    const handleAddHistoryRow = () => {
+        setHistoryRows((prev) => [...prev, emptyHistoryRow()]);
+    };
+
+    const handleRemoveHistoryRow = (idx) => {
+        if (historyRows.length <= 1) return;
+        setHistoryRows((prev) => prev.filter((_, i) => i !== idx));
     };
 
     const handleAddImageRow = () => {
@@ -745,10 +932,22 @@ const MachineMasterForm = ({ editData, editId, onBack, onSave }) => {
         setImageRows((prev) => prev.filter((_, i) => i !== idx));
     };
 
-    const handlePdfChange = (idx, file) => {
-        setPdfRows((prev) =>
-            prev.map((row, i) => (i === idx ? { ...row, pdf: file } : row))
-        );
+    const handleImageChange = (idx, key, value) => {
+        console.log("Image change:", idx, key, value);
+        setImageRows((prev) => {
+            const newRows = [...prev];
+            newRows[idx] = { ...newRows[idx], [key]: value };
+            return newRows;
+        });
+    };
+
+    const handlePdfChange = (idx, key, value) => {
+        console.log("PDF change:", idx, key, value);
+        setPdfRows((prev) => {
+            const newRows = [...prev];
+            newRows[idx] = { ...newRows[idx], [key]: value };
+            return newRows;
+        });
     };
 
     const handleAddPdfRow = () => {
@@ -789,23 +988,186 @@ const MachineMasterForm = ({ editData, editId, onBack, onSave }) => {
 
         const isUpdate = Boolean(editData?.id || editId);
 
-        const payload = {
-            ...(isUpdate ? { id: editData?.id || editId } : {}),
-            ...header,
-            branchId: Number(header.plantId),
-            orgId: orgId,
-            createdBy: usersId,
-            spareDetails: spareRows.filter((r) => r.spareId?.trim()),
-            images: imageRows.filter((r) => r.image),
-            pdfAttachments: pdfRows.filter((r) => r.pdf),
-        };
-
-        console.log("Saving Payload:", payload);
-
         try {
-            const response = await machineMasterAPI.createUpdateMachineMaster(payload);
+            // Prepare the machine master data
+            const machineData = {
+                active: true,
+                bedSizeMm: Number(header.bedSizeMm) || 0,
+                branch: Number(header.plantId) || 0,
+                calibrationAgency: header.calibrationAgency || "",
+                calibrationCost: Number(header.calibrationCost) || 0,
+                calibrationRequired: header.calibrationRequired || "",
+                cancel: false,
+                cancelRemarks: "",
+                capacity: Number(header.capacity) || 0,
+                certificateNo: header.certificateNo || "",
+                consumption: Number(header.consumption) || 0,
+                createdBy: usersId || "SYSTEM",
+                currentInAmps: Number(header.currentInAmps) || 0,
+                cushion: Number(header.cushion) || 0,
+                cushionTonnage: Number(header.cussionTonnage) || 0,
+                department: Number(header.department) || 0,
+                errorAllowed: header.errorAllowed || "",
+                frequencyOfCalibration: header.frequencyOfCalibration || "",
+                goSize: Number(header.goSize) || 0,
+                hcNo: header.hcNo || "",
+                hourlyRate: Number(header.hourlyRate) || 0,
+                hp: Number(header.hp) || 0,
+                installationDate: header.installationDate || "",
+                instrumentCost: Number(header.instrumentCost) || 0,
+                lastCalibratedDate: header.lastCalibratedDate || "",
+                leastcount: Number(header.leastcount) || 0,
+                lifeCycleYear: header.lifeCycleYear || "",
+                location: Number(header.location) || 0,
+                machineInstrumentCategory: Number(header.machineInstrumentCategory) || 0,
+                machineInstrumentImageName: "",
+                machineInstrumentIncharge: header.machineInstrumentIncharge || "",
+                machineInstrumentName: header.machineInstrumentName || "",
+                machineInstrumentNo: header.machineInstrumentNo || "",
+                machineInstrumentUsedFor: header.machineInstrumentUsedFor || "",
+                machineInstrumentWeight: Number(header.machineInstrumentWt) || 0,
+                machineOrInstrument: header.type || "",
+                machineType: Number(header.machineType) || 0,
+                madeIn: Number(header.madeIn) || 0,
+                maintenanceDate: header.maintenanceDate || "",
+                make: header.make || "",
+                manufacturedBy: header.manufacturedBy || "",
+                modeOfPurchase: header.modeOfPurchase || "",
+                model: header.model || "",
+                nextDueDate: header.nextDueDate || "",
+                noGoSize: Number(header.noGoSize) || 0,
+                orgId: orgId,
+                parallelity: Number(header.parallelity) || 0,
+                pmChecklistNo: header.pmCheckListNo || "",
+                powerConsumption: Number(header.powerConsumption) || 0,
+                powerProduced: Number(header.powerProduced) || 0,
+                processNo: header.processNo || "",
+                purchasedFrom: Number(header.purchasedFrom) || 0,
+                ramSize: Number(header.ramSize) || 0,
+                range: header.range || "",
+                rangeSize: Number(header.rangeSize) || 0,
+                remarks: header.remarks || "",
+                screenCode: "MACHINE_MASTER",
+                screenName: "Machine Master",
+                section: header.section || "",
+                serialNo: header.serialNo || "",
+                shutHeightMm: Number(header.shutHtMm) || 0,
+                status: header.status || "",
+                strokeMm: Number(header.strokeMm) || 0,
+                technicalSpecification: header.technicalSpecification || "",
+                throatDepth: Number(header.throatDepth) || 0,
+                throatGap: Number(header.throatGap) || 0,
+                type: Number(header.type) || 0,
+                unit: Number(header.unit) || 0,
+                uom: Number(header.uom) || 0,
+                updatedBy: usersId || "SYSTEM",
+                voltage: Number(header.voltage) || 0,
+                warrantyEndDate: header.warrantyEndDate || "",
+                warrantyStartDate: header.warrantyStDate || "",
 
-            const isSuccess = response?.status === true || response?.statusFlag === "Ok";
+                machineSpareDetailsDTO: spareRows
+                    .filter((r) => r.spareId && r.spareId.trim() !== "")
+                    .map((r) => ({
+                        calibrationRequired: r.calibrationRequired || "",
+                        critical: r.critical === "Yes",
+                        lastCalibratedDate: r.lastCalibDate || "",
+                        manufacturer: r.manufacturer || "",
+                        modelNo: r.modelNo || "",
+                        quantity: Number(r.quantity) || 0,
+                        serialNo: r.serialNo || "",
+                        spareDescription: r.spareDesc || "",
+                        spareId: Number(r.spareId) || 0,
+                        unit: Number(r.unit) || 0,
+                        warrantyTillDate: r.warrantyTillDate || "",
+                    })),
+
+                machineHistoryDTO: historyRows
+                    .filter((r) => r.date?.trim() || r.description?.trim())
+                    .map((r) => ({
+                        changedDate: r.changedDate || "",
+                        cost: Number(r.cost) || 0,
+                        date: r.date || "",
+                        description: r.description || "",
+                        purpose: r.purpose || "",
+                        remarks: r.remarks || "",
+                    })),
+            };
+
+            if (isUpdate) {
+                machineData.id = editData?.id || editId;
+            }
+
+            // Create FormData
+            const formDataToSend = new FormData();
+
+            // Add machine data as JSON blob
+            const machineDataJSON = JSON.stringify(machineData);
+            const machineDataBlob = new Blob([machineDataJSON], {
+                type: "application/json",
+            });
+
+            formDataToSend.append(
+                "MachineMasterDTO",
+                machineDataBlob,
+                "machineMasterDTO.json"
+            );
+
+            // Add image files
+            console.log("Image Rows:", imageRows);
+            if (imageRows && imageRows.length > 0) {
+                for (let i = 0; i < imageRows.length; i++) {
+                    const row = imageRows[i];
+                    if (row && row.image) {
+                        if (row.image instanceof File) {
+                            console.log("Appending image file:", row.image.name);
+                            formDataToSend.append("files", row.image, row.image.name);
+                        } else if (row.image && typeof row.image === "object" && row.image.filePath) {
+                            console.log("Existing image:", row.image.filePath);
+                        } else if (typeof row.image === "string" && row.image) {
+                            console.log("Image string path:", row.image);
+                        }
+                    }
+                }
+            }
+
+            // Add PDF files
+            console.log("PDF Rows:", pdfRows);
+            if (pdfRows && pdfRows.length > 0) {
+                for (let i = 0; i < pdfRows.length; i++) {
+                    const row = pdfRows[i];
+                    if (row && row.pdf) {
+                        if (row.pdf instanceof File) {
+                            console.log("Appending PDF file:", row.pdf.name);
+                            formDataToSend.append("files", row.pdf, row.pdf.name);
+                        } else if (row.pdf && typeof row.pdf === "object" && row.pdf.filePath) {
+                            console.log("Existing PDF:", row.pdf.filePath);
+                        } else if (typeof row.pdf === "string" && row.pdf) {
+                            console.log("PDF string path:", row.pdf);
+                        }
+                    }
+                }
+            }
+
+            // Log all FormData entries for debugging
+            console.log("FormData entries:");
+            for (let pair of formDataToSend.entries()) {
+                console.log(pair[0], pair[1]);
+            }
+
+            console.log("Sending machine data:", machineData);
+
+            // Call the API
+            const response = await machineMasterAPI.createUpdateMachineMaster(formDataToSend);
+
+            console.log("Full API Response:", response);
+
+            const isSuccess =
+                response?.status === true ||
+                response?.success === true ||
+                response?.status === "SUCCESS" ||
+                response?.status === 200 ||
+                response?.statusCode === 200 ||
+                response?.statusFlag === "Ok";
 
             if (isSuccess) {
                 addToast(
@@ -814,15 +1176,23 @@ const MachineMasterForm = ({ editData, editId, onBack, onSave }) => {
                         : "Machine/Instrument created successfully!",
                     "success"
                 );
-                if (onSave) onSave(payload);
+                if (onSave) onSave(machineData);
                 onBack();
             } else {
-                const errorMessage = response?.paramObjectsMap?.message || response?.message || "Failed to save";
+                const errorMessage =
+                    response?.message ||
+                    response?.paramObjectsMap?.message ||
+                    response?.errorMessage ||
+                    response?.error ||
+                    "Failed to save";
                 addToast(errorMessage, "error");
             }
         } catch (error) {
             console.error("Save Error:", error);
-            const errorMessage = error?.response?.data?.message || error?.message || "Something went wrong";
+            const errorMessage =
+                error?.response?.data?.message ||
+                error?.message ||
+                "Something went wrong";
             addToast(errorMessage, "error");
         } finally {
             setIsSubmitting(false);
@@ -837,10 +1207,11 @@ const MachineMasterForm = ({ editData, editId, onBack, onSave }) => {
         );
     }
 
-    const canAddRow = ["spareDetails", "image", "pdfAttachment"].includes(activeChildTab);
+    const canAddRow = ["spareDetails", "machineHistory", "image", "pdfAttachment"].includes(activeChildTab);
 
     const handleAddRow = () => {
         if (activeChildTab === "spareDetails") handleAddSpareRow();
+        else if (activeChildTab === "machineHistory") handleAddHistoryRow();
         else if (activeChildTab === "image") handleAddImageRow();
         else if (activeChildTab === "pdfAttachment") handleAddPdfRow();
     };
@@ -979,7 +1350,7 @@ const MachineMasterForm = ({ editData, editId, onBack, onSave }) => {
                                 name="machineInstrumentCategory"
                                 value={header.machineInstrumentCategory}
                                 onChange={handleHeaderChange}
-                                options={categoryOptions}
+                                options={toolCategoryOptions}
                             />
                             <Field
                                 label="Section"
@@ -999,8 +1370,7 @@ const MachineMasterForm = ({ editData, editId, onBack, onSave }) => {
                                 value={header.serialNo}
                                 onChange={handleHeaderChange}
                             />
-                            <Field
-                                type="select"
+                            <Field type="select"
                                 label="Status"
                                 name="status"
                                 value={header.status}
@@ -1038,19 +1408,16 @@ const MachineMasterForm = ({ editData, editId, onBack, onSave }) => {
                                 name="modeOfPurchase"
                                 value={header.modeOfPurchase}
                                 onChange={handleHeaderChange}
-                                // options={modeOfPurchaseOptions}
                                 options={[
                                     { value: "Local", label: "Local" },
                                     { value: "Import", label: "Import" },
                                 ]}
                             />
                             <Field
-                                // type="select"
                                 label="Machine/Instrument Incharge"
                                 name="machineInstrumentIncharge"
                                 value={header.machineInstrumentIncharge}
                                 onChange={handleHeaderChange}
-                                // options={employeeOptions}
                             />
                             <Field
                                 label="Machine/Instrument Used For"
@@ -1059,12 +1426,10 @@ const MachineMasterForm = ({ editData, editId, onBack, onSave }) => {
                                 onChange={handleHeaderChange}
                             />
                             <Field
-                                type="select"
                                 label="PM Check List No."
                                 name="pmCheckListNo"
                                 value={header.pmCheckListNo}
                                 onChange={handleHeaderChange}
-                                options={pmCheckListOptions}
                             />
                             <Field
                                 label="Remarks"
@@ -1135,7 +1500,7 @@ const MachineMasterForm = ({ editData, editId, onBack, onSave }) => {
                                 name="unit"
                                 value={header.unit}
                                 onChange={handleHeaderChange}
-                                options={uomOptions}
+                                options={unitOptions}
                             />
                             <Field
                                 type="number"
@@ -1387,14 +1752,18 @@ const MachineMasterForm = ({ editData, editId, onBack, onSave }) => {
                                     key: "spareId",
                                     label: "Spare ID",
                                     type: "select",
-                                    options: spareOptions,
+                                    options: itemOptions,
                                 },
-                                { key: "spareDesc", label: "Spare Desc." },
+                                {
+                                    key: "spareDesc",
+                                    label: "Spare Desc.",
+                                    readOnly: false
+                                },
                                 {
                                     key: "unit",
                                     label: "Unit",
                                     type: "select",
-                                    options: uomOptions,
+                                    options: unitOptions,
                                 },
                                 { key: "quantity", label: "Quantity", type: "number" },
                                 {
@@ -1406,10 +1775,91 @@ const MachineMasterForm = ({ editData, editId, onBack, onSave }) => {
                                         { value: "No", label: "No" },
                                     ],
                                 },
+                                { key: "modelNo", label: "Model No." },
+                                { key: "serialNo", label: "Serial No" },
+                                {
+                                    key: "manufacturer",
+                                    label: "Manufacturer",
+                                },
+                                {
+                                    key: "warrantyTillDate",
+                                    label: "Warranty Till Date",
+                                    type: "date",
+                                },
+                                {
+                                    key: "calibrationRequired",
+                                    label: "Calibration Required?",
+                                    type: "select",
+                                    options: [
+                                        { value: "Yes", label: "Yes" },
+                                        { value: "No", label: "No" },
+                                    ],
+                                },
+                                {
+                                    key: "lastCalibDate",
+                                    label: "Last Calib. Date",
+                                    type: "date",
+                                },
+                                {
+                                    key: "nextCalibDate",
+                                    label: "Next Calib. Date",
+                                    type: "date",
+                                },
                             ]}
                             rows={spareRows}
                             onCellChange={handleSpareCellChange}
                             onRemoveRow={handleRemoveSpareRow}
+                        />
+                    </div>
+                )}
+
+                {/* ---------------- Machine History Tab ---------------- */}
+                {activeChildTab === "machineHistory" && (
+                    <div>
+                        <div className="flex items-center justify-between mb-2">
+                            <SectionHeader>Machine History</SectionHeader>
+                            <button
+                                type="button"
+                                onClick={handleAddHistoryRow}
+                                className="h-6 w-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-colors"
+                            >
+                                <Plus size={12} />
+                            </button>
+                        </div>
+
+                        <DynamicTable
+                            columns={[
+                                {
+                                    key: "date",
+                                    label: "Date",
+                                    type: "date",
+                                },
+                                {
+                                    key: "description",
+                                    label: "Description",
+                                },
+                                {
+                                    key: "changedDate",
+                                    label: "Changed Date",
+                                    type: "date",
+                                },
+                                {
+                                    key: "cost",
+                                    label: "Cost",
+                                    type: "number",
+                                },
+                                {
+                                    key: "purpose",
+                                    label: "Purpose",
+                                },
+                                {
+                                    key: "remarks",
+                                    label: "Remarks",
+                                },
+                            ]}
+                            rows={historyRows}
+                            onCellChange={handleHistoryCellChange}
+                            onRemoveRow={handleRemoveHistoryRow}
                         />
                     </div>
                 )}
@@ -1434,6 +1884,7 @@ const MachineMasterForm = ({ editData, editId, onBack, onSave }) => {
                                     key: "image",
                                     label: "Image",
                                     type: "file",
+                                    accept: "image/*",
                                 },
                             ]}
                             rows={imageRows.length ? imageRows : [{ image: null }]}
@@ -1463,6 +1914,7 @@ const MachineMasterForm = ({ editData, editId, onBack, onSave }) => {
                                     key: "pdf",
                                     label: "PDF File",
                                     type: "file",
+                                    accept: ".pdf",
                                 },
                             ]}
                             rows={pdfRows.length ? pdfRows : [{ pdf: null }]}

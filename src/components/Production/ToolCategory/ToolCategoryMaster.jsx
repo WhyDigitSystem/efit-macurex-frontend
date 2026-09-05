@@ -1,8 +1,9 @@
 import { useState } from "react";
-import MachineMasterForm from "./MachineMasterForm";
-import MachineMasterList from "./MachineMasterList";
+import toolCategoryAPI from "../../../api/Production/toolCategoryAPI";
+import ToolCategoryList from "./ToolCategoryList";
+import ToolCategoryForm from "./ToolCategoryForm";
 
-const MachineMaster = () => {
+const ToolCategoryMaster = () => {
     const [screen, setScreen] = useState("list");
     const [editData, setEditData] = useState(null);
     const [editId, setEditId] = useState(null);
@@ -25,15 +26,16 @@ const MachineMaster = () => {
         setEditId(null);
     };
 
-    // Just handle navigation - the form handles the API call
-    const handleSave = () => {
+    // Remove the API call from here - let the form handle it
+    const handleSave = (payload) => {
+        // Just handle the navigation/state after save
         handleBack();
     };
 
     return (
         <>
             {screen === "list" && (
-                <MachineMasterList
+                <ToolCategoryList
                     onAddNew={handleAddNew}
                     onEdit={handleEdit}
                     onBack={() => window.history.back()}
@@ -41,7 +43,7 @@ const MachineMaster = () => {
             )}
 
             {screen === "form" && (
-                <MachineMasterForm
+                <ToolCategoryForm
                     editId={editId}
                     editData={editData}
                     onBack={handleBack}
@@ -52,4 +54,4 @@ const MachineMaster = () => {
     );
 };
 
-export default MachineMaster;
+export default ToolCategoryMaster;

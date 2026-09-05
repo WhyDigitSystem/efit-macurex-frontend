@@ -18,6 +18,7 @@ import StockOrderMaster from "../components/Production/StockOrder/StockOrderMast
 import ToolsFixturesMaster from "../components/Production/ToolsFixtures/ToolsFixturesMaster";
 import MachineMaster from "../components/Production/MachineMaster/MachineMaster";
 import ReasonMaster from "../components/Production/ReasonMaster/ReasonMaster";
+import ToolCategoryMaster from "../components/Production/ToolCategory/ToolCategoryMaster";
 
 const productionRoutes = [
   {
@@ -29,6 +30,11 @@ const productionRoutes = [
     path: "/reasonmaster",
     label: "Reason Master",
     element: <ReasonMaster />,
+  },
+  {
+    path: "/toolCategory",
+    label: "Tool Category",
+    element: <ToolCategoryMaster />,
   },
   {
     path: "/productionscheduleorder",

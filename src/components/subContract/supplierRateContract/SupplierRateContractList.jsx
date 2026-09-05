@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
-import supplierRateContractAPI from "../../../api/supplierRateContractAPI";
-import { toast } from "../../../utils/toast";
+import supplierRateContractAPI from "../../../api/SubContract/supplierRateContractAPI";
+import { useToast } from "../../Toast/ToastContext";
 
 const SupplierRateContractList = ({
   onAddNew,
@@ -11,32 +11,75 @@ const SupplierRateContractList = ({
 }) => {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
+  const { addToast } = useToast();
 
   const ORG_ID = localStorage.getItem("orgId");
   const BRANCH_ID = localStorage.getItem("branchId");
 
   const loadRecords = useCallback(async () => {
+    if (!ORG_ID || !BRANCH_ID) {
+      console.warn("Missing orgId or branchId");
+      return;
+    }
+
     try {
       setLoading(true);
-      const data =
-        await supplierRateContractAPI.getSupplierRateContractByOrgId(
-          ORG_ID,
-          BRANCH_ID,
-        );
-      data.sort((a, b) => (b.id || 0) - (a.id || 0));
-      setRecords(data);
+      const response = await supplierRateContractAPI.getSupplierRateContractByOrgId(
+        ORG_ID,
+        BRANCH_ID
+      );
+
+      console.log("API Response:", response);
+
+      // Extract the data from the response structure
+      let data = [];
+      if (response?.paramObjectsMap?.supplierRateContract) {
+        data = response.paramObjectsMap.supplierRateContract;
+      } else if (Array.isArray(response)) {
+        data = response;
+      } else if (response?.data?.paramObjectsMap?.supplierRateContract) {
+        data = response.data.paramObjectsMap.supplierRateContract;
+      }
+
+      // Transform data for display
+      const transformedData = data.map((item) => ({
+        id: item.id,
+        contractNo: item.docId || item.contractNo || "",
+        contractDate: item.docDate || item.contractDate || "",
+        plantId: item.branch?.branchName || item.plantId || "",
+        department: item.department?.departmentName || item.department || "",
+        vendorId: item.customer?.customerCode || item.vendorId || "",
+        vendorName: item.customer?.customerName || item.vendorName || "",
+        contractFor: item.contractFor || "",
+        validFrom: item.validFrom || "",
+        validTo: item.validTo || "",
+        active: item.active === "Active" ? "Active" : "Inactive",
+        // Keep the full object for edit
+        _rawData: item,
+      }));
+
+      // Sort by ID descending (newest first)
+      transformedData.sort((a, b) => (b.id || 0) - (a.id || 0));
+      setRecords(transformedData);
     } catch (error) {
       console.error("Failed to load supplier rate contracts:", error);
       setRecords([]);
-      toast.error("Failed to fetch Supplier Rate Contracts");
+      addToast("Failed to fetch Supplier Rate Contracts", "error");
     } finally {
       setLoading(false);
     }
-  }, [ORG_ID, BRANCH_ID]);
+  }, [ORG_ID, BRANCH_ID, addToast]);
 
   useEffect(() => {
     loadRecords();
   }, [loadRecords, refreshTrigger]);
+
+  const handleEdit = (record) => {
+    if (onEdit) {
+      // Pass the raw data for editing
+      onEdit(record._rawData || record);
+    }
+  };
 
   const columns = [
     {
@@ -165,7 +208,7 @@ const SupplierRateContractList = ({
       defaultFilter="all"
       onBack={onBack}
       onAddNew={onAddNew}
-      onEdit={onEdit}
+      onEdit={handleEdit}
       onView={false}
       showSerialNumber={true}
       itemsPerPageOptions={[5, 10, 20, 50, 100]}
