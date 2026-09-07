@@ -24,7 +24,20 @@ const SubContractingGrnMaster = () => {
       try {
         const grns = await subContractingGrnAPI.getGrnByOrgId(ORG_ID);
         const fresh = grns.find((g) => g.id === row.id) || row;
-        setEditData(fresh);
+        setEditData({
+          id: fresh.id,
+          general: fresh,
+          grnDetail:
+            fresh.grnDetail ||
+            fresh.grnDetailList ||
+            fresh.itemDetails ||
+            [],
+          taxDetails: fresh.taxDetails || fresh.taxDetailList || [],
+          summary: fresh.summary || {},
+          invoiceCopy: [],
+          consumptionScrap:
+            fresh.consumptionScrap || fresh.consumptionScrapList || [],
+        });
         setView("form");
       } catch (error) {
         console.error("Failed to fetch sub contracting GRN for edit:", error);
@@ -41,10 +54,10 @@ const SubContractingGrnMaster = () => {
     setRefreshTrigger((prev) => prev + 1);
   };
 
-  // List screen back button -> return to the Inventory module home.
+  // List screen back button -> return to the Sub Contract module home.
   // (Form's back button goes back to the list via handleBack.)
   const handleNavigateHome = () => {
-    navigate("/inventory");
+    navigate("/subcontract");
   };
 
   if (view === "form") {

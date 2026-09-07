@@ -20,6 +20,8 @@ import unitMasterAPI from "../../../api/unitAPI";
 
 import toolsFixtureAPI from "../../../api/Production/toolsFixtureAPI";
 
+import { pmChecklistMasterAPI } from "../../../api/plantMaintenance/pmChecklistMasterAPI";
+
 /* ============================================================================ 
    SHARED DESIGN 
 ============================================================================ */
@@ -225,6 +227,7 @@ const emptyBasicInfo = () => ({
 
 const emptyToolsInfo = () => ({
   pmCheckListNo: "",
+  productionWorkOrderNo: "",
   location: "",
   toolIncharge: "",
   toolUsedFor: "",
@@ -397,6 +400,14 @@ const ToolsFixturesForm = ({ data, onBack }) => {
 
   const [fieldErrors, setFieldErrors] = useState({});
 
+  const [showErrors, setShowErrors] = useState(false);
+
+  const [gridErrors, setGridErrors] = useState({
+    spareRows: [],
+    componentRows: [],
+    historyRows: [],
+  });
+
   const [toastMessage, setToastMessage] = useState(null);
 
   /* ========================================================================== 
@@ -418,6 +429,8 @@ const ToolsFixturesForm = ({ data, onBack }) => {
   const [presentLocationData, setPresentLocationData] = useState([]);
 
   const [unitData, setUnitData] = useState([]);
+
+  const [pmChecklistData, setPmChecklistData] = useState([]);
 
   /* ========================================================================== 
      FORM STATE 
@@ -758,6 +771,47 @@ const ToolsFixturesForm = ({ data, onBack }) => {
   }, [orgId]);
 
   /* ========================================================================== 
+     LOAD PM CHECKLISTS 
+  
+     PM Checklist No (Tools tab): 
+     API = pmChecklistMasterAPI.getChecklists(orgId) 
+     -> GET /api/plantMaintenance/pmChecklist?orgid=... 
+  ========================================================================== */
+
+  const loadPmChecklists = useCallback(async () => {
+    if (!orgId) {
+      setPmChecklistData([]);
+      return;
+    }
+
+    try {
+      const checklists = await pmChecklistMasterAPI.getChecklists(orgId);
+
+      const list = Array.isArray(checklists) ? checklists : [];
+
+      const options = list
+        .map((item) => {
+          const checklistId = item.id ?? item.checklistId ?? "";
+
+          return {
+            value: checklistId,
+            label:
+              item.checklistNumber ||
+              item.checklistNo ||
+              item.checklistCode ||
+              item.name ||
+              String(checklistId),
+          };
+        })
+        .filter((item) => item.value !== "");
+
+      setPmChecklistData(options);
+    } catch (error) {
+      setPmChecklistData([]);
+    }
+  }, [orgId]);
+
+  /* ========================================================================== 
      LOAD PRESENT LOCATION OPTIONS 
  
      Present Location: 
@@ -866,6 +920,7 @@ const ToolsFixturesForm = ({ data, onBack }) => {
     loadEmployees();
     loadCustomers();
     loadUnitMaster();
+    loadPmChecklists();
   }, [
     loadListOfValuesData,
     loadBranches,
@@ -874,6 +929,7 @@ const ToolsFixturesForm = ({ data, onBack }) => {
     loadEmployees,
     loadCustomers,
     loadUnitMaster,
+    loadPmChecklists,
   ]);
 
   /* ========================================================================== 
@@ -919,7 +975,9 @@ const ToolsFixturesForm = ({ data, onBack }) => {
         },
 
         toolsInfo: {
-          pmCheckListNo: apiData.pmchecklistNo || "",
+          pmCheckListNo: getMasterId(apiData.pmchecklistNo),
+
+          productionWorkOrderNo: apiData.productionWorkOrderNo || "",
 
           location: getMasterId(apiData.location),
 
@@ -1297,6 +1355,10 @@ const ToolsFixturesForm = ({ data, onBack }) => {
   ========================================================================== */
 
   const handleTechnicalDetailChange = (field, value) => {
+    setFieldErrors((previous) =>
+      previous[field] ? { ...previous, [field]: "" } : previous,
+    );
+
     setTechnicalDetailRows((previous) => {
       const rows = previous.length ? [...previous] : [{}];
 
@@ -1317,6 +1379,13 @@ const ToolsFixturesForm = ({ data, onBack }) => {
     const selectedItem = itemData.find(
       (item) => String(item.value) === String(value),
     );
+
+    if (value) {
+      setGridErrors((previous) => ({
+        ...previous,
+        componentRows: previous.componentRows.filter((i) => i !== index),
+      }));
+    }
 
     setComponentRows((previous) =>
       previous.map((row, rowIndex) =>
@@ -1340,6 +1409,13 @@ const ToolsFixturesForm = ({ data, onBack }) => {
   ========================================================================== */
 
   const handleSpareChange = (index, field, value) => {
+    if (field === "sparePartId" && value) {
+      setGridErrors((previous) => ({
+        ...previous,
+        spareRows: previous.spareRows.filter((i) => i !== index),
+      }));
+    }
+
     setSpareRows((previous) =>
       previous.map((row, rowIndex) =>
         rowIndex === index
@@ -1357,6 +1433,13 @@ const ToolsFixturesForm = ({ data, onBack }) => {
   ========================================================================== */
 
   const handleHistoryChange = (index, field, value) => {
+    if (field === "date" && value) {
+      setGridErrors((previous) => ({
+        ...previous,
+        historyRows: previous.historyRows.filter((i) => i !== index),
+      }));
+    }
+
     setHistoryRows((previous) =>
       previous.map((row, rowIndex) =>
         rowIndex === index
@@ -1458,9 +1541,81 @@ const ToolsFixturesForm = ({ data, onBack }) => {
       errors.status = "Status is required";
     }
 
+    if (!toolsInfo.location) {
+      errors.location = "Location Name is required";
+    }
+
+    if (!technicalDetailRows[0]?.unit) {
+      errors.unit = "Unit is required";
+    }
+
+    if (!technicalDetailRows[0]?.lifeType) {
+      errors.lifeType = "Life Type is required";
+    }
+
+    /*
+     * Child-grid mandatory cells are only highlighted after a failed
+     * save (showErrors), matching the pattern used across master forms.
+     */
+
+    const spareMissing = [];
+    spareRows.forEach((row, index) => {
+      const hasContent =
+        row.sparePartId ||
+        row.sparePartDescription ||
+        row.modelNo ||
+        row.serialNo ||
+        row.manufacturer ||
+        row.warrantyTillDate ||
+        row.calibrationReq !== "NO" ||
+        row.lastCalibDate ||
+        row.nextCalibDate;
+
+      if (hasContent && !row.sparePartId) {
+        spareMissing.push(index);
+      }
+    });
+
+    const componentMissing = [];
+    componentRows.forEach((row, index) => {
+      const hasContent = row.itemCode || row.itemDescription || row.unit;
+
+      if (hasContent && !row.itemCode) {
+        componentMissing.push(index);
+      }
+    });
+
+    const historyMissing = [];
+    historyRows.forEach((row, index) => {
+      const hasContent =
+        row.date ||
+        row.description ||
+        row.changedDate ||
+        row.cost ||
+        row.purpose ||
+        row.remarks;
+
+      if (hasContent && !row.date) {
+        historyMissing.push(index);
+      }
+    });
+
+    const panelErrors = {
+      spareRows: spareMissing,
+      componentRows: componentMissing,
+      historyRows: historyMissing,
+    };
+
+    setGridErrors(panelErrors);
+
+    const hasGridErrors =
+      spareMissing.length ||
+      componentMissing.length ||
+      historyMissing.length;
+
     setFieldErrors(errors);
 
-    return Object.keys(errors).length === 0;
+    return Object.keys(errors).length === 0 && !hasGridErrors;
   };
 
   /* ========================================================================== 
@@ -1532,16 +1687,11 @@ const ToolsFixturesForm = ({ data, onBack }) => {
       ),
 
       /*
-       * Tool Cost on the Technical Info tab doubles as the backend's
-       * "toolFixtureCost" unless a more specific stored value exists
-       * for this row.
+       * Tool/Fixture Cost per Stroke (Technical Info tab). Distinct
+       * from the "toolCost" (Total Tool/Fixture Cost) root field, so
+       * it is sourced only from the technical-detail value.
        */
-      toolFixtureCost:
-        technicalInfo.toolCost !== "" &&
-        technicalInfo.toolCost !== null &&
-        technicalInfo.toolCost !== undefined
-          ? Number(technicalInfo.toolCost)
-          : Number(technicalDetail.toolFixtureCost || 0),
+      toolFixtureCost: Number(technicalDetail.toolFixtureCost || 0),
 
       toolFixtureSize: technicalDetail.toolFixtureSize || "",
 
@@ -1603,6 +1753,8 @@ const ToolsFixturesForm = ({ data, onBack }) => {
       orgId: Number(orgId),
 
       pmchecklistNo: toolsInfo.pmCheckListNo || "",
+
+      productionWorkOrderNo: toolsInfo.productionWorkOrderNo || "",
 
       /* ====================================================================== 
          PRESENT LOCATION 
@@ -1785,6 +1937,7 @@ const ToolsFixturesForm = ({ data, onBack }) => {
 
   const handleSave = async () => {
     if (!validate()) {
+      setShowErrors(true);
       return;
     }
 
@@ -2124,12 +2277,23 @@ const ToolsFixturesForm = ({ data, onBack }) => {
                   onChange={handleToolsInfoChange}
                   options={presentLocationData}
                   disabled={!basic.plantId}
+                  error={fieldErrors.location}
+                  required
                 />
 
                 <Field
-                  label="PM Check List No."
+                  type="select"
+                  label="PM Check List No"
                   name="pmCheckListNo"
                   value={toolsInfo.pmCheckListNo}
+                  onChange={handleToolsInfoChange}
+                  options={pmChecklistData}
+                />
+
+                <Field
+                  label="Tool/Fixture Production Work Order No"
+                  name="productionWorkOrderNo"
+                  value={toolsInfo.productionWorkOrderNo}
                   onChange={handleToolsInfoChange}
                 />
 
@@ -2290,9 +2454,9 @@ const ToolsFixturesForm = ({ data, onBack }) => {
                   onChange={handleTechnicalInfoChange}
                 />
 
-                <Field
+<Field
                   type="number"
-                  label="Tool Cost"
+                  label="Total Tool/Fixture Cost"
                   name="toolCost"
                   value={technicalInfo.toolCost}
                   onChange={handleTechnicalInfoChange}
@@ -2300,7 +2464,7 @@ const ToolsFixturesForm = ({ data, onBack }) => {
 
                 {/* ============================================================ 
                    LIFE TYPE 
- 
+  
                    API: 
                    listOfValuesAPI.getListValuesGroup("LIFE TYPE", orgId) 
                 ============================================================ */}
@@ -2314,14 +2478,16 @@ const ToolsFixturesForm = ({ data, onBack }) => {
                     handleTechnicalDetailChange("lifeType", e.target.value)
                   }
                   options={lifeTypeOptions}
+                  error={fieldErrors.lifeType}
+                  required
                 />
 
                 {/* ============================================================ 
                    UNIT 
- 
+  
                    API: 
                    listOfValuesAPI.getUnitMasterByOrgId(orgId) 
- 
+  
                    Option value is the unit's id; label shown is unitId. 
                 ============================================================ */}
 
@@ -2334,6 +2500,179 @@ const ToolsFixturesForm = ({ data, onBack }) => {
                     handleTechnicalDetailChange("unit", e.target.value)
                   }
                   options={unitData}
+                  error={fieldErrors.unit}
+                  required
+                />
+
+                {/* ============================================================ 
+                   REMAINING TECHNICAL DETAIL FIELDS 
+  
+                   Bound to technicalDetailRows[0] (only one technical-detail 
+                   record is supported per tool, see buildPayload). 
+                ============================================================ */}
+
+                <Field
+                  type="number"
+                  label="Tool/Fixture Weight"
+                  name="toolWeight"
+                  value={technicalDetailRows[0]?.toolWeight ?? ""}
+                  onChange={(e) =>
+                    handleTechnicalDetailChange("toolWeight", e.target.value)
+                  }
+                />
+
+                <Field
+                  label="Tool/Fixture Size"
+                  name="toolFixtureSize"
+                  value={technicalDetailRows[0]?.toolFixtureSize ?? ""}
+                  onChange={(e) =>
+                    handleTechnicalDetailChange(
+                      "toolFixtureSize",
+                      e.target.value,
+                    )
+                  }
+                />
+
+                <Field
+                  type="number"
+                  label="Life of Tool/Fixture"
+                  name="lifeOfTool"
+                  value={technicalDetailRows[0]?.lifeOfTool ?? ""}
+                  onChange={(e) =>
+                    handleTechnicalDetailChange("lifeOfTool", e.target.value)
+                  }
+                />
+
+                <Field
+                  type="number"
+                  label="Recondition Frequency"
+                  name="reconditionFreq"
+                  value={technicalDetailRows[0]?.reconditionFreq ?? ""}
+                  onChange={(e) =>
+                    handleTechnicalDetailChange(
+                      "reconditionFreq",
+                      e.target.value,
+                    )
+                  }
+                />
+
+                <Field
+                  type="number"
+                  label="Setup Time (Minutes)"
+                  name="setUpTimeInMinutes"
+                  value={technicalDetailRows[0]?.setUpTimeInMinutes ?? ""}
+                  onChange={(e) =>
+                    handleTechnicalDetailChange(
+                      "setUpTimeInMinutes",
+                      e.target.value,
+                    )
+                  }
+                />
+
+                <Field
+                  type="number"
+                  label="Completed Life Cycle"
+                  name="completedLifeCycle"
+                  value={technicalDetailRows[0]?.completedLifeCycle ?? ""}
+                  onChange={(e) =>
+                    handleTechnicalDetailChange(
+                      "completedLifeCycle",
+                      e.target.value,
+                    )
+                  }
+                />
+
+                <Field
+                  type="date"
+                  label="Re-Conditioned Date"
+                  name="reconditionedDate"
+                  value={technicalDetailRows[0]?.reconditionedDate ?? ""}
+                  onChange={(e) =>
+                    handleTechnicalDetailChange(
+                      "reconditionedDate",
+                      e.target.value,
+                    )
+                  }
+                />
+
+                <Field
+                  type="number"
+                  label="No. of Strokes Completed"
+                  name="noOfStokesCompleted"
+                  value={technicalDetailRows[0]?.noOfStokesCompleted ?? ""}
+                  onChange={(e) =>
+                    handleTechnicalDetailChange(
+                      "noOfStokesCompleted",
+                      e.target.value,
+                    )
+                  }
+                />
+
+                <Field
+                  type="number"
+                  label="Strokes Completed After Reconditioning"
+                  name="strokesCompletedAfterReconditioning"
+                  value={
+                    technicalDetailRows[0]?.strokesCompletedAfterReconditioning ??
+                    ""
+                  }
+                  onChange={(e) =>
+                    handleTechnicalDetailChange(
+                      "strokesCompletedAfterReconditioning",
+                      e.target.value,
+                    )
+                  }
+                />
+
+                <Field
+                  label="Tool/Fixture Made Of"
+                  name="toolMadeOf"
+                  value={technicalDetailRows[0]?.toolMadeOf ?? ""}
+                  onChange={(e) =>
+                    handleTechnicalDetailChange("toolMadeOf", e.target.value)
+                  }
+                />
+
+                <Field
+                  type="number"
+                  label="Tool/Fixture Cost per Stroke"
+                  name="toolFixtureCost"
+                  value={technicalDetailRows[0]?.toolFixtureCost ?? ""}
+                  onChange={(e) =>
+                    handleTechnicalDetailChange(
+                      "toolFixtureCost",
+                      e.target.value,
+                    )
+                  }
+                />
+
+                <Field
+                  type="number"
+                  label="Tool/Fixture Amortized Recovered"
+                  name="toolFixtureAmortizedRecovered"
+                  value={
+                    technicalDetailRows[0]?.toolFixtureAmortizedRecovered ?? ""
+                  }
+                  onChange={(e) =>
+                    handleTechnicalDetailChange(
+                      "toolFixtureAmortizedRecovered",
+                      e.target.value,
+                    )
+                  }
+                />
+
+                <Field
+                  type="textarea"
+                  label="Technical Specifications"
+                  name="technicalSpecification"
+                  value={technicalDetailRows[0]?.technicalSpecification ?? ""}
+                  onChange={(e) =>
+                    handleTechnicalDetailChange(
+                      "technicalSpecification",
+                      e.target.value,
+                    )
+                  }
+                  className="col-span-2 md:col-span-4 xl:col-span-6"
                 />
               </div>
             )}
@@ -2427,7 +2766,11 @@ const ToolsFixturesForm = ({ data, onBack }) => {
                                   e.target.value,
                                 )
                               }
-                              className={controlClasses}
+                              className={`${controlClasses} ${
+                                showErrors && gridErrors.spareRows.includes(idx)
+                                  ? " border-red-500 focus:border-red-500"
+                                  : ""
+                              }`}
                             >
                               <option value="">Select Item</option>
 
@@ -2546,6 +2889,12 @@ const ToolsFixturesForm = ({ data, onBack }) => {
                     </tbody>
                   </table>
                 </div>
+
+                {showErrors && gridErrors.spareRows.length > 0 && (
+                  <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
+                    Spare Part Id is required for the highlighted row(s)
+                  </p>
+                )}
               </div>
             )}
 
@@ -2611,7 +2960,12 @@ const ToolsFixturesForm = ({ data, onBack }) => {
                               onChange={(e) =>
                                 handleComponentItemChange(idx, e.target.value)
                               }
-                              className={controlClasses}
+                              className={`${controlClasses} ${
+                                showErrors &&
+                                gridErrors.componentRows.includes(idx)
+                                  ? " border-red-500 focus:border-red-500"
+                                  : ""
+                              }`}
                             >
                               <option value="">Select Item</option>
 
@@ -2666,6 +3020,12 @@ const ToolsFixturesForm = ({ data, onBack }) => {
                     </tbody>
                   </table>
                 </div>
+
+                {showErrors && gridErrors.componentRows.length > 0 && (
+                  <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
+                    Item Code is required for the highlighted row(s)
+                  </p>
+                )}
               </div>
             )}
 
@@ -2742,7 +3102,11 @@ const ToolsFixturesForm = ({ data, onBack }) => {
                               onChange={(e) =>
                                 handleHistoryChange(idx, "date", e.target.value)
                               }
-                              className={controlClasses}
+                              className={`${controlClasses} ${
+                                showErrors && gridErrors.historyRows.includes(idx)
+                                  ? " border-red-500 focus:border-red-500"
+                                  : ""
+                              }`}
                             />
                           </td>
 
@@ -2842,6 +3206,12 @@ const ToolsFixturesForm = ({ data, onBack }) => {
                     </tbody>
                   </table>
                 </div>
+
+                {showErrors && gridErrors.historyRows.length > 0 && (
+                  <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
+                    Date is required for the highlighted row(s)
+                  </p>
+                )}
               </div>
             )}
 

@@ -100,6 +100,7 @@ import ScrapMaterialReturnMaster from "../components/subContract/scrapMaterialRe
 import SubContractReconciliationMaster from "../components/subContract/subContractReconciliation/SubContractReconciliationMaster";
 import SubContractSupplyScheduleMaster from "../components/subContract/subContractSupplySchedule/SubContractSupplyScheduleMaster";
 import SubContractingDcMaster from "../components/subContract/subContractingDc/SubContractingDcMaster";
+import SubContractingGrnMaster from "../components/subContract/subContractingGrn/SubContractingGrnMaster";
 import SupplierRateContractMaster from "../components/subContract/supplierRateContract/SupplierRateContractMaster";
 import SupplierRateContractAmendmentMaster from "../components/subContract/supplierRateContractAmendment/SupplierRateContractAmendmentMaster";
 import Dashboard from "../pages/DashBoard";
@@ -184,6 +185,11 @@ export const routesConfig = [
     path: "/dcforsubcontracting",
     label: "D.C For Sub Contracting (JO)",
     element: <SubContractingDcMaster />,
+  },
+  {
+    path: "/subcontractinggrn",
+    label: "Sub Contracting GRN",
+    element: <SubContractingGrnMaster />,
   },
   {
     path: "/scbill",
