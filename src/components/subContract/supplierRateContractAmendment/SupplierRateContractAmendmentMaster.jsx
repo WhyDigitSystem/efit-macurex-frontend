@@ -2,55 +2,94 @@ import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import SupplierRateContractAmendmentList from "./SupplierRateContractAmendmentList";
 import SupplierRateContractAmendmentForm from "./SupplierRateContractAmendmentForm";
-import supplierRateContractAmendmentAPI from "../../../api/supplierRateContractAmendmentAPI";
 import { toast } from "../../../utils/toast";
+import supplierRateContractAmendmentAPI from "../../../api/SubContract/supplierRateContractAmendmentAPI";
 
 const SupplierRateContractAmendmentMaster = () => {
   const navigate = useNavigate();
-  const [view, setView] = useState("list"); // "list" | "form"
+  const [view, setView] = useState("list");
   const [editData, setEditData] = useState(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-
-  const ORG_ID = localStorage.getItem("orgId");
-  const BRANCH_ID = localStorage.getItem("branchId");
 
   const handleAddNew = () => {
     setEditData(null);
     setView("form");
   };
 
-  // Pencil icon click -> fetch fresh data by orgId, find the matching record, open form
   const handleEdit = useCallback(
     async (row) => {
       try {
-        const records =
-          await supplierRateContractAmendmentAPI.getSupplierRateContractAmendmentByOrgId(
-            ORG_ID,
-            BRANCH_ID,
-          );
-        const fresh = records.find((r) => r.id === row.id) || row;
-        setEditData(fresh);
+        const response = await supplierRateContractAmendmentAPI.getSupplierRateContractAmendmentById(
+          row.id,
+        );
+
+        const freshData = response?.paramObjectsMap?.supplierRateContractAmendment ||
+          response?.data?.paramObjectsMap?.supplierRateContractAmendment ||
+          response;
+
+        if (!freshData) {
+          toast.error("Failed to load supplier rate contract amendment details");
+          return;
+        }
+
+        const mappedData = {
+          id: freshData.id,
+          plantId: freshData.branch?.id || "",
+          belongsTo: freshData.belongsTo || "",
+          department: "",
+          partyId: freshData.customer?.customerId || "",
+          partyName: freshData.customer?.customerName || "",
+          contractNo: freshData.contractNo || "",
+          contractDate: freshData.contractDate || "",
+          validFrom: freshData.validFrom || "",
+          validTo: freshData.validTo || "",
+          newValidFrom: freshData.newValidFrom || "",
+          newValidTo: freshData.newValidTo || "",
+          amendmentNo: freshData.docId || "",
+          amendmentDate: freshData.docDate || "",
+          revisionNo: Number(freshData.revisionNo) || 1,
+          active: freshData.active === "Active",
+          details: {
+            freightType: freshData.freightType || "",
+            packingType: freshData.packingType || "",
+            insuranceAmount: freshData.insuranceAmount || "",
+            modeOfDespatch: freshData.modeOfDespatch || "",
+            taxDescription: freshData.taxDescription || "",
+            preparedBy: freshData.preparedBy?.id || "",
+            authorizedBy: freshData.authorisedBy?.id || "",
+            remarks: freshData.remarks || "",
+          },
+          supplierRateDetails: (freshData.itemDetails || []).map((item) => ({
+            itemCode: item.itemCode?.id || "",
+            itemDescription: item.itemCode?.itemDescription || "",
+            unit: item.unit?.id || "",
+            unitLabel: item.unit?.unitId || "",
+            oldRate: item.oldRate || "",
+            newRate: item.newRate || "",
+          })),
+          summary: {
+            summaryNotes: "",
+            approvalStatus: "",
+            additionalComments: "",
+          },
+        };
+
+        setEditData(mappedData);
         setView("form");
       } catch (error) {
-        console.error(
-          "Failed to fetch supplier rate contract amendment for edit:",
-          error,
-        );
+        console.error("Failed to fetch supplier rate contract amendment for edit:", error);
         toast.error("Failed to load supplier rate contract amendment details");
       }
     },
-    [ORG_ID, BRANCH_ID],
+    []
   );
 
   const handleBack = () => {
     setEditData(null);
     setView("list");
-    // bump refreshTrigger so the list re-fetches after add/update
     setRefreshTrigger((prev) => prev + 1);
   };
 
-  // List screen back button -> return to the Sub Contract module home.
-  // (Form's back button goes back to the list via handleBack.)
   const handleNavigateHome = () => {
     navigate("/subcontract");
   };

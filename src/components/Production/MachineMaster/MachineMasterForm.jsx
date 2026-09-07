@@ -635,30 +635,36 @@ const MachineMasterForm = ({ editData, editId, onBack, onSave }) => {
         setLoading(true);
         try {
             const response = await machineMasterAPI.getMachineMasterById(id);
-            const data = response?.paramObjectsMap?.machineMasterVO;
+            console.log("Get by ID Response:", response);
+
+            // Extract data from response
+            let data = response?.paramObjectsMap?.machineMasterVO ||
+                response?.paramObjectsMap?.machineMaster ||
+                response;
 
             if (data) {
+                // Map the data to form fields
                 setHeader({
-                    plantId: data.plantId || "",
-                    department: data.department || "",
-                    type: data.type || "",
+                    plantId: data.branch?.id || "",
+                    department: data.department?.id || "",
+                    type: data.type?.id || data.type?.description || "",
                     machineInstrumentNo: data.machineInstrumentNo || "",
                     machineInstrumentName: data.machineInstrumentName || "",
                     calibrationRequired: data.calibrationRequired || "",
-                    location: data.location || "",
+                    location: data.location?.id || "",
                     processNo: data.processNo || "",
-                    machineInstrumentCategory: data.machineInstrumentCategory || "",
+                    machineInstrumentCategory: data.machineInstrumentCategory?.id || data.machineInstrumentCategory || "",
                     section: data.section || "",
                     model: data.model || "",
                     serialNo: data.serialNo || "",
                     status: data.status || "",
                     manufacturedBy: data.manufacturedBy || "",
-                    madeIn: data.madeIn || "",
-                    purchasedFrom: data.purchasedFrom || "",
+                    madeIn: data.madeIn?.id || "",
+                    purchasedFrom: data.purchasedFrom?.id || "",
                     modeOfPurchase: data.modeOfPurchase || "",
                     machineInstrumentIncharge: data.machineInstrumentIncharge || "",
                     machineInstrumentUsedFor: data.machineInstrumentUsedFor || "",
-                    pmCheckListNo: data.pmCheckListNo || "",
+                    pmCheckListNo: data.pmChecklistNo || "",
                     remarks: data.remarks || "",
                     make: data.make || "",
                     installationDate: data.installationDate || "",
@@ -667,7 +673,7 @@ const MachineMasterForm = ({ editData, editId, onBack, onSave }) => {
                     powerProduced: data.powerProduced || "",
                     technicalSpecification: data.technicalSpecification || "",
                     capacity: data.capacity || "",
-                    unit: data.unit || "",
+                    unit: data.unit?.id || data.unit || "",
                     bedSizeMm: data.bedSizeMm || "",
                     range: data.range || "",
                     errorAllowed: data.errorAllowed || "",
@@ -677,23 +683,23 @@ const MachineMasterForm = ({ editData, editId, onBack, onSave }) => {
                     calibrationCost: data.calibrationCost || "",
                     voltage: data.voltage || "",
                     calibrationAgency: data.calibrationAgency || "",
-                    cussionTonnage: data.cussionTonnage || "",
+                    cussionTonnage: data.cushionTonnage || "",
                     certificateNo: data.certificateNo || "",
                     parallelity: data.parallelity || "",
-                    shutHtMm: data.shutHtMm || "",
+                    shutHtMm: data.shutHeightMm || "",
                     hcNo: data.hcNo || "",
-                    machineType: data.machineType || "",
+                    machineType: data.machineType?.id || data.machineType || "",
                     strokeMm: data.strokeMm || "",
                     rangeSize: data.rangeSize || "",
                     hourlyRate: data.hourlyRate || "",
                     cushion: data.cushion || "",
                     leastcount: data.leastcount || "",
-                    machineInstrumentWt: data.machineInstrumentWt || "",
+                    machineInstrumentWt: data.machineInstrumentWeight || "",
                     hp: data.hp || "",
-                    uom: data.uom || "",
+                    uom: data.uom?.id || data.uom || "",
                     goSize: data.goSize || "",
                     noGoSize: data.noGoSize || "",
-                    warrantyStDate: data.warrantyStDate || "",
+                    warrantyStDate: data.warrantyStartDate || "",
                     warrantyEndDate: data.warrantyEndDate || "",
                     ramSize: data.ramSize || "",
                     throatGap: data.throatGap || "",
@@ -704,38 +710,77 @@ const MachineMasterForm = ({ editData, editId, onBack, onSave }) => {
                     lifeCycleYear: data.lifeCycleYear || "",
                 });
 
-                if (data.type) {
-                    await loadToolCategories(data.type);
+                // Load tool categories if type is selected
+                if (data.type?.id || data.type) {
+                    await loadToolCategories(data.type?.id || data.type);
                 }
 
-                if (data.spareDetails?.length) {
-                    const mappedSpares = data.spareDetails.map((item) => ({
-                        ...item,
-                        warrantyTillDate: formatDateForInput(item.warrantyTillDate),
-                        lastCalibDate: formatDateForInput(item.lastCalibDate),
-                        nextCalibDate: formatDateForInput(item.nextCalibDate),
+                // Map spare details
+                if (data.machineSpareDetailsResponseDTO?.length) {
+                    const mappedSpares = data.machineSpareDetailsResponseDTO.map((item) => ({
+                        id: item.id || "",
+                        spareId: item.spareId?.id || "",
+                        spareDesc: item.spareDescription || "",
+                        unit: item.unit?.id || "",
+                        quantity: item.quantity || "",
+                        critical: item.critical ? "Yes" : "No",
+                        modelNo: item.modelNo || "",
+                        serialNo: item.serialNo || "",
+                        manufacturer: item.manufacturer || "",
+                        warrantyTillDate: formatDateForInput(item.warrantyTillDate) || "",
+                        calibrationRequired: item.calibrationRequired || "",
+                        lastCalibDate: formatDateForInput(item.lastCalibratedDate) || "",
+                        nextCalibDate: formatDateForInput(item.nextDueDate) || "",
                     }));
                     setSpareRows(mappedSpares);
+                } else {
+                    setSpareRows([emptySpareRow()]);
                 }
 
-                if (data.historyDetails?.length) {
-                    setHistoryRows(data.historyDetails);
+                // Map history details
+                if (data.machineHistoryResponseDTO?.length) {
+                    const mappedHistory = data.machineHistoryResponseDTO.map((item) => ({
+                        id: item.id || "",
+                        date: item.date || "",
+                        description: item.description || "",
+                        changedDate: item.changedDate || "",
+                        cost: item.cost || "",
+                        purpose: item.purpose || "",
+                        remarks: item.remarks || "",
+                    }));
+                    setHistoryRows(mappedHistory);
+                } else {
+                    setHistoryRows([emptyHistoryRow()]);
                 }
 
-                if (data.images?.length) {
-                    setImageRows(
-                        data.images.map((img) => ({
+                // Map images
+                if (data.machineMasterAttachmentResponseDTO?.length) {
+                    // Filter for images
+                    const images = data.machineMasterAttachmentResponseDTO.filter(
+                        (item) => item.contentType?.startsWith('image/')
+                    );
+                    if (images.length > 0) {
+                        setImageRows(images.map((img) => ({
                             image: img
-                        }))
-                    );
+                        })));
+                    } else {
+                        setImageRows([]);
+                    }
                 }
 
-                if (data.pdfAttachments?.length) {
-                    setPdfRows(
-                        data.pdfAttachments.map((pdf) => ({
-                            pdf: pdf
-                        }))
+                // Map PDF attachments
+                if (data.machineMasterAttachmentResponseDTO?.length) {
+                    // Filter for PDFs
+                    const pdfs = data.machineMasterAttachmentResponseDTO.filter(
+                        (item) => item.contentType === 'application/pdf'
                     );
+                    if (pdfs.length > 0) {
+                        setPdfRows(pdfs.map((pdf) => ({
+                            pdf: pdf
+                        })));
+                    } else {
+                        setPdfRows([]);
+                    }
                 }
 
                 setDataLoadedRef(true);
@@ -1065,11 +1110,23 @@ const MachineMasterForm = ({ editData, editId, onBack, onSave }) => {
                 warrantyEndDate: header.warrantyEndDate || "",
                 warrantyStartDate: header.warrantyStDate || "",
 
+                // Fixed: Check if spareId exists and is not empty
                 machineSpareDetailsDTO: spareRows
-                    .filter((r) => r.spareId && r.spareId.trim() !== "")
+                    .filter((r) => {
+                        // Check if spareId has a valid value (not null, undefined, or empty)
+                        const spareId = r.spareId;
+                        if (spareId === null || spareId === undefined || spareId === "") {
+                            return false;
+                        }
+                        // If it's a string, check if it's not empty after trim
+                        if (typeof spareId === "string" && spareId.trim() === "") {
+                            return false;
+                        }
+                        return true;
+                    })
                     .map((r) => ({
                         calibrationRequired: r.calibrationRequired || "",
-                        critical: r.critical === "Yes",
+                        critical: r.critical === "Yes" || r.critical === true,
                         lastCalibratedDate: r.lastCalibDate || "",
                         manufacturer: r.manufacturer || "",
                         modelNo: r.modelNo || "",
@@ -1081,8 +1138,14 @@ const MachineMasterForm = ({ editData, editId, onBack, onSave }) => {
                         warrantyTillDate: r.warrantyTillDate || "",
                     })),
 
+                // Fixed: Check if history has valid data
                 machineHistoryDTO: historyRows
-                    .filter((r) => r.date?.trim() || r.description?.trim())
+                    .filter((r) => {
+                        // Check if at least one field has a value
+                        const hasDate = r.date && r.date.trim() !== "";
+                        const hasDescription = r.description && r.description.trim() !== "";
+                        return hasDate || hasDescription;
+                    })
                     .map((r) => ({
                         changedDate: r.changedDate || "",
                         cost: Number(r.cost) || 0,
@@ -1107,51 +1170,33 @@ const MachineMasterForm = ({ editData, editId, onBack, onSave }) => {
             });
 
             formDataToSend.append(
-                "MachineMasterDTO",
+                "machineMasterDTO",
                 machineDataBlob,
                 "machineMasterDTO.json"
             );
 
             // Add image files
-            console.log("Image Rows:", imageRows);
             if (imageRows && imageRows.length > 0) {
                 for (let i = 0; i < imageRows.length; i++) {
                     const row = imageRows[i];
                     if (row && row.image) {
                         if (row.image instanceof File) {
-                            console.log("Appending image file:", row.image.name);
-                            formDataToSend.append("files", row.image, row.image.name);
-                        } else if (row.image && typeof row.image === "object" && row.image.filePath) {
-                            console.log("Existing image:", row.image.filePath);
-                        } else if (typeof row.image === "string" && row.image) {
-                            console.log("Image string path:", row.image);
+                            formDataToSend.append("images", row.image, row.image.name);
                         }
                     }
                 }
             }
 
             // Add PDF files
-            console.log("PDF Rows:", pdfRows);
             if (pdfRows && pdfRows.length > 0) {
                 for (let i = 0; i < pdfRows.length; i++) {
                     const row = pdfRows[i];
                     if (row && row.pdf) {
                         if (row.pdf instanceof File) {
-                            console.log("Appending PDF file:", row.pdf.name);
                             formDataToSend.append("files", row.pdf, row.pdf.name);
-                        } else if (row.pdf && typeof row.pdf === "object" && row.pdf.filePath) {
-                            console.log("Existing PDF:", row.pdf.filePath);
-                        } else if (typeof row.pdf === "string" && row.pdf) {
-                            console.log("PDF string path:", row.pdf);
                         }
                     }
                 }
-            }
-
-            // Log all FormData entries for debugging
-            console.log("FormData entries:");
-            for (let pair of formDataToSend.entries()) {
-                console.log(pair[0], pair[1]);
             }
 
             console.log("Sending machine data:", machineData);

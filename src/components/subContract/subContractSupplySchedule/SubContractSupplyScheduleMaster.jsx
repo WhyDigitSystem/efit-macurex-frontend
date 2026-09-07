@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import SubContractSupplyScheduleList from "./SubContractSupplyScheduleList";
 import SubContractSupplyScheduleForm from "./SubContractSupplyScheduleForm";
-import subContractSupplyScheduleAPI from "../../../api/subContractSupplyScheduleAPI";
+import subContractSupplyScheduleAPI from "../../../api/SubContract/subContractSupplyScheduleAPI";
 import { toast } from "../../../utils/toast";
 
 const SubContractSupplyScheduleMaster = () => {
@@ -19,24 +19,37 @@ const SubContractSupplyScheduleMaster = () => {
     setView("form");
   };
 
-  // Pencil icon click -> fetch fresh data by orgId, find the matching record, open form
+  // Pencil icon click -> fetch fresh data by ID using getSubContractSupplyScheduleById
   const handleEdit = useCallback(
     async (row) => {
       try {
-        const records =
-          await subContractSupplyScheduleAPI.getSubContractSupplyScheduleByOrgId(
-            ORG_ID,
-            BRANCH_ID,
-          );
-        const fresh = records.find((r) => r.id === row.id) || row;
+        // Fetch the full record by ID
+        const response = await subContractSupplyScheduleAPI.getSubContractSupplyScheduleById(row.id);
+        console.log("Get By ID Response:", response);
+
+        // Extract data from response
+        let fresh = null;
+        if (response?.paramObjectsMap?.subContractSupplySchedule) {
+          fresh = response.paramObjectsMap.subContractSupplySchedule;
+        } else if (response?.data?.paramObjectsMap?.subContractSupplySchedule) {
+          fresh = response.data.paramObjectsMap.subContractSupplySchedule;
+        } else if (response?.subContractSupplySchedule) {
+          fresh = response.subContractSupplySchedule;
+        } else {
+          fresh = row;
+        }
+
         setEditData(fresh);
         setView("form");
       } catch (error) {
         console.error("Failed to fetch sub contract supply schedule for edit:", error);
         toast.error("Failed to load sub contract supply schedule details");
+        // Fallback to using the row data from the list
+        setEditData(row);
+        setView("form");
       }
     },
-    [ORG_ID, BRANCH_ID],
+    []
   );
 
   const handleBack = () => {

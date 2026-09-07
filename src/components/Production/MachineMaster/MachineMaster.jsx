@@ -13,9 +13,9 @@ const MachineMaster = () => {
         setScreen("form");
     };
 
-    const handleEdit = (data) => {
-        setEditId(data.id);
-        setEditData(data);
+    const handleEdit = (row) => {
+        setEditId(row.id);
+        setEditData(null); // Don't pass data, let form fetch by ID
         setScreen("form");
     };
 
@@ -25,7 +25,6 @@ const MachineMaster = () => {
         setEditId(null);
     };
 
-    // Just handle navigation - the form handles the API call
     const handleSave = () => {
         handleBack();
     };

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import PDFPreviewModal from "../../../utils/PDFPreviewModal";
-import subContractSupplyScheduleAPI from "../../../api/subContractSupplyScheduleAPI";
+import subContractSupplyScheduleAPI from "../../../api/SubContract/subContractSupplyScheduleAPI";
 import { generateSubContractSupplySchedulePDF } from "../../../utils/generateSubContractSupplySchedulePDF";
 import { useToast } from "../../Toast/ToastContext";
 
@@ -23,24 +23,74 @@ const SubContractSupplyScheduleList = ({
   const ORG_ID = Number(localStorage.getItem("orgId")) || 0;
   const BRANCH_ID = Number(localStorage.getItem("branchId")) || 0;
 
+  // Map API response data to display format
+  const mapRecordForDisplay = (record) => {
+    return {
+      id: record.id,
+      docNo: record.docId || record.docNo || "-",
+      docDate: record.docDate || "-",
+      plantName: record.branch?.branchName || record.plantName || "-",
+      belongsTo: record.belongsTo || "-",
+      schStartDate: record.schStartDate || "-",
+      schEndDate: record.schEndDate || "-",
+      partyId: record.customer?.customerCode || record.partyId || "-",
+      partyName: record.customer?.customerName || record.partyName || "-",
+      contractNo: record.contractNo || "-",
+      contractDate: record.contractDate || "-",
+      jobOrderNo: record.jobOrderNo || "-",
+      preparedBy: record.preparedBy?.employeeName || record.preparedBy || "-",
+      authorizedBy: record.authorisedBy?.employeeName || record.authorizedBy || "-",
+      active: record.active || "Active",
+      remarks: record.remarks || "",
+      itemDetails: record.itemDetails || [],
+      // Keep original record for PDF generation
+      original: record,
+    };
+  };
+
   const loadRecords = useCallback(async () => {
     if (!ORG_ID) return;
     try {
       setLoading(true);
-      const data =
-        await subContractSupplyScheduleAPI.getSubContractSupplyScheduleByOrgId(
-          ORG_ID,
-          BRANCH_ID,
-        );
+      const response = await subContractSupplyScheduleAPI.getSubContractSupplyScheduleByOrgIdAndBranch(
+        ORG_ID,
+        BRANCH_ID
+      );
+      console.log("API Response:", response);
+
+      // Extract data from response
+      let data = [];
+      if (response?.paramObjectsMap?.subContractSupplySchedule) {
+        const result = response.paramObjectsMap.subContractSupplySchedule;
+        if (Array.isArray(result)) {
+          data = result;
+        } else {
+          data = [result];
+        }
+      } else if (response?.data?.paramObjectsMap?.subContractSupplySchedule) {
+        const result = response.data.paramObjectsMap.subContractSupplySchedule;
+        if (Array.isArray(result)) {
+          data = result;
+        } else {
+          data = [result];
+        }
+      } else if (Array.isArray(response)) {
+        data = response;
+      } else if (response?.paramObjectsMap?.subContractSupplyScheduleList) {
+        data = response.paramObjectsMap.subContractSupplyScheduleList;
+      }
+
+      // Sort by ID descending (newest first)
       data.sort((a, b) => (b.id || 0) - (a.id || 0));
       setRecords(data);
     } catch (error) {
       console.error("Failed to load sub contract supply schedules:", error);
       setRecords([]);
+      addToast("Failed to fetch Sub Contract Supply Schedules", "error");
     } finally {
       setLoading(false);
     }
-  }, [ORG_ID, BRANCH_ID]);
+  }, [ORG_ID, BRANCH_ID, addToast]);
 
   useEffect(() => {
     loadRecords();
@@ -48,10 +98,9 @@ const SubContractSupplyScheduleList = ({
 
   const handleDownloadPDF = async (row) => {
     try {
-      const fullData =
-        await subContractSupplyScheduleAPI.getSubContractSupplyScheduleById(
-          row.id,
-        );
+      const fullData = await subContractSupplyScheduleAPI.getSubContractSupplyScheduleById(
+        row.id,
+      );
       if (!fullData) {
         addToast("Sub Contract Supply Schedule data not found", "error");
         return;
@@ -154,6 +203,11 @@ const SubContractSupplyScheduleList = ({
           className:
             "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
         },
+        "": {
+          label: "Active",
+          className:
+            "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+        },
       },
     },
     {
@@ -202,7 +256,7 @@ const SubContractSupplyScheduleList = ({
     <>
       <CommonListViewTable
         title="Sub Contract Supply Schedule"
-        data={records}
+        data={records.map(mapRecordForDisplay)}
         loading={loading}
         columns={columns}
         searchFields={searchFields}
@@ -226,7 +280,9 @@ const SubContractSupplyScheduleList = ({
       <PDFPreviewModal
         isOpen={pdfPreview.open}
         onClose={() => {
-          URL.revokeObjectURL(pdfPreview.blobUrl);
+          if (pdfPreview.blobUrl) {
+            URL.revokeObjectURL(pdfPreview.blobUrl);
+          }
           setPdfPreview({ open: false, blobUrl: null, fileName: "" });
         }}
         blobUrl={pdfPreview.blobUrl}

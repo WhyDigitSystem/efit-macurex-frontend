@@ -11,12 +11,47 @@ const MachineMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     const BRANCH_ID = localStorage.getItem("branchId");
 
     const loadRecords = useCallback(async () => {
+        if (!ORG_ID) return;
         try {
             setLoading(true);
             const response = await machineMasterAPI.getMachineMaster(ORG_ID, BRANCH_ID);
-            const data = response?.paramObjectsMap?.machineMasterList || [];
-            data.sort((a, b) => (b.id || 0) - (a.id || 0));
-            setRecords(data);
+            console.log("API Response:", response);
+
+            // Extract data from response
+            let data = [];
+            if (response?.paramObjectsMap?.machineMasterResponseVO) {
+                data = response.paramObjectsMap.machineMasterResponseVO;
+            } else if (response?.paramObjectsMap?.machineMasterList) {
+                data = response.paramObjectsMap.machineMasterList;
+            } else if (Array.isArray(response)) {
+                data = response;
+            } else if (response?.data?.paramObjectsMap?.machineMasterResponseVO) {
+                data = response.data.paramObjectsMap.machineMasterResponseVO;
+            }
+
+            // Map the data for the table
+            const mappedData = data.map((item) => ({
+                id: item.id,
+                machineInstrumentNo: item.machineInstrumentNo || "",
+                machineInstrumentName: item.machineInstrumentName || "",
+                type: typeof item.type === "object"
+                    ? (item.type?.description || item.type?.code || "")
+                    : item.type || "",
+                department: typeof item.department === "object"
+                    ? (item.department?.departmentName || item.department?.departmentCode || "")
+                    : item.department || "",
+                location: typeof item.location === "object"
+                    ? (item.location?.locationName || "")
+                    : item.location || "",
+                active: item.active ? "Active" : "Inactive",
+                status: item.active ? "Active" : "Inactive",
+                // Store full data for edit
+                _fullData: item,
+            }));
+
+            // Sort by ID descending (newest first)
+            mappedData.sort((a, b) => (b.id || 0) - (a.id || 0));
+            setRecords(mappedData);
         } catch (error) {
             console.error("Failed to load machine master:", error);
             setRecords([]);
@@ -34,47 +69,38 @@ const MachineMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
         {
             key: "machineInstrumentNo",
             label: "Machine/Instrument No",
-            accessor: (row) => row.machineInstrumentNo || row.machineInstrumentNumber,
+            accessor: "machineInstrumentNo",
             type: "text",
             noWrap: true,
         },
         {
             key: "machineInstrumentName",
             label: "Machine/Instrument Name",
-            accessor: (row) => row.machineInstrumentName || row.name,
+            accessor: "machineInstrumentName",
             type: "text",
         },
         {
             key: "type",
             label: "Type",
-            accessor: (row) =>
-                typeof row.type === "object"
-                    ? row.type.valuesDescription || row.type.valueDescription
-                    : row.type,
+            accessor: "type",
             type: "text",
         },
         {
             key: "department",
             label: "Department",
-            accessor: (row) =>
-                typeof row.department === "object"
-                    ? row.department.valuesDescription || row.department.valueDescription
-                    : row.department,
+            accessor: "department",
             type: "text",
         },
         {
             key: "location",
             label: "Location",
-            accessor: (row) =>
-                typeof row.location === "object"
-                    ? row.location.valuesDescription || row.location.valueDescription
-                    : row.location,
+            accessor: "location",
             type: "text",
         },
         {
             key: "status",
             label: "Status",
-            accessor: "active",
+            accessor: "status",
             type: "status",
             statusVariants: {
                 Active: {
@@ -100,9 +126,7 @@ const MachineMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
 
     const searchFields = [
         "machineInstrumentNo",
-        "machineInstrumentNumber",
         "machineInstrumentName",
-        "name",
         "type",
         "department",
         "location",
@@ -113,14 +137,14 @@ const MachineMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
         {
             value: "active",
             label: "Active",
-            field: "active",
+            field: "status",
             filterValue: "Active",
             activeValue: "Active",
         },
         {
             value: "inactive",
             label: "Inactive",
-            field: "active",
+            field: "status",
             filterValue: "Inactive",
             activeValue: "Active",
         },

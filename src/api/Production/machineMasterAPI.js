@@ -2,28 +2,28 @@ import apiClient from "../apiClient";
 
 const machineMasterAPI = {
 
-    // Get all Machine Setting Plans
+    // Get all Machine Masters
     getMachineMaster: async (orgId, branchId) => {
         try {
             const response = await apiClient.get(
-                `/api/machineSettingPlan/getAll?orgId=${orgId}&branch=${branchId}`
+                `/api/develop/getMachineMasterByOrgId?orgId=${orgId}&branch=${branchId}`
             );
             return response;
         } catch (error) {
-            console.error("Error fetching machine setting plans:", error);
+            console.error('Error fetching machine master:', error);
             throw error;
         }
     },
 
-    // Get Machine Setting Plan by ID
+    // Get Machine Master by ID
     getMachineMasterById: async (id) => {
         try {
             const response = await apiClient.get(
-                `/api/machineSettingPlan/getById?id=${id}`
+                `/api/develop/getMachineMasterById?id=${id}`
             );
             return response;
         } catch (error) {
-            console.error("Error fetching machine setting plan:", error);
+            console.error("Error fetching machine master by ID:", error);
             throw error;
         }
     },

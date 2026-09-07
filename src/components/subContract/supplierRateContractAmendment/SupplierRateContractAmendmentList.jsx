@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import PDFPreviewModal from "../../../utils/PDFPreviewModal";
-import supplierRateContractAmendmentAPI from "../../../api/supplierRateContractAmendmentAPI";
 import { generateSupplierRateContractAmendmentPDF } from "../../../utils/generateSupplierRateContractAmendmentPDF";
 import { useToast } from "../../Toast/ToastContext";
+import supplierRateContractAmendmentAPI from "../../../api/SubContract/supplierRateContractAmendmentAPI";
 
 const SupplierRateContractAmendmentList = ({
   onAddNew,
@@ -27,20 +27,52 @@ const SupplierRateContractAmendmentList = ({
     if (!ORG_ID) return;
     try {
       setLoading(true);
-      const data =
-        await supplierRateContractAmendmentAPI.getSupplierRateContractAmendmentByOrgId(
-          ORG_ID,
-          BRANCH_ID,
-        );
-      data.sort((a, b) => (b.id || 0) - (a.id || 0));
-      setRecords(data);
+      const response = await supplierRateContractAmendmentAPI.getSupplierRateContractAmendmentByOrgIdAndBranch(
+        ORG_ID,
+        BRANCH_ID,
+      );
+      console.log("API Response:", response);
+
+      // Extract the array from the response
+      let data = [];
+      if (response?.paramObjectsMap?.supplierRateContractAmendment) {
+        data = response.paramObjectsMap.supplierRateContractAmendment;
+      } else if (Array.isArray(response)) {
+        data = response;
+      } else if (response?.data?.paramObjectsMap?.supplierRateContractAmendment) {
+        data = response.data.paramObjectsMap.supplierRateContractAmendment;
+      }
+
+      // Map the data to match the table columns
+      const mappedData = data.map((item) => ({
+        id: item.id,
+        amendmentNo: item.docId || "",
+        amendmentDate: item.docDate || "",
+        plantName: item.branch?.branchName || "",
+        belongsTo: item.belongsTo || "",
+        partyId: item.customer?.customerId || "",
+        partyName: item.customer?.customerName || "",
+        contractNo: item.contractNo || "",
+        contractDate: item.contractDate || "",
+        newValidFrom: item.newValidFrom || "",
+        newValidTo: item.newValidTo || "",
+        revisionNo: item.revisionNo || "",
+        active: item.active || "Inactive",
+        // Store the full data for PDF generation
+        _fullData: item,
+      }));
+
+      // Sort by ID descending (newest first)
+      mappedData.sort((a, b) => (b.id || 0) - (a.id || 0));
+      setRecords(mappedData);
     } catch (error) {
       console.error("Failed to load supplier rate contract amendments:", error);
+      addToast("Failed to load records", "error");
       setRecords([]);
     } finally {
       setLoading(false);
     }
-  }, [ORG_ID, BRANCH_ID]);
+  }, [ORG_ID, BRANCH_ID, addToast]);
 
   useEffect(() => {
     loadRecords();
@@ -48,14 +80,22 @@ const SupplierRateContractAmendmentList = ({
 
   const handleDownloadPDF = async (row) => {
     try {
-      const fullData =
-        await supplierRateContractAmendmentAPI.getSupplierRateContractAmendmentById(
+      // Use the full data stored in the row, or fetch by ID if needed
+      let fullData = row._fullData;
+
+      if (!fullData) {
+        // Fallback to fetching by ID if full data is not available
+        const response = await supplierRateContractAmendmentAPI.getSupplierRateContractAmendmentById(
           row.id,
         );
+        fullData = response?.paramObjectsMap?.supplierRateContractAmendment || response;
+      }
+
       if (!fullData) {
         addToast("Supplier Rate Contract Amendment data not found", "error");
         return;
       }
+
       const { blobUrl, fileName } =
         await generateSupplierRateContractAmendmentPDF(fullData);
       setPdfPreview({ open: true, blobUrl, fileName });
@@ -219,7 +259,9 @@ const SupplierRateContractAmendmentList = ({
       <PDFPreviewModal
         isOpen={pdfPreview.open}
         onClose={() => {
-          URL.revokeObjectURL(pdfPreview.blobUrl);
+          if (pdfPreview.blobUrl) {
+            URL.revokeObjectURL(pdfPreview.blobUrl);
+          }
           setPdfPreview({ open: false, blobUrl: null, fileName: "" });
         }}
         blobUrl={pdfPreview.blobUrl}

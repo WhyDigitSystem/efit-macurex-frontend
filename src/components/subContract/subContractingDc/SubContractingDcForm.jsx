@@ -1,7 +1,5 @@
 import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import subContractingDcAPI from "../../../api/subContractingDcAPI";
-import jobOrderAPI from "../../../api/jobOrderAPI";
 import supplierRateContractAPI from "../../../api/supplierRateContractAPI";
 import partyMasterAPI from "../../../api/partyMasterAPI";
 import itemAPI from "../../../api/itemAPI";
@@ -10,7 +8,10 @@ import locationMasterAPI from "../../../api/locationMasterAPI";
 import branchAPI from "../../../api/branchAPI";
 import transportAPI from "../../../api/transportAPI";
 import employeeAPI from "../../../api/employeeAPI";
+import { departmentAPI } from "../../../api/departmentAPI";
+import listOfValuesAPI from "../../../api/listOfValuesAPI";
 import { useToast } from "../../Toast/ToastContext";
+import subContractingDCAPI from "../../../api/SubContract/subContractingDCAPI";
 
 /* ---------------------------------------------------------------------------- */
 /* Shared design tokens                                                        */
@@ -209,13 +210,12 @@ const TableHead = ({ headers }) => (
       {headers.map((h, i) => (
         <th
           key={i}
-          className={`p-2 whitespace-nowrap ${
-            i === 0
-              ? "w-8 text-center"
-              : i === headers.length - 1
-                ? "w-20 text-left"
-                : "text-left"
-          } dark:text-white`}
+          className={`p-2 whitespace-nowrap ${i === 0
+            ? "w-8 text-center"
+            : i === headers.length - 1
+              ? "w-20 text-left"
+              : "text-left"
+            } dark:text-white`}
         >
           {h}
         </th>
@@ -233,11 +233,10 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
         type="button"
         onClick={onRemove}
         disabled={disabled}
-        className={`h-6 w-6 rounded text-white flex items-center justify-center ${
-          disabled
-            ? "bg-gray-400 cursor-not-allowed"
-            : "bg-red-600 hover:bg-red-700"
-        }`}
+        className={`h-6 w-6 rounded text-white flex items-center justify-center ${disabled
+          ? "bg-gray-400 cursor-not-allowed"
+          : "bg-red-600 hover:bg-red-700"
+          }`}
       >
         <Trash2 size={12} />
       </button>
@@ -263,7 +262,7 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
               return (
                 <td className="p-2 align-top" key={col.key}>
                   <select
-                    value={row[col.key]}
+                    value={row[col.key] || ""}
                     onChange={(e) => onCellChange(idx, col.key, e.target.value)}
                     className={cellInputClasses}
                   >
@@ -282,7 +281,7 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
               return (
                 <td className="p-2 align-top" key={col.key}>
                   <textarea
-                    value={row[col.key]}
+                    value={row[col.key] || ""}
                     rows={1}
                     readOnly={col.readOnly}
                     onChange={(e) => onCellChange(idx, col.key, e.target.value)}
@@ -298,7 +297,7 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
               <td className="p-2 align-top" key={col.key}>
                 <input
                   type={col.type === "number" ? "number" : "text"}
-                  value={row[col.key]}
+                  value={row[col.key] || ""}
                   readOnly={col.readOnly}
                   onChange={(e) => onCellChange(idx, col.key, e.target.value)}
                   className={
@@ -315,12 +314,8 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
 );
 
 /* ---------------------------------------------------------------------------- */
-/* Options                                                                      */
+/* Constants                                                                    */
 
-const DEPARTMENTS = ["Purchase", "Stores", "Quality", "Production", "Finance"];
-const BELONGS_TO = ["APPLIANCES", "ELECTRICALS", "PACKAGING", "RAW MATERIAL"];
-const JOB_ORDER_FOR = ["Sub Contract", "Job Work", "Rate Contract", "Repair"];
-const DC_TYPES = ["Regular", "Extra", "Rush"];
 const YES_NO = ["YES", "NO"];
 const BOM_IDS = ["BOM-001", "BOM-002", "BOM-003"];
 const APPROVAL_STATUS = ["Pending", "Approved", "Rejected"];
@@ -363,9 +358,6 @@ const nowTimeStr = () => {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 };
 
-const autoScDcNo = () =>
-  `SCDC-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, "0")}${String(new Date().getDate()).padStart(2, "0")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
-
 /* ---------------------------------------------------------------------------- */
 
 const SubContractingDcForm = ({ data, onBack }) => {
@@ -380,27 +372,44 @@ const SubContractingDcForm = ({ data, onBack }) => {
   const [activeChildTab, setActiveChildTab] = useState("outGoingItem");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
+  const [generatingDocId, setGeneratingDocId] = useState(false);
 
   const [plantOptions, setPlantOptions] = useState([]);
   const [vendorOptions, setVendorOptions] = useState([]);
+  const [vendorMap, setVendorMap] = useState({});
   const [jobOrderOptions, setJobOrderOptions] = useState([]);
-  const [contractOptions, setContractOptions] = useState([]);
+  const [jobOrderMap, setJobOrderMap] = useState({});
   const [locationOptions, setLocationOptions] = useState([]);
+  const [partyLocationOptions, setPartyLocationOptions] = useState([]);
   const [itemOptions, setItemOptions] = useState([]);
   const [itemMasterMap, setItemMasterMap] = useState({});
   const [unitOptions, setUnitOptions] = useState([]);
   const [transportOptions, setTransportOptions] = useState([]);
   const [employeeOptions, setEmployeeOptions] = useState([]);
+  const [outgoingItemOptions, setOutgoingItemOptions] = useState([]);
+  const [outgoingItemMap, setOutgoingItemMap] = useState({});
+  const [fromLocationOptions, setFromLocationOptions] = useState([]);
+
+  // New state for LOV and Department
+  const [belongsToOptions, setBelongsToOptions] = useState([]);
+  const [dcTypeOptions, setDcTypeOptions] = useState([]);
+  const [departmentOptions, setDepartmentOptions] = useState([]);
 
   const [header, setHeader] = useState(() => ({
     plantId: data?.plantId || "",
-    scDcNo: data?.scDcNo || (data ? "" : autoScDcNo()),
+    scDcNo: data?.scDcNo || "",
     scDcDate: data?.scDcDate || todayStr(),
     belongsTo: data?.belongsTo || "",
     department: data?.department || "",
     vendorId: data?.vendorId || "",
     vendorName: data?.vendorName || "",
+    vendorAddress: data?.vendorAddress || "",
+    vendorGstNo: data?.vendorGstNo || "",
+    vendorGstState: data?.vendorGstState || "",
+    vendorGstType: data?.vendorGstType || "",
+    vendorCode: data?.vendorCode || "",
     jobOrderNo: data?.jobOrderNo || "",
+    jobOrderDate: data?.jobOrderDate || "",
     partyLocation: data?.partyLocation || "",
     incomingPartNo: data?.incomingPartNo || "",
     partName: data?.partName || "",
@@ -408,9 +417,9 @@ const SubContractingDcForm = ({ data, onBack }) => {
     transportName: data?.transportName || "",
     vehicleNo: data?.vehicleNo || "",
     city: data?.city || "",
-    sfgBomId: data?.sfgBomId || "",
+    sfgBom: data?.sfgBom || "",
     timeOfIssue: data?.timeOfIssue || nowTimeStr(),
-    dcType: data?.dcType || "Regular",
+    dcType: data?.dcType || "",
     approvalByStores: data?.approvalByStores || "",
     preparedBy: data?.preparedBy || "",
     approvedBy: data?.approvedBy || "",
@@ -425,6 +434,43 @@ const SubContractingDcForm = ({ data, onBack }) => {
     ...emptySummary(),
     ...data?.summary,
   });
+
+  /* ---------------- Generate Document ID ---------------- */
+
+  const generateDocId = useCallback(async () => {
+    // Don't generate if editing
+    if (data?.id) return;
+
+    setGeneratingDocId(true);
+    setHeader((prev) => ({ ...prev, scDcNo: "" }));
+
+    try {
+      const financialYear = new Date().getFullYear().toString();
+      const response = await subContractingDCAPI.getDeliveryChallanSubcontractingDocId(
+        financialYear,
+        orgId
+      );
+      console.log("Document ID Response:", response);
+
+      const docId = response?.paramObjectsMap?.docId || "";
+      if (docId) {
+        setHeader((prev) => ({ ...prev, scDcNo: docId }));
+      } else {
+        addToast("Failed to generate Document ID", "error");
+        // Fallback to auto-generated ID
+        const fallbackId = `SCDC-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, "0")}${String(new Date().getDate()).padStart(2, "0")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
+        setHeader((prev) => ({ ...prev, scDcNo: fallbackId }));
+      }
+    } catch (error) {
+      console.error("Error generating document ID:", error);
+      // Fallback to auto-generated ID
+      const fallbackId = `SCDC-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, "0")}${String(new Date().getDate()).padStart(2, "0")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
+      setHeader((prev) => ({ ...prev, scDcNo: fallbackId }));
+      addToast("Failed to generate Document ID, using fallback", "error");
+    } finally {
+      setGeneratingDocId(false);
+    }
+  }, [data, orgId, addToast]);
 
   /* ---------------- Lookup loading ---------------- */
 
@@ -453,53 +499,188 @@ const SubContractingDcForm = ({ data, onBack }) => {
     }
   }, [orgId, isMacurex]);
 
+  // Load Vendors/Customers from the new API
   const loadVendors = useCallback(async () => {
     try {
-      const res = await partyMasterAPI.getPartyByOrgId(orgId, branch);
-      setVendorOptions(
-        (res || []).map((v) => ({
-          value: v.id,
-          label: v.customerName || v.docId || v.id,
-        })),
-      );
+      const res = await subContractingDCAPI.getCustomersForSupplierRateContract(branch, orgId);
+      console.log("Vendor Response:", res);
+
+      const customerList = res?.paramObjectsMap?.customerList || [];
+      const map = {};
+      const options = customerList.map((c) => {
+        map[c.customerId] = {
+          customerId: c.customerId,
+          customerName: c.customerName,
+          customerCode: c.customerCode,
+          address: c.address,
+          gstNo: c.gstNo,
+          gstState: c.gstState,
+          gstType: c.gstType,
+          igstApplicable: c.igstApplicable,
+        };
+        return {
+          value: c.customerId,
+          label: `${c.customerCode} - ${c.customerName}`,
+        };
+      });
+      setVendorOptions(options);
+      setVendorMap(map);
     } catch (error) {
       console.error("Failed to load vendor options:", error);
       setVendorOptions([]);
+      setVendorMap({});
     }
   }, [orgId, branch]);
 
-  const loadJobOrders = useCallback(async () => {
+  // Load Job Orders based on selected Vendor
+  const loadJobOrders = useCallback(async (vendorId) => {
+    if (!vendorId) {
+      setJobOrderOptions([]);
+      setJobOrderMap({});
+      return;
+    }
+
     try {
-      const res = await jobOrderAPI.getJobOrderByOrgId(orgId, branch);
-      setJobOrderOptions(
-        (res || []).map((jo) => ({
+      const res = await subContractingDCAPI.getJobOrderNoAndDateForJobOrderAmd(
+        branch,
+        vendorId,
+        orgId
+      );
+      console.log("Job Order Response:", res);
+
+      const jobOrderList = res?.paramObjectsMap?.jobOrderList || [];
+      const map = {};
+      const options = jobOrderList.map((jo) => {
+        map[jo.jobOrderNo] = {
+          id: jo.id,
+          jobOrderNo: jo.jobOrderNo,
+          jobOrderDate: jo.jobOrderDate,
+        };
+        return {
           value: jo.jobOrderNo,
           label: jo.jobOrderNo,
-        })),
-      );
+        };
+      });
+      setJobOrderOptions(options);
+      setJobOrderMap(map);
     } catch (error) {
       console.error("Failed to load job order options:", error);
       setJobOrderOptions([]);
+      setJobOrderMap({});
     }
   }, [orgId, branch]);
 
-  const loadContracts = useCallback(async () => {
+  // Load Party Location
+  const loadPartyLocations = useCallback(async () => {
     try {
-      const res = await supplierRateContractAPI.getSupplierRateContractByOrgId(
-        orgId,
+      const res = await subContractingDCAPI.getLocationForDeliverChallanSubContract(
         branch,
+        orgId
       );
-      setContractOptions(
-        (res || []).map((c) => ({
-          value: c.contractNo,
-          label: c.contractNo,
-        })),
-      );
+      console.log("Party Location Response:", res);
+
+      const locationList = res?.paramObjectsMap?.locationList || [];
+      const options = locationList.map((loc) => ({
+        value: loc.id,
+        label: loc.locationName || loc.locationId || loc.id,
+      }));
+      setPartyLocationOptions(options);
     } catch (error) {
-      console.error("Failed to load contract options:", error);
-      setContractOptions([]);
+      console.error("Failed to load party locations:", error);
+      setPartyLocationOptions([]);
     }
   }, [orgId, branch]);
+
+  // Load From Location from Location Master
+  const loadFromLocations = useCallback(async () => {
+    try {
+      const res = await locationMasterAPI.getLocationMasterByOrgId(orgId, branch);
+      console.log("From Location Response:", res);
+
+      const options = (res || []).map((loc) => ({
+        value: loc.id,
+        label: loc.locationName || loc.locationId || loc.id,
+      }));
+      setFromLocationOptions(options);
+    } catch (error) {
+      console.error("Failed to load from locations:", error);
+      setFromLocationOptions([]);
+    }
+  }, [orgId, branch]);
+
+  // Load Incoming Part No and Outgoing Item details based on Job Order
+  const loadItemDetails = useCallback(async (jobOrderNo) => {
+    if (!jobOrderNo || !header.vendorId) {
+      setItemOptions([]);
+      setItemMasterMap({});
+      setOutgoingItemOptions([]);
+      setOutgoingItemMap({});
+      return;
+    }
+
+    try {
+      const res = await subContractingDCAPI.getItemDetailsforDeliveryChallanSubContract(
+        branch,
+        jobOrderNo,
+        orgId,
+        header.vendorId
+      );
+      console.log("Item Details Response:", res);
+
+      const itemDetails = res?.paramObjectsMap?.itemDetails || [];
+
+      // Map for Incoming Part No - Store the outgoingItem ID
+      const itemMap = {};
+      const itemOpts = itemDetails.map((item) => {
+        itemMap[item.outgoingItem] = {
+          id: item.id,
+          itemCode: item.itemCode,
+          itemDescription: item.itemDescription,
+          unit: item.unit,
+          unitDescription: item.unitDescription,
+          rate: item.rate,
+          contractNo: item.contractNo,
+          jobOrderFor: item.jobOrderFor,
+          outgoingItem: item.outgoingItem,
+        };
+        return {
+          value: item.outgoingItem, // Use outgoingItem as value
+          label: item.itemCode,
+        };
+      });
+      setItemOptions(itemOpts);
+      setItemMasterMap(itemMap);
+
+      // Map for Outgoing Item Code - Store the outgoingItem ID
+      const outMap = {};
+      const outOpts = itemDetails.map((item) => {
+        outMap[item.outgoingItem] = {
+          id: item.id,
+          itemCode: item.itemCode,
+          itemDescription: item.itemDescription,
+          unit: item.unit,
+          unitDescription: item.unitDescription,
+          rate: item.rate,
+          contractNo: item.contractNo,
+          jobOrderFor: item.jobOrderFor,
+          outgoingItem: item.outgoingItem,
+        };
+        return {
+          value: item.outgoingItem, // Use outgoingItem as value
+          label: item.itemCode,
+        };
+      });
+      setOutgoingItemOptions(outOpts);
+      setOutgoingItemMap(outMap);
+
+    } catch (error) {
+      console.error("Failed to load item details:", error);
+      setItemOptions([]);
+      setItemMasterMap({});
+      setOutgoingItemOptions([]);
+      setOutgoingItemMap({});
+    }
+  }, [orgId, branch, header.vendorId]);
 
   const loadLocations = useCallback(async () => {
     try {
@@ -513,23 +694,6 @@ const SubContractingDcForm = ({ data, onBack }) => {
     } catch (error) {
       console.error("Failed to load location options:", error);
       setLocationOptions([]);
-    }
-  }, [orgId, branch]);
-
-  const loadItems = useCallback(async () => {
-    try {
-      const res = await itemAPI.getItems(orgId, branch);
-      const map = {};
-      const options = (res || []).map((it) => {
-        map[it.itemCode] = it;
-        return { value: it.itemCode, label: it.itemCode };
-      });
-      setItemOptions(options);
-      setItemMasterMap(map);
-    } catch (error) {
-      console.error("Failed to load item options:", error);
-      setItemOptions([]);
-      setItemMasterMap({});
     }
   }, [orgId, branch]);
 
@@ -551,12 +715,14 @@ const SubContractingDcForm = ({ data, onBack }) => {
   const loadTransports = useCallback(async () => {
     try {
       const res = await transportAPI.getTransportByOrgId(branch, orgId);
-      setTransportOptions(
-        (res || []).map((t) => ({
-          value: t.id,
-          label: t.transportName || t.id,
-        })),
-      );
+      console.log("Transport Response:", res);
+
+      const options = (res || []).map((t) => ({
+        value: t.id,
+        label: t.transportName || t.id,
+        transportName: t.transportName || "",
+      }));
+      setTransportOptions(options);
     } catch (error) {
       console.error("Failed to load transport options:", error);
       setTransportOptions([]);
@@ -568,8 +734,8 @@ const SubContractingDcForm = ({ data, onBack }) => {
       const res = await employeeAPI.getEmployeeByOrgId(orgId);
       setEmployeeOptions(
         (res || []).map((e) => ({
-          value: e.employeeName || e.id,
-          label: e.employeeName || e.id,
+          value: e.id,
+          label: e.employeeName || e.name || e.id,
         })),
       );
     } catch (error) {
@@ -578,35 +744,112 @@ const SubContractingDcForm = ({ data, onBack }) => {
     }
   }, [orgId]);
 
+  // Load List of Values for Belongs To
+  const loadBelongsTo = useCallback(async () => {
+    try {
+      const res = await listOfValuesAPI.getListValuesGroup("SDS BELONGS TO", orgId);
+      setBelongsToOptions(
+        (res || []).map((item) => ({
+          value: item.id,
+          label: item.valuesDescription || item.valueDescription || item.id,
+        }))
+      );
+    } catch (error) {
+      console.error("Failed to load Belongs To options:", error);
+      setBelongsToOptions([]);
+    }
+  }, [orgId]);
+
+  // Load List of Values for D.C Type
+  const loadDcTypes = useCallback(async () => {
+    try {
+      const res = await listOfValuesAPI.getListValuesGroup("DC_TYPE", orgId);
+      setDcTypeOptions(
+        (res || []).map((item) => ({
+          value: item.id,
+          label: item.valuesDescription || item.valueDescription || item.id,
+        }))
+      );
+    } catch (error) {
+      console.error("Failed to load D.C Type options:", error);
+      setDcTypeOptions([]);
+    }
+  }, [orgId]);
+
+  // Load Departments from Department API
+  const loadDepartments = useCallback(async () => {
+    try {
+      const res = await departmentAPI.getAllDepartments(orgId);
+      const deptList = res?.paramObjectsMap?.departmentVO || [];
+      setDepartmentOptions(
+        deptList.map((d) => ({
+          value: d.id,
+          label: d.departmentCode || d.departmentName || d.id,
+        }))
+      );
+    } catch (error) {
+      console.error("Failed to load department options:", error);
+      setDepartmentOptions([]);
+    }
+  }, [orgId]);
+
   useEffect(() => {
-    if (orgId) loadPlants();
-  }, [orgId, loadPlants]);
+    if (orgId) {
+      loadPlants();
+      loadBelongsTo();
+      loadDcTypes();
+      loadDepartments();
+      loadVendors();
+      loadPartyLocations();
+      loadFromLocations();
+      loadTransports();
+    }
+  }, [orgId, loadPlants, loadBelongsTo, loadDcTypes, loadDepartments, loadVendors, loadPartyLocations, loadFromLocations, loadTransports]);
+
+  // Load job orders when vendor changes
+  useEffect(() => {
+    if (header.vendorId) {
+      loadJobOrders(header.vendorId);
+    } else {
+      setJobOrderOptions([]);
+      setJobOrderMap({});
+    }
+  }, [header.vendorId, loadJobOrders]);
+
+  // Load item details when job order changes
+  useEffect(() => {
+    if (header.jobOrderNo && header.vendorId) {
+      loadItemDetails(header.jobOrderNo);
+    } else {
+      setItemOptions([]);
+      setItemMasterMap({});
+      setOutgoingItemOptions([]);
+      setOutgoingItemMap({});
+    }
+  }, [header.jobOrderNo, header.vendorId, loadItemDetails]);
 
   useEffect(() => {
     if (orgId && branch) {
-      loadVendors();
-      loadJobOrders();
-      loadContracts();
       loadLocations();
-      loadItems();
       loadUnits();
-      loadTransports();
     }
   }, [
     orgId,
     branch,
-    loadVendors,
-    loadJobOrders,
-    loadContracts,
     loadLocations,
-    loadItems,
     loadUnits,
-    loadTransports,
   ]);
 
   useEffect(() => {
     if (orgId) loadEmployees();
   }, [orgId, loadEmployees]);
+
+  // Generate document ID on mount (only for new records)
+  useEffect(() => {
+    if (!data?.id && orgId) {
+      generateDocId();
+    }
+  }, [data, orgId, generateDocId]);
 
   /* ---------------- Handlers ---------------- */
 
@@ -617,13 +860,48 @@ const SubContractingDcForm = ({ data, onBack }) => {
       const next = { ...prev, [name]: value };
 
       if (name === "vendorId") {
-        const vendor = vendorOptions.find((v) => v.value === value);
-        next.vendorName = vendor?.label || "";
+        const vendor = vendorMap[value];
+        if (vendor) {
+          next.vendorName = vendor.customerName || "";
+          next.vendorAddress = vendor.address || "";
+          next.vendorGstNo = vendor.gstNo || "";
+          next.vendorGstState = vendor.gstState || "";
+          next.vendorGstType = vendor.gstType || "";
+          next.vendorCode = vendor.customerCode || "";
+        } else {
+          next.vendorName = "";
+          next.vendorAddress = "";
+          next.vendorGstNo = "";
+          next.vendorGstState = "";
+          next.vendorGstType = "";
+          next.vendorCode = "";
+        }
+        // Clear job order when vendor changes
+        next.jobOrderNo = "";
+        next.jobOrderDate = "";
+        next.incomingPartNo = "";
+        next.partName = "";
+      }
+
+      if (name === "jobOrderNo") {
+        const jobOrder = jobOrderMap[value];
+        if (jobOrder) {
+          next.jobOrderDate = jobOrder.jobOrderDate || "";
+        } else {
+          next.jobOrderDate = "";
+        }
+        // Clear item details when job order changes
+        next.incomingPartNo = "";
+        next.partName = "";
       }
 
       if (name === "incomingPartNo") {
         const item = itemMasterMap[value];
-        next.partName = item?.itemDescription || "";
+        if (item) {
+          next.partName = item.itemDescription || "";
+        } else {
+          next.partName = "";
+        }
       }
 
       return next;
@@ -642,14 +920,21 @@ const SubContractingDcForm = ({ data, onBack }) => {
         let next = { ...row, [key]: value };
 
         if (key === "outgoingItemCode") {
-          const item = itemMasterMap[value];
-          next = {
-            ...next,
-            outgoingItemDescription: item?.itemDescription || "",
-            availableStock:
-              item?.availableStock ?? item?.stock ?? "",
-            unit: item?.primaryUnits?.id || row.unit || "",
-          };
+          const item = outgoingItemMap[value];
+          if (item) {
+            next = {
+              ...next,
+              outgoingItemDescription: item.itemDescription || "",
+              unit: item.unit || row.unit || "",
+              unitRate: item.rate || row.unitRate || "",
+              contractNo: item.contractNo || row.contractNo || "",
+              jobOrderFor: item.jobOrderFor || row.jobOrderFor || "",
+            };
+          }
+        }
+
+        if (key === "fromLocation") {
+          // You can add logic to fetch stock based on location if needed
         }
 
         if (key === "issueQty" || key === "unitRate") {
@@ -717,50 +1002,88 @@ const SubContractingDcForm = ({ data, onBack }) => {
 
     const isUpdate = Boolean(data?.id);
 
+    // Prepare the payload according to the API schema
     const payload = {
-      ...(isUpdate ? { id: data.id } : {}),
-      orgId,
-      branch,
-      ...header,
-      outgoingItems: outGoingItemRows.filter((r) => r.outgoingItemCode?.trim()),
-      summary,
+      active: true,
+      approvalByStores: header.approvalByStores || "",
+      approvedBy: Number(header.approvedBy) || 0,
+      belongsTo: header.belongsTo || "",
+      branch: Number(header.plantId) || 0,
+      cancelRemarks: "",
       createdBy: isUpdate
-        ? data?.createdBy || localStorage.getItem("usersId")
-        : localStorage.getItem("usersId"),
-      ...(isUpdate ? { updatedBy: localStorage.getItem("usersId") } : {}),
+        ? data?.createdBy || localStorage.getItem("usersId") || "SYSTEM"
+        : localStorage.getItem("usersId") || "SYSTEM",
+      dcType: header.dcType || "",
+      department: Number(header.department) || 0,
+      details: outGoingItemRows
+        .filter((r) => r.outgoingItemCode && r.outgoingItemCode.trim() !== "")
+        .map((r) => ({
+          availableStock: Number(r.availableStock) || 0,
+          contractNo: r.contractNo || "",
+          fromLocation: Number(r.fromLocation) || 0,
+          issueQty: Number(r.issueQty) || 0,
+          jobOrderFor: r.jobOrderFor || "",
+          outgoingItem: Number(r.outgoingItemCode) || 0,
+          remarks: r.remarks || "",
+          stock: Number(r.stock) || 0,
+          unit: Number(r.unit) || 0,
+          unitRate: Number(r.unitRate) || 0,
+        })),
+      financialYear: new Date().getFullYear().toString(),
+      incomingItem: Number(header.incomingPartNo) || 0, // This sends the outgoingItem ID
+      jobOrderNo: header.jobOrderNo || "",
+      orgId: orgId,
+      partyLocation: Number(header.partyLocation) || 0,
+      preparedBy: Number(header.preparedBy) || 0,
+      qty: Number(header.qty) || 0,
+      remarks: header.remarks || "",
+      sfgBom: header.sfgBom || "",
+      timeOfIssue: header.timeOfIssue || nowTimeStr(),
+      transportName: header.transportName || "",
+      vehicleNo: header.vehicleNo || "",
+      vendor: Number(header.vendorId) || 0,
     };
+
+    // Add ID only if updating
+    if (isUpdate) {
+      payload.id = data.id;
+    }
+
+    console.log("Saving Payload:", payload);
 
     try {
       const response =
-        await subContractingDcAPI.createUpdateSubContractingDc(payload);
+        await subContractingDCAPI.createUpdateDeliveryChallanSubcontracting(payload);
+
+      console.log("API Response:", response);
 
       if (response?.status) {
         addToast(
           response?.paramObjectsMap?.message ||
-            (isUpdate
-              ? "Sub Contracting DC updated successfully!"
-              : "Sub Contracting DC created successfully!"),
+          (isUpdate
+            ? "Sub Contracting DC updated successfully!"
+            : "Sub Contracting DC created successfully!"),
+          "success"
         );
         onBack?.();
       } else {
-        addToast(
+        const errorMessage =
           response?.errors?.[0]?.shortMessage ||
-            response?.errors?.[0]?.longMessage ||
-            response?.message ||
-            "Failed to save Sub Contracting DC.",
-        );
+          response?.errors?.[0]?.longMessage ||
+          response?.message ||
+          "Failed to save Sub Contracting DC.";
+        addToast(errorMessage, "error");
       }
     } catch (err) {
       console.error("Save Sub Contracting DC Error:", err);
       if (err.response?.data) {
-        addToast(
-          err.response.data.message ||
-            err.response.data.statusMessage ||
-            err.response.data.error ||
-            JSON.stringify(err.response.data),
-        );
+        const errorMsg = err.response.data.message ||
+          err.response.data.statusMessage ||
+          err.response.data.error ||
+          JSON.stringify(err.response.data);
+        addToast(errorMsg, "error");
       } else {
-        addToast("Something went wrong.");
+        addToast("Something went wrong. Please try again.", "error");
       }
     } finally {
       setIsSubmitting(false);
@@ -768,6 +1091,72 @@ const SubContractingDcForm = ({ data, onBack }) => {
   };
 
   const activeTabMeta = CHILD_TABS.find((t) => t.key === activeChildTab);
+
+  // If data is provided (edit mode), populate the form
+  useEffect(() => {
+    if (data?.id) {
+      // Populate header fields
+      setHeader({
+        plantId: data.plantId || data.branch || "",
+        scDcNo: data.scDcNo || data.docId || "",
+        scDcDate: data.scDcDate || data.docDate || todayStr(),
+        belongsTo: data.belongsTo || "",
+        department: data.department || "",
+        vendorId: data.vendorId || data.vendor || "",
+        vendorName: data.vendorName || "",
+        vendorAddress: data.vendorAddress || "",
+        vendorGstNo: data.vendorGstNo || "",
+        vendorGstState: data.vendorGstState || "",
+        vendorGstType: data.vendorGstType || "",
+        vendorCode: data.vendorCode || "",
+        jobOrderNo: data.jobOrderNo || "",
+        jobOrderDate: data.jobOrderDate || "",
+        partyLocation: data.partyLocation || "",
+        incomingPartNo: data.incomingPartNo || data.incomingItem || "",
+        partName: data.partName || "",
+        qty: data.qty || "",
+        transportName: data.transportName || "",
+        vehicleNo: data.vehicleNo || "",
+        city: data.city || "",
+        sfgBom: data.sfgBom || "",
+        timeOfIssue: data.timeOfIssue || nowTimeStr(),
+        dcType: data.dcType || "",
+        approvalByStores: data.approvalByStores || "",
+        preparedBy: data.preparedBy || "",
+        approvedBy: data.approvedBy || "",
+        remarks: data.remarks || "",
+        active: data.active !== false,
+      });
+
+      // Populate outgoing items
+      if (data.details && data.details.length > 0) {
+        const items = data.details.map((detail) => ({
+          jobOrderFor: detail.jobOrderFor || "",
+          contractNo: detail.contractNo || "",
+          outgoingItemCode: detail.outgoingItem || "",
+          outgoingItemDescription: detail.outgoingItemDescription || "",
+          stock: detail.stock || "",
+          unit: detail.unit || "",
+          fromLocation: detail.fromLocation || "",
+          availableStock: detail.availableStock || "",
+          issueQty: detail.issueQty || "",
+          unitRate: detail.unitRate || "",
+          amount: detail.amount || "",
+          remarks: detail.remarks || "",
+        }));
+        setOutGoingItemRows(items);
+      }
+
+      // Populate summary
+      if (data.summary) {
+        setSummary({
+          summaryNotes: data.summary.summaryNotes || "",
+          approvalStatus: data.summary.approvalStatus || "",
+          additionalComments: data.summary.additionalComments || "",
+        });
+      }
+    }
+  }, [data]);
 
   return (
     <div className="w-full p-2">
@@ -781,7 +1170,7 @@ const SubContractingDcForm = ({ data, onBack }) => {
         </button>
 
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-          {data ? "Edit Sub Contracting DC" : "Add Sub Contracting DC"}
+          {data?.id ? "Edit Sub Contracting DC" : "Add Sub Contracting DC"}
         </h2>
       </div>
 
@@ -802,13 +1191,34 @@ const SubContractingDcForm = ({ data, onBack }) => {
               required
             />
             <Field
+              type="select"
+              label="Belongs To"
+              name="belongsTo"
+              value={header.belongsTo}
+              onChange={handleHeaderChange}
+              error={fieldErrors.belongsTo}
+              options={belongsToOptions}
+              required
+            />
+            <Field
+              type="select"
+              label="Department"
+              name="department"
+              value={header.department}
+              onChange={handleHeaderChange}
+              error={fieldErrors.department}
+              options={departmentOptions}
+              required
+            />
+            <Field
               label="SC DC No"
               name="scDcNo"
               value={header.scDcNo}
               onChange={handleHeaderChange}
               error={fieldErrors.scDcNo}
               required
-              disabled={!data}
+              disabled={!!data?.id || generatingDocId}
+              placeholder={generatingDocId ? "Generating..." : ""}
             />
             <Field
               type="date"
@@ -819,26 +1229,6 @@ const SubContractingDcForm = ({ data, onBack }) => {
               error={fieldErrors.scDcDate}
               required
               disabled
-            />
-            <Field
-              type="select"
-              label="Belongs To"
-              name="belongsTo"
-              value={header.belongsTo}
-              onChange={handleHeaderChange}
-              error={fieldErrors.belongsTo}
-              options={BELONGS_TO}
-              required
-            />
-            <Field
-              type="select"
-              label="Department"
-              name="department"
-              value={header.department}
-              onChange={handleHeaderChange}
-              error={fieldErrors.department}
-              options={DEPARTMENTS}
-              required
             />
             <Field
               type="select"
@@ -876,7 +1266,7 @@ const SubContractingDcForm = ({ data, onBack }) => {
               value={header.partyLocation}
               onChange={handleHeaderChange}
               error={fieldErrors.partyLocation}
-              options={locationOptions}
+              options={partyLocationOptions}
               required
             />
             <Field
@@ -894,13 +1284,7 @@ const SubContractingDcForm = ({ data, onBack }) => {
               name="partName"
               value={header.partName}
               onChange={handleHeaderChange}
-            />
-            <Field
-              type="number"
-              label="Qty"
-              name="qty"
-              value={header.qty}
-              onChange={handleHeaderChange}
+              disabled
             />
             <Field
               type="select"
@@ -911,24 +1295,23 @@ const SubContractingDcForm = ({ data, onBack }) => {
               options={transportOptions}
             />
             <Field
+              type="number"
+              label="Qty"
+              name="qty"
+              value={header.qty}
+              onChange={handleHeaderChange}
+            />
+            <Field
               label="Vehicle No"
               name="vehicleNo"
               value={header.vehicleNo}
               onChange={handleHeaderChange}
             />
             <Field
-              label="City"
-              name="city"
-              value={header.city}
+              label="SFG Bom"
+              name="sfgBom"
+              value={header.sfgBom}
               onChange={handleHeaderChange}
-            />
-            <Field
-              type="select"
-              label="SFG Bom Id"
-              name="sfgBomId"
-              value={header.sfgBomId}
-              onChange={handleHeaderChange}
-              options={BOM_IDS}
             />
             <Field
               label="Time Of Issue"
@@ -944,7 +1327,7 @@ const SubContractingDcForm = ({ data, onBack }) => {
               value={header.dcType}
               onChange={handleHeaderChange}
               error={fieldErrors.dcType}
-              options={DC_TYPES}
+              options={dcTypeOptions}
               required
             />
             <Field
@@ -956,33 +1339,6 @@ const SubContractingDcForm = ({ data, onBack }) => {
               error={fieldErrors.approvalByStores}
               options={YES_NO}
               required
-            />
-            <Field
-              type="select"
-              label="Prepared By"
-              name="preparedBy"
-              value={header.preparedBy}
-              onChange={handleHeaderChange}
-              error={fieldErrors.preparedBy}
-              options={employeeOptions}
-              required
-            />
-            <Field
-              type="select"
-              label="Approved By"
-              name="approvedBy"
-              value={header.approvedBy}
-              onChange={handleHeaderChange}
-              error={fieldErrors.approvedBy}
-              options={employeeOptions}
-              required
-            />
-            <Field
-              type="textarea"
-              label="Remarks"
-              name="remarks"
-              value={header.remarks}
-              onChange={handleHeaderChange}
             />
           </div>
         </div>
@@ -997,11 +1353,10 @@ const SubContractingDcForm = ({ data, onBack }) => {
                   key={tab.key}
                   type="button"
                   onClick={() => setActiveChildTab(tab.key)}
-                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${
-                    activeChildTab === tab.key
-                      ? "bg-blue-600 text-white"
-                      : "text-gray-600 dark:text-gray-300"
-                  }`}
+                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${activeChildTab === tab.key
+                    ? "bg-blue-600 text-white"
+                    : "text-gray-600 dark:text-gray-300"
+                    }`}
                 >
                   {tab.label}
                 </button>
@@ -1025,45 +1380,38 @@ const SubContractingDcForm = ({ data, onBack }) => {
               <DynamicTable
                 columns={[
                   {
-                    key: "jobOrderFor",
-                    label: "Job Order For",
-                    type: "select",
-                    options: JOB_ORDER_FOR,
-                  },
-                  {
-                    key: "contractNo",
-                    label: "Contract No",
-                    type: "select",
-                    options: contractOptions,
-                  },
-                  {
                     key: "outgoingItemCode",
                     label: "Outgoing Item Code",
                     type: "select",
-                    options: itemOptions,
+                    options: outgoingItemOptions,
                   },
                   {
                     key: "outgoingItemDescription",
                     label: "Outgoing Item Description",
                     readOnly: true,
                   },
+                  {
+                    key: "jobOrderFor",
+                    label: "Job Order For",
+                  },
+                  {
+                    key: "contractNo",
+                    label: "Contract No",
+                  },
                   { key: "stock", label: "Stock", type: "number" },
                   {
                     key: "unit",
                     label: "Unit",
-                    type: "select",
-                    options: unitOptions,
                   },
                   {
                     key: "fromLocation",
                     label: "From Location",
                     type: "select",
-                    options: locationOptions,
+                    options: fromLocationOptions,
                   },
                   {
                     key: "availableStock",
                     label: "Available Stock",
-                    readOnly: true,
                   },
                   { key: "issueQty", label: "Issue Qty", type: "number" },
                   { key: "unitRate", label: "Unit Rate", type: "number" },
@@ -1091,26 +1439,31 @@ const SubContractingDcForm = ({ data, onBack }) => {
             <div className="pt-3">
               <div className={subTabFieldGrid}>
                 <Field
-                  type="textarea"
-                  label="Summary Notes"
-                  name="summaryNotes"
-                  value={summary.summaryNotes}
-                  onChange={handleSummaryChange}
+                  type="select"
+                  label="Prepared By"
+                  name="preparedBy"
+                  value={header.preparedBy}
+                  onChange={handleHeaderChange}
+                  error={fieldErrors.preparedBy}
+                  options={employeeOptions}
+                  required
                 />
                 <Field
                   type="select"
-                  label="Approval Status"
-                  name="approvalStatus"
-                  value={summary.approvalStatus}
-                  onChange={handleSummaryChange}
-                  options={APPROVAL_STATUS}
+                  label="Approved By"
+                  name="approvedBy"
+                  value={header.approvedBy}
+                  onChange={handleHeaderChange}
+                  error={fieldErrors.approvedBy}
+                  options={employeeOptions}
+                  required
                 />
                 <Field
                   type="textarea"
-                  label="Additional Comments"
-                  name="additionalComments"
-                  value={summary.additionalComments}
-                  onChange={handleSummaryChange}
+                  label="Remarks"
+                  name="remarks"
+                  value={header.remarks}
+                  onChange={handleHeaderChange}
                 />
               </div>
             </div>
@@ -1121,7 +1474,7 @@ const SubContractingDcForm = ({ data, onBack }) => {
           onCancel={onBack}
           onSave={handleSave}
           isSubmitting={isSubmitting}
-          saveLabel={data ? "Update" : "Save"}
+          saveLabel={data?.id ? "Update" : "Save"}
         />
       </div>
     </div>
