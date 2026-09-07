@@ -366,6 +366,7 @@ const BomMasterForm = ({ data, onBack }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [tableError, setTableError] = useState("");
+  const [showErrors, setShowErrors] = useState(false);
 
   /* ---------------- Lookup options ---------------- */
   const [itemOptions, setItemOptions] = useState([]);
@@ -518,11 +519,10 @@ const BomMasterForm = ({ data, onBack }) => {
         Number(r.qty) > 0,
     );
 
-    if (!validRows)
-      setTableError("Complete all mandatory columns in the Material Details grid");
-    else setTableError("");
 
-    return Object.keys(errors).length === 0 && validRows;
+    const valid = Object.keys(errors).length === 0 && validRows;
+    setShowErrors(!valid);
+    return valid;
   };
 
   /* ---------------- Save ---------------- */
@@ -607,15 +607,17 @@ const BomMasterForm = ({ data, onBack }) => {
     { key: "scrapQty", label: "Scrap Qty", type: "number", step: "0.001" },
   ];
 
-  const rowErrors = materialRows.reduce((acc, row, idx) => {
-    const errs = {};
-    if (!row.itemCode?.trim()) errs.itemCode = true;
-    if (!row.itemType?.trim()) errs.itemType = true;
-    if (!row.uom?.trim()) errs.uom = true;
-    if (row.qty === "" || Number(row.qty) <= 0) errs.qty = true;
-    if (Object.keys(errs).length > 0) acc[idx] = errs;
-    return acc;
-  }, {});
+  const rowErrors = showErrors
+    ? materialRows.reduce((acc, row, idx) => {
+        const errs = {};
+        if (!row.itemCode?.trim()) errs.itemCode = true;
+        if (!row.itemType?.trim()) errs.itemType = true;
+        if (!row.uom?.trim()) errs.uom = true;
+        if (row.qty === "" || Number(row.qty) <= 0) errs.qty = true;
+        if (Object.keys(errs).length > 0) acc[idx] = errs;
+        return acc;
+      }, {})
+    : {};
 
   return (
     <div className="w-full p-2">
@@ -637,7 +639,7 @@ const BomMasterForm = ({ data, onBack }) => {
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
         {/* ---------------- Header Section ---------------- */}
         <div>
-          <SectionHeader>Header</SectionHeader>
+          
           <div className={fieldGrid}>
             <Field
               type="select"
@@ -723,7 +725,7 @@ const BomMasterForm = ({ data, onBack }) => {
             />
           </div>
 
-          <div className="mt-4">
+          <div className="mt-3">
             <Field
               type="textarea"
               label="Specifications"
@@ -731,6 +733,15 @@ const BomMasterForm = ({ data, onBack }) => {
               value={header.specifications}
               onChange={handleHeaderChange}
               placeholder="Enter specifications..."
+            />
+          
+            <Field
+              type="textarea"
+              label="Remarks"
+              name="remarks"
+              value={summary.remarks}
+              onChange={handleSummaryChange}
+              placeholder="Enter remarks / comments..."
             />
           </div>
         </div>
@@ -748,7 +759,7 @@ const BomMasterForm = ({ data, onBack }) => {
             </button>
           </div>
 
-          {tableError && (
+          {showErrors && tableError && (
             <p className="text-[11px] text-red-500 dark:text-red-400 mb-2">
               {tableError}
             </p>
@@ -819,19 +830,6 @@ const BomMasterForm = ({ data, onBack }) => {
               })}
             </tbody>
           </TableWrapper>
-        </div>
-
-        {/* ---------------- Summary Section ---------------- */}
-        <div>
-          <SectionHeader>Summary</SectionHeader>
-          <Field
-            type="textarea"
-            label="Remarks"
-            name="remarks"
-            value={summary.remarks}
-            onChange={handleSummaryChange}
-            placeholder="Enter remarks / comments..."
-          />
         </div>
 
         <FormButtons

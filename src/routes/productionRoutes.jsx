@@ -19,6 +19,7 @@ import ToolsFixturesMaster from "../components/Production/ToolsFixtures/ToolsFix
 import MachineMaster from "../components/Production/MachineMaster/MachineMaster";
 import ReasonMaster from "../components/Production/ReasonMaster/ReasonMaster";
 import ToolCategoryMaster from "../components/Production/ToolCategory/ToolCategoryMaster";
+import ProcessSheetCompRoutingMaster from "../components/Production/ProcessSheetCompRouting/ProcessSheetCompRoutingMaster";
 
 const productionRoutes = [
   {
@@ -125,6 +126,11 @@ const productionRoutes = [
     path: "/toolsfixtureslist",
     label: "Tools & Fixtures List",
     element: <ToolsFixturesMaster />,
+  },
+  {
+    path: "/processsheetcomproutingmaster",
+    label: "Process Sheet comp Routing Master",
+    element: <ProcessSheetCompRoutingMaster />,
   },
 ];
 

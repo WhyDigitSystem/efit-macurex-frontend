@@ -24,6 +24,7 @@ const CommonListViewTable = ({
   searchFields = [],
   filterOptions = [],
   defaultFilter = "all",
+  filterInHeader = false,
 
   // Actions
   onAddNew,
@@ -391,6 +392,26 @@ const CommonListViewTable = ({
     );
   };
 
+  const filterSelect = filterOptions.length > 0 && (
+    <div className="relative w-full sm:w-40 sm:flex-shrink-0">
+      <Filter className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+
+      <select
+        value={statusFilter}
+        onChange={(e) => handleFilterChange(e.target.value)}
+        className="w-full pl-8 pr-8 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none cursor-pointer"
+      >
+        {filterOptions.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+
+      <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
+    </div>
+  );
+
   return (
     <div className="p-3">
       <div className="mb-4 flex items-center justify-between">
@@ -430,15 +451,18 @@ const CommonListViewTable = ({
         </div>
 
         {/* Right */}
-        {onAddNew && (
-          <button
-            onClick={onAddNew}
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all duration-200 hover:bg-blue-700 hover:shadow-md active:scale-95"
-          >
-            <Plus className="h-4 w-4" />
-            Add
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {filterInHeader && filterSelect}
+          {onAddNew && (
+            <button
+              onClick={onAddNew}
+              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all duration-200 hover:bg-blue-700 hover:shadow-md active:scale-95"
+            >
+              <Plus className="h-4 w-4" />
+              Add
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700 overflow-hidden">
@@ -460,25 +484,7 @@ const CommonListViewTable = ({
 
                 <div className="flex items-center gap-2">
                   {/* Filter */}
-                  {filterOptions.length > 0 && (
-                    <div className="relative w-full sm:w-40 sm:flex-shrink-0">
-                      <Filter className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-
-                      <select
-                        value={statusFilter}
-                        onChange={(e) => handleFilterChange(e.target.value)}
-                        className="w-full pl-8 pr-8 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none cursor-pointer"
-                      >
-                        {filterOptions.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-
-                      <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
-                    </div>
-                  )}
+                  {!filterInHeader && filterSelect}
 
                   {/* Custom Actions */}
                   {customHeaderActions && (

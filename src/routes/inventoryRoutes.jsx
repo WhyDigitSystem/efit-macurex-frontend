@@ -7,6 +7,7 @@ import DirectPurchaseMaster from "../components/inventory/DirectPurchase/DirectP
 import StockTransferGRNMaster from "../components/inventory/stockTransferGRN/StockTransferGRNMaster";
 import GoodsReceivedNoteMaster from "../components/inventory/GoodsReceivedNote/GoodsReceivedNoteMaster";
 import QtyShortageReport from "../components/inventory/QtyShortageReport/QtyShortageReport";
+import OpeningStockEntryMaster from "../components/inventory/openingStockEntry/OpeningStockEntryMaster";
 
 const inventoryRoutes = [
   {
@@ -53,6 +54,11 @@ const inventoryRoutes = [
     path: "/reportforqtyshortage",
     label: "Report For Qty Shortage",
     element: <QtyShortageReport />,
+  },
+  {
+    path: "/openstockentrymaster",
+    label: "Open Stock Entry Master",
+    element: <OpeningStockEntryMaster />,
   },
 ];
 
