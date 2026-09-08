@@ -13,7 +13,7 @@ const EngineeringDeviationRequestMaster = () => {
 
   const ORG_ID = localStorage.getItem("orgId");
   const BRANCH_ID = localStorage.getItem("branchId");
-
+  
   const handleAddNew = () => {
     setEditData(null);
     setView("form");

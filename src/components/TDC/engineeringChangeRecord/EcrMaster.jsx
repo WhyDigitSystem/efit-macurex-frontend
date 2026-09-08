@@ -53,7 +53,7 @@ const EcrMaster = () => {
   if (view === "form") {
     return <EcrForm data={editData} onBack={handleBack} />;
   }
-
+ 
   return (
     <EcrList
       onAddNew={handleAddNew}

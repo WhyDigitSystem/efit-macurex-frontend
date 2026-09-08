@@ -159,7 +159,7 @@ const EcrList = ({ onAddNew, onEdit, onBack, refreshTrigger, loadingEdit }) => {
     "bomChange",
     "customerApproval",
   ];
-
+   
   const filterOptions = [
     { value: "all", label: "All", field: null },
     {
