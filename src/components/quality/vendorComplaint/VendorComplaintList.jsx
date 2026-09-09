@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import vendorComplaintAPI from "../../../api/quality/vendorComplaintAPI";
+import itemAPI from "../../../api/itemAPI";
 import { toast } from "../../../utils/toast";
 
 const VendorComplaintList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [supplierMap, setSupplierMap] = useState({});
 
   const ORG_ID = localStorage.getItem("orgId");
   const BRANCH_ID = localStorage.getItem("branchId");
@@ -13,10 +15,7 @@ const VendorComplaintList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   const loadRecords = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await vendorComplaintAPI.getVendorComplaintByOrgId(
-        ORG_ID,
-        BRANCH_ID,
-      );
+      const data = await vendorComplaintAPI.getVendorComplaintByOrgId(ORG_ID);
       data.sort((a, b) => (b.id || 0) - (a.id || 0));
       setRecords(data);
     } catch (error) {
@@ -26,17 +25,35 @@ const VendorComplaintList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     } finally {
       setLoading(false);
     }
+  }, [ORG_ID]);
+
+  const loadSuppliers = useCallback(async () => {
+    try {
+      const res = await itemAPI.getSuppliers(ORG_ID, BRANCH_ID);
+      const map = {};
+      (res || []).forEach((s) => {
+        map[String(s.supplierId)] = s.supplierName;
+      });
+      setSupplierMap(map);
+    } catch (error) {
+      console.error("Failed to load supplier map:", error);
+      setSupplierMap({});
+    }
   }, [ORG_ID, BRANCH_ID]);
 
   useEffect(() => {
     loadRecords();
   }, [loadRecords, refreshTrigger]);
 
+  useEffect(() => {
+    if (ORG_ID) loadSuppliers();
+  }, [ORG_ID, loadSuppliers]);
+
   const columns = [
     {
-      key: "docNo",
-      label: "Doc No",
-      accessor: (row) => row.docNo || "",
+      key: "docId",
+      label: "Doc Id",
+      accessor: (row) => row.docId || "",
       type: "text",
       noWrap: true,
     },
@@ -52,31 +69,33 @@ const VendorComplaintList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
       label: "FG Item",
       accessor: (row) =>
         typeof row.fgItem === "object"
-          ? row.fgItem.itemCode || row.fgItem.itemName || row.fgItem.id
+          ? row.fgItem.itemCode || row.fgItem.itemDescription || row.fgItem.id
           : row.fgItem || "",
       type: "text",
     },
     {
       key: "fgName",
       label: "FG Name",
-      accessor: (row) => row.fgName || "",
+      accessor: (row) =>
+        typeof row.fgItem === "object" ? row.fgItem.itemDescription || "" : "",
       type: "text",
     },
     {
       key: "supplierId",
       label: "Supplier No",
-      accessor: (row) =>
-        typeof row.supplierId === "object"
-          ? row.supplierId.customerCode ||
-            row.supplierId.customerName ||
-            row.supplierId.id
-          : row.supplierNo || row.supplierId,
+      accessor: (row) => row.supplier || "",
       type: "text",
     },
     {
       key: "supplierName",
       label: "Supplier Name",
-      accessor: (row) => row.supplierName || "",
+      accessor: (row) => supplierMap[String(row.supplier)] || "",
+      type: "text",
+    },
+    {
+      key: "remarks",
+      label: "Remarks",
+      accessor: (row) => row.remarks || "",
       type: "text",
     },
     {
@@ -89,12 +108,13 @@ const VendorComplaintList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   ];
 
   const searchFields = [
-    "docNo",
+    "docId",
     "docDate",
     "fgItem",
     "fgName",
     "supplierId",
     "supplierName",
+    "remarks",
   ];
 
   return (

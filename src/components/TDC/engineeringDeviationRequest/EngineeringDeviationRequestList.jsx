@@ -11,19 +11,52 @@ const EngineeringDeviationRequestList = ({
 }) => {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
- 
+
   const ORG_ID = localStorage.getItem("orgId");
   const BRANCH_ID = localStorage.getItem("branchId");
 
   const loadRecords = useCallback(async () => {
+    if (!ORG_ID) return;
     try {
       setLoading(true);
-      const data = await engineeringDeviationRequestAPI.getEdrByOrgId(
+      const response = await engineeringDeviationRequestAPI.getEdrByOrgId(
         ORG_ID,
         BRANCH_ID,
       );
-      data.sort((a, b) => (b.id || 0) - (a.id || 0));
-      setRecords(data);
+      console.log("API Response:", response);
+
+      // Extract data from response
+      let data = [];
+      if (response?.paramObjectsMap?.engineeringDeviationRequestVO) {
+        data = response.paramObjectsMap.engineeringDeviationRequestVO;
+      } else if (Array.isArray(response)) {
+        data = response;
+      } else if (response?.data?.paramObjectsMap?.engineeringDeviationRequestVO) {
+        data = response.data.paramObjectsMap.engineeringDeviationRequestVO;
+      }
+
+      // Map the data to match the table columns
+      const mappedData = data.map((item) => ({
+        id: item.id,
+        requestNo: item.docId || "",
+        date: item.docDate || "",
+        to: item.toDepartment?.departmentName || item.toDepartment || "",
+        deviationRequestedBy: item.requestedBy?.employeeName || item.requestedBy || "",
+        customerId: item.customerId || "",
+        customerName: item.customerId || "",
+        productName: item.productName || "",
+        partDescription: item.partDescription || "",
+        partNoDrawingNo: item.partNo || "",
+        quantityReceived: item.quantityReceived || "",
+        supplier: item.supplier || "",
+        active: item.active ? "Active" : "Inactive",
+        // Store full data for edit
+        _fullData: item,
+      }));
+
+      // Sort by ID descending (newest first)
+      mappedData.sort((a, b) => (b.id || 0) - (a.id || 0));
+      setRecords(mappedData);
     } catch (error) {
       console.error("Failed to load engineering deviation requests:", error);
       setRecords([]);
@@ -41,72 +74,62 @@ const EngineeringDeviationRequestList = ({
     {
       key: "requestNo",
       label: "Request No",
-      accessor: (row) => row.requestNo,
+      accessor: "requestNo",
       type: "text",
       noWrap: true,
     },
     {
       key: "date",
       label: "Date",
-      accessor: (row) => row.date,
+      accessor: "date",
       type: "text",
     },
     {
       key: "to",
       label: "To",
-      accessor: (row) =>
-        typeof row.to === "object"
-          ? row.to.departmentName || row.to.id
-          : row.to,
+      accessor: "to",
       type: "text",
     },
     {
       key: "deviationRequestedBy",
       label: "Deviation Requested By",
-      accessor: (row) =>
-        typeof row.deviationRequestedBy === "object"
-          ? row.deviationRequestedBy.employeeName ||
-            row.deviationRequestedBy.id
-          : row.deviationRequestedBy,
+      accessor: "deviationRequestedBy",
       type: "text",
     },
     {
-      key: "customerId",
+      key: "customerName",
       label: "Customer",
-      accessor: (row) =>
-        typeof row.customerId === "object"
-          ? row.customerId.customerName || row.customerId.id
-          : row.customerName || row.customerId,
+      accessor: "customerName",
       type: "text",
     },
     {
       key: "productName",
       label: "Product Name",
-      accessor: (row) => row.productName,
+      accessor: "productName",
       type: "text",
     },
     {
       key: "partDescription",
       label: "Part Description",
-      accessor: (row) => row.partDescription,
+      accessor: "partDescription",
       type: "text",
     },
     {
       key: "partNoDrawingNo",
       label: "Part No / Drawing No",
-      accessor: (row) => row.partNoDrawingNo,
+      accessor: "partNoDrawingNo",
       type: "text",
     },
     {
       key: "quantityReceived",
       label: "Qty Received",
-      accessor: (row) => row.quantityReceived,
+      accessor: "quantityReceived",
       type: "text",
     },
     {
       key: "supplier",
       label: "Supplier",
-      accessor: (row) => row.supplier,
+      accessor: "supplier",
       type: "text",
     },
     {
@@ -140,11 +163,7 @@ const EngineeringDeviationRequestList = ({
     "requestNo",
     "date",
     "to",
-    "to.departmentName",
     "deviationRequestedBy",
-    "deviationRequestedBy.employeeName",
-    "customerId",
-    "customerId.customerName",
     "customerName",
     "productName",
     "partDescription",
@@ -159,14 +178,14 @@ const EngineeringDeviationRequestList = ({
       value: "active",
       label: "Active",
       field: "active",
-      filterValue: "active",
+      filterValue: "Active",
       activeValue: "Active",
     },
     {
       value: "inactive",
       label: "Inactive",
       field: "active",
-      filterValue: "inactive",
+      filterValue: "Inactive",
       activeValue: "Active",
     },
   ];

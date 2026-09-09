@@ -1,32 +1,56 @@
-// engineeringDeviationRequestAPI.js
 import apiClient from "../apiClient";
- 
-/* Engineering Deviation Request/Note API
-   Mirrors the commonmaster/dev API convention used across this app.
-   The backend persists the header, request-of-deviation, review,
-   approvals, customer intimation/feedback and PDF attachments in a
-   single transaction and keeps the complete deviation history with
-   approval tracking (server-side validation). */
+
 const engineeringDeviationRequestAPI = {
   // Get Engineering Deviation Requests by Organization ID
   getEdrByOrgId: async (orgId, branch) => {
     try {
       const res = await apiClient.get(
-        `/api/dev/getEngineeringDeviationRequestByOrgId?branch=${branch}&orgId=${orgId}`,
+        `/api/toolmaster/getEngineeringDeviationByOrgId?orgId=${orgId}`
       );
-      return res?.paramObjectsMap?.engineeringDeviationRequestEntryVO || [];
+      return res;
     } catch (error) {
       console.error("Error fetching engineering deviation requests:", error);
       throw error;
     }
   },
 
-  // Create / Update Engineering Deviation Request
-  createUpdateEdr: async (payload) => {
+  // Get Engineering Deviation by ID
+  getEngineeringDeviationById: async (id) => {
     try {
-      const res = await apiClient.put(
-        "/api/dev/updateCreateEngineeringDeviationRequest",
-        payload,
+      const res = await apiClient.get(
+        `/api/toolmaster/getEngineeringDeviationById?id=${id}`
+      );
+      return res;
+    } catch (error) {
+      console.error("Error fetching engineering deviation by ID:", error);
+      throw error;
+    }
+  },
+
+  // Get Engineering Deviation Document ID
+  getEngineeringDeviationDocId: async (financialYear, orgId) => {
+    try {
+      const res = await apiClient.get(
+        `/api/toolmaster/getEngineeringDeviationDocId?financialYear=${financialYear}&orgId=${orgId}`
+      );
+      return res;
+    } catch (error) {
+      console.error("Error fetching engineering deviation docId:", error);
+      throw error;
+    }
+  },
+
+  // Create / Update Engineering Deviation Request with multipart/form-data
+  createUpdateEdr: async (formData) => {
+    try {
+      const res = await apiClient.post(
+        "/api/toolmaster/updateCreateEngineeringDeviation",
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        }
       );
       return res;
     } catch (error) {

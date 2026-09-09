@@ -13,7 +13,7 @@ import engineeringDeviationRequestAPI from "../../../api/TDC/engineeringDeviatio
 import { departmentAPI } from "../../../api/departmentAPI";
 import { employeeAPI } from "../../../api/employeeAPI";
 import partyMasterAPI from "../../../api/partyMasterAPI";
- 
+
 /* ---------------------------------------------------------------------------- */
 /* Shared design tokens                                                        */
 
@@ -201,13 +201,12 @@ const TableHead = ({ headers }) => (
       {headers.map((h, i) => (
         <th
           key={i}
-          className={`p-2 whitespace-nowrap ${
-            i === 0
-              ? "w-8 text-center"
-              : i === headers.length - 1
-                ? "w-20 text-left"
-                : "text-left"
-          } dark:text-white`}
+          className={`p-2 whitespace-nowrap ${i === 0
+            ? "w-8 text-center"
+            : i === headers.length - 1
+              ? "w-20 text-left"
+              : "text-left"
+            } dark:text-white`}
         >
           {h}
         </th>
@@ -225,11 +224,10 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
         type="button"
         onClick={onRemove}
         disabled={disabled}
-        className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-          disabled
-            ? "bg-gray-400 cursor-not-allowed"
-            : "bg-red-600 hover:bg-red-700"
-        }`}
+        className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
+          ? "bg-gray-400 cursor-not-allowed"
+          : "bg-red-600 hover:bg-red-700"
+          }`}
       >
         <Trash2 size={10} />
       </button>
@@ -261,13 +259,12 @@ const UploadCell = ({ file, onFileChange, error }) => {
           if (f) onFileChange(f);
         }}
         onClick={() => inputRef.current?.click()}
-        className={`flex items-center gap-2 rounded-md border-2 border-dashed px-3 py-2 cursor-pointer transition-colors ${
-          dragOver
-            ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
-            : error
-              ? "border-red-500"
-              : "border-gray-300 dark:border-gray-600 hover:border-blue-400"
-        }`}
+        className={`flex items-center gap-2 rounded-md border-2 border-dashed px-3 py-2 cursor-pointer transition-colors ${dragOver
+          ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
+          : error
+            ? "border-red-500"
+            : "border-gray-300 dark:border-gray-600 hover:border-blue-400"
+          }`}
       >
         <UploadCloud className="h-3.5 w-3.5 text-gray-400 dark:text-gray-500 shrink-0" />
         <span className="text-[11px] text-gray-500 dark:text-gray-400 truncate">
@@ -302,15 +299,10 @@ const YES_NO = ["Yes", "No"];
 const NATURE_OF_DEVIATION = [
   "Minor",
   "Major",
-  "Critical",
-  "Process Deviation",
-  "Supplier Deviation",
 ];
 const DISPOSITIONS = [
-  "Approved",
-  "Approved with Condition",
-  "Not Approved",
-  "Pending",
+  "APPROVED",
+  "DISAPPROVED",
 ];
 
 const CHILD_TABS = [
@@ -331,9 +323,6 @@ const emptyPdfRow = () => ({
 
 const fmtDate = (value) => (value ? dayjs(value).format("YYYY-MM-DD") : "");
 
-const generateRequestNo = () =>
-  `EDR-${dayjs().format("YYYYMMDD")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
-
 /* ---------------------------------------------------------------------------- */
 
 const EngineeringDeviationRequestForm = ({ data, onBack }) => {
@@ -345,25 +334,26 @@ const EngineeringDeviationRequestForm = ({ data, onBack }) => {
   const [activeChildTab, setActiveChildTab] = useState("requestOfDeviation");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
+  const [generatingDocId, setGeneratingDocId] = useState(false);
+  const docIdGeneratedRef = useRef(false);
 
   const [departmentOptions, setDepartmentOptions] = useState([]);
   const [employeeOptions, setEmployeeOptions] = useState([]);
   const [customerOptions, setCustomerOptions] = useState([]);
 
+  // Initialize header with data from props (mapped data from master)
   const [header, setHeader] = useState(() => {
     const base = {
       date: data?.date || dayjs().format("YYYY-MM-DD"),
-      requestNo: data?.requestNo || (data ? "" : generateRequestNo()),
-      to: data?.to?.id ?? data?.to ?? "",
-      deviationRequestedBy:
-        data?.deviationRequestedBy?.id ?? data?.deviationRequestedBy ?? "",
+      requestNo: data?.requestNo || "",
+      to: data?.to || "",
+      deviationRequestedBy: data?.deviationRequestedBy || "",
       partDescription: data?.partDescription || "",
-      customerId: data?.customerId?.id ?? data?.customerId ?? "",
+      customerId: data?.customerId || "",
       productName: data?.productName || "",
-      quantityReceived: data?.quantityReceived ?? "",
+      quantityReceived: data?.quantityReceived || "",
       supplier: data?.supplier || "",
-      deviationApprovedBy:
-        data?.deviationApprovedBy?.id ?? data?.deviationApprovedBy ?? "",
+      deviationApprovedBy: data?.deviationApprovedBy || "",
       partNoDrawingNo: data?.partNoDrawingNo || "",
       invoiceNo: data?.invoiceNo || "",
       active: data?.active !== false,
@@ -372,48 +362,43 @@ const EngineeringDeviationRequestForm = ({ data, onBack }) => {
     return base;
   });
 
+  // Initialize requestOfDeviation with data from props
   const [requestOfDeviation, setRequestOfDeviation] = useState({
     descriptionOfNc: data?.requestOfDeviation?.descriptionOfNc || "",
-    reasonForDeviationRequest:
-      data?.requestOfDeviation?.reasonForDeviationRequest || "",
+    reasonForDeviationRequest: data?.requestOfDeviation?.reasonForDeviationRequest || "",
     actionOnNc: data?.requestOfDeviation?.actionOnNc || "",
-    deviationPeriodFrom:
-      fmtDate(data?.requestOfDeviation?.deviationPeriodFrom) || "",
-    deviationPeriodTo: fmtDate(data?.requestOfDeviation?.deviationPeriodTo) || "",
-    responsibleForName:
-      data?.requestOfDeviation?.responsibleForName?.id ??
-      data?.requestOfDeviation?.responsibleForName ??
-      "",
-    department:
-      data?.requestOfDeviation?.department?.id ??
-      data?.requestOfDeviation?.department ??
-      "",
+    deviationPeriodFrom: data?.requestOfDeviation?.deviationPeriodFrom || "",
+    deviationPeriodTo: data?.requestOfDeviation?.deviationPeriodTo || "",
+    responsibleForName: data?.requestOfDeviation?.responsibleForName || "",
+    department: data?.requestOfDeviation?.department || "",
   });
 
+  // Initialize reviewOfDeviation with data from props
   const [reviewOfDeviation, setReviewOfDeviation] = useState({
     affectFit: data?.reviewOfDeviation?.affectFit || "",
     affectForm: data?.reviewOfDeviation?.affectForm || "",
     affectFunction: data?.reviewOfDeviation?.affectFunction || "",
     affectSafety: data?.reviewOfDeviation?.affectSafety || "",
-    natureOfDeviationRequest:
-      data?.reviewOfDeviation?.natureOfDeviationRequest || "",
+    natureOfDeviationRequest: data?.reviewOfDeviation?.natureOfDeviationRequest || "",
     intimatedToCustomer: data?.reviewOfDeviation?.intimatedToCustomer || "",
     note: data?.reviewOfDeviation?.note || "",
   });
 
+  // Initialize approvals with data from props
   const [approvals, setApprovals] = useState({
-    productionManager: data?.approvals?.productionManager?.id ?? data?.approvals?.productionManager ?? "",
+    productionManager: data?.approvals?.productionManager || "",
     productionDisposition: data?.approvals?.productionDisposition || "",
-    qualityManager: data?.approvals?.qualityManager?.id ?? data?.approvals?.qualityManager ?? "",
+    qualityManager: data?.approvals?.qualityManager || "",
     qualityDisposition: data?.approvals?.qualityDisposition || "",
-    tdcManager: data?.approvals?.tdcManager?.id ?? data?.approvals?.tdcManager ?? "",
+    tdcManager: data?.approvals?.tdcManager || "",
     tdcDisposition: data?.approvals?.tdcDisposition || "",
-    directorTechnical: data?.approvals?.directorTechnical?.id ?? data?.approvals?.directorTechnical ?? "",
+    directorTechnical: data?.approvals?.directorTechnical || "",
     directorTechnicalDisposition: data?.approvals?.directorTechnicalDisposition || "",
-    purchaseManager: data?.approvals?.purchaseManager?.id ?? data?.approvals?.purchaseManager ?? "",
+    purchaseManager: data?.approvals?.purchaseManager || "",
     purchaseDisposition: data?.approvals?.purchaseDisposition || "",
   });
 
+  // Initialize customerIntimation with data from props
   const [customerIntimation, setCustomerIntimation] = useState({
     intimationModeRef: data?.customerIntimation?.intimationModeRef || "",
     customerFeedback: data?.customerIntimation?.customerFeedback || "",
@@ -421,13 +406,63 @@ const EngineeringDeviationRequestForm = ({ data, onBack }) => {
     decision: data?.customerIntimation?.decision || "",
   });
 
-  const [pdfRows, setPdfRows] = useState(
-    data?.pdfAttachments?.length
-      ? data.pdfAttachments.map((p) => ({
-          referenceAttachFile: p.fileName || p.referenceAttachFile || null,
-        }))
-      : [emptyPdfRow()],
-  );
+  // Initialize pdfRows with data from props
+  const [pdfRows, setPdfRows] = useState(() => {
+    if (data?.pdfAttachments?.length) {
+      return data.pdfAttachments.map((p) => ({
+        referenceAttachFile: p.referenceAttachFile || null,
+      }));
+    }
+    return [emptyPdfRow()];
+  });
+
+  /* ---------------- Generate Document ID ---------------- */
+
+  const generateDocId = useCallback(async () => {
+    // Don't generate if editing or already generated
+    if (data?.id || docIdGeneratedRef.current || generatingDocId) {
+      return;
+    }
+
+    setGeneratingDocId(true);
+
+    try {
+      const financialYear = new Date().getFullYear().toString();
+      const response = await engineeringDeviationRequestAPI.getEngineeringDeviationDocId(
+        financialYear,
+        orgId
+      );
+      console.log("Document ID Response:", response);
+
+      const docId = response?.paramObjectsMap?.docId || "";
+      if (docId) {
+        setHeader((prev) => ({ ...prev, requestNo: docId }));
+        docIdGeneratedRef.current = true;
+      } else {
+        addToast("Failed to generate Document ID", "error");
+        // Fallback to auto-generated ID
+        const fallbackId = `EDR-${dayjs().format("YYYYMMDD")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
+        setHeader((prev) => ({ ...prev, requestNo: fallbackId }));
+        docIdGeneratedRef.current = true;
+      }
+    } catch (error) {
+      console.error("Error generating document ID:", error);
+
+      // Handle 401 error specifically
+      if (error.response?.status === 401) {
+        addToast("Authentication failed. Please login again.", "error");
+      } else {
+        addToast("Failed to generate Document ID", "error");
+      }
+
+      // Fallback to auto-generated ID
+      const fallbackId = `EDR-${dayjs().format("YYYYMMDD")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
+      setHeader((prev) => ({ ...prev, requestNo: fallbackId }));
+      docIdGeneratedRef.current = true;
+    } finally {
+      setGeneratingDocId(false);
+    }
+  }, [data, orgId, addToast, generatingDocId]);
 
   /* ---------------- Lookup loading ---------------- */
 
@@ -446,7 +481,7 @@ const EngineeringDeviationRequestForm = ({ data, onBack }) => {
       console.error("Failed to load department options:", error);
       setDepartmentOptions(["Design", "Purchase", "Stores", "Quality", "Production"]);
     }
-  }, [orgId, branch]);
+  }, [orgId]);
 
   const loadEmployees = useCallback(async () => {
     try {
@@ -485,6 +520,14 @@ const EngineeringDeviationRequestForm = ({ data, onBack }) => {
       loadCustomers();
     }
   }, [orgId, branch, loadDepartments, loadEmployees, loadCustomers]);
+
+  // Generate document ID on mount (only for new records and only once)
+  useEffect(() => {
+    if (!data?.id && orgId && !docIdGeneratedRef.current && !generatingDocId) {
+      generateDocId();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /* ---------------- Handlers ---------------- */
 
@@ -553,10 +596,10 @@ const EngineeringDeviationRequestForm = ({ data, onBack }) => {
       errors.department = "Department is required";
 
     if (requestOfDeviation.deviationPeriodFrom &&
-        requestOfDeviation.deviationPeriodTo &&
-        dayjs(requestOfDeviation.deviationPeriodTo).isBefore(
-          dayjs(requestOfDeviation.deviationPeriodFrom),
-        )) {
+      requestOfDeviation.deviationPeriodTo &&
+      dayjs(requestOfDeviation.deviationPeriodTo).isBefore(
+        dayjs(requestOfDeviation.deviationPeriodFrom),
+      )) {
       errors.deviationPeriod =
         "Deviation Period 'To' must be on or after 'From'";
     }
@@ -579,63 +622,111 @@ const EngineeringDeviationRequestForm = ({ data, onBack }) => {
     setIsSubmitting(true);
 
     const isUpdate = Boolean(data?.id);
+    const financialYear = localStorage.getItem("finYear") || String(new Date().getFullYear());
 
-    // Single-transaction payload: header + request/review/approvals/
-    // customer feedback + PDF attachments. The backend keeps the complete
-    // deviation history with approval tracking (server-side validation).
+    // Build the payload matching the backend schema
     const payload = {
-      ...(isUpdate ? { id: data.id } : {}),
-      orgId,
-      branch,
-      ...header,
-      requestOfDeviation,
-      reviewOfDeviation,
-      approvals,
-      customerIntimation,
-      pdfAttachments: pdfRows
-        .filter((r) => r.referenceAttachFile)
-        .map((r) => ({
-          fileName:
-            r.referenceAttachFile instanceof File
-              ? r.referenceAttachFile.name
-              : r.referenceAttachFile,
-        })),
-      createdBy: isUpdate ? data?.createdBy || usersId : usersId,
-      ...(isUpdate ? { updatedBy: usersId } : {}),
+      actionOnNC: requestOfDeviation.actionOnNc || "",
+      active: true,
+      createdBy: usersId || "SYSTEM",
+      customerFeedBack: customerIntimation.customerFeedback || "",
+      customerFeedBackModeAndReference: customerIntimation.feedbackModeRef || "",
+      customerId: header.customerId || "",
+      customerIntimationModeAndReference: customerIntimation.intimationModeRef || "",
+      decision: customerIntimation.decision || "",
+      department: Number(requestOfDeviation.department) || 0,
+      descriptionOfNC: requestOfDeviation.descriptionOfNc || "",
+      deviationPeriod: requestOfDeviation.deviationPeriodFrom && requestOfDeviation.deviationPeriodTo
+        ? `${requestOfDeviation.deviationPeriodFrom} to ${requestOfDeviation.deviationPeriodTo}`
+        : "",
+      deviationRequestedBy: Number(header.deviationRequestedBy) || 0,
+      deviationRequistApprovedBy: Number(header.deviationApprovedBy) || 0,
+      directorTechnical: Number(approvals.directorTechnical) || 0,
+      directorTechnicalDisposition: approvals.directorTechnicalDisposition || "",
+      docDate: header.date || dayjs().format("YYYY-MM-DD"),
+      docId: header.requestNo || "",
+      financialYear: financialYear,
+      invoiceNo: header.invoiceNo || "",
+      natureOfTheDeviationRequest: reviewOfDeviation.natureOfDeviationRequest || "",
+      note: reviewOfDeviation.note || "",
+      orgId: orgId,
+      partDescription: header.partDescription || "",
+      partNo: header.partNoDrawingNo || "",
+      productName: header.productName || "",
+      productionMgr: Number(approvals.productionManager) || 0,
+      productionMgrDisposition: approvals.productionDisposition || "",
+      purMgr: Number(approvals.purchaseManager) || 0,
+      purMgrDisposition: approvals.purchaseDisposition || "",
+      qualityMgr: Number(approvals.qualityManager) || 0,
+      qualityMgrDisposition: approvals.qualityDisposition || "",
+      quantityReceived: Number(header.quantityReceived) || 0,
+      reasonForDeviationRequest: requestOfDeviation.reasonForDeviationRequest || "",
+      responsibleForName: Number(requestOfDeviation.responsibleForName) || 0,
+      supplier: header.supplier || "",
+      tdcMgrDisposition: approvals.tdcDisposition || "",
+      tdcmgr: Number(approvals.tdcManager) || 0,
+      toBeIntimatedToCustomerAndActionOnCustomerFeedBack: reviewOfDeviation.intimatedToCustomer || "",
+      toDepartment: Number(header.to) || 0,
+      willTheNCAffectTheFit: reviewOfDeviation.affectFit || "",
+      willTheNCAffectTheForm: reviewOfDeviation.affectForm || "",
+      willTheNCAffectTheFunction: reviewOfDeviation.affectFunction || "",
+      willTheNCAffectTheSafety: reviewOfDeviation.affectSafety || "",
     };
 
+    // Add id if updating
+    if (isUpdate && data.id) {
+      payload.id = data.id;
+    }
+
+    // Create FormData for multipart upload
+    const formData = new FormData();
+
+    // Append the payload as JSON blob
+    const payloadJSON = JSON.stringify(payload);
+    const payloadBlob = new Blob([payloadJSON], { type: "application/json" });
+    formData.append("engineeringDeviationRequestDTO", payloadBlob);
+
+    // Append files
+    pdfRows
+      .filter((r) => r.referenceAttachFile instanceof File)
+      .forEach((r) => {
+        formData.append("files", r.referenceAttachFile);
+      });
+
     try {
-      const response =
-        await engineeringDeviationRequestAPI.createUpdateEdr(payload);
+      const response = await engineeringDeviationRequestAPI.createUpdateEdr(formData);
+
+      console.log("Save Response:", response);
 
       if (response?.status) {
         addToast(
           response?.paramObjectsMap?.message ||
-            (isUpdate
-              ? "Engineering Deviation Request updated successfully!"
-              : "Engineering Deviation Request created successfully!"),
+          (isUpdate
+            ? "Engineering Deviation Request updated successfully!"
+            : "Engineering Deviation Request created successfully!"),
+          "success"
         );
         onBack?.();
       } else {
-        addToast(
+        const errorMessage =
           response?.errors?.[0]?.shortMessage ||
-            response?.errors?.[0]?.longMessage ||
-            response?.message ||
-            response?.paramObjectsMap?.message ||
-            "Failed to save Engineering Deviation Request.",
-        );
+          response?.errors?.[0]?.longMessage ||
+          response?.message ||
+          response?.paramObjectsMap?.message ||
+          "Failed to save Engineering Deviation Request.";
+        addToast(errorMessage, "error");
       }
     } catch (err) {
       console.error("Save Engineering Deviation Request Error:", err);
       if (err.response?.data) {
-        addToast(
+        const errorMsg =
           err.response.data.message ||
-            err.response.data.statusMessage ||
-            err.response.data.error ||
-            JSON.stringify(err.response.data),
-        );
+          err.response.data.statusMessage ||
+          err.response.data.error ||
+          JSON.stringify(err.response.data);
+        addToast(errorMsg, "error");
       } else {
-        addToast("Something went wrong.");
+        addToast("Something went wrong.", "error");
       }
     } finally {
       setIsSubmitting(false);
@@ -656,7 +747,7 @@ const EngineeringDeviationRequestForm = ({ data, onBack }) => {
         </button>
 
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-          {data
+          {data?.id
             ? "Edit Engineering Deviation Request/Note"
             : "Add Engineering Deviation Request/Note"}
         </h2>
@@ -685,7 +776,8 @@ const EngineeringDeviationRequestForm = ({ data, onBack }) => {
               onChange={handleHeaderChange}
               error={fieldErrors.requestNo}
               required
-              disabled={!data}
+              disabled={!!data?.id || generatingDocId}
+              placeholder={generatingDocId ? "Generating..." : ""}
             />
             <Field
               type="select"
@@ -714,13 +806,11 @@ const EngineeringDeviationRequestForm = ({ data, onBack }) => {
               onChange={handleHeaderChange}
             />
             <Field
-              type="select"
               label="Customer ID"
               name="customerId"
               value={header.customerId}
               onChange={handleHeaderChange}
               error={fieldErrors.customerId}
-              options={customerOptions}
               required
             />
             <Field
@@ -777,11 +867,10 @@ const EngineeringDeviationRequestForm = ({ data, onBack }) => {
                   key={tab.key}
                   type="button"
                   onClick={() => setActiveChildTab(tab.key)}
-                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${
-                    activeChildTab === tab.key
-                      ? "bg-blue-600 text-white"
-                      : "text-gray-600 dark:text-gray-300"
-                  }`}
+                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${activeChildTab === tab.key
+                    ? "bg-blue-600 text-white"
+                    : "text-gray-600 dark:text-gray-300"
+                    }`}
                 >
                   {tab.label}
                 </button>
@@ -1093,7 +1182,7 @@ const EngineeringDeviationRequestForm = ({ data, onBack }) => {
           onCancel={onBack}
           onSave={handleSave}
           isSubmitting={isSubmitting}
-          saveLabel={data ? "Update" : "Save"}
+          saveLabel={data?.id ? "Update" : "Save"}
         />
       </div>
     </div>

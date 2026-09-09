@@ -3,7 +3,6 @@ import { useCallback, useEffect, useState } from "react";
 import dayjs from "dayjs";
 import { useToast } from "../../Toast/ToastContext";
 import vendorComplaintAPI from "../../../api/quality/vendorComplaintAPI";
-import partyMasterAPI from "../../../api/partyMasterAPI";
 import itemAPI from "../../../api/itemAPI";
 
 /* ---------------------------------------------------------------------------- */
@@ -308,9 +307,6 @@ const CHILD_TABS = [
 
 const fmtDate = (value) => (value ? dayjs(value).format("YYYY-MM-DD") : "");
 
-const generateDocNo = () =>
-  `VC-${dayjs().format("YYYYMMDD")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
-
 /* ---------------------------------------------------------------------------- */
 /* Vendor Complaint Form                                                         */
 
@@ -328,26 +324,31 @@ const VendorComplaintForm = ({ data, onBack }) => {
   const [header, setHeader] = useState(() => {
     const base = {
       fgItem: data?.fgItem?.id ?? data?.fgItem ?? "",
-      docNo: data?.docNo || "",
-      fgName: data?.fgName || "",
+      docNo: data?.docId ?? data?.docNo ?? "",
+      fgName: data?.fgItem?.itemDescription ?? data?.fgName ?? "",
       docDate: data?.docDate ? fmtDate(data.docDate) : fmtDate(dayjs()),
-      supplierId: data?.supplierId?.id ?? data?.supplierId ?? "",
+      supplierId: data?.supplier ?? data?.supplierId ?? "",
       supplierName: data?.supplierName || "",
     };
-    if (!base.docNo) base.docNo = generateDocNo();
     return base;
   });
 
   const [detailRows, setDetailRows] = useState(() => {
-    const raw = data?.complaintDetails?.length
-      ? data.complaintDetails
-      : data?.details?.length
-        ? data.details
-        : [];
+    const raw = data?.vendorComplaintDetailsResponseDTO?.length
+      ? data.vendorComplaintDetailsResponseDTO
+      : data?.complaintDetails?.length
+        ? data.complaintDetails
+        : data?.details?.length
+          ? data.details
+          : [];
     if (raw.length) {
       return raw.map((item) => ({
-        partNo: item.partNo?.id ?? item.partNo ?? "",
-        partName: item.partName || "",
+        partNo: item.item?.id ?? item.partNo?.id ?? item.item ?? "",
+        partName:
+          item.item?.itemDescription ??
+          item.item?.itemCode ??
+          item.partName ??
+          "",
         qty: item.qty ?? "",
         reason: item.reason || "",
       }));
@@ -361,47 +362,120 @@ const VendorComplaintForm = ({ data, onBack }) => {
 
   /* ---------- Lookup loading ---------- */
 
-  const [itemOptions, setItemOptions] = useState([]);
+  const [fgOptions, setFgOptions] = useState([]);
   const [supplierOptions, setSupplierOptions] = useState([]);
+  const [partOptions, setPartOptions] = useState([]);
 
-  const loadItems = useCallback(async () => {
+  const loadFgItems = useCallback(async () => {
     try {
-      const res = await itemAPI.getItems(orgId, branch);
-      setItemOptions(
+      const res = await vendorComplaintAPI.getFgItemDropdown(branch, orgId);
+      setFgOptions(
         (res || []).map((it) => ({
           value: it.id,
-          label: it.itemCode || it.id,
-          itemDescription: it.itemDescription || it.itemName || "",
+          label: it.name || it.itemCode || it.id,
         })),
       );
     } catch (error) {
-      console.error("Failed to load item options:", error);
-      setItemOptions([]);
+      console.error("Failed to load FG item options:", error);
+      setFgOptions([]);
     }
-  }, [orgId, branch]);
+  }, [branch, orgId]);
 
   const loadSuppliers = useCallback(async () => {
     try {
-      const res = await partyMasterAPI.getPartyByOrgId(orgId, branch);
-      setSupplierOptions(
-        (res || []).map((c) => ({
-          value: c.id,
-          label: c.customerCode || c.docId || c.id,
-          supplierName: c.customerName || "",
-        })),
-      );
+      const res = await itemAPI.getSuppliers(orgId, branch);
+      setSupplierOptions(res || []);
     } catch (error) {
       console.error("Failed to load supplier options:", error);
       setSupplierOptions([]);
     }
-  }, [orgId, branch]);
+  }, [branch, orgId]);
+
+  const loadParts = useCallback(
+    async (supplierId) => {
+      if (!supplierId) {
+        setPartOptions([]);
+        return;
+      }
+      try {
+        const res = await vendorComplaintAPI.getItemDropdownBySupplier(
+          branch,
+          orgId,
+          supplierId,
+        );
+        setPartOptions(
+          (res || []).map((it) => ({
+            value: it.id,
+            label: it.itemCode || it.id,
+            itemDescription: it.itemDescription || it.itemCode || "",
+            qty: it.qty ?? "",
+          })),
+        );
+      } catch (error) {
+        console.error("Failed to load part options:", error);
+        setPartOptions([]);
+      }
+    },
+    [branch, orgId],
+  );
 
   useEffect(() => {
     if (orgId) {
-      loadItems();
+      loadFgItems();
       loadSuppliers();
     }
-  }, [orgId, loadItems, loadSuppliers]);
+  }, [orgId, loadFgItems, loadSuppliers]);
+
+  // Generate the actual next Doc Id via the API for new entries.
+  useEffect(() => {
+    if (data?.id) return;
+    let cancelled = false;
+    (async () => {
+      const financialYear = String(
+        localStorage.getItem("finYear") || dayjs(header.docDate).year(),
+      );
+      try {
+        const docId = await vendorComplaintAPI.getVendorComplaintEntryDocId({
+          financialYear,
+          orgId,
+        });
+        if (!cancelled && docId) {
+          setHeader((prev) =>
+            prev.docNo ? prev : { ...prev, docNo: docId },
+          );
+        }
+      } catch (error) {
+        console.error("Failed to generate Doc Id:", error);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [data?.id, orgId, header.docDate]);
+
+  // Part No options depend on the selected supplier.
+  useEffect(() => {
+    loadParts(header.supplierId);
+  }, [header.supplierId, loadParts]);
+
+  // Auto-fill FG Name (edit mode) once FG options are loaded.
+  useEffect(() => {
+    if (header.fgItem && !header.fgName && fgOptions.length) {
+      const opt = fgOptions.find((o) => String(o.value) === String(header.fgItem));
+      if (opt) setHeader((prev) => ({ ...prev, fgName: opt.label || "" }));
+    }
+  }, [fgOptions, header.fgItem, header.fgName]);
+
+  // Auto-fill Supplier Name (edit mode) once supplier options are loaded.
+  useEffect(() => {
+    if (header.supplierId && !header.supplierName && supplierOptions.length) {
+      const opt = supplierOptions.find(
+        (s) => String(s.value) === String(header.supplierId),
+      );
+      if (opt)
+        setHeader((prev) => ({ ...prev, supplierName: opt.supplierName || "" }));
+    }
+  }, [supplierOptions, header.supplierId, header.supplierName]);
 
   /* ---------------------------------------------------------------------------- */
   /* Handlers                                                                     */
@@ -412,8 +486,8 @@ const VendorComplaintForm = ({ data, onBack }) => {
     setHeader((prev) => {
       const next = { ...prev, [name]: value };
       if (name === "fgItem") {
-        const item = itemOptions.find((i) => String(i.value) === String(value));
-        next.fgName = item?.itemDescription || "";
+        const item = fgOptions.find((i) => String(i.value) === String(value));
+        next.fgName = item?.label || "";
       }
       if (name === "supplierId") {
         const supplier = supplierOptions.find(
@@ -431,8 +505,11 @@ const VendorComplaintForm = ({ data, onBack }) => {
         if (i !== idx) return row;
         const next = { ...row, [key]: value };
         if (key === "partNo") {
-          const item = itemOptions.find((it) => String(it.value) === String(value));
+          const item = partOptions.find(
+            (it) => String(it.value) === String(value),
+          );
           next.partName = item?.itemDescription || "";
+          next.qty = item?.qty ?? "";
         }
         return next;
       }),
@@ -470,14 +547,12 @@ const VendorComplaintForm = ({ data, onBack }) => {
     if (!header.supplierName?.trim())
       errors.supplierName = "Supplier Name is required";
 
-    const validRows = detailRows.filter((r) => r.partNo && r.qty !== "");
+    const validRows = detailRows.filter((r) => r.partNo);
     if (!validRows.length)
       errors.complaintDetails =
-        "Add at least one Complaint Detail row with Part No and Qty";
+        "Add at least one Complaint Detail row with Part No";
     detailRows.forEach((r, i) => {
       if (!r.partNo) errors[`detail.${i}.partNo`] = "Part No is required";
-      if (r.qty === "" || r.qty === null || r.qty === undefined)
-        errors[`detail.${i}.qty`] = "Qty is required";
       if (!r.reason?.trim()) errors[`detail.${i}.reason`] = "Reason is required";
     });
 
@@ -490,17 +565,21 @@ const VendorComplaintForm = ({ data, onBack }) => {
 
     setIsSubmitting(true);
 
-    const isUpdate = Boolean(data?.id);
-
     const payload = {
-      ...(isUpdate ? { id: data.id } : {}),
+      ...(data?.id ? { id: Number(data.id) } : {}),
+      active: true,
+      cancelRemarks: "",
+      createdBy: usersId || "Tester",
+      docDate: header.docDate,
+      docId: header.docNo,
+      fgItem: Number(header.fgItem),
+      financialYear: String(dayjs(header.docDate).year()),
       orgId,
-      branch,
-      ...header,
-      complaintDetails: detailRows.filter((r) => r.partNo),
-      summary,
-      createdBy: isUpdate ? data?.createdBy || usersId : usersId,
-      ...(isUpdate ? { updatedBy: usersId } : {}),
+      remarks: summary.remarks,
+      supplier: Number(header.supplierId),
+      vendorComplaintDetailsDTO: detailRows
+        .filter((r) => r.partNo)
+        .map((r) => ({ item: Number(r.partNo), reason: r.reason })),
     };
 
     try {
@@ -573,7 +652,7 @@ const VendorComplaintForm = ({ data, onBack }) => {
               value={header.fgItem}
               onChange={handleHeaderChange}
               error={fieldErrors.fgItem}
-              options={itemOptions}
+              options={fgOptions}
               required
             />
             <Field
@@ -583,6 +662,7 @@ const VendorComplaintForm = ({ data, onBack }) => {
               onChange={handleHeaderChange}
               error={fieldErrors.docNo}
               required
+              disabled
             />
             <Field
               label="FG Name"
@@ -663,7 +743,7 @@ const VendorComplaintForm = ({ data, onBack }) => {
                     key: "partNo",
                     label: "Part No",
                     type: "select",
-                    options: itemOptions,
+                    options: partOptions,
                   },
                   {
                     key: "partName",
@@ -686,11 +766,6 @@ const VendorComplaintForm = ({ data, onBack }) => {
               {detailRows.some((r, i) => fieldErrors[`detail.${i}.partNo`]) && (
                 <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
                   Part No is required in every row
-                </p>
-              )}
-              {detailRows.some((r, i) => fieldErrors[`detail.${i}.qty`]) && (
-                <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
-                  Qty is required in every row
                 </p>
               )}
               {detailRows.some((r, i) => fieldErrors[`detail.${i}.reason`]) && (
