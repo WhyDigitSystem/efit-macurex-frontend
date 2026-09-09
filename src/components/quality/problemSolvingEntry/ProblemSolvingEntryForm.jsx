@@ -346,7 +346,7 @@ const ProblemSolvingEntryForm = ({ data, onBack }) => {
       itemDescription:
         data?.item?.itemDescription ?? (data?.itemDescription ?? ""),
       machineNo: data?.machineNo?.id ?? (data?.machineNo ?? ""),
-      machineName: "",
+      machineName: data?.machineName || "",
       manufacturingDate: data?.mfgDate ? fmtDate(data.mfgDate) : "",
       defectDescription: data?.defectDesciption ?? (data?.defectDescription ?? ""),
       teamMember1:
@@ -612,6 +612,20 @@ const ProblemSolvingEntryForm = ({ data, onBack }) => {
       );
     }
   }, [employeeOptions, teamMemberOptions]);
+
+  useEffect(() => {
+    if (!machineOptions.length || !header.machineNo) return;
+    const hit = machineOptions.find(
+      (m) => String(m.value) === String(header.machineNo),
+    );
+    if (hit?.machineName) {
+      setHeader((prev) =>
+        prev.machineName === hit.machineName
+          ? prev
+          : { ...prev, machineName: hit.machineName },
+      );
+    }
+  }, [machineOptions, header.machineNo, header.machineName]);
 
   // Generate the actual next Doc Id via the API for new entries.
   useEffect(() => {
