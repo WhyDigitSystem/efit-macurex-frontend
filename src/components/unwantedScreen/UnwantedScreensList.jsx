@@ -1,6 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { Receipt, Settings } from "lucide-react";
+import { Receipt, Settings, PackagePlus, FileWarning, ShoppingCart } from "lucide-react";
 import { hasScreenAccess } from "../../utils/accessControl";
 
 // Same section/item shape as menu-items config, so this page reads
@@ -13,6 +13,24 @@ const SECTIONS = [
         icon: Receipt,
         path: "/othersalesinvoice",
         screenCode: "OTHER_SALES_INVOICE",
+      },
+      {
+        name: "Receipts",
+        icon: PackagePlus,
+        path: "/receipts",
+        screenCode: "RECEIPTS",
+      },
+      {
+        name: "Report For Qty Shortage",
+        icon: FileWarning,
+        path: "/reportforqtyshortage",
+        screenCode: "REPORT_FOR_QTY_SHORTAGE",
+      },
+      {
+        name: "Direct Purchase",
+        icon: ShoppingCart,
+        path: "/directpurchase",
+        screenCode: "DIRECT_PURCHASE",
       },
     ],
   },

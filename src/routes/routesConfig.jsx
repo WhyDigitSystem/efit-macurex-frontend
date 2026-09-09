@@ -114,6 +114,9 @@ import DocketInvoiceDetailsMaster from "../components/sales/docketInvoiceDetails
 import Enquiry from "../components/sales/enquiry/Enquiry";
 import OrderAcceptance from "../components/sales/orderacceptance/OrderAcceptance";
 import OtherSalesInvoiceMasterScreen from "../components/unwantedScreen/othersalesinvoice/OtherSalesInvoiceMasterScreen";
+import ReceiptMaster from "../components/unwantedScreen/receipt/ReceiptMaster";
+import DirectPurchaseMaster from "../components/unwantedScreen/DirectPurchase/DirectPurchaseMaster";
+import QtyShortageReport from "../components/unwantedScreen/QtyShortageReport/QtyShortageReport";
 import ProformaInvoice from "../components/sales/proformainvoice/ProformaInvoice";
 import Quotation from "../components/sales/quotation/Quotation";
 import SalesContract from "../components/sales/salescontract/SalesContract";
@@ -647,6 +650,24 @@ export const routesConfig = [
     label: "Other Sales Invoice",
     keywords: ["othersalesinvoice", "sales invoice"],
     element: <OtherSalesInvoiceMasterScreen />,
+  },
+  {
+    path: "/receipts",
+    label: "Receipts",
+    keywords: ["receipts"],
+    element: <ReceiptMaster />,
+  },
+  {
+    path: "/directpurchase",
+    label: "Direct Purchase",
+    keywords: ["directpurchase", "purchase"],
+    element: <DirectPurchaseMaster />,
+  },
+  {
+    path: "/reportforqtyshortage",
+    label: "Report For Qty Shortage",
+    keywords: ["reportforqtyshortage", "qty shortage"],
+    element: <QtyShortageReport />,
   },
   {
     path: "/transportbill",

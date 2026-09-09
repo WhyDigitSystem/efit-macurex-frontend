@@ -218,11 +218,21 @@ const CommonListViewTable = ({
   };
 
   const defaultRenderers = {
-    text: (value, row, column) => (
-      <span className="text-xs text-gray-900 dark:text-white">
-        {value || "-"}
-      </span>
-    ),
+    text: (value, row, column) => {
+      let display = value;
+      if (value && typeof value === "object") {
+        display =
+          value.employeeName ||
+          value.name ||
+          JSON.stringify(value) ||
+          "-";
+      }
+      return (
+        <span className="text-xs text-gray-900 dark:text-white">
+          {display ?? "-"}
+        </span>
+      );
+    },
     badge: (value, row, column, badgeClass) => {
       const badgeClassName =
         typeof badgeClass === "function" ? badgeClass(value) : badgeClass;

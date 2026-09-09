@@ -88,12 +88,22 @@ const PhysicalStockReconciliationList = ({
       label: "Prepared By",
       accessor: "preparedBy",
       type: "text",
+      render: (value) => (
+        <span className="text-xs text-gray-900 dark:text-white">
+          {value?.employeeName || value?.employeeCode || value?.employeeId || "-"}
+        </span>
+      ),
     },
     {
       key: "approvedByPM",
       label: "Approved By PM",
       accessor: "approvedByPM",
       type: "text",
+      render: (value) => (
+        <span className="text-xs text-gray-900 dark:text-white">
+          {value?.employeeName || value?.employeeCode || value?.employeeId || "-"}
+        </span>
+      ),
     },
     {
       key: "active",

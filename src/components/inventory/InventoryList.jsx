@@ -5,16 +5,10 @@ import {
   ClipboardList,
   PackageMinus,
   ScanSearch,
-  PackagePlus,
   FileCheck,
-  FileWarning,
-  SearchCheck,
-  Factory,
-  Clock3,
   Ship,
-  PackageCheck,
-  ShoppingCart,
   Truck,
+  Clock3,
   ShoppingBasket,
 } from "lucide-react";
 import { hasScreenAccess } from "../../utils/accessControl";
@@ -49,40 +43,16 @@ const SECTIONS = [
         screenCode: "PHYSICAL_STOCK_RECONCILIATION",
       },
       {
-        name: "Receipts",
-        icon: PackagePlus,
-        path: "/receipts",
-        screenCode: "RECEIPTS",
-      },
-      {
         name: "Goods Received Note",
         icon: FileCheck,
         path: "/goodsreceivednote",
         screenCode: "GOODS_RECEIVED_NOTE",
       },
       {
-        name: "Report For Qty Shortage",
-        icon: FileWarning,
-        path: "/reportforqtyshortage",
-        screenCode: "REPORT_FOR_QTY_SHORTAGE",
-      },
-      {
         name: "Import GRN",
         icon: Ship,
         path: "/importgrn",
         screenCode: "IMPORT_GRN",
-      },
-      {
-        name: "GRN Receipt (Bought Out/Sub Contract)",
-        icon: PackageCheck,
-        path: "/grnreceipt",
-        screenCode: "GRN_RECEIPT",
-      },
-      {
-        name: "Direct Purchase",
-        icon: ShoppingCart,
-        path: "/directpurchase",
-        screenCode: "DIRECT_PURCHASE",
       },
       {
         name: "Stock Transfer GRN",
