@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import PurchaseContractList from "./PurchaseContractList";
 import PurchaseContractForm from "./PurchaseContractForm";
-import { purchaseContractAPI } from "../../../api/Purchase/purchaseContractAPI";
+import  purchaseContractAPI  from "../../../api/Purchase/purchaseContractAPI";
 import { toast } from "../../../utils/toast";
 
 const PurchaseContractMaster = () => {
@@ -12,17 +12,22 @@ const PurchaseContractMaster = () => {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const ORG_ID = localStorage.getItem("orgId");
+  const BRANCH_ID = localStorage.getItem("branchId");
 
   const handleAddNew = () => {
     setEditData(null);
     setView("form");
   };
 
-  //  Pencil icon click -> fetch fresh data by orgId, find the matching contract, open form
+  //  Pencil icon click -> fetch fresh data by branch + orgId, find the matching contract, open form
   const handleEdit = useCallback(
     async (row) => {
       try {
-        const contracts = await purchaseContractAPI.getContractByOrgId(ORG_ID);
+        const contracts = await purchaseContractAPI.getContractByOrgId(
+          BRANCH_ID,
+          ORG_ID,
+        );
+
         const fresh = contracts.find((c) => c.id === row.id) || row;
         setEditData(fresh);
         setView("form");
@@ -31,7 +36,7 @@ const PurchaseContractMaster = () => {
         toast.error("Failed to load Purchase Contract details");
       }
     },
-    [ORG_ID],
+    [ORG_ID, BRANCH_ID],
   );
 
   const handleBack = () => {

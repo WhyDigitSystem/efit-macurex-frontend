@@ -1,14 +1,14 @@
-import { ArrowLeft, Save, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ArrowLeft, Save, X, Loader2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import dayjs from "dayjs";
+
 import openingStockEntryAPI from "../../../api/Inventory/openingStockEntryAPI";
 import { branchAPI } from "../../../api/branchAPI";
-import stockTransferGrnAPI from "../../../api/Inventory/stockTransferGRNAPI";
-import { itemAPI } from "../../../api/itemAPI";
 import { useToast } from "../../Toast/ToastContext";
 
-/* ---------------------------------------------------------------------------- */
-/* Shared design tokens                                                        */
+/* -------------------------------------------------------------------------- */
+/* Styles                                                                     */
+/* -------------------------------------------------------------------------- */
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -18,28 +18,108 @@ const controlClasses =
   "placeholder-gray-400 dark:placeholder-gray-500 " +
   "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
   "dark:focus:ring-blue-400 dark:focus:border-blue-400 " +
-  "disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed";
+  "disabled:bg-gray-100 dark:disabled:bg-gray-800 " +
+  "disabled:text-gray-900 dark:disabled:text-gray-100 " +
+  "disabled:opacity-100 disabled:cursor-not-allowed";
 
 const controlErrClasses =
-  "border-red-500 dark:border-red-500 focus:ring-red-500 focus:border-red-500";
+  "border-red-500 dark:border-red-500 " +
+  "focus:ring-red-500 focus:border-red-500";
 
-const labelClasses = "block text-[11px] text-gray-500 dark:text-gray-400 mb-1";
+const labelClasses =
+  "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
-// Adequate spacing between header fields for clarity
 const fieldGrid =
-  "grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-x-6 gap-y-4 items-start";
+  "grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] " +
+  "gap-x-4 gap-y-3 items-start";
 
-const MULTILINE_CLASSES =
-  "w-full px-2 py-1.5 rounded border text-xs leading-relaxed transition-colors " +
-  "bg-white dark:bg-gray-900 " +
-  "border-gray-300 dark:border-gray-600 " +
-  "text-gray-900 dark:text-gray-100 " +
-  "placeholder-gray-400 dark:placeholder-gray-500 " +
-  "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
-  "dark:focus:ring-blue-400 dark:focus:border-blue-400";
+/* -------------------------------------------------------------------------- */
+/* Helpers                                                                    */
+/* -------------------------------------------------------------------------- */
 
-/* ---------------------------------------------------------------------------- */
-/* Shared building blocks                                                      */
+const getToday = () => dayjs().format("YYYY-MM-DD");
+
+const formatDate = (value) => {
+  if (!value) return "";
+
+  const date = dayjs(value);
+
+  return date.isValid() ? date.format("YYYY-MM-DD") : "";
+};
+
+const calculateAmount = (quantity, rate) => {
+  const qty = Number(quantity);
+  const price = Number(rate);
+
+  if (
+    quantity === "" ||
+    rate === "" ||
+    !Number.isFinite(qty) ||
+    !Number.isFinite(price) ||
+    qty <= 0 ||
+    price < 0
+  ) {
+    return "";
+  }
+
+  return (qty * price).toFixed(2);
+};
+
+const getLocalStorageNumber = (key) => {
+  const value = Number(localStorage.getItem(key));
+
+  return Number.isFinite(value) && value > 0 ? value : null;
+};
+
+const getCurrentUser = () => {
+  return (
+    localStorage.getItem("userId") ||
+    localStorage.getItem("usersId") ||
+    localStorage.getItem("userName") ||
+    localStorage.getItem("username") ||
+    ""
+  );
+};
+
+/* -------------------------------------------------------------------------- */
+/* Extract Item Information                                                   */
+/* -------------------------------------------------------------------------- */
+
+const getItemCode = (item) => {
+  if (!item) return "";
+
+  if (typeof item === "string") {
+    return item;
+  }
+
+  return item?.itemCode || item?.code || item?.item_code || "";
+};
+
+const getItemDescription = (item) => {
+  if (!item || typeof item === "string") {
+    return "";
+  }
+
+  return (
+    item?.itemDescription ||
+    item?.description ||
+    item?.itemName ||
+    item?.name ||
+    ""
+  );
+};
+
+const getItemUnit = (item) => {
+  if (!item || typeof item === "string") {
+    return "";
+  }
+
+  return item?.unitId || item?.unit || item?.uom || item?.unitName || "";
+};
+
+/* -------------------------------------------------------------------------- */
+/* Field                                                                      */
+/* -------------------------------------------------------------------------- */
 
 const Field = ({
   label,
@@ -52,7 +132,10 @@ const Field = ({
   options,
   className = "",
   disabled = false,
-  placeholder,
+  readOnly = false,
+  placeholder = "",
+  step,
+  min,
 }) => {
   if (type === "select") {
     return (
@@ -64,15 +147,16 @@ const Field = ({
 
         <select
           name={name}
-          value={value}
+          value={value ?? ""}
           onChange={onChange}
           disabled={disabled}
           className={`${controlClasses} ${error ? controlErrClasses : ""}`}
         >
-          <option value="">Select {label}</option>
+          <option value="">-- Select --</option>
+
           {(options || []).map((opt) => (
-            <option key={opt.value ?? opt} value={opt.value ?? opt}>
-              {opt.label ?? opt}
+            <option key={String(opt.value)} value={opt.value}>
+              {opt.label}
             </option>
           ))}
         </select>
@@ -99,9 +183,23 @@ const Field = ({
           value={value ?? ""}
           onChange={onChange}
           disabled={disabled}
-          placeholder={placeholder}
           rows={3}
-          className={`${MULTILINE_CLASSES} ${error ? controlErrClasses : ""}`}
+          placeholder={placeholder}
+          className={
+            "w-full px-2 py-1.5 rounded border text-xs leading-snug " +
+            "transition-colors resize-none " +
+            "bg-white dark:bg-gray-900 " +
+            "text-gray-900 dark:text-gray-100 " +
+            "placeholder-gray-400 dark:placeholder-gray-500 " +
+            "disabled:bg-gray-100 dark:disabled:bg-gray-800 " +
+            "disabled:text-gray-900 dark:disabled:text-gray-100 " +
+            "disabled:opacity-100 " +
+            "focus:outline-none focus:ring-1 focus:ring-blue-500 " +
+            "focus:border-blue-500 " +
+            `${
+              error ? controlErrClasses : "border-gray-300 dark:border-gray-600"
+            }`
+          }
         />
 
         {error && (
@@ -123,10 +221,13 @@ const Field = ({
       <input
         type={type}
         name={name}
-        value={value}
+        value={value ?? ""}
         onChange={onChange}
         disabled={disabled}
+        readOnly={readOnly}
         placeholder={placeholder}
+        step={step}
+        min={min}
         className={`${controlClasses} ${error ? controlErrClasses : ""}`}
       />
 
@@ -139,47 +240,60 @@ const Field = ({
   );
 };
 
-const SectionHeader = ({ children }) => (
-  <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">
-    {children}
-  </h3>
-);
+/* -------------------------------------------------------------------------- */
+/* Buttons                                                                    */
+/* -------------------------------------------------------------------------- */
 
 const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
   <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
     <button
+      type="button"
       onClick={onCancel}
       disabled={isSubmitting}
-      className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+      className={
+        "flex items-center gap-1 px-3 py-1.5 rounded text-xs " +
+        "border border-gray-300 dark:border-gray-600 " +
+        "text-gray-700 dark:text-gray-200 " +
+        "bg-white dark:bg-gray-800 " +
+        "hover:bg-gray-50 dark:hover:bg-gray-700 " +
+        "disabled:opacity-60 disabled:cursor-not-allowed"
+      }
     >
       <X className="h-3 w-3" />
       Cancel
     </button>
 
     <button
+      type="button"
       onClick={onSave}
       disabled={isSubmitting}
-      className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+      className={
+        "flex items-center gap-1 px-3 py-1.5 rounded text-xs " +
+        "text-white bg-blue-600 hover:bg-blue-700 " +
+        "dark:bg-blue-600 dark:hover:bg-blue-500 " +
+        "disabled:opacity-60 disabled:cursor-not-allowed"
+      }
     >
-      <Save className="h-3 w-3" />
+      {isSubmitting ? (
+        <Loader2 className="h-3 w-3 animate-spin" />
+      ) : (
+        <Save className="h-3 w-3" />
+      )}
+
       {isSubmitting ? "Saving..." : saveLabel}
     </button>
   </div>
 );
 
-/* ---------------------------------------------------------------------------- */
-/* Helpers                                                                      */
+/* -------------------------------------------------------------------------- */
+/* Initial Header                                                             */
+/* -------------------------------------------------------------------------- */
 
-const fmtDate = (value) => (value ? dayjs(value).format("YYYY-MM-DD") : "");
-
-const toNumber = (value) => {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : 0;
-};
-
-const emptyHeader = () => ({
+const createInitialHeader = () => ({
   plant: "",
-  asOnDate: dayjs().format("YYYY-MM-DD"),
+  docDate: getToday(),
+  asOnDate: getToday(),
+  docId: "",
   location: "",
   itemCode: "",
   itemDescription: "",
@@ -187,292 +301,724 @@ const emptyHeader = () => ({
   quantity: "",
   rate: "",
   amount: "",
-});
-
-const emptySummary = () => ({
   remarks: "",
 });
 
-/* ---------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+/* Component                                                                  */
+/* -------------------------------------------------------------------------- */
 
 const OpeningStockEntryForm = ({ data, onBack }) => {
   const { addToast } = useToast();
-  const orgId = Number(localStorage.getItem("orgId"));
-  const branch = Number(localStorage.getItem("branchId")) || 1000000001;
-  const usersId = localStorage.getItem("usersId");
+
+  const orgId = getLocalStorageNumber("orgId");
+  const branchId = getLocalStorageNumber("branchId");
+
+  const currentUser = getCurrentUser();
+
+  const existingId =
+    data?.id ?? data?.header?.id ?? data?.openStockEntryId ?? null;
+
+  const isEdit = Boolean(existingId);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [loadingMasters, setLoadingMasters] = useState(false);
+
+  const [loadingLocations, setLoadingLocations] = useState(false);
+
   const [fieldErrors, setFieldErrors] = useState({});
 
-  /* ---------------- Lookup options ---------------- */
   const [plantOptions, setPlantOptions] = useState([]);
+
   const [locationOptions, setLocationOptions] = useState([]);
+
   const [itemOptions, setItemOptions] = useState([]);
+
   const [itemMap, setItemMap] = useState({});
 
-  /* ---------------- Form state ---------------- */
-  const [header, setHeader] = useState(() => {
-    const d = data?.header || data || {};
-    const s = (data?.stockDetails || data?.stockDetailList || [])[0] || {};
+  /* ---------------------------------------------------------------------- */
+  /* Initial Header                                                         */
+  /* ---------------------------------------------------------------------- */
+
+  const getInitialHeader = () => {
+    const source = data?.header || data?.openStockEntry || data || {};
+
+    const detail =
+      data?.stockDetails?.[0] ||
+      data?.stockDetailList?.[0] ||
+      data?.openStockEntryDetails?.[0] ||
+      data?.details?.[0] ||
+      source?.detail ||
+      {};
+
+    const item = detail?.item || source?.item || data?.item || null;
+
+    const itemCode =
+      getItemCode(item) ||
+      detail?.itemCode ||
+      source?.itemCode ||
+      data?.itemCode ||
+      "";
+
+    const itemDescription =
+      getItemDescription(item) ||
+      detail?.itemDescription ||
+      detail?.itemDesc ||
+      detail?.description ||
+      source?.itemDescription ||
+      data?.itemDescription ||
+      "";
+
+    const unit =
+      getItemUnit(item) ||
+      detail?.unit ||
+      detail?.unitId ||
+      detail?.uom ||
+      source?.unit ||
+      data?.unit ||
+      "";
+
+    const quantity =
+      detail?.quantity ??
+      detail?.qty ??
+      source?.quantity ??
+      source?.qty ??
+      data?.quantity ??
+      data?.qty ??
+      "";
+
     return {
-      ...emptyHeader(),
-      plant: d.plant ?? "",
-      asOnDate: fmtDate(d.asOnDate),
-      location: d.location ?? "",
-      itemCode: s.itemCode ?? s.item ?? "",
-      itemDescription:
-        s.itemDescription ??
-        s.itemDesc ??
-        s.description ??
-        s.name ??
+      ...createInitialHeader(),
+
+      plant:
+        source?.branch?.id ??
+        source?.plant ??
+        source?.branch ??
+        source?.branchId ??
+        data?.branch?.id ??
+        data?.plant ??
+        data?.branch ??
+        data?.branchId ??
         "",
-      unit: s.unit ?? "",
-      quantity: s.quantity ?? "",
-      rate: s.rate ?? "",
-      amount: s.amount ?? "",
+
+      docDate: formatDate(source?.docDate ?? data?.docDate ?? getToday()),
+
+      asOnDate: formatDate(source?.asOnDate ?? data?.asOnDate ?? getToday()),
+
+      docId: source?.docId || data?.docId || "",
+
+      location:
+        source?.location?.id ??
+        source?.location ??
+        source?.locationId ??
+        data?.location?.id ??
+        data?.location ??
+        data?.locationId ??
+        "",
+
+      itemCode,
+
+      itemDescription,
+
+      unit,
+
+      quantity,
+
+      rate: detail?.rate ?? source?.rate ?? data?.rate ?? "",
+
+      amount: detail?.amount ?? source?.amount ?? data?.amount ?? "",
+
+      remarks: source?.remarks || data?.remarks || "",
     };
-  });
+  };
 
-  const [summary, setSummary] = useState(() => ({
-    ...emptySummary(),
-    ...(data?.summary || data || {}),
-  }));
+  const [header, setHeader] = useState(getInitialHeader);
 
-  /* ---------------- Lookup loading ---------------- */
+  /* ---------------------------------------------------------------------- */
+  /* Recalculate Amount                                                     */
+  /* ---------------------------------------------------------------------- */
 
   useEffect(() => {
-    if (!orgId) return;
-
-    const loadPlants = async () => {
-      try {
-        const res = await branchAPI.getBranchByOrgId(orgId);
-        setPlantOptions(
-          (Array.isArray(res) ? res : []).map((b) => ({
-            value: b.id ?? b.branchId,
-            label: b.branchName || b.name || b.branchCode || `Branch ${b.id}`,
-          })),
-        );
-      } catch {
-        setPlantOptions([]);
-      }
-    };
-
-    const loadItems = async () => {
-      try {
-        const res = await itemAPI.getItems(orgId, branch);
-        const map = {};
-        const opts = (res || []).map((it) => {
-          const code = it.itemCode || it.code || it.id?.toString() || "";
-          map[code] = it;
-          return { value: code, label: code };
-        });
-        setItemOptions(opts);
-        setItemMap(map);
-      } catch {
-        setItemOptions([]);
-        setItemMap({});
-      }
-    };
-
-    Promise.all([loadPlants(), loadItems()]);
-  }, [orgId, branch]);
-
-  // Locations depend on the selected Plant
-  useEffect(() => {
-    if (!orgId || !header.plant) {
-      setLocationOptions([]);
+    if (header.quantity === "" || header.rate === "") {
       return;
     }
+
+    const calculatedAmount = calculateAmount(header.quantity, header.rate);
+
+    if (calculatedAmount !== header.amount) {
+      setHeader((previous) => ({
+        ...previous,
+        amount: calculatedAmount,
+      }));
+    }
+  }, [header.quantity, header.rate, header.amount]);
+
+  /* ---------------------------------------------------------------------- */
+  /* Load Branch + Items                                                    */
+  /* ---------------------------------------------------------------------- */
+
+  useEffect(() => {
     let cancelled = false;
-    const loadLocations = async () => {
+
+    const loadMasters = async () => {
+      if (!orgId || !branchId) {
+        return;
+      }
+
       try {
-        const res = await stockTransferGrnAPI.getLocationDetails(
-          header.plant,
-          orgId,
-        );
-        if (cancelled) return;
-        const list =
-          res?.paramObjectsMap?.mapp ||
-          res?.paramObjectsMap?.locationVO ||
-          res?.paramObjectsMap?.locations ||
-          (Array.isArray(res) ? res : []);
-        setLocationOptions(
-          list.map((loc) => ({
-            value: loc.id ?? loc.locationId,
+        setLoadingMasters(true);
+
+        const [branches, items] = await Promise.all([
+          branchAPI.getBranchByOrgId(orgId),
+          openingStockEntryAPI.getItemCodeDropdown(branchId, orgId),
+        ]);
+
+        if (cancelled) {
+          return;
+        }
+
+        /* ---------------- Branches ---------------- */
+
+        const branchList = Array.isArray(branches) ? branches : [];
+
+        const branchOptions = branchList
+          .map((branch) => ({
+            value: branch?.id ?? branch?.branchId ?? "",
+
             label:
-              loc.locationName ||
-              loc.name ||
-              loc.location ||
-              `Location ${loc.id ?? loc.locationId}`,
-          })),
-        );
-      } catch {
-        if (!cancelled) setLocationOptions([]);
+              branch?.branchName ||
+              branch?.name ||
+              branch?.branchCode ||
+              String(branch?.id ?? branch?.branchId ?? ""),
+          }))
+          .filter((option) => option.value !== "");
+
+        setPlantOptions(branchOptions);
+
+        /* ---------------- Default Branch ---------------- */
+
+        if (!isEdit && branchId) {
+          setHeader((previous) => ({
+            ...previous,
+            plant: previous.plant || String(branchId),
+          }));
+        }
+
+        /* ---------------- Items ---------------- */
+
+        const itemList = Array.isArray(items) ? items : [];
+
+        const nextItemMap = {};
+
+        const nextItemOptions = itemList
+          .map((item) => {
+            const code = getItemCode(item);
+
+            if (!code) {
+              return null;
+            }
+
+            nextItemMap[code] = item;
+
+            return {
+              value: code,
+              label: code,
+            };
+          })
+          .filter(Boolean);
+
+        /* Preserve edit item */
+
+        if (isEdit && header.itemCode && !nextItemMap[header.itemCode]) {
+          nextItemOptions.unshift({
+            value: header.itemCode,
+            label: header.itemCode,
+          });
+        }
+
+        setItemMap(nextItemMap);
+        setItemOptions(nextItemOptions);
+      } catch (error) {
+        console.error("Opening Stock Entry master loading error:", error);
+
+        if (!cancelled) {
+          setPlantOptions([]);
+          setItemOptions([]);
+          setItemMap({});
+
+          addToast("Failed to load Opening Stock Entry master data.", "error");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingMasters(false);
+        }
       }
     };
-    loadLocations();
+
+    loadMasters();
+
     return () => {
       cancelled = true;
     };
-  }, [orgId, header.plant]);
+  }, [orgId, branchId, isEdit]);
 
-  /* ---------------- Handlers ---------------- */
+  /* ---------------------------------------------------------------------- */
+  /* Load Locations                                                         */
+  /* ---------------------------------------------------------------------- */
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    if (fieldErrors[name]) setFieldErrors((prev) => ({ ...prev, [name]: "" }));
+  useEffect(() => {
+    let cancelled = false;
 
-    // Item Code selection auto-fills description and unit
-    if (name === "itemCode") {
-      const item = itemMap[value];
-      setHeader((prev) => ({
-        ...prev,
-        itemCode: value,
-        itemDescription:
-          item?.itemDescription || item?.description || prev.itemDescription || "",
-        unit: item?.primaryUnits?.primaryUnit || item?.unit || item?.uom || "",
-      }));
-      return;
-    }
+    const loadLocations = async () => {
+      if (!orgId || !header.plant) {
+        setLocationOptions([]);
+        return;
+      }
 
-    // Recalculate Amount = Quantity x Rate
-    if (name === "quantity" || name === "rate") {
-      setHeader((prev) => {
-        const qty = name === "quantity" ? value : prev.quantity;
-        const rate = name === "rate" ? value : prev.rate;
-        const amount =
-          toNumber(qty) * toNumber(rate) !== 0
-            ? (toNumber(qty) * toNumber(rate)).toFixed(2)
-            : "";
-        return { ...prev, [name]: value, amount };
+      try {
+        setLoadingLocations(true);
+
+        const locations = await openingStockEntryAPI.getLocationByOrgId(
+          orgId,
+          Number(header.plant),
+        );
+
+        if (cancelled) {
+          return;
+        }
+
+        const list = Array.isArray(locations) ? locations : [];
+
+        const options = list
+          .map((location) => ({
+            value: location?.id ?? location?.locationId ?? "",
+
+            label:
+              location?.locationName ||
+              location?.name ||
+              String(location?.id ?? location?.locationId ?? ""),
+          }))
+          .filter((option) => option.value !== "");
+
+        /* Preserve existing edit location */
+
+        if (
+          isEdit &&
+          header.location &&
+          !options.some(
+            (option) => String(option.value) === String(header.location),
+          )
+        ) {
+          options.unshift({
+            value: header.location,
+            label:
+              data?.location?.locationName ||
+              data?.locationName ||
+              String(header.location),
+          });
+        }
+
+        setLocationOptions(options);
+      } catch (error) {
+        console.error("Opening Stock Entry location loading error:", error);
+
+        if (!cancelled) {
+          setLocationOptions([]);
+
+          addToast("Failed to load locations.", "error");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingLocations(false);
+        }
+      }
+    };
+
+    loadLocations();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [orgId, header.plant, isEdit]);
+
+  /* ---------------------------------------------------------------------- */
+  /* Generate Document ID                                                   */
+  /* ---------------------------------------------------------------------- */
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const generateDocId = async () => {
+      if (isEdit) {
+        return;
+      }
+
+      if (!orgId || header.docId) {
+        return;
+      }
+
+      const financialYear = dayjs().format("YYYY");
+
+      try {
+        const docId = await openingStockEntryAPI.getOpenStockEntryDocId(
+          financialYear,
+          orgId,
+          "OSE",
+        );
+
+        if (!cancelled && docId) {
+          setHeader((previous) => ({
+            ...previous,
+            docId,
+          }));
+        }
+      } catch (error) {
+        console.error("Opening Stock Entry Doc ID generation error:", error);
+
+        if (!cancelled) {
+          addToast("Failed to generate Opening Stock Entry Doc Id.", "error");
+        }
+      }
+    };
+
+    generateDocId();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [orgId, isEdit, header.docId]);
+
+  /* ---------------------------------------------------------------------- */
+  /* Item Options                                                           */
+  /* ---------------------------------------------------------------------- */
+
+  const finalItemOptions = useMemo(() => {
+    const options = [...itemOptions];
+
+    if (
+      header.itemCode &&
+      !options.some(
+        (option) => String(option.value) === String(header.itemCode),
+      )
+    ) {
+      options.unshift({
+        value: header.itemCode,
+        label: header.itemCode,
       });
+    }
+
+    return options;
+  }, [itemOptions, header.itemCode]);
+
+  /* ---------------------------------------------------------------------- */
+  /* Change Handler                                                         */
+  /* ---------------------------------------------------------------------- */
+
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+
+    setFieldErrors((previous) => ({
+      ...previous,
+      [name]: "",
+    }));
+
+    /* ---------------- Plant ---------------- */
+
+    if (name === "plant") {
+      setHeader((previous) => ({
+        ...previous,
+        plant: value,
+        location: "",
+      }));
+
+      setFieldErrors((previous) => ({
+        ...previous,
+        plant: "",
+        location: "",
+      }));
+
       return;
     }
 
-    setHeader((prev) => ({ ...prev, [name]: value }));
+    /* ---------------- Item Code ---------------- */
+
+    if (name === "itemCode") {
+      const selectedItem = itemMap[value];
+
+      setHeader((previous) => ({
+        ...previous,
+
+        itemCode: value,
+
+        itemDescription:
+          getItemDescription(selectedItem) || previous.itemDescription,
+
+        unit: getItemUnit(selectedItem) || previous.unit,
+      }));
+
+      setFieldErrors((previous) => ({
+        ...previous,
+        itemCode: "",
+        itemDescription: "",
+        unit: "",
+      }));
+
+      return;
+    }
+
+    /* ---------------- Quantity / Rate ---------------- */
+
+    if (name === "quantity" || name === "rate") {
+      setHeader((previous) => {
+        const quantity = name === "quantity" ? value : previous.quantity;
+
+        const rate = name === "rate" ? value : previous.rate;
+
+        return {
+          ...previous,
+          [name]: value,
+          amount: calculateAmount(quantity, rate),
+        };
+      });
+
+      return;
+    }
+
+    /* ---------------- Other Fields ---------------- */
+
+    setHeader((previous) => ({
+      ...previous,
+      [name]: value,
+    }));
   };
 
-  /* ---------------- Validation ---------------- */
+  /* ---------------------------------------------------------------------- */
+  /* Validation                                                             */
+  /* ---------------------------------------------------------------------- */
 
   const validate = () => {
     const errors = {};
 
-    if (!header.plant) errors.plant = "Plant is required";
-    if (!header.asOnDate) errors.asOnDate = "As On Date is required";
-    if (!header.location) errors.location = "Location is required";
-    if (!header.itemCode?.trim()) errors.itemCode = "Item Code is required";
-    if (!header.unit?.trim()) errors.unit = "Unit is required";
-    if (header.quantity === "" || Number(header.quantity) <= 0)
-      errors.quantity = "Quantity must be greater than 0";
-    if (header.rate === "" || Number(header.rate) < 0)
+    if (!header.plant) {
+      errors.plant = "Plant is required";
+    }
+
+    if (!header.docDate) {
+      errors.docDate = "Doc Date is required";
+    }
+
+    if (!header.asOnDate) {
+      errors.asOnDate = "As On Date is required";
+    }
+
+    if (!header.docId?.trim()) {
+      errors.docId = "Doc Id is required";
+    }
+
+    if (!header.location) {
+      errors.location = "Location is required";
+    }
+
+    if (!header.itemCode?.trim()) {
+      errors.itemCode = "Item Code is required";
+    }
+
+    if (!header.itemDescription?.trim()) {
+      errors.itemDescription = "Item Description is required";
+    }
+
+    if (!header.unit?.trim()) {
+      errors.unit = "Unit is required";
+    }
+
+    if (
+      header.quantity === "" ||
+      !Number.isFinite(Number(header.quantity)) ||
+      Number(header.quantity) <= 0
+    ) {
+      errors.quantity = "Qty must be greater than 0";
+    }
+
+    if (
+      header.rate === "" ||
+      !Number.isFinite(Number(header.rate)) ||
+      Number(header.rate) < 0
+    ) {
       errors.rate = "Rate cannot be negative";
+    }
+
+    const amount = calculateAmount(header.quantity, header.rate);
+
+    if (!amount) {
+      errors.amount = "Invalid Qty / Rate";
+    }
 
     setFieldErrors(errors);
+
     return Object.keys(errors).length === 0;
   };
 
-  /* ---------------- Save ---------------- */
+  /* ---------------------------------------------------------------------- */
+  /* Build Payload                                                          */
+  /* ---------------------------------------------------------------------- */
+
+  const buildPayload = () => {
+    const isUpdate = Boolean(existingId);
+
+    const amount = calculateAmount(header.quantity, header.rate);
+
+    return {
+      ...(isUpdate
+        ? {
+            id: Number(existingId),
+          }
+        : {}),
+
+      orgId: Number(orgId),
+
+      branch: Number(header.plant),
+
+      docDate: header.docDate,
+
+      asOnDate: header.asOnDate,
+
+      docId: header.docId,
+
+      location: Number(header.location),
+
+      itemCode: header.itemCode,
+
+      itemDescription: header.itemDescription,
+
+      unit: header.unit,
+
+      quantity: Number(header.quantity),
+
+      rate: Number(header.rate),
+
+      amount: Number(amount),
+
+      remarks: header.remarks || "",
+
+      active: typeof data?.active === "boolean" ? data.active : true,
+
+      createdBy: isUpdate
+        ? data?.createdBy || data?.header?.createdBy || currentUser
+        : currentUser,
+
+      ...(isUpdate
+        ? {
+            updatedBy: currentUser,
+          }
+        : {}),
+    };
+  };
+
+  /* ---------------------------------------------------------------------- */
+  /* Save                                                                   */
+  /* ---------------------------------------------------------------------- */
 
   const handleSave = async () => {
     if (!validate()) {
       addToast("Please fill all mandatory fields before saving.", "error");
+
       return;
     }
 
-    setIsSubmitting(true);
-
-    const isUpdate = Boolean(data?.id ?? data?.header?.id);
-
-    // Single-transaction payload: header + stock details + summary.
-    // The backend persists all of these together, links the record to the
-    // plant, location and item details and keeps the complete opening stock
-    // history for audit & reporting (server-side validation).
-    const payload = {
-      ...(isUpdate ? { id: data?.id ?? data?.header?.id } : {}),
-      orgId,
-      header: {
-        plant: header.plant,
-        asOnDate: header.asOnDate,
-        location: header.location,
-      },
-      stockDetails: [
-        {
-          itemCode: header.itemCode,
-          itemDescription: header.itemDescription,
-          unit: header.unit,
-          quantity: header.quantity,
-          rate: header.rate,
-          amount: header.amount,
-        },
-      ],
-      summary,
-      active: data?.active ?? true,
-      createdBy: isUpdate ? data?.createdBy || usersId : usersId,
-      ...(isUpdate ? { updatedBy: usersId } : {}),
-    };
-
     try {
+      setIsSubmitting(true);
+
+      const payload = buildPayload();
+
+      console.log(
+        "================ OPENING STOCK ENTRY PAYLOAD ================",
+      );
+
+      console.log(JSON.stringify(payload, null, 2));
+
       const response = await openingStockEntryAPI.createUpdate(payload);
 
-      if (response?.status) {
-        addToast(
+      if (response?.status === true) {
+        const message =
           response?.paramObjectsMap?.message ||
-            (isUpdate
-              ? "Opening stock entry updated successfully!"
-              : "Opening stock entry created successfully!"),
-        );
+          (isEdit
+            ? "Opening Stock Entry updated successfully!"
+            : "Opening Stock Entry created successfully!");
+
+        addToast(message, "success");
+
         onBack?.();
-      } else {
-        addToast(
-          response?.errors?.[0]?.shortMessage ||
-            response?.errors?.[0]?.longMessage ||
-            response?.message ||
-            response?.paramObjectsMap?.message ||
-            "Failed to save Opening Stock Entry.",
-          "error",
-        );
+
+        return;
       }
-    } catch (err) {
-      console.error("Save Opening Stock Entry Error:", err);
-      if (err.response?.data) {
-        addToast(
-          err.response.data.message ||
-            err.response.data.statusMessage ||
-            err.response.data.error ||
-            JSON.stringify(err.response.data),
-          "error",
-        );
-      } else {
-        addToast("Something went wrong.", "error");
-      }
+
+      const errorMessage =
+        response?.errors?.[0]?.shortMessage ||
+        response?.errors?.[0]?.longMessage ||
+        response?.paramObjectsMap?.errorMessage ||
+        response?.paramObjectsMap?.message ||
+        response?.message ||
+        "Failed to save Opening Stock Entry.";
+
+      addToast(errorMessage, "error");
+    } catch (error) {
+      console.error("Opening Stock Entry Save Error:", error);
+
+      const responseData = error?.response?.data;
+
+      const errorMessage =
+        responseData?.errors?.[0]?.shortMessage ||
+        responseData?.errors?.[0]?.longMessage ||
+        responseData?.paramObjectsMap?.errorMessage ||
+        responseData?.paramObjectsMap?.message ||
+        responseData?.message ||
+        error?.message ||
+        "Something went wrong while saving.";
+
+      addToast(errorMessage, "error");
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  /* ---------------------------------------------------------------------- */
+  /* Render                                                                 */
+  /* ---------------------------------------------------------------------- */
+
   return (
-    <div className="w-full p-2">
+    <div className="p-2 max-w-7xl">
       {/* Header */}
+
       <div className="flex items-center gap-2 mb-3">
         <button
+          type="button"
           onClick={onBack}
-          className="p-1 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white transition-colors"
+          disabled={isSubmitting}
+          className={
+            "p-1 rounded-md text-gray-600 " +
+            "dark:text-gray-300 " +
+            "hover:bg-gray-100 " +
+            "dark:hover:bg-gray-700 " +
+            "hover:text-gray-900 " +
+            "dark:hover:text-white " +
+            "disabled:opacity-50"
+          }
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
 
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-          {data ? "Edit Opening Stock Entry" : "Add Opening Stock Entry"}
+          {isEdit ? "Edit Opening Stock Entry" : "Add Opening Stock Entry"}
         </h2>
       </div>
 
       {/* Main Card */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
-        {/* ---------------- Header Section ---------------- */}
-        <div>
-          <SectionHeader>Opening Stock Entry Details</SectionHeader>
 
-          {/* Row 1: Plant / As On Date / Location */}
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
+        {/* Document Details */}
+
+        <div>
           <div className={fieldGrid}>
             <Field
               type="select"
@@ -480,10 +1026,23 @@ const OpeningStockEntryForm = ({ data, onBack }) => {
               name="plant"
               value={header.plant}
               onChange={handleChange}
-              error={fieldErrors.plant}
               options={plantOptions}
+              error={fieldErrors.plant}
               required
+              disabled={loadingMasters || isEdit}
             />
+
+            <Field
+              type="date"
+              label="Doc Date"
+              name="docDate"
+              value={header.docDate}
+              onChange={handleChange}
+              error={fieldErrors.docDate}
+              required
+              disabled={isSubmitting}
+            />
+
             <Field
               type="date"
               label="As On Date"
@@ -492,63 +1051,84 @@ const OpeningStockEntryForm = ({ data, onBack }) => {
               onChange={handleChange}
               error={fieldErrors.asOnDate}
               required
+              disabled={isSubmitting}
             />
+
+            <Field
+              label="Doc Id"
+              name="docId"
+              value={header.docId}
+              onChange={handleChange}
+              error={fieldErrors.docId}
+              required
+              disabled
+              placeholder="Auto generated"
+            />
+          </div>
+        </div>
+
+        {/* Stock Details */}
+
+        <div>
+          <div className={fieldGrid}>
             <Field
               type="select"
               label="Location"
               name="location"
               value={header.location}
               onChange={handleChange}
-              error={fieldErrors.location}
               options={locationOptions}
+              error={fieldErrors.location}
               required
+              disabled={!header.plant || loadingLocations}
             />
-          </div>
 
-          {/* Row 2: Item Code / Item Description / Unit */}
-          <div className={fieldGrid}>
             <Field
               type="select"
               label="Item Code"
               name="itemCode"
               value={header.itemCode}
               onChange={handleChange}
+              options={finalItemOptions}
               error={fieldErrors.itemCode}
-              options={itemOptions}
               required
+              disabled={loadingMasters}
             />
+
             <Field
-              type="text"
               label="Item Description"
               name="itemDescription"
               value={header.itemDescription}
               onChange={handleChange}
+              error={fieldErrors.itemDescription}
+              required
+              disabled
             />
+
             <Field
-              type="text"
               label="Unit"
               name="unit"
               value={header.unit}
               onChange={handleChange}
               error={fieldErrors.unit}
-              placeholder="e.g. PCS, KG"
               required
+              disabled
             />
-          </div>
 
-          {/* Row 3: Quantity / Rate / Amount */}
-          <div className={fieldGrid}>
             <Field
               type="number"
-              label="Quantity"
+              label="Qty"
               name="quantity"
               value={header.quantity}
               onChange={handleChange}
               error={fieldErrors.quantity}
+              required
+              min="0"
               step="0.001"
               placeholder="0.000"
-              required
+              disabled={isSubmitting}
             />
+
             <Field
               type="number"
               label="Rate"
@@ -556,44 +1136,50 @@ const OpeningStockEntryForm = ({ data, onBack }) => {
               value={header.rate}
               onChange={handleChange}
               error={fieldErrors.rate}
+              required
+              min="0"
               step="0.01"
               placeholder="0.00"
-              required
+              disabled={isSubmitting}
             />
+
             <Field
               type="number"
-              label="Amount (Auto)"
+              label="Amount"
               name="amount"
               value={header.amount}
+              error={fieldErrors.amount}
               readOnly
               disabled
               placeholder="0.00"
             />
           </div>
+        </div>
 
-          {/* Remarks */}
+        {/* Remarks */}
+
+        <div>
           <div className={fieldGrid}>
             <Field
-              className="col-span-full"
               type="textarea"
               label="Remarks"
               name="remarks"
-              value={summary.remarks}
-              onChange={(e) => {
-                if (fieldErrors.remarks)
-                  setFieldErrors((prev) => ({ ...prev, remarks: "" }));
-                setSummary((prev) => ({ ...prev, remarks: e.target.value }));
-              }}
-              placeholder="Enter comments / notes..."
+              value={header.remarks}
+              onChange={handleChange}
+              disabled={isSubmitting}
+              placeholder="Enter remarks..."
+              className="col-span-full"
             />
           </div>
         </div>
+
+        {/* Buttons */}
 
         <FormButtons
           onCancel={onBack}
           onSave={handleSave}
           isSubmitting={isSubmitting}
-          saveLabel={data ? "Update" : "Save"}
+          saveLabel={isEdit ? "Update" : "Save"}
         />
       </div>
     </div>

@@ -2,7 +2,7 @@ import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import dayjs from "dayjs";
 import purchaseContractAmendmentAPI from "../../../api/Purchase/purchaseContractAmendmentAPI";
-import { purchaseContractAPI } from "../../../api/Purchase/purchaseContractAPI";
+import purchaseContractAPI from "../../../api/Purchase/purchaseContractAPI";
 import partyMasterAPI from "../../../api/partyMasterAPI";
 import { useToast } from "../../Toast/ToastContext";
 
@@ -373,8 +373,7 @@ const emptyPcDetailRow = () => ({
   newValidTo: "",
 });
 
-const fmtDate = (value) =>
-  value ? dayjs(value).format("YYYY-MM-DD") : "";
+const fmtDate = (value) => (value ? dayjs(value).format("YYYY-MM-DD") : "");
 
 /* ---------------------------------------------------------------------------- */
 
@@ -455,7 +454,12 @@ const PurchaseContractAmendmentForm = ({ data, onBack }) => {
           (units || []).map((u) => ({
             value: u.unitCode || u.code || u.id?.toString() || "",
             label:
-              u.unitName || u.name || u.unitCode || u.code || u.id?.toString() || "",
+              u.unitName ||
+              u.name ||
+              u.unitCode ||
+              u.code ||
+              u.id?.toString() ||
+              "",
           })),
         );
       } catch {
@@ -481,7 +485,10 @@ const PurchaseContractAmendmentForm = ({ data, onBack }) => {
       try {
         const res = await purchaseContractAPI.getContractByOrgId(orgId);
         setContractOptions(
-          (res || []).map((c) => ({ value: c.contractNo, label: c.contractNo })),
+          (res || []).map((c) => ({
+            value: c.contractNo,
+            label: c.contractNo,
+          })),
         );
       } catch {
         setContractOptions([]);
@@ -508,7 +515,10 @@ const PurchaseContractAmendmentForm = ({ data, onBack }) => {
     async (pId) => {
       if (!pId || !orgId) return;
       try {
-        const party = await purchaseContractAmendmentAPI.getPartyById(pId, orgId);
+        const party = await purchaseContractAmendmentAPI.getPartyById(
+          pId,
+          orgId,
+        );
         setHeader((prev) => ({
           ...prev,
           partyName: party?.partyName || party?.name || "",
@@ -571,7 +581,10 @@ const PurchaseContractAmendmentForm = ({ data, onBack }) => {
 
   useEffect(() => {
     if (header.contractNo) {
-      const timer = setTimeout(() => loadContractDetails(header.contractNo), 500);
+      const timer = setTimeout(
+        () => loadContractDetails(header.contractNo),
+        500,
+      );
       return () => clearTimeout(timer);
     }
   }, [header.contractNo, loadContractDetails]);
@@ -702,7 +715,12 @@ const PurchaseContractAmendmentForm = ({ data, onBack }) => {
   };
 
   const pcDetailColumns = [
-    { key: "itemCode", label: "Item Code", type: "select", options: itemOptions },
+    {
+      key: "itemCode",
+      label: "Item Code",
+      type: "select",
+      options: itemOptions,
+    },
     { key: "itemName", label: "Item Description", readOnly: true },
     { key: "unit", label: "Unit", type: "select", options: unitOptions },
     { key: "oldRate", label: "Old Rate", readOnly: true },
