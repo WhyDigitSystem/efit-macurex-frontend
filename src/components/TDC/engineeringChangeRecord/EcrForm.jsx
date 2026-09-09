@@ -935,18 +935,16 @@ const EcrForm = ({ data, onBack }) => {
               value={header.ecrDate}
               onChange={handleHeaderChange}
               error={fieldErrors.ecrDate}
-              required
               disabled
             />
             <Field
-              type="select"
+              // type="select"
               label="From Department"
               name="fromDepartment"
               value={header.fromDepartment}
               onChange={handleHeaderChange}
               error={fieldErrors.fromDepartment}
-              options={departmentOptions}
-              required
+              // options={departmentOptions}
             />
             <Field
               label="Customer Name"
@@ -962,7 +960,6 @@ const EcrForm = ({ data, onBack }) => {
               onChange={handleHeaderChange}
               error={fieldErrors.requestedBy}
               options={requestedByOptions}
-              required
             />
             <Field
               type="textarea"
@@ -971,12 +968,15 @@ const EcrForm = ({ data, onBack }) => {
               value={header.reasonForChange}
               onChange={handleHeaderChange}
               error={fieldErrors.reasonForChange}
-              required
             />
-            
-
-
-
+            <Field
+              type="textarea"
+              label="Product Description"
+              name="productDescription"
+              value={header.productDescription}
+              onChange={handleHeaderChange}
+              error={fieldErrors.productDescription}
+            />
             <Field
               type="select"
               label="Engineering Drawing Change"
@@ -985,7 +985,6 @@ const EcrForm = ({ data, onBack }) => {
               onChange={handleHeaderChange}
               error={fieldErrors.engineeringDrawingChange}
               options={YES_NO}
-              required
             />
             <Field
               type="select"
@@ -995,7 +994,6 @@ const EcrForm = ({ data, onBack }) => {
               onChange={handleHeaderChange}
               error={fieldErrors.bomChange}
               options={YES_NO}
-              required
             />
           </div>
         </div>
@@ -1038,7 +1036,7 @@ const EcrForm = ({ data, onBack }) => {
               <div className={subTabFieldGrid}>
                 <Field
                   type="text"
-                  label="Customer Product No"
+                  label="Customer"
                   name="customerProductNo"
                   value={customerProductNo}
                   onChange={handleProductChange}
@@ -1047,7 +1045,7 @@ const EcrForm = ({ data, onBack }) => {
 
                 <Field
                   type="text"
-                  label="Company Product NO"
+                  label="Macurex"
                   name="companyProductNo"
                   value={companyProductNo}
                   onChange={handleProductChange}
