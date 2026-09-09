@@ -8,17 +8,15 @@ const SupplierResponseList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   const [loading, setLoading] = useState(false);
 
   const ORG_ID = localStorage.getItem("orgId");
-  const BRANCH_ID = localStorage.getItem("branchId");
 
   const loadRecords = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await supplierResponseAPI.getSupplierResponseByOrgId(
-        ORG_ID,
-        BRANCH_ID,
+      const data = await supplierResponseAPI.getSupplierResponseByOrgId(ORG_ID);
+      const sorted = [...(data || [])].sort(
+        (a, b) => (b.id || 0) - (a.id || 0),
       );
-      data.sort((a, b) => (b.id || 0) - (a.id || 0));
-      setRecords(data);
+      setRecords(sorted);
     } catch (error) {
       console.error("Failed to fetch supplier responses:", error);
       setRecords([]);
@@ -26,7 +24,7 @@ const SupplierResponseList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     } finally {
       setLoading(false);
     }
-  }, [ORG_ID, BRANCH_ID]);
+  }, [ORG_ID]);
 
   useEffect(() => {
     loadRecords();
@@ -34,49 +32,35 @@ const SupplierResponseList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
 
   const columns = [
     {
-      key: "docNo",
-      label: "Doc No",
-      accessor: (row) => row.docNo || "",
+      key: "complaintNo",
+      label: "Complaint No",
+      accessor: (row) => row.complaintNo || "",
       type: "text",
       noWrap: true,
     },
     {
-      key: "complaintId",
-      label: "Complaint No",
-      accessor: (row) =>
-        typeof row.complaintId === "object"
-          ? row.complaintId.docNo || row.complaintId.id
-          : row.complaintNo || row.complaintId,
-      type: "text",
-    },
-    {
-      key: "docDate",
-      label: "Doc Date",
-      accessor: (row) => row.docDate || "",
+      key: "complaintDate",
+      label: "Complaint Date",
+      accessor: (row) => row.complaintDate || "",
       type: "text",
       noWrap: true,
     },
     {
       key: "productNo",
-      label: "Product No",
+      label: "Part No",
       accessor: (row) => row.productNo || "",
       type: "text",
     },
     {
       key: "productName",
-      label: "Product Name",
+      label: "Part Name",
       accessor: (row) => row.productName || "",
       type: "text",
     },
     {
-      key: "supplierId",
+      key: "supplierNo",
       label: "Supplier No",
-      accessor: (row) =>
-        typeof row.supplierId === "object"
-          ? row.supplierId.customerCode ||
-            row.supplierId.customerName ||
-            row.supplierId.id
-          : row.supplierNo || row.supplierId,
+      accessor: (row) => row.supplierNo || "",
       type: "text",
     },
     {
@@ -84,6 +68,31 @@ const SupplierResponseList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
       label: "Supplier Name",
       accessor: (row) => row.supplierName || "",
       type: "text",
+    },
+    {
+      key: "financialYear",
+      label: "Financial Year",
+      accessor: (row) => row.financialYear || "",
+      type: "text",
+    },
+    {
+      key: "active",
+      label: "Status",
+      accessor: (row) =>
+        row.active === true || row.active === "Active" ? "Active" : "Inactive",
+      type: "status",
+      statusVariants: {
+        Active: {
+          label: "Active",
+          className:
+            "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+        },
+        Inactive: {
+          label: "Inactive",
+          className:
+            "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+        },
+      },
     },
     {
       key: "actions",
@@ -95,12 +104,11 @@ const SupplierResponseList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   ];
 
   const searchFields = [
-    "docNo",
-    "complaintId",
-    "docDate",
+    "complaintNo",
+    "complaintDate",
     "productNo",
     "productName",
-    "supplierId",
+    "supplierNo",
     "supplierName",
   ];
 

@@ -1,49 +1,105 @@
-// supplierResponseAPI.js
 import apiClient from "../apiClient";
 
-// Supplier Response Entry API
-// Mirrors the quality API convention used in this app.
-// The backend persists the header, response details and summary in a
-// single transaction (server-side validation).
+const BASE = "/api/vendorComplaintEntry";
 
 const supplierResponseAPI = {
-  // Get Supplier Responses by Organization ID
-  getSupplierResponseByOrgId: async (orgId, branch) => {
+  getComplaintNoDropdown: async (orgId) => {
     try {
       const res = await apiClient.get(
-        `/api/quality/getSupplierResponseByOrgId?branch=${branch}&orgId=${orgId}`,
+        `${BASE}/getComplaintNoDropdownForSupplierResponseEntry`,
+        {
+          params: {
+            orgId: Number(orgId),
+          },
+        },
       );
-      const list = res?.paramObjectsMap?.supplierResponseVO;
+
+      return res?.paramObjectsMap?.complaintList || [];
+    } catch (error) {
+      return [];
+    }
+  },
+
+  getItemDropDownForSupplierResponseEntry: async (
+    branch,
+    orgId,
+    supplierId,
+  ) => {
+    try {
+      const res = await apiClient.get(
+        `${BASE}/getItemDropDownForSupplierResponseEntry`,
+        {
+          params: {
+            branch: Number(branch),
+            orgId: Number(orgId),
+            supplierId: Number(supplierId),
+          },
+        },
+      );
+
+      return res?.paramObjectsMap?.items || [];
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  getSupplierResponseEntryDocId: async (financialYear, orgId) => {
+    try {
+      const res = await apiClient.get(`${BASE}/getSupplierResponseEntryDocId`, {
+        params: {
+          financialYear: String(financialYear),
+          orgId: Number(orgId),
+        },
+      });
+
+      return res?.paramObjectsMap?.docId || "";
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  getSupplierResponseByOrgId: async (orgId) => {
+    try {
+      const res = await apiClient.get(
+        `${BASE}/getSupplierResponseEntryByOrgId`,
+        {
+          params: {
+            orgId: Number(orgId),
+          },
+        },
+      );
+
+      const list = res?.paramObjectsMap?.supplierResponseEntryVO;
+
       return Array.isArray(list) ? list : list ? [list] : [];
     } catch (error) {
-      console.error("Error fetching supplier responses:", error);
       throw error;
     }
   },
 
-  // Get Supplier Response by ID
   getSupplierResponseById: async (id) => {
     try {
-      const res = await apiClient.get(
-        `/api/quality/getSupplierResponseById?id=${id}`,
-      );
-      return res?.paramObjectsMap?.supplierResponseVO || null;
+      const res = await apiClient.get(`${BASE}/getSupplierResponseEntryById`, {
+        params: {
+          id: Number(id),
+        },
+      });
+
+      return res?.paramObjectsMap?.supplierResponseEntryVO || null;
     } catch (error) {
-      console.error("Error fetching supplier response by ID:", error);
       throw error;
     }
   },
 
-  // Create / Update Supplier Response
   createUpdateSupplierResponse: async (payload) => {
     try {
       const res = await apiClient.put(
-        `/api/quality/updateCreateSupplierResponse`,
+        `${BASE}/updateCreateSupplierResponseEntry`,
         payload,
       );
+
       return res;
     } catch (error) {
-      console.error("Error saving supplier response:", error);
       throw error;
     }
   },
