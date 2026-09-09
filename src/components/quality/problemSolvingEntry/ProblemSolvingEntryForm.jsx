@@ -9,7 +9,7 @@ import { departmentAPI } from "../../../api/departmentAPI";
 import partyMasterAPI from "../../../api/partyMasterAPI";
 import itemAPI from "../../../api/itemAPI";
 import employeeAPI from "../../../api/employeeAPI";
-import { controlPlanAPI } from "../../../api/quality/controlPlanAPI";
+import machineMasterAPI from "../../../api/Production/machineMasterAPI";
 
 /* ---------------------------------------------------------------------------- */
 /* Shared design tokens                                                        */
@@ -303,29 +303,13 @@ const CHILD_TABS = [
   { key: "problemSolvingRoot", label: "Problem Solving Root", kind: "table" },
   { key: "problemSolvingOther", label: "Problem Solving Other", kind: "table" },
   { key: "problemAction", label: "Problem Action", kind: "table" },
-  { key: "problemSolvingSummary", label: "Problem Solving Summary", kind: "fields" },
 ];
 
-const REFERENCE_OPTIONS = [
-  { value: "Customer Complaint", label: "Customer Complaint" },
-  { value: "Internal Rejection", label: "Internal Rejection" },
-  { value: "Inward Inspection", label: "Inward Inspection" },
-  { value: "In-Process Inspection", label: "In-Process Inspection" },
-  { value: "Audit", label: "Audit" },
-];
+const REFERENCE_OPTIONS = [ 1,2 ];
 
-const ACTION_OPTIONS = [
-  { value: "Containment", label: "Containment" },
-  { value: "Corrective Action", label: "Corrective Action" },
-  { value: "Preventive Action", label: "Preventive Action" },
-  { value: "Training", label: "Training" },
-  { value: "Inspection", label: "Inspection" },
-];
+const ACTION_OPTIONS = [ 1,2,3,4,5 ];
 
 const fmtDate = (value) => (value ? dayjs(value).format("YYYY-MM-DD") : "");
-
-const generateAnalysisNo = () =>
-  `PS-${dayjs().format("YYYYMMDD")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
 
 /* ---------------------------------------------------------------------------- */
 /* Problem Solving Entry Form                                                    */
@@ -351,50 +335,65 @@ const ProblemSolvingEntryForm = ({ data, onBack }) => {
   /* ---------- Header state ---------- */
   const [header, setHeader] = useState(() => {
     const base = {
-      analysisNo: data?.analysisNo || "",
-      analysisDate: data?.analysisDate
-        ? fmtDate(data.analysisDate)
-        : fmtDate(dayjs()),
-      plantId: data?.plantId?.id ?? data?.plantId ?? "",
+      analysisNo: data?.docId ?? data?.analysisNo ?? "",
+      analysisDate: data?.docDate ? fmtDate(data.docDate) : fmtDate(dayjs()),
+      plantId: data?.branch?.id ?? data?.plantId ?? "",
       department: data?.department?.id ?? data?.department ?? "",
       reference: data?.reference || "",
-      customerId: data?.customerId?.id ?? data?.customerId ?? "",
-      customerName: data?.customerName || "",
-      itemCode: data?.itemCode?.id ?? data?.itemCode ?? "",
-      itemDescription: data?.itemDescription || "",
-      machineNo: data?.machineNo || "",
-      machineName: data?.machineName || "",
-      manufacturingDate: data?.manufacturingDate
-        ? fmtDate(data.manufacturingDate)
-        : "",
-      defectDescription: data?.defectDescription || "",
-      teamMember1: data?.teamMember1?.id ?? data?.teamMember1 ?? "",
-      teamMember2: data?.teamMember2?.id ?? data?.teamMember2 ?? "",
-      shortTermAction: data?.shortTermAction || "",
+      customerId: data?.customer?.id ?? data?.customerId ?? data?.customer ?? "",
+      customerName: data?.customer?.customerName ?? (data?.customerName ?? ""),
+      itemCode: data?.item?.id ?? data?.itemCode ?? data?.item ?? "",
+      itemDescription:
+        data?.item?.itemDescription ?? (data?.itemDescription ?? ""),
+      machineNo: data?.machineNo?.id ?? (data?.machineNo ?? ""),
+      machineName: "",
+      manufacturingDate: data?.mfgDate ? fmtDate(data.mfgDate) : "",
+      defectDescription: data?.defectDesciption ?? (data?.defectDescription ?? ""),
+      teamMember1:
+        data?.teamMember1?.id ?? data?.teamMember1?.employeeId ?? data?.teamMember1 ?? "",
+      teamMember2:
+        data?.teamMember2?.id ?? data?.teamMember2?.employeeId ?? data?.teamMember2 ?? "",
+      shortTermAction: data?.shortTeamAction ?? (data?.shortTermAction ?? ""),
       closeDate: data?.closeDate ? fmtDate(data.closeDate) : "",
-      preparedBy: data?.preparedBy?.id ?? data?.preparedBy ?? "",
+      preparedBy:
+        data?.preparedBy?.id ?? data?.preparedBy?.employeeId ?? data?.preparedBy ?? "",
       recognizeTheTeam: data?.recognizeTheTeam || "",
     };
-    if (!base.analysisNo) base.analysisNo = generateAnalysisNo();
     return base;
   });
 
-  const [rootCauses, setRootCauses] = useState(
-    data?.problemSolvingRoot?.length ? data.problemSolvingRoot : [{}],
+  const [rootCauses, setRootCauses] = useState(() =>
+    data?.problemSolvingRootDetailsResponseDTO?.length
+      ? data.problemSolvingRootDetailsResponseDTO.map((r) => ({
+          rootCause: r.rootCause || "",
+          contributionPct: r.contributionPercentage ?? "",
+        }))
+      : [{ rootCause: "", contributionPct: "" }],
   );
 
-  const [correctiveActions, setCorrectiveActions] = useState(
-    data?.problemSolvingOther?.length ? data.problemSolvingOther : [{}],
+  const [correctiveActions, setCorrectiveActions] = useState(() =>
+    data?.problemSolvingOtherDetailsResponseDTO?.length
+      ? data.problemSolvingOtherDetailsResponseDTO.map((r) => ({
+          permanentCorrectiveActions: r.permanentCorrectiveActions || "",
+          effectsPct: r.effectsPercentage ?? "",
+        }))
+      : [{ permanentCorrectiveActions: "", effectsPct: "" }],
   );
 
-  const [problemActions, setProblemActions] = useState(
-    data?.problemAction?.length ? data.problemAction : [{}],
+  const [problemActions, setProblemActions] = useState(() =>
+    data?.problemSolvingActionDetailsResponseDTO?.length
+      ? data.problemSolvingActionDetailsResponseDTO.map((r) => ({
+          action: r.action || "",
+          description: r.description || "",
+          responsible:
+            r.responsible?.id ??
+            r.responsible?.employeeId ??
+            r.responsible ??
+            "",
+          implementationDate: r.implDate ? fmtDate(r.implDate) : "",
+        }))
+      : [{ action: "", description: "", responsible: "", implementationDate: "" }],
   );
-
-  const [summary, setSummary] = useState({
-    overallSummary: data?.summary?.overallSummary || "",
-    remarks: data?.summary?.remarks || "",
-  });
 
   /* ---------- Lookup loading ---------- */
 
@@ -404,6 +403,7 @@ const ProblemSolvingEntryForm = ({ data, onBack }) => {
   const [itemOptions, setItemOptions] = useState([]);
   const [machineOptions, setMachineOptions] = useState([]);
   const [employeeOptions, setEmployeeOptions] = useState([]);
+  const [teamMemberOptions, setTeamMemberOptions] = useState([]);
 
   const loadPlants = useCallback(async () => {
     try {
@@ -479,20 +479,29 @@ const ProblemSolvingEntryForm = ({ data, onBack }) => {
   }, [orgId, branch]);
 
   const loadMachines = useCallback(async () => {
+    if (!header.plantId) {
+      setMachineOptions([]);
+      return;
+    }
     try {
-      const res = await controlPlanAPI.getMachineFixtures(orgId);
+      const res = await machineMasterAPI.getMachineMaster(orgId, header.plantId);
+      const list = res?.paramObjectsMap?.machineMasterResponseVO;
       setMachineOptions(
-        (res || []).map((m) => ({
-          value: m.machineFixtureNo || m.id,
-          label: m.machineFixtureNo || m.machineFixtureName || m.id,
-          machineName: m.machineFixtureName || "",
-        })),
+        Array.isArray(list)
+          ? list.map((m) => ({
+              value: m.id,
+              label: m.machineInstrumentNo
+                ? `${m.machineInstrumentNo} - ${m.machineInstrumentName || ""}`.trim()
+                : m.id,
+              machineName: m.machineInstrumentName || "",
+            }))
+          : [],
       );
     } catch (error) {
       console.error("Failed to load machine options:", error);
       setMachineOptions([]);
     }
-  }, [orgId]);
+  }, [orgId, header.plantId]);
 
   const loadEmployees = useCallback(async () => {
     try {
@@ -500,7 +509,9 @@ const ProblemSolvingEntryForm = ({ data, onBack }) => {
       setEmployeeOptions(
         (res || []).map((e) => ({
           value: e.id,
-          label: e.employeeCode || e.employeeName || e.id,
+          label: e.employeeName || e.employeeCode || e.employeeId || e.id,
+          employeeId: e.employeeId,
+          employeeName: e.employeeName,
         })),
       );
     } catch (error) {
@@ -508,6 +519,29 @@ const ProblemSolvingEntryForm = ({ data, onBack }) => {
       setEmployeeOptions([]);
     }
   }, [orgId]);
+
+  const loadTeamMembers = useCallback(async () => {
+    if (!header.plantId || !header.department) {
+      setTeamMemberOptions([]);
+      return;
+    }
+    try {
+      const res = await problemSolvingEntryAPI.getTeamMemberDropdown(
+        header.plantId,
+        header.department,
+        orgId,
+      );
+      setTeamMemberOptions(
+        (res || []).map((m) => ({
+          value: m.id,
+          label: m.employeeName || m.employeeId || m.id,
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to load team member options:", error);
+      setTeamMemberOptions([]);
+    }
+  }, [header.plantId, header.department, orgId]);
 
   useEffect(() => {
     if (orgId) loadPlants();
@@ -518,10 +552,93 @@ const ProblemSolvingEntryForm = ({ data, onBack }) => {
       loadDepartments();
       loadCustomers();
       loadItems();
-      loadMachines();
       loadEmployees();
     }
-  }, [orgId, loadDepartments, loadCustomers, loadItems, loadMachines, loadEmployees]);
+  }, [orgId, loadDepartments, loadCustomers, loadItems, loadEmployees]);
+
+  useEffect(() => {
+    if (header.plantId) loadMachines();
+  }, [header.plantId, loadMachines]);
+
+  useEffect(() => {
+    loadTeamMembers();
+  }, [loadTeamMembers]);
+
+  const resolveEmployeeRef = (raw, options) => {
+    if (raw === null || raw === undefined || raw === "") return "";
+    if (typeof raw === "number" || /^\d+$/.test(String(raw))) return String(raw);
+    const hit = (options || []).find(
+      (o) =>
+        String(o.employeeId ?? "") === String(raw) ||
+        String(o.employeeName ?? "") === String(raw) ||
+        String(o.label ?? "") === String(raw),
+    );
+    return hit ? String(hit.value) : String(raw);
+  };
+
+  useEffect(() => {
+    let changed = false;
+    setHeader((prev) => {
+      const next = { ...prev };
+      if (employeeOptions.length) {
+        const preparedBy = resolveEmployeeRef(prev.preparedBy, employeeOptions);
+        if (preparedBy !== String(prev.preparedBy ?? "")) {
+          next.preparedBy = preparedBy;
+          changed = true;
+        }
+      }
+      if (teamMemberOptions.length) {
+        const tm1 = resolveEmployeeRef(prev.teamMember1, teamMemberOptions);
+        const tm2 = resolveEmployeeRef(prev.teamMember2, teamMemberOptions);
+        if (tm1 !== String(prev.teamMember1 ?? "")) {
+          next.teamMember1 = tm1;
+          changed = true;
+        }
+        if (tm2 !== String(prev.teamMember2 ?? "")) {
+          next.teamMember2 = tm2;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+    if (employeeOptions.length) {
+      setProblemActions((prev) =>
+        prev.map((r) => {
+          const responsible = resolveEmployeeRef(r.responsible, employeeOptions);
+          return responsible !== String(r.responsible ?? "")
+            ? { ...r, responsible }
+            : r;
+        }),
+      );
+    }
+  }, [employeeOptions, teamMemberOptions]);
+
+  // Generate the actual next Doc Id via the API for new entries.
+  useEffect(() => {
+    if (data?.id) return;
+    let cancelled = false;
+    (async () => {
+      const financialYear = String(
+        localStorage.getItem("finYear") || dayjs().year(),
+      );
+      try {
+        const docId = await problemSolvingEntryAPI.getProblemSolvingEntryDocId({
+          financialYear,
+          orgId,
+        });
+        if (!cancelled && docId) {
+          setHeader((prev) =>
+            prev.analysisNo ? prev : { ...prev, analysisNo: docId },
+          );
+        }
+      } catch (error) {
+        console.error("Failed to generate Doc Id:", error);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [data?.id, orgId]);
 
   /* ---------------------------------------------------------------------------- */
   /* Handlers                                                                     */
@@ -546,6 +663,14 @@ const ProblemSolvingEntryForm = ({ data, onBack }) => {
           (m) => String(m.value) === String(value),
         );
         next.machineName = machine?.machineName || "";
+      }
+      if (name === "plantId") {
+        next.machineNo = "";
+        next.machineName = "";
+      }
+      if (name === "plantId" || name === "department") {
+        next.teamMember1 = "";
+        next.teamMember2 = "";
       }
       return next;
     });
@@ -577,12 +702,6 @@ const ProblemSolvingEntryForm = ({ data, onBack }) => {
     problemSolvingRoot: setRootCauses,
     problemSolvingOther: setCorrectiveActions,
     problemAction: setProblemActions,
-  };
-
-  const handleSummaryChange = (e) => {
-    const { name, value } = e.target;
-    if (fieldErrors[name]) setFieldErrors((prev) => ({ ...prev, [name]: "" }));
-    setSummary((prev) => ({ ...prev, [name]: value }));
   };
 
   /* ---------------------------------------------------------------------------- */
@@ -628,17 +747,23 @@ const ProblemSolvingEntryForm = ({ data, onBack }) => {
         "Add at least one Problem Action row with Action and Implementation Date";
     problemActions.forEach((r, i) => {
       if (!r.action?.trim()) errors[`pa.${i}.action`] = "Action is required";
-      if (!r.responsible?.trim())
+      if (!r.responsible || String(r.responsible).trim() === "")
         errors[`pa.${i}.responsible`] = "Responsible is required";
       if (!r.implementationDate)
         errors[`pa.${i}.implementationDate`] = "Implementation Date is required";
     });
 
-    if (!summary.overallSummary?.trim())
-      errors.overallSummary = "Overall Summary is required";
-
     setFieldErrors(errors);
-    return Object.keys(errors).length === 0;
+
+    const keys = Object.keys(errors);
+    if (keys.length) {
+      addToast(errors[keys[0]], "error");
+      if (keys[0] === "problemSolvingRoot") setActiveChildTab("problemSolvingRoot");
+      if (keys[0] === "problemSolvingOther") setActiveChildTab("problemSolvingOther");
+      if (keys[0] === "problemAction") setActiveChildTab("problemAction");
+      return false;
+    }
+    return true;
   };
 
   const handleSave = async () => {
@@ -646,19 +771,49 @@ const ProblemSolvingEntryForm = ({ data, onBack }) => {
 
     setIsSubmitting(true);
 
-    const isUpdate = Boolean(data?.id);
-
     const payload = {
-      ...(isUpdate ? { id: data.id } : {}),
+      ...(data?.id ? { id: Number(data.id) } : {}),
+      active: "Active",
+      branch: Number(header.plantId),
+      cancelRemarks: "",
+      closeDate: header.closeDate,
+      createdBy: usersId || "admin",
+      customer: Number(header.customerId),
+      department: Number(header.department),
+      defectDesciption: header.defectDescription,
+      docDate: header.analysisDate,
+      docId: header.analysisNo,
+      financialYear: String(dayjs(header.analysisDate).year()),
+      item: Number(header.itemCode),
+      machineNo: header.machineNo,
+      mfgDate: header.manufacturingDate,
       orgId,
-      branch,
-      ...header,
-      problemSolvingRoot: rootCauses,
-      problemSolvingOther: correctiveActions,
-      problemAction: problemActions,
-      summary,
-      createdBy: isUpdate ? data?.createdBy || usersId : usersId,
-      ...(isUpdate ? { updatedBy: usersId } : {}),
+      preparedBy: Number(header.preparedBy),
+      problemSolvingActionDetailsDTO: problemActions
+        .filter((r) => r.action)
+        .map((r) => ({
+          action: r.action,
+          description: r.description,
+          implDate: r.implementationDate,
+          responsible: r.responsible ? Number(r.responsible) : undefined,
+        })),
+      problemSolvingOtherDetailsDTO: correctiveActions
+        .filter((r) => r.permanentCorrectiveActions)
+        .map((r) => ({
+          effectsPercentage: Number(r.effectsPct) || 0,
+          permanentCorrectiveActions: r.permanentCorrectiveActions,
+        })),
+      problemSolvingRootDetailsDTO: rootCauses
+        .filter((r) => r.rootCause)
+        .map((r) => ({
+          contributionPercentage: Number(r.contributionPct) || 0,
+          rootCause: r.rootCause,
+        })),
+      recognizeTheTeam: header.recognizeTheTeam,
+      reference: header.reference,
+      shortTeamAction: header.shortTermAction,
+      teamMember1: header.teamMember1 ? Number(header.teamMember1) : undefined,
+      teamMember2: header.teamMember2 ? Number(header.teamMember2) : undefined,
     };
 
     try {
@@ -668,7 +823,7 @@ const ProblemSolvingEntryForm = ({ data, onBack }) => {
       if (response?.status) {
         addToast(
           response?.paramObjectsMap?.message ||
-            (isUpdate
+            (data?.id
               ? "Problem Solving Entry updated successfully!"
               : "Problem Solving Entry created successfully!"),
         );
@@ -845,7 +1000,7 @@ const ProblemSolvingEntryForm = ({ data, onBack }) => {
               value={header.teamMember1}
               onChange={handleHeaderChange}
               error={fieldErrors.teamMember1}
-              options={employeeOptions}
+              options={teamMemberOptions}
             />
             <Field
               type="select"
@@ -854,7 +1009,7 @@ const ProblemSolvingEntryForm = ({ data, onBack }) => {
               value={header.teamMember2}
               onChange={handleHeaderChange}
               error={fieldErrors.teamMember2}
-              options={employeeOptions}
+              options={teamMemberOptions}
             />
             <Field
               type="textarea"
@@ -1027,30 +1182,6 @@ const ProblemSolvingEntryForm = ({ data, onBack }) => {
                   Implementation Date is required in every row
                 </p>
               )}
-            </div>
-          )}
-
-          {/* Tab 4: Problem Solving Summary */}
-          {activeChildTab === "problemSolvingSummary" && (
-            <div className="pt-3">
-              <div className={fieldGrid}>
-                <Field
-                  type="textarea"
-                  label="Overall Summary"
-                  name="overallSummary"
-                  value={summary.overallSummary}
-                  onChange={handleSummaryChange}
-                  error={fieldErrors.overallSummary}
-                  required
-                />
-                <Field
-                  type="textarea"
-                  label="Remarks"
-                  name="remarks"
-                  value={summary.remarks}
-                  onChange={handleSummaryChange}
-                />
-              </div>
             </div>
           )}
         </section>

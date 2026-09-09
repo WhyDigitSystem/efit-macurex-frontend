@@ -34,25 +34,25 @@ const ProblemSolvingEntryList = ({ onAddNew, onEdit, onBack, refreshTrigger }) =
 
   const columns = [
     {
-      key: "analysisNo",
+      key: "docId",
       label: "Analysis No",
-      accessor: (row) => row.analysisNo,
+      accessor: (row) => row.docId || row.analysisNo || "",
       type: "text",
       noWrap: true,
     },
     {
-      key: "analysisDate",
+      key: "docDate",
       label: "Analysis Date",
-      accessor: (row) => row.analysisDate || "",
+      accessor: (row) => row.docDate || "",
       type: "text",
     },
     {
-      key: "plantId",
+      key: "branch",
       label: "Plant",
       accessor: (row) =>
-        typeof row.plantId === "object"
-          ? row.plantId.branchName || row.plantId.plantName || row.plantId.id
-          : row.plantName || row.plantId,
+        typeof row.branch === "object"
+          ? row.branch.branchName || row.branch.branchCode || row.branch.id
+          : row.branch || "",
       type: "text",
     },
     {
@@ -60,32 +60,34 @@ const ProblemSolvingEntryList = ({ onAddNew, onEdit, onBack, refreshTrigger }) =
       label: "Department",
       accessor: (row) =>
         typeof row.department === "object"
-          ? row.department.departmentName || row.department.id
+          ? row.department.departmentName ||
+            row.department.departmentCode ||
+            row.department.id
           : row.department || "",
       type: "text",
     },
     {
-      key: "customerId",
+      key: "customer",
       label: "Customer",
       accessor: (row) =>
-        typeof row.customerId === "object"
-          ? row.customerId.customerCode || row.customerId.customerName || row.customerId.id
-          : row.customerName || row.customerId,
+        typeof row.customer === "object"
+          ? row.customer.customerName || row.customer.id
+          : row.customerName || row.customer || "",
       type: "text",
     },
     {
-      key: "itemCode",
+      key: "item",
       label: "Item Code",
       accessor: (row) =>
-        typeof row.itemCode === "object"
-          ? row.itemCode.itemCode || row.itemCode.id
-          : row.itemCode || "",
+        typeof row.item === "object"
+          ? row.item.itemCode || row.item.id
+          : row.item || "",
       type: "text",
     },
     {
-      key: "defectDescription",
+      key: "defectDesciption",
       label: "Defect Description",
-      accessor: (row) => row.defectDescription || "",
+      accessor: (row) => row.defectDesciption || "",
       type: "text",
     },
     {
@@ -98,13 +100,13 @@ const ProblemSolvingEntryList = ({ onAddNew, onEdit, onBack, refreshTrigger }) =
   ];
 
   const searchFields = [
-    "analysisNo",
-    "analysisDate",
-    "plantId",
+    "docId",
+    "docDate",
+    "branch",
     "department",
-    "customerId",
-    "itemCode",
-    "defectDescription",
+    "customer",
+    "item",
+    "defectDesciption",
   ];
 
   return (
