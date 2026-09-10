@@ -13,15 +13,20 @@ const GoodsReceivedNoteList = ({
   const [loading, setLoading] = useState(false);
 
   const ORG_ID = Number(localStorage.getItem("orgId"));
+  const BRANCH_ID = Number(localStorage.getItem("branchId"));
 
   const loadGrns = useCallback(async () => {
     try {
       setLoading(true);
 
-      const response = await goodsReceivedNoteAPI.getGrnByOrgId(ORG_ID);
+      const response = await goodsReceivedNoteAPI.getGrnByOrgId(
+        BRANCH_ID,
+        ORG_ID
+      );
 
+      // response is already the grnVO array from the API helper
       const sortedData = (response || []).sort(
-        (a, b) => (b.id || 0) - (a.id || 0),
+        (a, b) => (b.id || 0) - (a.id || 0)
       );
 
       setGrnData(sortedData);
@@ -32,7 +37,7 @@ const GoodsReceivedNoteList = ({
     } finally {
       setLoading(false);
     }
-  }, [ORG_ID]);
+  }, [ORG_ID, BRANCH_ID]);
 
   useEffect(() => {
     loadGrns();
@@ -40,39 +45,40 @@ const GoodsReceivedNoteList = ({
 
   const columns = [
     {
-      key: "grnNo",
+      key: "docId",
       label: "GRN No",
-      accessor: (row) => row.header?.grnNo,
+      accessor: (row) => row.docId,
       type: "text",
     },
     {
-      key: "grnDate",
+      key: "docDate",
       label: "GRN Date",
-      accessor: (row) => row.header?.grnDate,
+      accessor: (row) => row.docDate,
       type: "date",
     },
     {
       key: "supplierName",
       label: "Supplier Name",
-      accessor: (row) => row.header?.supplierName,
+      accessor: (row) => row.supplierCode?.supplierName || "",
       type: "text",
     },
     {
       key: "supplierCode",
       label: "Supplier Code",
-      accessor: (row) => row.header?.supplierCode,
+      accessor: (row) => row.supplierCode?.supplierCode || "",
       type: "text",
     },
     {
       key: "poNo",
       label: "PO No/ PC No",
-      accessor: (row) => row.header?.poNo,
+      accessor: (row) => row.poNo,
       type: "text",
     },
     {
       key: "plantId",
       label: "Plant ID",
-      accessor: (row) => row.header?.plantId,
+      accessor: (row) =>
+        row.branch?.branchName || row.location?.locationName || "",
       type: "text",
     },
     {
@@ -91,10 +97,10 @@ const GoodsReceivedNoteList = ({
   ];
 
   const searchFields = [
-    "header.grnNo",
-    "header.supplierName",
-    "header.supplierCode",
-    "header.poNo",
+    "docId",
+    "supplierCode.supplierName",
+    "supplierCode.supplierCode",
+    "poNo",
   ];
 
   return (

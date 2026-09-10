@@ -8,18 +8,47 @@ const StockTransferList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   const [loading, setLoading] = useState(false);
 
   const ORG_ID = Number(localStorage.getItem("orgId"));
+  const BRANCH_ID = Number(localStorage.getItem("branchId"));
 
   const loadTransfers = useCallback(async () => {
+    if (!ORG_ID) return;
     try {
       setLoading(true);
 
-      const response = await stockTransferAPI.getStockTransferByOrgId(ORG_ID);
+      const response = await stockTransferAPI.getStockTransferByOrgId(ORG_ID, BRANCH_ID);
+      console.log("Stock Transfer List Response:", response);
 
-      const sortedData = (response || []).sort(
-        (a, b) => (b.id || 0) - (a.id || 0),
-      );
+      // Extract data from response
+      let data = [];
+      if (response?.paramObjectsMap?.stockTransferResponseVO) {
+        data = response.paramObjectsMap.stockTransferResponseVO;
+      } else if (Array.isArray(response)) {
+        data = response;
+      } else if (response?.data?.paramObjectsMap?.stockTransferResponseVO) {
+        data = response.data.paramObjectsMap.stockTransferResponseVO;
+      }
 
-      setTransferData(sortedData);
+      // Map the data to match the table columns
+      const mappedData = data.map((item) => ({
+        id: item.id,
+        stockTransferNo: item.docId || "",
+        stockTransferDate: item.docDate || "",
+        fromPlantId: item.branch?.branchName || item.branch?.branchCode || "",
+        toPlant: item.toBranch?.branchName || item.toBranch?.branchCode || "",
+        fromLocation: item.fromLocation?.locationName || "",
+        toLocation: item.toLocation?.locationName || "",
+        belongsTo: item.belongsTo || "",
+        reason: item.reason || "",
+        narration: item.narration || "",
+        active: item.active || "Inactive",
+        createdBy: item.createdBy || "",
+        // Store full data for edit
+        _fullData: item,
+      }));
+
+      // Sort by ID descending (newest first)
+      mappedData.sort((a, b) => (b.id || 0) - (a.id || 0));
+      setTransferData(mappedData);
     } catch (error) {
       console.error("Failed to load stock transfers:", error);
       setTransferData([]);
@@ -27,7 +56,7 @@ const StockTransferList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     } finally {
       setLoading(false);
     }
-  }, [ORG_ID]);
+  }, [ORG_ID, BRANCH_ID]);
 
   useEffect(() => {
     loadTransfers();
@@ -37,37 +66,43 @@ const StockTransferList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     {
       key: "stockTransferNo",
       label: "Stock Transfer No",
-      accessor: (row) => row.header?.stockTransferNo,
+      accessor: "stockTransferNo",
       type: "text",
     },
     {
       key: "stockTransferDate",
       label: "Stock Transfer Date",
-      accessor: (row) => row.header?.stockTransferDate,
-      type: "date",
+      accessor: "stockTransferDate",
+      type: "text",
     },
     {
       key: "fromPlantId",
-      label: "From Plant ID",
-      accessor: (row) => row.header?.fromPlantId,
+      label: "From Plant",
+      accessor: "fromPlantId",
       type: "text",
     },
     {
       key: "toPlant",
       label: "To Plant",
-      accessor: (row) => row.header?.toPlant,
+      accessor: "toPlant",
       type: "text",
     },
     {
       key: "fromLocation",
       label: "From Location",
-      accessor: (row) => row.header?.fromLocation,
+      accessor: "fromLocation",
       type: "text",
     },
     {
       key: "toLocation",
       label: "To Location",
-      accessor: (row) => row.header?.toLocation,
+      accessor: "toLocation",
+      type: "text",
+    },
+    {
+      key: "reason",
+      label: "Reason",
+      accessor: "reason",
       type: "text",
     },
     {
@@ -75,6 +110,18 @@ const StockTransferList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
       label: "Status",
       accessor: "active",
       type: "status",
+      statusVariants: {
+        Active: {
+          label: "Active",
+          className:
+            "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+        },
+        Inactive: {
+          label: "Inactive",
+          className:
+            "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+        },
+      },
     },
     {
       key: "actions",
@@ -86,9 +133,30 @@ const StockTransferList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   ];
 
   const searchFields = [
-    "header.stockTransferNo",
-    "header.fromPlantId",
-    "header.toPlant",
+    "stockTransferNo",
+    "fromPlantId",
+    "toPlant",
+    "fromLocation",
+    "toLocation",
+    "reason",
+  ];
+
+  const filterOptions = [
+    { value: "all", label: "All", field: null },
+    {
+      value: "active",
+      label: "Active",
+      field: "active",
+      filterValue: "Active",
+      activeValue: "Active",
+    },
+    {
+      value: "inactive",
+      label: "Inactive",
+      field: "active",
+      filterValue: "Inactive",
+      activeValue: "Active",
+    },
   ];
 
   return (
@@ -99,6 +167,8 @@ const StockTransferList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
         loading={loading}
         columns={columns}
         searchFields={searchFields}
+        filterOptions={filterOptions}
+        defaultFilter="all"
         onBack={onBack}
         onAddNew={onAddNew}
         onEdit={onEdit}

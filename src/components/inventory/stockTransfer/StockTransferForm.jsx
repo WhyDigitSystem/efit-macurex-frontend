@@ -1,6 +1,9 @@
 import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import stockTransferAPI from "../../../api/Inventory/stockTransferAPI";
+import branchAPI from "../../../api/branchAPI";
+import listOfValuesAPI from "../../../api/listOfValuesAPI";
+import locationMasterAPI from "../../../api/locationMasterAPI";
 
 /* ---------------------------------------------------------------------------- */
 /* Shared design tokens - identical to PurchaseContractForm / PartyMasterForm  */
@@ -31,7 +34,7 @@ const fieldGrid =
   "grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-x-3 gap-y-2 items-start";
 
 /* ---------------------------------------------------------------------------- */
-/* Shared building blocks - identical to PurchaseContractForm / PartyMasterForm */
+/* Shared building blocks */
 
 const Field = ({
   label,
@@ -62,8 +65,8 @@ const Field = ({
         >
           <option value="">-- Select --</option>
           {(options || []).map((opt) => (
-            <option key={opt} value={opt}>
-              {opt}
+            <option key={opt.value ?? opt} value={opt.value ?? opt}>
+              {opt.label ?? opt}
             </option>
           ))}
         </select>
@@ -164,7 +167,7 @@ const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
 );
 
 /* ---------------------------------------------------------------------------- */
-/* Table helpers - identical to PurchaseContractForm / PartyMasterForm         */
+/* Table helpers */
 
 const TableWrapper = ({ children }) => (
   <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
@@ -178,13 +181,12 @@ const TableHead = ({ headers }) => (
       {headers.map((h, i) => (
         <th
           key={i}
-          className={`p-1 whitespace-nowrap ${
-            i === 0
-              ? "w-8 text-center"
-              : i === headers.length - 1
-                ? "w-20 text-left"
-                : "text-left"
-          } dark:text-white`}
+          className={`p-1 whitespace-nowrap ${i === 0
+            ? "w-8 text-center"
+            : i === headers.length - 1
+              ? "w-20 text-left"
+              : "text-left"
+            } dark:text-white`}
         >
           {h}
         </th>
@@ -202,11 +204,10 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
         type="button"
         onClick={onRemove}
         disabled={disabled}
-        className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-          disabled
-            ? "bg-gray-400 cursor-not-allowed"
-            : "bg-red-600 hover:bg-red-700"
-        }`}
+        className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
+          ? "bg-gray-400 cursor-not-allowed"
+          : "bg-red-600 hover:bg-red-700"
+          }`}
       >
         <Trash2 size={10} />
       </button>
@@ -219,8 +220,8 @@ const SelectCell = ({ value, onChange, options }) => (
     <select value={value} onChange={onChange} className={cellInputClasses}>
       <option value="">-- Select --</option>
       {(options || []).map((opt) => (
-        <option key={opt} value={opt}>
-          {opt}
+        <option key={opt.value ?? opt} value={opt.value ?? opt}>
+          {opt.label ?? opt}
         </option>
       ))}
     </select>
@@ -234,9 +235,8 @@ const InputCell = ({ value, onChange, type = "text", disabled }) => (
       value={value}
       onChange={onChange}
       disabled={disabled}
-      className={`${cellInputClasses} ${
-        disabled ? "bg-gray-100 dark:bg-gray-800 cursor-not-allowed" : ""
-      }`}
+      className={`${cellInputClasses} ${disabled ? "bg-gray-100 dark:bg-gray-800 cursor-not-allowed" : ""
+        }`}
     />
   </td>
 );
@@ -277,19 +277,17 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
 );
 
 /* ---------------------------------------------------------------------------- */
-/* Options (swap for real API-driven lists)                                    */
+/* Options (hardcoded)                                                         */
 
-const PLANT_IDS = ["BANGALORE", "CHENNAI", "PUNE", "DELHI"];
-const BELONGS_TO = ["APPLIANCES", "BOSCH"];
-const LOCATIONS = ["MAIN STORE", "WIP STORE", "FG STORE", "QC HOLD"];
 const REASONS = [
-  "PRODUCTION REQUIREMENT",
-  "STOCK REBALANCING",
-  "QUALITY HOLD RELEASE",
-  "RETURN TO STORE",
+  "NON MOVING ITEMS",
+  "SCRAP FROM R&D",
+  "SALES RETURN FROM BOSCH",
+  "SCHORTAGE",
+  "MATERIAL RETURN TO WITHOUT PROCESS",
+  "WRONGE ENTRY",
+  "ITEM TRANSFER",
 ];
-const ITEM_CODES = ["RM-001", "RM-002", "PKG-001", "SVC-001"];
-const UNITS = ["NOS", "KG", "LTR", "BOX", "MTR"];
 
 /* ---------------------------------------------------------------------------- */
 
@@ -312,8 +310,12 @@ const emptySummary = () => ({
 
 const emptyItemRow = () => ({
   itemCode: "",
+  itemmastid: "",
+  ItemIDn: "",
   itemDescription: "",
   unit: "",
+  unitmasterId: "",
+  unitLabel: "", // For displaying unit name
   availableQty: "",
   qty: "",
   rate: "",
@@ -323,15 +325,25 @@ const emptyItemRow = () => ({
 /* Child tabs - Bin Transfer Details is a table, Summary is a field grid       */
 
 const CHILD_TABS = [
-  { key: "binTransfer", label: "1-Bin Transfer Details", type: "table" },
-  { key: "summary", label: "2-Summary", type: "fields" },
+  { key: "binTransfer", label: "Bin Transfer Details", type: "table" },
+  { key: "summary", label: "Summary", type: "fields" },
 ];
 
 const StockTransferForm = ({ onBack, onSave, editData }) => {
   const ORG_ID = parseInt(localStorage.getItem("orgId"));
+  const branch = parseInt(localStorage.getItem("branchId"));
   const [activeChildTab, setActiveChildTab] = useState("binTransfer");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
+  const [generatingDocId, setGeneratingDocId] = useState(false);
+  const docIdGeneratedRef = useRef(false);
+
+  // API data states
+  const [plantOptions, setPlantOptions] = useState([]);
+  const [belongsToOptions, setBelongsToOptions] = useState([]);
+  const [locationOptions, setLocationOptions] = useState([]);
+  const [itemOptions, setItemOptions] = useState([]);
+  const [itemMap, setItemMap] = useState({});
 
   const [header, setHeader] = useState({
     ...emptyHeader(),
@@ -349,6 +361,144 @@ const StockTransferForm = ({ onBack, onSave, editData }) => {
       : [emptyItemRow()],
   );
 
+  /* ---------------- Generate Document ID ---------------- */
+
+  const generateDocId = useCallback(async () => {
+    // Don't generate if editing or already generated
+    if (editData?.id || docIdGeneratedRef.current || generatingDocId) {
+      return;
+    }
+
+    setGeneratingDocId(true);
+
+    try {
+      const financialYear = new Date().getFullYear().toString();
+      const response = await stockTransferAPI.getStockTransferDocId(
+        financialYear,
+        ORG_ID
+      );
+      console.log("Document ID Response:", response);
+
+      const docId = response?.paramObjectsMap?.invoiceDocId || "";
+      if (docId) {
+        setHeader((prev) => ({ ...prev, stockTransferNo: docId }));
+        docIdGeneratedRef.current = true;
+      } else {
+        console.error("Failed to generate Document ID");
+        const fallbackId = `STR-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, "0")}${String(new Date().getDate()).padStart(2, "0")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
+        setHeader((prev) => ({ ...prev, stockTransferNo: fallbackId }));
+        docIdGeneratedRef.current = true;
+      }
+    } catch (error) {
+      console.error("Error generating document ID:", error);
+      const fallbackId = `STR-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, "0")}${String(new Date().getDate()).padStart(2, "0")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
+      setHeader((prev) => ({ ...prev, stockTransferNo: fallbackId }));
+      docIdGeneratedRef.current = true;
+    } finally {
+      setGeneratingDocId(false);
+    }
+  }, [editData, ORG_ID, generatingDocId]);
+
+  /* ---------------- API Loading ---------------- */
+
+  const loadBranches = useCallback(async () => {
+    try {
+      const res = await branchAPI.getBranchByOrgId(ORG_ID);
+      const options = (res || []).map((branch) => ({
+        value: branch.id,
+        label: branch.branchName || branch.branchCode || branch.id,
+      }));
+      setPlantOptions(options);
+    } catch (error) {
+      console.error("Failed to load branches:", error);
+      setPlantOptions([]);
+    }
+  }, [ORG_ID]);
+
+  const loadBelongsTo = useCallback(async () => {
+    try {
+      const res = await listOfValuesAPI.getListValuesGroup("SDS BELONGS TO", ORG_ID);
+      console.log("Belongs To Response:", res);
+      const options = (res || []).map((item) => ({
+        value: item.valuesDescription || item.valueDescription || item.id,
+        label: item.valuesDescription || item.valueDescription || item.id,
+      }));
+      setBelongsToOptions(options);
+    } catch (error) {
+      console.error("Failed to load Belongs To options:", error);
+      setBelongsToOptions([
+        { value: "APPLIANCES", label: "APPLIANCES" },
+        { value: "BOSCH", label: "BOSCH" },
+        { value: "AUTOMOTIVE", label: "AUTOMOTIVE" },
+      ]);
+    }
+  }, [ORG_ID]);
+
+  const loadLocations = useCallback(async () => {
+    try {
+      const res = await locationMasterAPI.getLocationMasterByOrgId(ORG_ID, branch);
+      console.log("Location Response:", res);
+      const options = (res || []).map((location) => ({
+        value: location.id,
+        label: location.locationName || location.locationId || location.id,
+      }));
+      setLocationOptions(options);
+    } catch (error) {
+      console.error("Failed to load locations:", error);
+      setLocationOptions([]);
+    }
+  }, [ORG_ID, branch]);
+
+  const loadItems = useCallback(async () => {
+    try {
+      const response = await stockTransferAPI.getStockTransferItemDetails(branch, ORG_ID);
+      console.log("Item Response:", response);
+
+      const items = response?.paramObjectsMap?.mapp || [];
+      const map = {};
+      const options = items.map((item) => {
+        map[item.itemId] = {
+          itemId: item.itemId,
+          itemCode: item.itemCode,
+          itemDescription: item.itemDescription,
+          unit: item.unitId || "",
+          unitmasterId: item.unitmasterId || "",
+          unitLabel: item.unitId || "",
+          locationId: item.locationId,
+        };
+        return {
+          value: item.itemId,
+          label: `${item.itemCode} - ${item.itemDescription || ''}`,
+        };
+      });
+      setItemOptions(options);
+      setItemMap(map);
+    } catch (error) {
+      console.error("Failed to load items:", error);
+      setItemOptions([]);
+      setItemMap({});
+    }
+  }, [ORG_ID, branch]);
+
+  useEffect(() => {
+    if (ORG_ID) {
+      loadBranches();
+      loadBelongsTo();
+      loadLocations();
+      loadItems();
+    }
+  }, [ORG_ID, loadBranches, loadBelongsTo, loadLocations, loadItems]);
+
+  // Generate document ID on mount (only for new records and only once)
+  useEffect(() => {
+    if (!editData?.id && ORG_ID && !docIdGeneratedRef.current && !generatingDocId) {
+      generateDocId();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* ---------------- Handlers ---------------- */
+
   const handleHeaderChange = (e) => {
     const { name, value } = e.target;
     if (fieldErrors[name]) setFieldErrors((prev) => ({ ...prev, [name]: "" }));
@@ -358,6 +508,30 @@ const StockTransferForm = ({ onBack, onSave, editData }) => {
   const handleSummaryChange = (e) => {
     const { name, value } = e.target;
     setSummary((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleItemCellChange = (idx, key, value) => {
+    setItemRows((prev) =>
+      prev.map((row, i) => {
+        if (i === idx) {
+          const next = { ...row, [key]: value };
+          // If item code changes, auto-populate item details
+          if (key === "itemCode") {
+            const item = itemMap[value];
+            if (item) {
+              next.itemDescription = item.itemDescription || "";
+              next.unit = item.unitmasterId || ""; // Store unitmasterId as unit
+              next.unitmasterId = item.unitmasterId || "";
+              next.unitLabel = item.unitLabel || ""; // Display label
+              next.itemmastid = item.itemId || "";
+              next.ItemIDn = item.itemId || "";
+            }
+          }
+          return next;
+        }
+        return row;
+      })
+    );
   };
 
   const makeTableHandlers = (setter, emptyRow) => ({
@@ -371,7 +545,17 @@ const StockTransferForm = ({ onBack, onSave, editData }) => {
 
   const itemHandlers = makeTableHandlers(setItemRows, emptyItemRow);
 
-  // Config-driven lookup, same pattern as PurchaseContractForm's childTabConfig
+  // Override itemHandlers.onCellChange to include auto-populate logic
+  const originalOnCellChange = itemHandlers.onCellChange;
+  itemHandlers.onCellChange = (idx, key, value) => {
+    if (key === "itemCode") {
+      handleItemCellChange(idx, key, value);
+    } else {
+      originalOnCellChange(idx, key, value);
+    }
+  };
+
+  // Config-driven lookup
   const childTabConfig = {
     binTransfer: {
       type: "table",
@@ -382,15 +566,16 @@ const StockTransferForm = ({ onBack, onSave, editData }) => {
           key: "itemCode",
           label: "Item Code",
           type: "select",
-          options: ITEM_CODES,
+          options: itemOptions,
         },
-        { key: "itemDescription", label: "Item Description" },
-        { key: "unit", label: "Unit", type: "select", options: UNITS },
+        { key: "itemmastid", label: "Item Master Id", readOnly: true },
+        { key: "ItemIDn", label: "Item Idn", readOnly: true },
+        { key: "itemDescription", label: "Item Description", readOnly: true },
+        { key: "unitLabel", label: "Unit", readOnly: true }, // Use unitLabel for display
         {
           key: "availableQty",
           label: "Available Qty",
           type: "number",
-          readOnly: true,
         },
         { key: "qty", label: "Qty", type: "number" },
         { key: "rate", label: "Rate", type: "number" },
@@ -428,6 +613,12 @@ const StockTransferForm = ({ onBack, onSave, editData }) => {
       errors.toLocation = "To Location must be different from From Location";
     }
 
+    // Validate at least one item row has qty > 0
+    const hasValidItem = itemRows.some((row) => Number(row.qty) > 0);
+    if (!hasValidItem) {
+      errors.itemRows = "Add at least one item with quantity greater than 0";
+    }
+
     setFieldErrors(errors);
 
     return Object.keys(errors).length === 0;
@@ -438,27 +629,53 @@ const StockTransferForm = ({ onBack, onSave, editData }) => {
 
     setIsSubmitting(true);
 
+    const isUpdate = Boolean(editData?.id);
+    const financialYear = new Date().getFullYear().toString();
+    const usersId = localStorage.getItem("userName") || "SYSTEM";
+
+    // Build payload matching the API schema
     const payload = {
-      ...(editData?.id && { id: editData.id }),
-      header,
-      summary,
-      binTransferDetails: itemRows,
-      active: editData?.active ?? true,
+      active: true,
+      belongsTo: header.belongsTo || "",
+      branch: Number(header.fromPlantId) || 0,
+      cancelRemarks: "",
+      createdBy: usersId,
+      financialYear: financialYear,
+      fromLocation: Number(header.fromLocation) || 0,
+      narration: summary.narration || "",
       orgId: ORG_ID,
-      createdBy: localStorage.getItem("userName") || "SYSTEM",
+      reason: header.reason || "",
+      stockTransferDetailsDTO: itemRows
+        .filter((row) => row.itemCode && Number(row.qty) > 0)
+        .map((row) => ({
+          availableQty: Number(row.availableQty) || 0,
+          item: Number(row.itemCode) || 0,
+          qty: Number(row.qty) || 0,
+          rate: Number(row.rate) || 0,
+          unit: Number(row.unit) || Number(row.unitmasterId) || 0, // Use unit or unitmasterId
+        })),
+      toBranch: Number(header.toPlant) || 0,
+      toLocation: Number(header.toLocation) || 0,
     };
+
+    // Add id if updating
+    if (isUpdate && editData.id) {
+      payload.id = editData.id;
+    }
 
     console.log("📤 Saving Stock Transfer Payload:", payload);
 
     try {
-      const response =
-        await stockTransferAPI.updateCreateStockTransfer(payload);
+      const response = await stockTransferAPI.updateCreateStockTransfer(payload);
       console.log("📥 Response:", response);
 
       const status = response?.status === true || response?.statusFlag === "Ok";
 
       if (status) {
-        if (onSave) onSave(payload);
+        if (onSave) {
+          onSave(payload);
+        }
+        onBack();
       } else {
         const errorMessage =
           response?.paramObjectsMap?.message ||
@@ -504,15 +721,8 @@ const StockTransferForm = ({ onBack, onSave, editData }) => {
               value={header.fromPlantId}
               onChange={handleHeaderChange}
               error={fieldErrors.fromPlantId}
-              options={PLANT_IDS}
+              options={plantOptions}
               required
-            />
-            <Field
-              label="Stock Transfer No"
-              name="stockTransferNo"
-              value={header.stockTransferNo || "Auto"}
-              onChange={handleHeaderChange}
-              disabled
             />
             <Field
               type="select"
@@ -521,8 +731,16 @@ const StockTransferForm = ({ onBack, onSave, editData }) => {
               value={header.toPlant}
               onChange={handleHeaderChange}
               error={fieldErrors.toPlant}
-              options={PLANT_IDS}
+              options={plantOptions}
               required
+            />
+            <Field
+              label="Stock Transfer No"
+              name="stockTransferNo"
+              value={header.stockTransferNo || "Auto"}
+              onChange={handleHeaderChange}
+              disabled={!!editData?.id || generatingDocId}
+              placeholder={generatingDocId ? "Generating..." : ""}
             />
             <Field
               type="date"
@@ -539,7 +757,7 @@ const StockTransferForm = ({ onBack, onSave, editData }) => {
               name="belongsTo"
               value={header.belongsTo}
               onChange={handleHeaderChange}
-              options={BELONGS_TO}
+              options={belongsToOptions}
             />
             <Field
               type="select"
@@ -548,7 +766,7 @@ const StockTransferForm = ({ onBack, onSave, editData }) => {
               value={header.fromLocation}
               onChange={handleHeaderChange}
               error={fieldErrors.fromLocation}
-              options={LOCATIONS}
+              options={locationOptions}
               required
             />
             <Field
@@ -558,7 +776,7 @@ const StockTransferForm = ({ onBack, onSave, editData }) => {
               value={header.toLocation}
               onChange={handleHeaderChange}
               error={fieldErrors.toLocation}
-              options={LOCATIONS}
+              options={locationOptions}
               required
             />
             <Field
@@ -584,11 +802,10 @@ const StockTransferForm = ({ onBack, onSave, editData }) => {
                   key={tab.key}
                   type="button"
                   onClick={() => setActiveChildTab(tab.key)}
-                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${
-                    activeChildTab === tab.key
-                      ? "bg-blue-600 text-white"
-                      : "text-gray-600 dark:text-gray-300"
-                  }`}
+                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${activeChildTab === tab.key
+                    ? "bg-blue-600 text-white"
+                    : "text-gray-600 dark:text-gray-300"
+                    }`}
                 >
                   {tab.label}
                 </button>
@@ -608,12 +825,19 @@ const StockTransferForm = ({ onBack, onSave, editData }) => {
 
           {/* Active tab's content */}
           {activeTabConfig.type === "table" ? (
-            <DynamicTable
-              columns={activeTabConfig.columns}
-              rows={activeTabConfig.rows}
-              onCellChange={activeTabConfig.handlers.onCellChange}
-              onRemoveRow={activeTabConfig.handlers.onRemoveRow}
-            />
+            <>
+              <DynamicTable
+                columns={activeTabConfig.columns}
+                rows={activeTabConfig.rows}
+                onCellChange={activeTabConfig.handlers.onCellChange}
+                onRemoveRow={activeTabConfig.handlers.onRemoveRow}
+              />
+              {fieldErrors.itemRows && (
+                <p className="text-[11px] text-red-500 dark:text-red-400 mt-1 px-1">
+                  {fieldErrors.itemRows}
+                </p>
+              )}
+            </>
           ) : (
             <div className="pt-3">
               <div className={fieldGrid}>

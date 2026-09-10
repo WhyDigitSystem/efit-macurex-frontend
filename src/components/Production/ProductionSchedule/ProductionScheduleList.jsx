@@ -12,69 +12,51 @@ const ProductionScheduleList = ({ onAddNew, onEdit, onBack }) => {
     try {
       if (!orgId || !branchId) {
         console.error("Missing orgId or branchId");
-
         setItemData([]);
-
         return;
       }
 
-      const response = await productionScheduleAPI.getByOrgId(
-        orgId,
+      const schedules = await productionScheduleAPI.getAllForNextThreeMonth(
         branchId,
+        orgId
       );
 
-      if (response?.status === false) {
-        const msg =
-          response?.paramObjectsMap?.errorMessage ||
-          response?.paramObjectsMap?.message ||
-          "Failed to load production schedules";
-
-        console.warn(msg);
-
+      if (!Array.isArray(schedules) || schedules.length === 0) {
         setItemData([]);
-
-        return;
-      }
-
-      const schedules = Array.isArray(
-        response?.paramObjectsMap?.productionScheduleList
-      )
-        ? response.paramObjectsMap.productionScheduleList
-        : [];
-
-      if (schedules.length === 0) {
-        console.warn("No Production Schedules found");
-
-        setItemData([]);
-
         return;
       }
 
       const transformedData = schedules.map((item) => {
+        // Flatten the first detail row's item so the table can show the item code.
+        const firstDetail =
+          item.productionScheduleForNextThreeMonthDetails?.[0] || null;
+
         return {
           ...item,
 
           id: item.id,
 
-          fromMonthYear: item.fromMonthYear || "",
+          // API returns "MM-YYYY" or "MonthName-YYYY"
+          monthYear: item.monthYear || "",
 
-          toMonthYear: item.toMonthYear || "",
+          // Keep both for compatibility with the table columns
+          fromMonthYear: item.monthYear || "",
+          toMonthYear: item.monthYear || "",
+
+          itemCode: firstDetail?.item?.itemCode || "",
+          itemDescription: firstDetail?.item?.itemDescription || "",
 
           active:
             item.active === true ||
+            String(item.active).toLowerCase() === "true" ||
             String(item.active).toLowerCase() === "active",
 
-          activeStatus: item.active || "",
+          activeStatus: item.active,
 
-          createdBy: item.createdBy || item.preparedBy || "",
+          createdBy: item.createdBy || "",
 
-          preparedBy: item.preparedBy || "",
-
-          productionScheduleMonthDTO:
-            item.productionScheduleMonthResponseDTO || [],
-
-          productionScheduleDetailsDTO:
-            item.productionScheduleDetailsResponseDTO || [],
+          productionScheduleForNextThreeMonthDetails:
+            item.productionScheduleForNextThreeMonthDetails || [],
         };
       });
 
@@ -83,12 +65,11 @@ const ProductionScheduleList = ({ onAddNew, onEdit, onBack }) => {
       setItemData(transformedData);
     } catch (error) {
       console.error("Error loading production schedules:", error);
-
       setItemData([]);
     } finally {
       setLoading(false);
     }
-  }, [productionScheduleAPI]);
+  }, []);
 
   useEffect(() => {
     const orgId = localStorage.getItem("orgId");
@@ -97,25 +78,38 @@ const ProductionScheduleList = ({ onAddNew, onEdit, onBack }) => {
     loadItems(orgId, branchId);
   }, [loadItems]);
 
+  const handleRefresh = () => {
+    const orgId = localStorage.getItem("orgId");
+    const branchId = localStorage.getItem("branchId");
+    loadItems(orgId, branchId);
+  };
+
   const handleEdit = (item) => {
     onEdit(item);
   };
 
   const columns = [
     {
-      key: "fromMonthYear",
-      label: "From Month-Year",
-      accessor: "fromMonthYear",
+      key: "monthYear",
+      label: "Month-Year",
+      accessor: "monthYear",
       type: "text",
       noWrap: true,
     },
 
     {
-      key: "toMonthYear",
-      label: "To Month-Year",
-      accessor: "toMonthYear",
+      key: "itemCode",
+      label: "Item Code",
+      accessor: "itemCode",
       type: "text",
       noWrap: true,
+    },
+
+    {
+      key: "itemDescription",
+      label: "Item Description",
+      accessor: "itemDescription",
+      type: "text",
     },
 
     {
@@ -155,7 +149,7 @@ const ProductionScheduleList = ({ onAddNew, onEdit, onBack }) => {
     },
   ];
 
-  const searchFields = ["fromMonthYear", "toMonthYear", "createdBy"];
+  const searchFields = ["monthYear", "itemCode", "itemDescription", "createdBy"];
 
   const filterOptions = [
     {
@@ -200,7 +194,7 @@ const ProductionScheduleList = ({ onAddNew, onEdit, onBack }) => {
       emptyMessage="No Production Schedules found"
       loadingMessage="Loading Production Schedules..."
       enableRefresh={true}
-      onRefresh={loadItems}
+      onRefresh={handleRefresh}
       enableExport={true}
       exportFileName="ProductionSchedules"
     />
