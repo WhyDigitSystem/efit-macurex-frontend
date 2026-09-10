@@ -16,10 +16,7 @@ const ProductionScheduleList = ({ onAddNew, onEdit, onBack }) => {
         return;
       }
 
-      const schedules = await productionScheduleAPI.getAllForNextThreeMonth(
-        branchId,
-        orgId
-      );
+      const schedules = await productionScheduleAPI.getAllForNextThreeMonth(branchId, orgId);
 
       if (!Array.isArray(schedules) || schedules.length === 0) {
         setItemData([]);
@@ -27,34 +24,23 @@ const ProductionScheduleList = ({ onAddNew, onEdit, onBack }) => {
       }
 
       const transformedData = schedules.map((item) => {
-        // Flatten the first detail row's item so the table can show the item code.
         const firstDetail =
           item.productionScheduleForNextThreeMonthDetails?.[0] || null;
 
         return {
           ...item,
-
           id: item.id,
-
-          // API returns "MM-YYYY" or "MonthName-YYYY"
           monthYear: item.monthYear || "",
-
-          // Keep both for compatibility with the table columns
           fromMonthYear: item.monthYear || "",
           toMonthYear: item.monthYear || "",
-
           itemCode: firstDetail?.item?.itemCode || "",
           itemDescription: firstDetail?.item?.itemDescription || "",
-
           active:
             item.active === true ||
             String(item.active).toLowerCase() === "true" ||
             String(item.active).toLowerCase() === "active",
-
           activeStatus: item.active,
-
           createdBy: item.createdBy || "",
-
           productionScheduleForNextThreeMonthDetails:
             item.productionScheduleForNextThreeMonthDetails || [],
         };
@@ -113,13 +99,6 @@ const ProductionScheduleList = ({ onAddNew, onEdit, onBack }) => {
     },
 
     {
-      key: "createdBy",
-      label: "Created By",
-      accessor: "createdBy",
-      type: "text",
-    },
-
-    {
       key: "active",
       label: "Status",
       accessor: "active",
@@ -149,7 +128,7 @@ const ProductionScheduleList = ({ onAddNew, onEdit, onBack }) => {
     },
   ];
 
-  const searchFields = ["monthYear", "itemCode", "itemDescription", "createdBy"];
+  const searchFields = ["monthYear", "itemCode", "itemDescription"];
 
   const filterOptions = [
     {
