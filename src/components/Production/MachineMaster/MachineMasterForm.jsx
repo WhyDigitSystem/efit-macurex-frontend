@@ -542,7 +542,7 @@ const MachineMasterForm = ({ editData, editId, onBack, onSave }) => {
             const types = await listOfValuesAPI.getListValuesGroup("MACHINE_TYPE", orgId);
             setTypeOptions(
                 (types || []).map((t) => ({
-                    value: t.valuesDescription || t.valueDescription || t.id,
+                    value: t.id,
                     label: t.valuesDescription || t.valueDescription || t.id,
                     id: t.id
                 }))
@@ -1071,7 +1071,8 @@ const MachineMasterForm = ({ editData, editId, onBack, onSave }) => {
                 machineInstrumentNo: header.machineInstrumentNo || "",
                 machineInstrumentUsedFor: header.machineInstrumentUsedFor || "",
                 machineInstrumentWeight: Number(header.machineInstrumentWt) || 0,
-                machineOrInstrument: header.type || "",
+                machineOrInstrument: Number(header.type) || 0,
+                // machineOrInstrument: header.type || "",
                 machineType: Number(header.machineType) || 0,
                 madeIn: Number(header.madeIn) || 0,
                 maintenanceDate: header.maintenanceDate || "",
