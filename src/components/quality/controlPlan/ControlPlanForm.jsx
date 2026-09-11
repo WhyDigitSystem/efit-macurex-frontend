@@ -1,21 +1,11 @@
-import {
-  ArrowLeft,
-  FilePlus2,
-  Plus,
-  Save,
-  Trash2,
-  X,
-} from "lucide-react";
+import { ArrowLeft, FilePlus2, Plus, Save, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import dayjs from "dayjs";
 import controlPlanAPI from "../../../api/quality/controlPlanAPI";
-import parameterMasterAPI from "../../../api/quality/parameterMasterAPI";
-import itemAPI from "../../../api/itemAPI";
-import itemGradeAPI from "../../../api/itemGradeAPI";
-import locationMasterAPI from "../../../api/locationMasterAPI";
+import branchAPI from "../../../api/branchAPI";
 import listOfValuesAPI from "../../../api/listOfValuesAPI";
 import { useToast } from "../../Toast/ToastContext";
-
+import employeeAPI from "../../../api/employeeAPI";
 /* ---------------------------------------------------------------------------- */
 /* Shared design tokens                                                        */
 
@@ -55,12 +45,12 @@ const cellReadOnlyClasses =
   "bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 " +
   "text-gray-500 dark:text-gray-400";
 
-const labelClasses = "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
+const labelClasses =
+  "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
 const fieldGrid =
   "grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-x-4 gap-y-3 items-start";
 
-// Spacious grid used inside the child tabs so fields breathe more.
 const subTabFieldGrid =
   "grid grid-cols-[repeat(auto-fit,minmax(210px,1fr))] gap-x-5 gap-y-4 items-start";
 
@@ -224,8 +214,6 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
   </tr>
 );
 
-/* Generic dynamic table. Supports text / number / select / textarea / readonly
-   columns. Options may be plain strings or { value, label }. */
 const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
   <TableWrapper>
     <TableHead headers={["#", ...columns.map((c) => c.label), "Action"]} />
@@ -239,17 +227,23 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
         >
           {columns.map((col) => {
             if (col.type === "select") {
+              // Options can be a static array or a per-row function, since
+              // some columns (e.g. Machine/Device) depend on another cell
+              // in the same row (e.g. the selected Operation No).
+              const opts =
+                typeof col.options === "function"
+                  ? col.options(row)
+                  : col.options || [];
+
               return (
                 <td className="p-2 align-top" key={col.key}>
                   <select
                     value={row[col.key]}
-                    onChange={(e) =>
-                      onCellChange(idx, col.key, e.target.value)
-                    }
+                    onChange={(e) => onCellChange(idx, col.key, e.target.value)}
                     className={cellInputClasses}
                   >
                     <option value="">-- Select --</option>
-                    {(col.options || []).map((opt) => (
+                    {opts.map((opt) => (
                       <option key={opt.value ?? opt} value={opt.value ?? opt}>
                         {opt.label ?? opt}
                       </option>
@@ -266,10 +260,10 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
                     rows={1}
                     value={row[col.key]}
                     readOnly={col.readOnly}
-                    onChange={(e) =>
-                      onCellChange(idx, col.key, e.target.value)
+                    onChange={(e) => onCellChange(idx, col.key, e.target.value)}
+                    className={
+                      col.readOnly ? cellReadOnlyClasses : cellTextareaClasses
                     }
-                    className={col.readOnly ? cellReadOnlyClasses : cellTextareaClasses}
                   />
                 </td>
               );
@@ -306,37 +300,47 @@ const CHILD_TABS = [
   { key: "summary", label: "Control Plan Summary", kind: "fields" },
 ];
 
+// NOTE: operationDesc has no slot in controlPlanDetailDTO — kept here for
+// on-screen reference only, never sent in the save payload. machineOptions
+// is UI-only state: the per-row Machine/Device choices for whichever
+// Operation No is currently selected on that row.
 const emptyDetailRow = () => ({
+  id: 0,
   operationNo: "",
   operationDesc: "",
   machineDevice: "",
+  machineOptions: [],
   product: "",
   process: "",
   specification: "",
-  riskClass: "",
-  evalTechnique: "",
+  riskClassSpecialCharacter: "",
+  evaluationTechnique: "",
+  sampling: "",
+  controlMethod: "",
+  reactionPlan: "",
+  record: "",
 });
 
 const emptyParameterRow = () => ({
+  id: 0,
   parameter: "",
   parameterType: "",
-  tolerance: "",
+  tol: "",
 });
 
 const emptySampleRow = () => ({
+  id: 0,
   sampleFrequency: "",
   size: "",
 });
 
 const emptyFixtureRow = () => ({
-  machineFixtureNo: "",
+  id: 0,
+  machineFixtureNo: "", // holds the machineFixtureId (DTO expects a number here)
   machineFixtureName: "",
 });
 
 const fmtDate = (value) => (value ? dayjs(value).format("YYYY-MM-DD") : "");
-
-const generatePlanNo = () =>
-  `CPL-${dayjs().format("YYYYMMDD")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
 
 /* ---------------------------------------------------------------------------- */
 
@@ -349,230 +353,331 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
   const [activeChildTab, setActiveChildTab] = useState("detail");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [generatingDocId, setGeneratingDocId] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [tableErrors, setTableErrors] = useState({});
-
+  const [employeeList, setEmployeeList] = useState([]);
   /* ---------------- Lookup options ---------------- */
-  const [plantOptions, setPlantOptions] = useState([]);
+  const [branchOptions, setBranchOptions] = useState([]);
   const [planTypeOptions, setPlanTypeOptions] = useState([]);
-  const [riskClassOptions, setRiskClassOptions] = useState([]);
-  const [evalTechniqueOptions, setEvalTechniqueOptions] = useState([]);
-  const [itemOptions, setItemOptions] = useState([]);
-  const [itemMap, setItemMap] = useState({});
-  const [gradeOptions, setGradeOptions] = useState([]);
-  const [processSheetOptions, setProcessSheetOptions] = useState([]);
-  const [machineFixtureOptions, setMachineFixtureOptions] = useState([]);
-  const [parameterOptions, setParameterOptions] = useState([]);
+  const [fgItemList, setFgItemList] = useState([]); // raw list, for id -> details lookup
+  const [operationList, setOperationList] = useState([]); // raw operationMasterVO list, for Operation No auto-fill (Operation Desc + Machine/Device options)
+  const [locationList, setLocationList] = useState([]); // raw list, for Process Sheet No dropdown (label: locationId, value: id)
+  const [machineFixtureList, setMachineFixtureList] = useState([]); // raw, for id -> name lookup
+  const [parameterList, setParameterList] = useState([]); // raw, for id -> type lookup
 
   const isTableTab =
     CHILD_TABS.find((t) => t.key === activeChildTab)?.kind === "table";
 
+  const isEditMode = Boolean(
+    (editData && editData.id) || (editId && editId > 0),
+  );
+
   /* ---------------- State ---------------- */
-  const [header, setHeader] = useState(() => ({
+  const [header, setHeader] = useState({
     id: 0,
-    plantId: "",
+    plantId: BRANCH_ID ? String(BRANCH_ID) : "",
     controlPlanType: "",
-    planNo: editData ? "" : generatePlanNo(),
+    planNo: "",
     fgItemCode: "",
     itemDescription: "",
-    itemGrade: "",
+    itemGrade: "", // numeric gradeMasterId — sent to backend
+    itemGradeCode: "", // display-only text (gradeCode)
     itemSize: "",
-    processSheetNo: "",
-    originDate: "",
+    processSheetNo: "", // holds the numeric location id — sent to backend
+    originDate: "", // UI-only, no slot in controlPlanDTO
     revisionDate: "",
+    preparedBy: "",
+    checkedBy: "",
+    approved: "No",
+    active: true,
+    cancel: false,
+    cancelRemarks: "",
     orgId: ORG_ID,
     createdBy: CREATED_BY,
-  }));
+  });
 
   const [detailRows, setDetailRows] = useState([emptyDetailRow()]);
   const [parameterRows, setParameterRows] = useState([emptyParameterRow()]);
   const [sampleRows, setSampleRows] = useState([emptySampleRow()]);
   const [fixtureRows, setFixtureRows] = useState([emptyFixtureRow()]);
 
-  const [summary, setSummary] = useState({
-    preparedBy: "",
-    checkedBy: "",
-    approved: "",
-  });
-
   /* ---------------- Lookup loading ---------------- */
 
-  const loadLov = useCallback(async (group, setter) => {
+  const loadBranches = useCallback(async () => {
     try {
-      const res = await listOfValuesAPI.getListValuesGroup(group, ORG_ID);
-      if (Array.isArray(res) && res.length) {
-        setter(
-          res.map((v) => ({
-            value: v.valuesDescription || v.valueDescription || v.id,
-            label: v.valuesDescription || v.valueDescription || v.id,
-          })),
+      if (!ORG_ID) return;
+      const response = await branchAPI.getBranchByOrgId(ORG_ID);
+      const list = Array.isArray(response)
+        ? response
+        : response?.paramObjectsMap?.branches ||
+          response?.paramObjectsMap?.branchVO ||
+          [];
+      setBranchOptions(
+        list.map((b) => ({
+          value: b.id,
+          label: b.branchName || b.name || b.branchCode || `Branch ${b.id}`,
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to load branches:", error);
+      setBranchOptions([]);
+    }
+  }, [ORG_ID]);
+
+  const loadEmployees = useCallback(async () => {
+    try {
+      if (!ORG_ID) return;
+
+      const res = await employeeAPI.getEmployeeByOrgId(ORG_ID);
+
+      const list = Array.isArray(res)
+        ? res
+        : res?.paramObjectsMap?.employeeMasterVO || [];
+
+      setEmployeeList(list);
+    } catch (error) {
+      console.error("Failed to load employees:", error);
+      setEmployeeList([]);
+    }
+  }, [ORG_ID]);
+
+  const loadPlanTypes = useCallback(async () => {
+    try {
+      const res = await listOfValuesAPI.getListValuesGroup(
+        "CONTROLPLANTYPE",
+        ORG_ID,
+      );
+      const list = Array.isArray(res) ? res : [];
+      setPlanTypeOptions(
+        list.map((v) => ({
+          value: v.id,
+          label: v.valuesDescription || v.valueDescription || v.id,
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to load Control Plan Type:", error);
+      setPlanTypeOptions([]);
+    }
+  }, [ORG_ID]);
+
+  const loadFgItems = useCallback(async () => {
+    try {
+      const res = await controlPlanAPI.getFGItemDropdown(BRANCH_ID, ORG_ID);
+      setFgItemList(res || []);
+    } catch (error) {
+      console.error("Failed to load FG items:", error);
+      setFgItemList([]);
+    }
+  }, [BRANCH_ID, ORG_ID]);
+
+  // Operation Master — drives Operation No, Operation Desc, and the
+  // per-row Machine/Device options on the Control Plan Detail table.
+  const loadOperations = useCallback(async () => {
+    try {
+      const res = await controlPlanAPI.getOperationMasterByOrgId(ORG_ID);
+      setOperationList(res || []);
+    } catch (error) {
+      console.error("Failed to load Operation Master:", error);
+      setOperationList([]);
+    }
+  }, [ORG_ID]);
+
+  // Locations — drives the Process Sheet No dropdown. Label shown is
+  // locationId, but the value stored/sent to the backend is the numeric id.
+  const loadLocations = useCallback(async () => {
+    try {
+      const res =
+        await controlPlanAPI.getLocationDropdownforProcessSheetCompRouting(
+          BRANCH_ID,
+          ORG_ID,
         );
-      }
+      setLocationList(res || []);
     } catch (error) {
-      console.error(`Failed to load ${group}:`, error);
-      setter([]);
+      console.error("Failed to load Process Sheet No (location) list:", error);
+      setLocationList([]);
     }
-  }, [ORG_ID]);
+  }, [BRANCH_ID, ORG_ID]);
 
-  const loadPlants = useCallback(async () => {
+  const loadParameters = useCallback(async () => {
     try {
-      const res = await locationMasterAPI.getPlants(ORG_ID);
-      setPlantOptions(
-        (res || []).map((p) => ({
-          value: p.id,
-          label: p.plantName || p.plantId || p.id,
-        })),
-      );
+      const res = await controlPlanAPI.getParameterMaster(ORG_ID);
+      setParameterList(res || []);
     } catch (error) {
-      console.error("Failed to load plants:", error);
-      setPlantOptions([]);
-    }
-  }, [ORG_ID]);
-
-  const loadItems = useCallback(async () => {
-    try {
-      const res = await itemAPI.getItems(ORG_ID, BRANCH_ID);
-      const map = {};
-      const options = (res || []).map((it) => {
-        map[it.itemCode] = it;
-        return { value: it.itemCode, label: it.itemCode };
-      });
-      setItemOptions(options);
-      setItemMap(map);
-    } catch (error) {
-      console.error("Failed to load items:", error);
-      setItemOptions([]);
-      setItemMap({});
-    }
-  }, [ORG_ID, BRANCH_ID]);
-
-  const loadGrades = useCallback(async () => {
-    try {
-      const res = await itemGradeAPI.getAll(ORG_ID, BRANCH_ID);
-      setGradeOptions(
-        (res || []).map((g) => ({
-          value: g.id,
-          label: g.gradeName || g.grade || g.id,
-        })),
-      );
-    } catch (error) {
-      console.error("Failed to load grades:", error);
-      setGradeOptions([]);
-    }
-  }, [ORG_ID, BRANCH_ID]);
-
-  const loadProcessSheets = useCallback(async () => {
-    try {
-      const res = await controlPlanAPI.getProcessSheets(ORG_ID);
-      setProcessSheetOptions(
-        (res || []).map((p) => ({
-          value: p.processSheetNo || p.id,
-          label: p.processSheetNo || p.processSheetName || p.id,
-        })),
-      );
-    } catch (error) {
-      console.error("Failed to load process sheets:", error);
-      setProcessSheetOptions([]);
+      console.error("Failed to load parameters:", error);
+      setParameterList([]);
     }
   }, [ORG_ID]);
 
   const loadMachineFixtures = useCallback(async () => {
     try {
-      const res = await controlPlanAPI.getMachineFixtures(ORG_ID);
-      setMachineFixtureOptions(
-        (res || []).map((m) => ({
-          value: m.machineFixtureNo || m.id,
-          label: m.machineFixtureNo || m.machineFixtureName || m.id,
-        })),
+      const res = await controlPlanAPI.getMachineFixtureDropdown(
+        BRANCH_ID,
+        ORG_ID,
       );
+      setMachineFixtureList(res || []);
     } catch (error) {
       console.error("Failed to load machine/fixtures:", error);
-      setMachineFixtureOptions([]);
+      setMachineFixtureList([]);
     }
-  }, [ORG_ID]);
-
-  const loadParameters = useCallback(async () => {
-    try {
-      const res = await parameterMasterAPI.getParameters(ORG_ID);
-      setParameterOptions(
-        (res || []).map((p) => ({
-          value: p.id,
-          label: p.parameterType || p.parameterId,
-        })),
-      );
-    } catch (error) {
-      console.error("Failed to load parameters:", error);
-      setParameterOptions([]);
-    }
-  }, [ORG_ID]);
+  }, [BRANCH_ID, ORG_ID]);
 
   useEffect(() => {
-    loadLov("CONTROL PLAN TYPE", setPlanTypeOptions);
-    loadLov("RISK CLASS", setRiskClassOptions);
-    loadLov("EVAL TECHNIQUE", setEvalTechniqueOptions);
-    loadPlants();
-    loadItems();
-    loadGrades();
-    loadProcessSheets();
-    loadMachineFixtures();
+    loadBranches();
+    loadPlanTypes();
+    loadFgItems();
+    loadOperations();
+    loadLocations();
     loadParameters();
+    loadMachineFixtures();
+    loadEmployees();
   }, [
-    loadLov,
-    loadPlants,
-    loadItems,
-    loadGrades,
-    loadProcessSheets,
-    loadMachineFixtures,
+    loadBranches,
+    loadPlanTypes,
+    loadFgItems,
+    loadOperations,
+    loadLocations,
     loadParameters,
+    loadMachineFixtures,
+    loadEmployees,
   ]);
+
+  /* ---------------- Derived option lists ---------------- */
+
+  const fgItemOptions = fgItemList.map((it) => ({
+    value: it.itemId,
+    label: it.itemCode,
+  }));
+
+  const employeeOptions = employeeList.map((employee) => ({
+    value: employee.id,
+    label: employee.employeeId
+      ? `${employee.employeeId} - ${employee.employeeName || ""}`
+      : employee.employeeName || "",
+  }));
+
+  const machineFixtureOptions = machineFixtureList.map((m) => ({
+    value: m.machineFixtureId,
+    label: m.machineFixtureNo || m.machineFixtureName,
+  }));
+
+  const parameterOptions = parameterList.map((p) => ({
+    value: p.id,
+    label: p.parameterCode || p.parameterDescription || p.id,
+  }));
+
+  // Process Sheet No — shows locationId, sends the numeric id.
+  const processSheetOptions = locationList.map((loc) => ({
+    value: loc.id,
+    label: loc.locationId,
+  }));
+
+  // Operation No — sourced from Operation Master.
+  const operationOptions = operationList
+    .filter((op) => op.operationId)
+    .map((op) => ({ value: op.operationId, label: op.operationId }));
+
+  /* ---------------- Doc No generation (add mode only) ---------------- */
+
+  useEffect(() => {
+    if (isEditMode) return;
+    if (!ORG_ID) return;
+
+    let cancelled = false;
+    const financialYear = String(new Date().getFullYear());
+
+    const generateDocId = async () => {
+      setGeneratingDocId(true);
+      try {
+        const docId = await controlPlanAPI.getControlPlanDocId(
+          financialYear,
+          ORG_ID,
+        );
+        if (!cancelled) {
+          setHeader((prev) => ({ ...prev, planNo: docId || "" }));
+        }
+      } catch (error) {
+        if (!cancelled)
+          console.error("Error generating Control Plan Doc No:", error);
+      } finally {
+        if (!cancelled) setGeneratingDocId(false);
+      }
+    };
+
+    generateDocId();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditMode, ORG_ID]);
 
   /* ---------------- Edit data loading ---------------- */
 
   const populateFormFromEditData = (data) => {
     setHeader({
       id: data.id || 0,
-      plantId: data.plantId || "",
-      controlPlanType: data.controlPlanType || "",
-      planNo: data.planNo || generatePlanNo(),
-      fgItemCode: data.fgItemCode || "",
+      plantId:
+        data.branch != null
+          ? String(data.branch)
+          : BRANCH_ID
+            ? String(BRANCH_ID)
+            : "",
+      controlPlanType: data.controlPlanType ?? "",
+      planNo: data.planNo || "",
+      fgItemCode: data.fgItemCode ?? "",
       itemDescription: data.itemDescription || "",
-      itemGrade: data.itemGrade || "",
+      itemGrade: data.itemGrade ?? "",
+      itemGradeCode: "", // resolved once fgItemList / this item's grade is known
       itemSize: data.itemSize || "",
       processSheetNo: data.processSheetNo || "",
-      originDate: fmtDate(data.originDate),
+      originDate: "",
       revisionDate: fmtDate(data.revisionDate),
+      preparedBy: data.preparedBy ?? "",
+      checkedBy: data.checkedBy ?? "",
+      approved: data.approved ? "Yes" : "No",
+      active: data.active !== false,
+      cancel: Boolean(data.cancel),
+      cancelRemarks: data.cancelRemarks || "",
       orgId: data.orgId || ORG_ID,
       createdBy: data.createdBy || CREATED_BY,
     });
 
     setDetailRows(
-      data.planDetails?.length
-        ? data.planDetails.map((d) => ({
+      data.controlPlanDetailDTO?.length
+        ? data.controlPlanDetailDTO.map((d) => ({
+            id: d.id || 0,
             operationNo: d.operationNo || "",
-            operationDesc: d.operationDesc || "",
-            machineDevice: d.machineDevice || "",
-            product: d.product || "",
+            operationDesc: "",
+            machineDevice: d.machineDevice ?? "",
+            machineOptions: [], // backfilled once Operation Master loads
+            product: "",
             process: d.process || "",
             specification: d.specification || "",
-            riskClass: d.riskClass || "",
-            evalTechnique: d.evalTechnique || "",
+            riskClassSpecialCharacter: d.riskClassSpecialCharacter || "",
+            evaluationTechnique: d.evaluationTechnique || "",
+            sampling: "",
+            controlMethod: d.controlMethod ?? "",
+            reactionPlan: d.reactionPlan || "",
+            record: d.record || "",
           }))
         : [emptyDetailRow()],
     );
 
     setParameterRows(
-      data.parameters?.length
-        ? data.parameters.map((p) => ({
-            parameter: p.parameter || "",
+      data.controlPlanParameterDTO?.length
+        ? data.controlPlanParameterDTO.map((p) => ({
+            id: p.id || 0,
+            parameter: p.parameter ?? "",
             parameterType: p.parameterType || "",
-            tolerance: p.tolerance ?? "",
+            tol: p.tol ?? "",
           }))
         : [emptyParameterRow()],
     );
 
     setSampleRows(
-      data.samples?.length
-        ? data.samples.map((s) => ({
+      data.controlPlanSampleDTO?.length
+        ? data.controlPlanSampleDTO.map((s) => ({
+            id: s.id || 0,
             sampleFrequency: s.sampleFrequency ?? "",
             size: s.size ?? "",
           }))
@@ -580,19 +685,14 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
     );
 
     setFixtureRows(
-      data.machineFixtures?.length
-        ? data.machineFixtures.map((f) => ({
-            machineFixtureNo: f.machineFixtureNo || "",
+      data.controlPlanMachineFixtureDTO?.length
+        ? data.controlPlanMachineFixtureDTO.map((f) => ({
+            id: f.id || 0,
+            machineFixtureNo: f.machineFixtureNo ?? "",
             machineFixtureName: f.machineFixtureName || "",
           }))
         : [emptyFixtureRow()],
     );
-
-    setSummary({
-      preparedBy: data.summary?.preparedBy || "",
-      checkedBy: data.summary?.checkedBy || "",
-      approved: data.summary?.approved || "",
-    });
   };
 
   const loadPlanData = async (planId) => {
@@ -614,7 +714,48 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
     } else if (editData) {
       populateFormFromEditData(editData);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editId, editData]);
+
+  // Once FG items are loaded, backfill the display-only grade code for edit mode
+  useEffect(() => {
+    if (!fgItemList.length || !header.fgItemCode) return;
+    const match = fgItemList.find(
+      (it) => String(it.itemId) === String(header.fgItemCode),
+    );
+    if (match) {
+      setHeader((prev) => ({ ...prev, itemGradeCode: match.gradeCode || "" }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fgItemList]);
+
+  // Once Operation Master is loaded, backfill Operation Desc + the
+  // Machine/Device options for any detail rows that already have an
+  // Operation No selected (edit mode, where rows load before the master
+  // data arrives).
+  useEffect(() => {
+    if (!operationList.length) return;
+    setDetailRows((prev) =>
+      prev.map((row) => {
+        if (!row.operationNo) return row;
+        const match = operationList.find(
+          (op) => String(op.operationId) === String(row.operationNo),
+        );
+        if (!match) return row;
+        return {
+          ...row,
+          operationDesc: match.description || row.operationDesc,
+          machineOptions: (
+            match.operationMasterMachineDetailsResponseDTO || []
+          ).map((m) => ({
+            value: m.machine?.id,
+            label: m.machine?.machineNo || m.machine?.machineName,
+          })),
+        };
+      }),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [operationList]);
 
   /* ---------------- Handlers ---------------- */
 
@@ -626,13 +767,13 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
     }
 
     if (name === "fgItemCode") {
-      const item = itemMap[value];
+      const item = fgItemList.find((it) => String(it.itemId) === String(value));
       setHeader((prev) => ({
         ...prev,
         fgItemCode: value,
-        itemDescription: item?.itemDescription || item?.itemDesc || "",
-        itemGrade: item?.itemGrade || prev.itemGrade || "",
-        itemSize: item?.itemSize || item?.size || prev.itemSize || "",
+        itemDescription: item?.itemDescription || "",
+        itemGrade: item?.gradeMasterId ?? "",
+        itemGradeCode: item?.gradeCode || "",
       }));
       return;
     }
@@ -640,14 +781,31 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
     setHeader((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSummaryChange = (e) => {
-    const { name, value } = e.target;
-    setSummary((prev) => ({ ...prev, [name]: value }));
-  };
-
   const handleDetailCellChange = (idx, key, value) =>
     setDetailRows((prev) =>
-      prev.map((row, i) => (i === idx ? { ...row, [key]: value } : row)),
+      prev.map((row, i) => {
+        if (i !== idx) return row;
+        const next = { ...row, [key]: value };
+
+        if (key === "operationNo") {
+          const match = operationList.find(
+            (op) => String(op.operationId) === String(value),
+          );
+
+          next.operationDesc = match?.description || "";
+          next.machineOptions = (
+            match?.operationMasterMachineDetailsResponseDTO || []
+          ).map((m) => ({
+            value: m.machine?.id,
+            label: m.machine?.machineNo || m.machine?.machineName,
+          }));
+          // The previously picked machine belonged to the old operation's
+          // option list, so it's no longer valid — clear it.
+          next.machineDevice = "";
+        }
+
+        return next;
+      }),
     );
 
   const handleParameterCellChange = (idx, key, value) =>
@@ -656,19 +814,25 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
         i === idx ? { ...row, [key]: value } : row,
       );
       if (key === "parameter") {
-        const selected = parameterOptions.find(
-          (o) => String(o.value) === String(value),
+        const selected = parameterList.find(
+          (p) => String(p.id) === String(value),
         );
-        if (selected) next[idx] = { ...next[idx], parameterType: selected.label };
+        if (selected) {
+          next[idx] = {
+            ...next[idx],
+            parameterType:
+              selected.parameterType?.description ||
+              selected.parameterType?.code ||
+              "",
+          };
+        }
       }
       return next;
     });
 
   const handleSampleCellChange = (idx, key, value) =>
     setSampleRows((prev) =>
-      prev.map((row, i) =>
-        i === idx ? { ...row, [key]: value.replace(/\D/g, "") } : row,
-      ),
+      prev.map((row, i) => (i === idx ? { ...row, [key]: value } : row)),
     );
 
   const handleFixtureCellChange = (idx, key, value) =>
@@ -677,25 +841,23 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
         i === idx ? { ...row, [key]: value } : row,
       );
       if (key === "machineFixtureNo") {
-        const selected = machineFixtureOptions.find(
-          (o) => String(o.value) === String(value),
+        const selected = machineFixtureList.find(
+          (m) => String(m.machineFixtureId) === String(value),
         );
-        if (selected)
-          next[idx] = { ...next[idx], machineFixtureName: selected.label };
+        if (selected) {
+          next[idx] = {
+            ...next[idx],
+            machineFixtureName: selected.machineFixtureName || "",
+          };
+        }
       }
       return next;
     });
 
-  const TABLE_HANDLERS = {
-    detail: handleDetailCellChange,
-    parameters: handleParameterCellChange,
-    sample: handleSampleCellChange,
-    fixtures: handleFixtureCellChange,
-  };
-
   const TABLE_ADD = {
     detail: () => setDetailRows((prev) => [...prev, emptyDetailRow()]),
-    parameters: () => setParameterRows((prev) => [...prev, emptyParameterRow()]),
+    parameters: () =>
+      setParameterRows((prev) => [...prev, emptyParameterRow()]),
     sample: () => setSampleRows((prev) => [...prev, emptySampleRow()]),
     fixtures: () => setFixtureRows((prev) => [...prev, emptyFixtureRow()]),
   };
@@ -724,16 +886,23 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
   const handleNew = () => {
     setHeader({
       id: 0,
-      plantId: "",
+      plantId: BRANCH_ID ? String(BRANCH_ID) : "",
       controlPlanType: "",
-      planNo: generatePlanNo(),
+      planNo: "",
       fgItemCode: "",
       itemDescription: "",
       itemGrade: "",
+      itemGradeCode: "",
       itemSize: "",
       processSheetNo: "",
       originDate: "",
       revisionDate: "",
+      preparedBy: "",
+      checkedBy: "",
+      approved: "No",
+      active: true,
+      cancel: false,
+      cancelRemarks: "",
       orgId: ORG_ID,
       createdBy: CREATED_BY,
     });
@@ -741,7 +910,6 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
     setParameterRows([emptyParameterRow()]);
     setSampleRows([emptySampleRow()]);
     setFixtureRows([emptyFixtureRow()]);
-    setSummary({ preparedBy: "", checkedBy: "", approved: "" });
     setFieldErrors({});
     setTableErrors({});
   };
@@ -754,7 +922,6 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
     if (!header.plantId) errors.plantId = "Plant Id is required";
     if (!header.controlPlanType)
       errors.controlPlanType = "Control Plan Type is required";
-    if (!header.planNo.trim()) errors.planNo = "Plan No is required";
     if (!header.fgItemCode) errors.fgItemCode = "FG Item Code is required";
     if (!header.processSheetNo)
       errors.processSheetNo = "Process Sheet No is required";
@@ -762,53 +929,33 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
 
     setFieldErrors(errors);
 
-    const detailsError =
-      detailRows.length === 0 || detailRows.every((r) => !r.operationNo);
     const validDetails = detailRows.every((r) => r.operationNo?.trim());
-
-    const parametersError =
-      parameterRows.length === 0 || parameterRows.every((r) => !r.parameter);
     const validParameters = parameterRows.every((r) => r.parameter?.trim());
-
-    const samplesError =
-      sampleRows.length === 0 ||
-      sampleRows.every((r) => r.sampleFrequency === "" && r.size === "");
     const validSamples = sampleRows.every(
       (r) => r.sampleFrequency !== "" && r.size !== "",
     );
-
-    const fixturesError =
-      fixtureRows.length === 0 || fixtureRows.every((r) => !r.machineFixtureNo);
     const validFixtures = fixtureRows.every((r) => r.machineFixtureNo?.trim());
 
     const nextTableErrors = {
-      detail: detailsError
-        ? "Add at least one Control Plan Detail row"
-        : validDetails
-          ? ""
-          : "Complete mandatory column (Operation No) in Control Plan Detail",
-      parameters: parametersError
-        ? "Add at least one Parameter row"
-        : validParameters
-          ? ""
-          : "Complete mandatory column (Parameter) in Parameters",
-      sample: samplesError
-        ? "Add at least one Sample row"
-        : validSamples
-          ? ""
-          : "Complete mandatory columns (Sample Frequency, Size) in Sample",
-      fixtures: fixturesError
-        ? "Add at least one Machine/Fixture row"
-        : validFixtures
-          ? ""
-          : "Complete mandatory column (Machine/Fixture No.) in Machine/Fixture",
+      detail: validDetails
+        ? ""
+        : "Complete mandatory column (Operation No) in Control Plan Detail",
+      parameters: validParameters
+        ? ""
+        : "Complete mandatory column (Parameter) in Parameters",
+      sample: validSamples
+        ? ""
+        : "Complete mandatory columns (Sample Frequency, Size) in Sample",
+      fixtures: validFixtures
+        ? ""
+        : "Complete mandatory column (Machine/Fixture No.) in Machine/Fixture",
     };
 
     setTableErrors(nextTableErrors);
 
     const firstError = Object.keys(errors)[0];
     if (firstError) {
-      addToast(`${errors[firstError]}`, "error");
+      addToast(errors[firstError], "error");
       return false;
     }
 
@@ -817,19 +964,16 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
       addToast(nextTableErrors.detail, "error");
       return false;
     }
-
     if (!validParameters) {
       setActiveChildTab("parameters");
       addToast(nextTableErrors.parameters, "error");
       return false;
     }
-
     if (!validSamples) {
       setActiveChildTab("sample");
       addToast(nextTableErrors.sample, "error");
       return false;
     }
-
     if (!validFixtures) {
       setActiveChildTab("fixtures");
       addToast(nextTableErrors.fixtures, "error");
@@ -847,52 +991,64 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
     setIsSubmitting(true);
 
     const payload = {
-      ...(header.id && header.id > 0 && { id: header.id }),
-      plantId: header.plantId,
-      controlPlanType: header.controlPlanType,
-      planNo: header.planNo,
-      fgItemCode: header.fgItemCode,
-      itemDescription: header.itemDescription,
-      itemGrade: header.itemGrade,
-      itemSize: header.itemSize,
-      processSheetNo: header.processSheetNo,
-      originDate: header.originDate,
-      revisionDate: header.revisionDate,
-      planDetails: detailRows
+      ...(header.id > 0 && { id: header.id }),
+      active: header.active,
+      approved: header.approved === "Yes",
+      branch: Number(header.plantId) || 0,
+      cancel: header.cancel,
+      cancelRemarks: header.cancelRemarks || "",
+      checkedBy: Number(header.checkedBy) || 0,
+      controlPlanDetailDTO: detailRows
         .filter((r) => r.operationNo?.trim())
         .map((r) => ({
+          ...(r.id > 0 && { id: r.id }),
+          controlMethod: Number(r.controlMethod) || 0,
+          evaluationTechnique: r.evaluationTechnique || "",
+          machineDevice: Number(r.machineDevice) || 0,
           operationNo: r.operationNo,
-          operationDesc: r.operationDesc,
-          machineDevice: r.machineDevice,
-          product: r.product,
-          process: r.process,
-          specification: r.specification,
-          riskClass: r.riskClass,
-          evalTechnique: r.evalTechnique,
+          process: r.process || "",
+          reactionPlan: r.reactionPlan || "",
+          record: r.record || "",
+          riskClassSpecialCharacter: r.riskClassSpecialCharacter || "",
+          specification: r.specification || "",
         })),
-      parameters: parameterRows
-        .filter((r) => r.parameter?.trim())
+      controlPlanMachineFixtureDTO: fixtureRows
+        .filter((r) => r.machineFixtureNo?.toString().trim())
         .map((r) => ({
-          parameter: r.parameter,
-          parameterType: r.parameterType,
-          tolerance: r.tolerance === "" ? "" : Number(r.tolerance),
+          ...(r.id > 0 && { id: r.id }),
+          machineFixtureName: r.machineFixtureName || "",
+          machineFixtureNo: Number(r.machineFixtureNo) || 0,
         })),
-      samples: sampleRows
+      controlPlanParameterDTO: parameterRows
+        .filter((r) => r.parameter?.toString().trim())
+        .map((r) => ({
+          ...(r.id > 0 && { id: r.id }),
+          parameter: Number(r.parameter) || 0,
+          parameterType: r.parameterType || "",
+          tol: r.tol === "" ? "" : String(r.tol),
+        })),
+      controlPlanSampleDTO: sampleRows
         .filter((r) => r.sampleFrequency !== "" || r.size !== "")
         .map((r) => ({
+          ...(r.id > 0 && { id: r.id }),
           sampleFrequency:
-            r.sampleFrequency === "" ? "" : Number(r.sampleFrequency),
-          size: r.size === "" ? "" : Number(r.size),
+            r.sampleFrequency === "" ? "" : String(r.sampleFrequency),
+          size: r.size === "" ? "" : String(r.size),
         })),
-      machineFixtures: fixtureRows
-        .filter((r) => r.machineFixtureNo?.trim())
-        .map((r) => ({
-          machineFixtureNo: r.machineFixtureNo,
-          machineFixtureName: r.machineFixtureName,
-        })),
-      summary,
-      orgId: header.orgId,
+      controlPlanType: Number(header.controlPlanType) || 0,
       createdBy: header.createdBy,
+      fgItemCode: Number(header.fgItemCode) || 0,
+      itemDescription: header.itemDescription || "",
+      itemGrade: Number(header.itemGrade) || 0,
+      itemSize: header.itemSize || "",
+      orgId: header.orgId,
+      planNo: header.planNo || "",
+      preparedBy: Number(header.preparedBy) || 0,
+      // header.processSheetNo holds the numeric location id from the
+      // Process Sheet No dropdown — sent to the backend as-is.
+      processSheetNo: header.processSheetNo || "",
+      revisionDate: header.revisionDate || "",
+      ...(isEditMode && { updatedBy: CREATED_BY }),
     };
 
     console.log("Submitting Control Plan Payload:", payload);
@@ -905,7 +1061,7 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
       if (status) {
         const successMessage =
           response?.paramObjectsMap?.message ||
-          (header.id && header.id > 0
+          (isEditMode
             ? "Control Plan updated successfully!"
             : "Control Plan created successfully!");
 
@@ -922,8 +1078,8 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
         }
       } else {
         const errorMessage =
-          response?.paramObjectsMap?.message ||
           response?.paramObjectsMap?.errorMessage ||
+          response?.paramObjectsMap?.message ||
           response?.message ||
           "Failed to save Control Plan";
 
@@ -931,10 +1087,11 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
       }
     } catch (error) {
       console.error("Save Error:", error);
+      const backendData = error?.response?.data || error;
       const errorMessage =
-        error.response?.data?.paramObjectsMap?.message ||
-        error.response?.data?.paramObjectsMap?.errorMessage ||
-        error.response?.data?.message ||
+        backendData?.paramObjectsMap?.errorMessage ||
+        backendData?.paramObjectsMap?.message ||
+        backendData?.message ||
         "Save failed! Try again.";
 
       addToast(errorMessage, "error");
@@ -963,7 +1120,7 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
         </button>
 
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-          {editData || editId ? "Edit Control Plan" : "Add Control Plan"}
+          {isEditMode ? "Edit Control Plan" : "Add Control Plan"}
         </h2>
       </div>
 
@@ -980,7 +1137,7 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
               value={header.plantId}
               onChange={handleHeaderChange}
               error={fieldErrors.plantId}
-              options={plantOptions}
+              options={branchOptions}
               required
             />
             <Field
@@ -996,10 +1153,8 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
             <Field
               label="Plan No"
               name="planNo"
-              value={header.planNo}
-              onChange={handleHeaderChange}
-              error={fieldErrors.planNo}
-              required
+              value={generatingDocId ? "Generating..." : header.planNo}
+              onChange={() => {}}
               disabled
             />
             <Field
@@ -1009,7 +1164,7 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
               value={header.fgItemCode}
               onChange={handleHeaderChange}
               error={fieldErrors.fgItemCode}
-              options={itemOptions}
+              options={fgItemOptions}
               required
             />
             <Field
@@ -1020,12 +1175,11 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
               disabled
             />
             <Field
-              type="select"
               label="Item Grade"
-              name="itemGrade"
-              value={header.itemGrade}
+              name="itemGradeCode"
+              value={header.itemGradeCode}
               onChange={handleHeaderChange}
-              options={gradeOptions}
+              disabled
             />
             <Field
               label="Item Size"
@@ -1099,29 +1253,44 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
             <div className="pt-3">
               <DynamicTable
                 columns={[
-                  { key: "operationNo", label: "Operation No *" },
-                  { key: "operationDesc", label: "Operation Desc" },
+                  {
+                    key: "operationNo",
+                    label: "Operation No *",
+                    type: "select",
+                    options: operationOptions,
+                  },
+                  {
+                    key: "operationDesc",
+                    label: "Operation Desc",
+                    readOnly: true,
+                  },
                   {
                     key: "machineDevice",
                     label: "Machine/Device",
                     type: "select",
-                    options: machineFixtureOptions,
+                    // Options depend on the operation picked on this row
+                    options: (row) => row.machineOptions || [],
                   },
                   { key: "product", label: "Product" },
                   { key: "process", label: "Process" },
                   { key: "specification", label: "Specification" },
                   {
-                    key: "riskClass",
+                    key: "riskClassSpecialCharacter",
                     label: "Risk Class / SPL Char",
-                    type: "select",
-                    options: riskClassOptions,
+                  },
+                  { key: "evaluationTechnique", label: "Eval. Technique" },
+                  { key: "sampling", label: "Sampling" },
+                  {
+                    key: "controlMethod",
+                    label: "Control Method",
+                    type: "number",
                   },
                   {
-                    key: "evalTechnique",
-                    label: "Eval. Technique",
-                    type: "select",
-                    options: evalTechniqueOptions,
+                    key: "reactionPlan",
+                    label: "Reaction Plan",
+                    type: "textarea",
                   },
+                  { key: "record", label: "Record", type: "textarea" },
                 ]}
                 rows={detailRows}
                 onCellChange={handleDetailCellChange}
@@ -1151,7 +1320,7 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
                     label: "Parameter Type",
                     readOnly: true,
                   },
-                  { key: "tolerance", label: "Tolerance (TOL)", type: "number" },
+                  { key: "tol", label: "Tolerance (TOL)" },
                 ]}
                 rows={parameterRows}
                 onCellChange={handleParameterCellChange}
@@ -1170,12 +1339,8 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
             <div className="pt-3">
               <DynamicTable
                 columns={[
-                  {
-                    key: "sampleFrequency",
-                    label: "Sample Frequency *",
-                    type: "number",
-                  },
-                  { key: "size", label: "Size *", type: "number" },
+                  { key: "sampleFrequency", label: "Sample Frequency *" },
+                  { key: "size", label: "Size *" },
                 ]}
                 rows={sampleRows}
                 onCellChange={handleSampleCellChange}
@@ -1200,7 +1365,11 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
                     type: "select",
                     options: machineFixtureOptions,
                   },
-                  { key: "machineFixtureName", label: "Machine/Fixture Name" },
+                  {
+                    key: "machineFixtureName",
+                    label: "Machine/Fixture Name",
+                    readOnly: true,
+                  },
                 ]}
                 rows={fixtureRows}
                 onCellChange={handleFixtureCellChange}
@@ -1219,27 +1388,38 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
             <div className="pt-3">
               <div className={subTabFieldGrid}>
                 <Field
-                  label="Prepared By"
+                  type="select"
+                  label="Prepared By (Employee ID)"
                   name="preparedBy"
-                  value={summary.preparedBy}
-                  onChange={handleSummaryChange}
+                  value={header.preparedBy}
+                  onChange={handleHeaderChange}
+                  options={employeeOptions}
                 />
+
                 <Field
-                  label="Checked By"
+                  type="select"
+                  label="Checked By (Employee ID)"
                   name="checkedBy"
-                  value={summary.checkedBy}
-                  onChange={handleSummaryChange}
+                  value={header.checkedBy}
+                  onChange={handleHeaderChange}
+                  options={employeeOptions}
                 />
                 <Field
                   type="select"
                   label="Approved"
                   name="approved"
-                  value={summary.approved}
-                  onChange={handleSummaryChange}
+                  value={header.approved}
+                  onChange={handleHeaderChange}
                   options={[
                     { value: "Yes", label: "Yes" },
                     { value: "No", label: "No" },
                   ]}
+                />
+                <Field
+                  label="Cancel Remarks"
+                  name="cancelRemarks"
+                  value={header.cancelRemarks}
+                  onChange={handleHeaderChange}
                 />
               </div>
             </div>
@@ -1251,7 +1431,7 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
           onNew={handleNew}
           onSave={handleSubmit}
           isSubmitting={isSubmitting}
-          saveLabel={editData || editId ? "Update" : "Submit"}
+          saveLabel={isEditMode ? "Update" : "Submit"}
         />
       </div>
     </div>

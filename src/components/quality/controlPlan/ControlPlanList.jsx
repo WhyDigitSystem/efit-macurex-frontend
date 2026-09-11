@@ -7,36 +7,77 @@ const ControlPlanList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   const [planData, setPlanData] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const ORG_ID = parseInt(localStorage.getItem("orgId"));
+  const ORG_ID = Number(localStorage.getItem("orgId")) || 0;
+  const BRANCH_ID = Number(localStorage.getItem("branchId")) || 0;
 
+  // ---------------------------------------------------------------------------
+  // Load Control Plans
+  // ---------------------------------------------------------------------------
   const loadPlans = useCallback(async () => {
     try {
       setLoading(true);
 
-      const response = await controlPlanAPI.getControlPlans(ORG_ID);
+      console.log("Loading Control Plans...");
+      console.log("ORG_ID:", ORG_ID);
+      console.log("BRANCH_ID:", BRANCH_ID);
 
-      const sortedPlans = (response || []).sort(
-        (a, b) => (b.id || 0) - (a.id || 0),
+      const response = await controlPlanAPI.getControlPlanByOrgId(
+        BRANCH_ID,
+        ORG_ID,
       );
+
+      console.log("Control Plan API Response:", response);
+
+      // Always make sure the table receives an array
+      const list = Array.isArray(response)
+        ? response
+        : response
+          ? [response]
+          : [];
+
+      console.log("Control Plan List:", list);
+
+      // Sort latest ID first
+      const sortedPlans = [...list].sort(
+        (a, b) => (Number(b?.id) || 0) - (Number(a?.id) || 0),
+      );
+
+      console.log("Sorted Control Plans:", sortedPlans);
 
       setPlanData(sortedPlans);
     } catch (error) {
       console.error("Failed to load control plans:", error);
+
       setPlanData([]);
+
       toast.error("Failed to fetch Control Plans");
     } finally {
       setLoading(false);
     }
-  }, [ORG_ID]);
+  }, [ORG_ID, BRANCH_ID]);
 
+  // ---------------------------------------------------------------------------
+  // Initial Load + Refresh After Create/Update
+  // ---------------------------------------------------------------------------
   useEffect(() => {
     loadPlans();
   }, [loadPlans, refreshTrigger]);
 
+  // ---------------------------------------------------------------------------
+  // Edit
+  // ---------------------------------------------------------------------------
   const handleEdit = (plan) => {
+    if (!plan) {
+      console.error("Invalid Control Plan selected for edit");
+      return;
+    }
+
     onEdit(plan);
   };
 
+  // ---------------------------------------------------------------------------
+  // Table Columns
+  // ---------------------------------------------------------------------------
   const columns = [
     {
       key: "planNo",
@@ -70,9 +111,9 @@ const ControlPlanList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
       type: "text",
     },
     {
-      key: "originDate",
-      label: "Origin Date",
-      accessor: "originDate",
+      key: "revisionDate",
+      label: "Revision Date",
+      accessor: "revisionDate",
       type: "text",
     },
     {
@@ -84,6 +125,9 @@ const ControlPlanList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     },
   ];
 
+  // ---------------------------------------------------------------------------
+  // Search Fields
+  // ---------------------------------------------------------------------------
   const searchFields = [
     "planNo",
     "controlPlanType",
@@ -92,6 +136,9 @@ const ControlPlanList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     "processSheetNo",
   ];
 
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
   return (
     <CommonListViewTable
       title="Control Plan"

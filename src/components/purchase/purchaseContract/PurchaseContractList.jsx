@@ -954,11 +954,7 @@ const PurchaseContractList = ({ onAddNew, onEdit, refreshTrigger, onBack }) => {
         enableExport={true}
         exportFileName="PurchaseContracts"
       />
-      /* *
-      ======================================================================== *
-      PDF PREVIEW *
-      ========================================================================
-      */
+
       {pdfPreview && (
         <PDFPreviewModal
           blobUrl={pdfPreview.blobUrl}
