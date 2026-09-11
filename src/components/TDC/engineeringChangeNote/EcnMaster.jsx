@@ -3,39 +3,38 @@ import { useNavigate } from "react-router-dom";
 import EcnList from "./EcnList";
 import EcnForm from "./EcnForm";
 import engineeringChangeNoteAPI from "../../../api/TDC/engineeringChangeNoteAPI";
-import { toast } from "../../../utils/toast";
+import { useToast } from "../../Toast/ToastContext";
 
 const EcnMaster = () => {
   const navigate = useNavigate();
+  const { addToast } = useToast();
+
   const [view, setView] = useState("list"); // "list" | "form"
   const [editData, setEditData] = useState(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-
-  const ORG_ID = localStorage.getItem("orgId");
-  const BRANCH_ID = localStorage.getItem("branchId");
 
   const handleAddNew = () => {
     setEditData(null);
     setView("form");
   };
 
-  // Pencil icon click -> fetch fresh data by orgId, find the matching record, open form
+  // Pencil icon click -> fetch the single record fresh by id, then open the form.
   const handleEdit = useCallback(
     async (row) => {
       try {
-        const records = await engineeringChangeNoteAPI.getEcnByOrgId(
-          ORG_ID,
-          BRANCH_ID,
-        );
-        const fresh = records.find((r) => r.id === row.id) || row;
-        setEditData(fresh);
+        const fresh = await engineeringChangeNoteAPI.getEcnById(row.id);
+        setEditData(fresh || row);
         setView("form");
       } catch (error) {
         console.error("Failed to fetch ECN for edit:", error);
-        toast.error("Failed to load Engineering Change Note details");
+        addToast("Failed to load Engineering Change Note details", "error");
+
+        // Fall back to the row data already in the list rather than blocking the user.
+        setEditData(row);
+        setView("form");
       }
     },
-    [ORG_ID, BRANCH_ID],
+    [addToast],
   );
 
   const handleBack = () => {
