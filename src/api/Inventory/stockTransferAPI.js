@@ -1,26 +1,54 @@
 import apiClient from "../apiClient";
 
-export const stockTransferAPI = {
+const stockTransferAPI = {
+  // Get Stock Transfer by ID
   getStockTransferById: async (id) => {
     try {
       const res = await apiClient.get(
-        `/api/inventorymaster/getStockTransferById?id=${id}`,
+        `/api/purchaseOrder/getStockTransferById?id=${id}`,
       );
-      return res?.paramObjectsMap?.stockTransferVO || null;
+      return res;
     } catch (error) {
       console.error("Error fetching stock transfer by ID:", error);
       throw error;
     }
   },
 
-  getStockTransferByOrgId: async (orgId) => {
+  // Get Stock Transfer List by Organization ID and Branch
+  getStockTransferByOrgId: async (orgId, branch) => {
     try {
       const res = await apiClient.get(
-        `/api/inventorymaster/getStockTransferByOrgId?orgId=${orgId}`,
+        `/api/purchaseOrder/getStockTransferByOrgId?branch=${branch}&orgId=${orgId}`,
       );
-      return res?.paramObjectsMap?.stockTransferList || [];
+      return res;
     } catch (error) {
       console.error("Error fetching stock transfer list:", error);
+      throw error;
+    }
+  },
+
+  // Get Stock Transfer Document ID
+  getStockTransferDocId: async (financialYear, orgId) => {
+    try {
+      const res = await apiClient.get(
+        `/api/purchaseOrder/getStockTransferDocId?financialYear=${financialYear}&orgId=${orgId}`
+      );
+      return res;
+    } catch (error) {
+      console.error("Error fetching stock transfer docId:", error);
+      throw error;
+    }
+  },
+
+  // Get Stock Transfer Item Details
+  getStockTransferItemDetails: async (branch, orgId) => {
+    try {
+      const res = await apiClient.get(
+        `/api/purchaseOrder/getStockTransferItemDetails?branch=${branch}&orgId=${orgId}`
+      );
+      return res;
+    } catch (error) {
+      console.error("Error fetching stock transfer item details:", error);
       throw error;
     }
   },
@@ -38,10 +66,11 @@ export const stockTransferAPI = {
     }
   },
 
+  // Create or Update Stock Transfer
   updateCreateStockTransfer: async (stockTransferDTO) => {
     try {
       const res = await apiClient.put(
-        "/api/inventorymaster/updateCreateStockTransfer",
+        "/api/purchaseOrder/createUpdateStockTransfer",
         stockTransferDTO,
       );
       return res;

@@ -25,18 +25,49 @@ const productionScheduleAPI = {
         }
     },
 
-    // Header, schedule month and schedule details are saved in a single
-    // transaction by the backend; complete record history with the monthly
-    // breakdown and variance tracking is maintained.
-    createUpdate: async (data) => {
+    getAllForNextThreeMonth: async (branch, orgId) => {
         try {
-            const res = await apiClient.post(
-                "/api/commonmaster/createUpdateProductionSchedule",
+            const res = await apiClient.get(
+                `/api/subContract/getAllProductionScheduleForNextThreeMonthByOrgIdAndBranch?branch=${branch}&orgId=${orgId}`,
+            );
+            return res?.paramObjectsMap?.productionScheduleForNextThreeMonth || [];
+        } catch (error) {
+            console.error(
+                "Error fetching next-three-month production schedules:",
+                error,
+            );
+            throw error;
+        }
+    },
+
+    // ✅ NEW: fetch a single record by id
+    getByIdForNextThreeMonth: async (id) => {
+        try {
+            const res = await apiClient.get(
+                `/api/subContract/getProductionScheduleForNextThreeMonthById?id=${id}`,
+            );
+            return res?.paramObjectsMap?.productionScheduleForNextThreeMonth || null;
+        } catch (error) {
+            console.error(
+                "Error fetching next-three-month production schedule by id:",
+                error,
+            );
+            throw error;
+        }
+    },
+
+    createUpdateForNextThreeMonth: async (data) => {
+        try {
+            const res = await apiClient.put(
+                "/api/subContract/createUpdateProductionScheduleForNextThreeMonth",
                 data,
             );
             return res;
         } catch (error) {
-            console.error("Error saving production schedule:", error);
+            console.error(
+                "Error saving next-three-month production schedule:",
+                error,
+            );
             throw error;
         }
     },

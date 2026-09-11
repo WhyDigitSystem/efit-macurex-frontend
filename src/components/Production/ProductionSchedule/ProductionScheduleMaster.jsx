@@ -12,7 +12,8 @@ const ProductionScheduleMaster = () => {
   };
 
   const handleEdit = (row) => {
-    setEditData(row);
+    // Pass only the id — the form fetches the full record by itself.
+    setEditData({ id: row?.id });
     setScreen("form");
   };
 

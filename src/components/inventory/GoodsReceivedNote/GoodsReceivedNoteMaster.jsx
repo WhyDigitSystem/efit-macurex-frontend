@@ -1,7 +1,6 @@
 import { useState } from "react";
 import GoodsReceivedNoteList from "./GoodsReceivedNoteList";
-import GoodsReceivedNoteForm from "./GoodsReceivedNoteForm";
-import goodsReceivedNoteAPI from "../../../api/Inventory/goodsReceivedNoteAPI";
+import GRNForm from "./GRNForm";
 
 const GoodsReceivedNoteMaster = () => {
   const [screen, setScreen] = useState("list");
@@ -12,23 +11,20 @@ const GoodsReceivedNoteMaster = () => {
     setScreen("form");
   };
 
-  const handleEdit = (data) => {
-    setEditData(data);
+  const handleEdit = (row) => {
+    // Pass only the id — the form fetches the full record by itself
+    setEditData({ id: row?.id });
     setScreen("form");
   };
 
   const handleBack = () => {
+    setEditData(null);
     setScreen("list");
   };
 
-  const handleSave = async (payload) => {
-    try {
-      await goodsReceivedNoteAPI.updateCreateGrn(payload); // Create/Update
-      handleBack();
-    } catch (error) {
-      console.error("Error saving GRN:", error);
-      throw error;
-    }
+  const handleSave = () => {
+    // The form already calls updateCreateGrn; nothing else to do
+    handleBack();
   };
 
   return (
@@ -42,7 +38,7 @@ const GoodsReceivedNoteMaster = () => {
       )}
 
       {screen === "form" && (
-        <GoodsReceivedNoteForm
+        <GRNForm
           editData={editData}
           onBack={handleBack}
           onSave={handleSave}
