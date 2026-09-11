@@ -19,8 +19,10 @@ const InstrumentCalibrationMaster = () => {
   // Pencil icon click -> fetch the record by id, then open the form
   const handleEdit = useCallback(async (row) => {
     try {
+      const id =
+        row?.id ?? row?.instrumentCalibrationId;
       const fresh =
-        (await instrumentCalibrationAPI.getInstrumentCalibrationById(row.id)) ||
+        (await instrumentCalibrationAPI.getInstrumentCalibrationById(id)) ||
         row;
       setEditData(fresh);
       setView("form");

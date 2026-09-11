@@ -1,19 +1,14 @@
 // instrumentCalibrationAPI.js
 import apiClient from "../apiClient";
 
-// Instrument Calibration API
-// Mirrors the quality API convention used in this app.
-// The backend persists the header, calibration details and summary in a
-// single transaction ... (server-side validation).
-
 const instrumentCalibrationAPI = {
   // Get Instrument Calibrations by Organization ID
-  getInstrumentCalibrationByOrgId: async (orgId, branch) => {
+  getInstrumentCalibrationByOrgId: async (branch, orgId) => {
     try {
       const res = await apiClient.get(
-        `/api/quality/getInstrumentCalibrationByOrgId?branch=${branch}&orgId=${orgId}`,
+        `/api/vendorComplaintEntry/getInstrumentCalibrationByOrgId?branch=${branch}&orgId=${orgId}`,
       );
-      const list = res?.paramObjectsMap?.instrumentCalibrationVO;
+      const list = res?.paramObjectsMap?.instrumentCalibrationResponseDTO;
       return Array.isArray(list) ? list : list ? [list] : [];
     } catch (error) {
       console.error("Error fetching instrument calibrations:", error);
@@ -25,9 +20,9 @@ const instrumentCalibrationAPI = {
   getInstrumentCalibrationById: async (id) => {
     try {
       const res = await apiClient.get(
-        `/api/quality/getInstrumentCalibrationById?id=${id}`,
+        `/api/vendorComplaintEntry/getInstrumentCalibrationById?id=${id}`,
       );
-      return res?.paramObjectsMap?.instrumentCalibrationVO || null;
+      return res?.paramObjectsMap?.instrumentCalibrationResponseDTO || null;
     } catch (error) {
       console.error("Error fetching instrument calibration by ID:", error);
       throw error;
@@ -38,12 +33,25 @@ const instrumentCalibrationAPI = {
   createUpdateInstrumentCalibration: async (payload) => {
     try {
       const res = await apiClient.put(
-        `/api/quality/updateCreateInstrumentCalibration`,
+        `/api/vendorComplaintEntry/updateCreateInstrumentCalibration`,
         payload,
       );
       return res;
     } catch (error) {
       console.error("Error saving instrument calibration:", error);
+      throw error;
+    }
+  },
+
+  // Get Machine/Instrument No options filtered by the selected machine master id
+  getMachineNo: async (machineId, branch, orgId) => {
+    try {
+      const res = await apiClient.get(
+        `/api/vendorComplaintEntry/getMachineNoForInstrumentCalibration?branch=${branch}&machineId=${machineId}&orgId=${orgId}`,
+      );
+      return res?.paramObjectsMap?.machineDetails || [];
+    } catch (error) {
+      console.error("Error fetching machine no for instrument calibration:", error);
       throw error;
     }
   },

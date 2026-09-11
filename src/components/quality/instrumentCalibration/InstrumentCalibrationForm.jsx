@@ -7,8 +7,7 @@ import branchAPI from "../../../api/branchAPI";
 import locationMasterAPI from "../../../api/locationMasterAPI";
 import { departmentAPI } from "../../../api/departmentAPI";
 import { employeeAPI } from "../../../api/employeeAPI";
-import partyMasterAPI from "../../../api/partyMasterAPI";
-import { controlPlanAPI } from "../../../api/quality/controlPlanAPI";
+import machineMasterAPI from "../../../api/Production/machineMasterAPI";
 
 /* ---------------------------------------------------------------------------- */
 /* Shared design tokens                                                        */
@@ -37,11 +36,6 @@ const cellInputClasses =
   "text-gray-900 dark:text-gray-100 " +
   "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
   "dark:focus:ring-blue-400 dark:focus:border-blue-400";
-
-const cellReadOnlyClasses =
-  "w-full px-2 py-1 rounded border text-xs leading-none " +
-  "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 " +
-  "border-gray-300 dark:border-gray-600 cursor-default";
 
 /* ---------------------------------------------------------------------------- */
 /* Building blocks                                                             */
@@ -75,11 +69,16 @@ const Field = ({
           className={`${controlClasses} ${error ? controlErrClasses : ""}`}
         >
           <option value="">-- Select --</option>
-          {(options || []).map((opt) => (
-            <option key={opt.value ?? opt} value={opt.value ?? opt}>
-              {opt.label ?? opt}
-            </option>
-          ))}
+          {(options || []).map((opt) => {
+            const isObj = opt && typeof opt === "object";
+            const optValue = isObj ? opt.value : opt;
+            const optLabel = isObj ? opt.label ?? optValue : opt;
+            return (
+              <option key={optValue ?? opt} value={optValue ?? opt}>
+                {optLabel}
+              </option>
+            );
+          })}
         </select>
 
         {error && (
@@ -248,11 +247,16 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
                     className={cellInputClasses}
                   >
                     <option value="">-- Select --</option>
-                    {(col.options || []).map((opt) => (
-                      <option key={opt.value ?? opt} value={opt.value ?? opt}>
-                        {opt.label ?? opt}
-                      </option>
-                    ))}
+                    {(col.options || []).map((opt) => {
+                      const isObj = opt && typeof opt === "object";
+                      const optValue = isObj ? opt.value : opt;
+                      const optLabel = isObj ? opt.label ?? optValue : opt;
+                      return (
+                        <option key={optValue ?? opt} value={optValue ?? opt}>
+                          {optLabel}
+                        </option>
+                      );
+                    })}
                   </select>
                 </td>
               );
@@ -271,7 +275,7 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
                   value={row[col.key] ?? ""}
                   readOnly={col.readOnly}
                   onChange={(e) => onCellChange(idx, col.key, e.target.value)}
-                  className={col.readOnly ? cellReadOnlyClasses : cellInputClasses}
+                  className={cellInputClasses}
                 />
               </td>
             );
@@ -285,29 +289,13 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
 /* ---------------------------------------------------------------------------- */
 /* Options                                                                      */
 
-const CHILD_TABS = [
-  { key: "calibrationDetails", label: "Calibration Details", kind: "table" },
-  { key: "calibrationSummary", label: "Calibration Summary", kind: "fields" },
-];
-
-const FREQUENCY_OPTIONS = [
-  { value: "Monthly", label: "Monthly" },
-  { value: "Quarterly", label: "Quarterly" },
-  { value: "Half Yearly", label: "Half Yearly" },
-  { value: "Yearly", label: "Yearly" },
-];
-
-const CALIBRATION_STATUS_OPTIONS = [
-  { value: "Calibrated", label: "Calibrated" },
-  { value: "Due for Calibration", label: "Due for Calibration" },
-  { value: "Overdue", label: "Overdue" },
-  { value: "In Progress", label: "In Progress" },
-];
-
 const fmtDate = (value) => (value ? dayjs(value).format("YYYY-MM-DD") : "");
 
-const generateReportNo = () =>
-  `CAL-${dayjs().format("YYYYMMDD")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
+const emptyDetailRow = () => ({
+  dateOfCalibration: fmtDate(dayjs()),
+  frequency: "",
+  nextScheduleDate: "",
+});
 
 /* ---------------------------------------------------------------------------- */
 /* Instrument Calibration Form                                                    */
@@ -315,8 +303,10 @@ const generateReportNo = () =>
 const InstrumentCalibrationForm = ({ data, onBack }) => {
   const { addToast } = useToast();
   const orgId = Number(localStorage.getItem("orgId")) || 0;
-  const branch = Number(localStorage.getItem("branchId")) || 0;
-  const usersId = localStorage.getItem("usersId");
+const branch = Number(localStorage.getItem("branchId")) || 0;
+  const employeeName = localStorage.getItem("employeeName") || "admin";
+  const financialYear =
+    localStorage.getItem("finYear") || String(dayjs().year());
 
   const userData = JSON.parse(localStorage.getItem("userData") || "{}");
   const orgName = (
@@ -326,57 +316,48 @@ const InstrumentCalibrationForm = ({ data, onBack }) => {
   ).trim();
   const isMacurex = ["mecurex", "macurex"].includes(orgName.toLowerCase());
 
-  const [activeChildTab, setActiveChildTab] = useState("calibrationDetails");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
 
   /* ---------- Header state ---------- */
   const [header, setHeader] = useState(() => {
-    const base = {
-      plantId: data?.plantId?.id ?? data?.plantId ?? "",
-      reportNo: data?.reportNo || "",
-      date: data?.date ? fmtDate(data.date) : fmtDate(dayjs()),
+    return {
+      plantId: data?.branch?.id ?? data?.plantId ?? "",
       department: data?.department?.id ?? data?.department ?? "",
-      checkedBy: data?.checkedBy?.id ?? data?.checkedBy ?? "",
-      machineInstrument: data?.machineInstrument?.id ?? data?.machineInstrument ?? "",
-      location: data?.location || "",
-      machineInstrumentNo: data?.machineInstrumentNo || data?.machineNo || "",
-      calibrationAgency: data?.calibrationAgency?.id ?? data?.calibrationAgency ?? "",
+      checkedBy: data?.checkedBy?.employeeId ?? data?.checkedBy ?? "",
+      machineInstrument:
+        data?.machineInstNo?.id ?? data?.machineInstrument ?? "",
+      machineInstrumentNo:
+        data?.selectMachineInstNo ??
+        data?.machineInstNo?.machineInstrumentNo ??
+        data?.machineInstrumentNo ??
+        "",
+      location:
+        data?.location?.locationName ?? data?.location ?? "",
+      locationId:
+        typeof data?.location === "object"
+          ? data?.location?.id
+          : Number(data?.location) || 0,
+      calibrationAgency: data?.calibrationAgency || "",
       certificateNo: data?.certificateNo || "",
-      approvedBy: data?.approvedBy?.id ?? data?.approvedBy ?? "",
+      approvedBy: data?.approvedBy?.employeeId ?? data?.approvedBy ?? "",
     };
-    if (!base.reportNo) base.reportNo = generateReportNo();
-    return base;
   });
 
   const [detailRows, setDetailRows] = useState(() => {
-    const raw = data?.calibrationDetails?.length
-      ? data.calibrationDetails
-      : data?.details?.length
-        ? data.details
-        : [];
+    const raw =
+      data?.instrumentCalibrationDetailsResponseDTO ||
+      data?.calibrationDetails ||
+      data?.details ||
+      [];
     if (raw.length) {
       return raw.map((item) => ({
         dateOfCalibration: fmtDate(item.dateOfCalibration),
-        frequency: item.frequency || "",
+        frequency: item.frequency?.id ?? item.frequency ?? "",
         nextScheduleDate: fmtDate(item.nextScheduleDate),
       }));
     }
-    return [
-      {
-        dateOfCalibration: fmtDate(dayjs()),
-        frequency: "",
-        nextScheduleDate: "",
-      },
-    ];
-  });
-
-  const [summary, setSummary] = useState({
-    summaryNotes: data?.summaryNotes || data?.remarks || "",
-    overallCalibrationStatus:
-      (data?.overallCalibrationStatus?.id ??
-        data?.overallCalibrationStatus) ||
-      "",
+    return [emptyDetailRow()];
   });
 
   /* ---------- Lookup loading ---------- */
@@ -384,8 +365,10 @@ const InstrumentCalibrationForm = ({ data, onBack }) => {
   const [plantOptions, setPlantOptions] = useState([]);
   const [departmentOptions, setDepartmentOptions] = useState([]);
   const [employeeOptions, setEmployeeOptions] = useState([]);
-  const [machineOptions, setMachineOptions] = useState([]);
+  const [machineTypeOptions, setMachineTypeOptions] = useState([]);
+  const [machineListOptions, setMachineListOptions] = useState([]);
   const [agencyOptions, setAgencyOptions] = useState([]);
+  const [frequencyOptions, setFrequencyOptions] = useState([]);
 
   const loadPlants = useCallback(async () => {
     try {
@@ -426,7 +409,7 @@ const InstrumentCalibrationForm = ({ data, onBack }) => {
       console.error("Failed to load department options:", error);
       setDepartmentOptions([]);
     }
-  }, [orgId, branch]);
+  }, [orgId]);
 
   const loadEmployees = useCallback(async () => {
     try {
@@ -443,36 +426,93 @@ const InstrumentCalibrationForm = ({ data, onBack }) => {
     }
   }, [orgId]);
 
-  const loadMachines = useCallback(async () => {
+  const loadMachineTypes = useCallback(async () => {
     try {
-      const res = await controlPlanAPI.getMachineFixtures(orgId);
-      setMachineOptions(
-        (res || []).map((m) => ({
-          value: m.machineFixtureNo || m.id,
-          label: m.machineFixtureNo || m.machineFixtureName || m.id,
-          machineNo: m.machineFixtureNo || "",
-        })),
+      const res = await machineMasterAPI.getMachineMaster(orgId, branch);
+      const machines =
+        res?.paramObjectsMap?.machineMasterResponseVO || [];
+      setMachineTypeOptions(
+        (machines || [])
+          .filter((m) => m?.type?.id != null)
+          .map((m) => ({
+            value: m.id,
+            label: m.type.code || m.type.description || String(m.type.id),
+          })),
+      );
+    } catch (error) {
+      console.error("Failed to load machine/instrument types:", error);
+      setMachineTypeOptions([]);
+    }
+  }, [orgId, branch]);
+
+  const loadMachines = useCallback(async () => {
+    if (!header.machineInstrument) {
+      setMachineListOptions([]);
+      return;
+    }
+    try {
+      const res = await instrumentCalibrationAPI.getMachineNo(
+        header.machineInstrument,
+        branch,
+        orgId,
+      );
+      setMachineListOptions(
+        (res || []).map((m) => {
+          const machineNo =
+            m.machineInstrumentNo || m.machineNo || String(m.id);
+          return {
+            value: machineNo,
+            label: `${machineNo}${
+              m.machineInstrumentName || m.machineName
+                ? ` - ${m.machineInstrumentName || m.machineName}`
+                : ""
+            }`,
+locationId: (m.location?.id ?? m.locationId) || Number(m.location) || 0,
+            locationName: m.location?.locationName || m.locationName || "",
+          };
+        }),
       );
     } catch (error) {
       console.error("Failed to load machine/instrument options:", error);
-      setMachineOptions([]);
+      setMachineListOptions([]);
     }
-  }, [orgId]);
+  }, [orgId, branch, header.machineInstrument]);
 
   const loadAgencies = useCallback(async () => {
     try {
-      const res = await partyMasterAPI.getPartyByOrgId(orgId, branch);
+      const res = await locationMasterAPI.getListValuesGroup(
+        "Instrument Calibration Agency",
+        orgId,
+      );
       setAgencyOptions(
-        (res || []).map((c) => ({
-          value: c.id,
-          label: c.customerCode || c.docId || c.customerName || c.id,
+        (res || []).map((v) => ({
+          value: v.valuesDescription,
+          label: v.valuesDescription || v.id,
         })),
       );
     } catch (error) {
       console.error("Failed to load calibration agency options:", error);
       setAgencyOptions([]);
     }
-  }, [orgId, branch]);
+  }, [orgId]);
+
+  const loadFrequencies = useCallback(async () => {
+    try {
+      const res = await locationMasterAPI.getListValuesGroup(
+        "Instrument calibration frequency",
+        orgId,
+      );
+      setFrequencyOptions(
+        (res || []).map((v) => ({
+          value: v.id,
+          label: v.valuesDescription || v.id,
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to load frequency options:", error);
+      setFrequencyOptions([]);
+    }
+  }, [orgId]);
 
   useEffect(() => {
     if (orgId) loadPlants();
@@ -482,10 +522,15 @@ const InstrumentCalibrationForm = ({ data, onBack }) => {
     if (orgId) {
       loadDepartments();
       loadEmployees();
-      loadMachines();
+      loadMachineTypes();
       loadAgencies();
+      loadFrequencies();
     }
-  }, [orgId, loadDepartments, loadEmployees, loadMachines, loadAgencies]);
+  }, [orgId, loadDepartments, loadEmployees, loadMachineTypes, loadAgencies, loadFrequencies]);
+
+  useEffect(() => {
+    if (header.machineInstrument) loadMachines();
+  }, [header.machineInstrument, loadMachines]);
 
   /* ---------------------------------------------------------------------------- */
   /* Handlers                                                                     */
@@ -495,11 +540,22 @@ const InstrumentCalibrationForm = ({ data, onBack }) => {
     if (fieldErrors[name]) setFieldErrors((prev) => ({ ...prev, [name]: "" }));
     setHeader((prev) => {
       const next = { ...prev, [name]: value };
+      if (name === "plantId") {
+        next.machineInstrumentNo = "";
+        next.location = "";
+        next.locationId = 0;
+      }
       if (name === "machineInstrument") {
-        const machine = machineOptions.find(
+        next.machineInstrumentNo = "";
+        next.location = "";
+        next.locationId = 0;
+      }
+      if (name === "machineInstrumentNo") {
+        const machine = machineListOptions.find(
           (m) => String(m.value) === String(value),
         );
-        next.machineInstrumentNo = machine?.machineNo || next.machineInstrumentNo || "";
+        next.location = machine?.locationName || "";
+        next.locationId = machine?.locationId || 0;
       }
       return next;
     });
@@ -507,61 +563,17 @@ const InstrumentCalibrationForm = ({ data, onBack }) => {
 
   const handleCellChange = (idx, key, value) => {
     setDetailRows((prev) =>
-      prev.map((row, i) => {
-        if (i !== idx) return row;
-        const next = { ...row, [key]: value };
-        if (key === "dateOfCalibration" && value) {
-          const freq = next.frequency;
-          const monthsMap = {
-            Monthly: 1,
-            Quarterly: 3,
-            "Half Yearly": 6,
-            Yearly: 12,
-          };
-          if (monthsMap[freq]) {
-            next.nextScheduleDate = dayjs(value)
-              .add(monthsMap[freq], "month")
-              .format("YYYY-MM-DD");
-          }
-        }
-        if (key === "frequency" && value && next.dateOfCalibration) {
-          const monthsMap = {
-            Monthly: 1,
-            Quarterly: 3,
-            "Half Yearly": 6,
-            Yearly: 12,
-          };
-          if (monthsMap[value]) {
-            next.nextScheduleDate = dayjs(next.dateOfCalibration)
-              .add(monthsMap[value], "month")
-              .format("YYYY-MM-DD");
-          }
-        }
-        return next;
-      }),
+      prev.map((row, i) => (i !== idx ? row : { ...row, [key]: value })),
     );
   };
 
   const handleAddRow = () =>
-    setDetailRows((prev) => [
-      ...prev,
-      {
-        dateOfCalibration: fmtDate(dayjs()),
-        frequency: "",
-        nextScheduleDate: "",
-      },
-    ]);
+    setDetailRows((prev) => [...prev, emptyDetailRow()]);
 
   const handleRemoveRow = (idx) =>
     setDetailRows((prev) =>
       prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx),
     );
-
-  const handleSummaryChange = (e) => {
-    const { name, value } = e.target;
-    if (fieldErrors[name]) setFieldErrors((prev) => ({ ...prev, [name]: "" }));
-    setSummary((prev) => ({ ...prev, [name]: value }));
-  };
 
   /* ---------------------------------------------------------------------------- */
   /* Validation & Save                                                            */
@@ -569,16 +581,16 @@ const InstrumentCalibrationForm = ({ data, onBack }) => {
   const validate = () => {
     const errors = {};
 
-    if (!header.plantId) errors.plantId = "Plant ID is required";
-    if (!header.reportNo?.trim()) errors.reportNo = "Report No is required";
-    if (!header.date) errors.date = "Date is required";
+    if (!header.plantId) errors.plantId = "Plant is required";
     if (!header.department) errors.department = "Department is required";
     if (!header.checkedBy) errors.checkedBy = "Checked By is required";
     if (!header.machineInstrument)
       errors.machineInstrument = "Machine/Instrument is required";
     if (!header.machineInstrumentNo?.trim())
       errors.machineInstrumentNo = "Machine/Instrument No is required";
-    if (!header.calibrationAgency)
+    if (!header.location && !header.locationId)
+      errors.location = "Location is required";
+    if (!header.calibrationAgency?.trim())
       errors.calibrationAgency = "Calibration Agency is required";
     if (!header.certificateNo?.trim())
       errors.certificateNo = "Certificate No is required";
@@ -590,18 +602,16 @@ const InstrumentCalibrationForm = ({ data, onBack }) => {
     if (!validRows.length)
       errors.calibrationDetails =
         "Add at least one Calibration Details row with Date of Calibration and Frequency";
-    detailRows.forEach((r, i) => {
-      if (!r.dateOfCalibration)
-        errors[`detail.${i}.dateOfCalibration`] = "Date of Calibration is required";
-      if (!r.frequency) errors[`detail.${i}.frequency`] = "Frequency is required";
-    });
 
-    if (!summary.overallCalibrationStatus)
-      errors.overallCalibrationStatus =
-        "Overall Calibration Status is required";
+    const errorKeys = Object.keys(errors);
+    if (errorKeys.length) {
+      setFieldErrors(errors);
+      addToast(errors[errorKeys[0]], "error");
+      return false;
+    }
 
-    setFieldErrors(errors);
-    return Object.keys(errors).length === 0;
+    setFieldErrors({});
+    return true;
   };
 
   const handleSave = async () => {
@@ -613,15 +623,28 @@ const InstrumentCalibrationForm = ({ data, onBack }) => {
 
     const payload = {
       ...(isUpdate ? { id: data.id } : {}),
+      active: true,
+      approvedBy: Number(header.approvedBy),
+      branch: Number(header.plantId),
+      calibrationAgency: header.calibrationAgency,
+      cancelRemarks: "",
+      certificateNo: header.certificateNo,
+      checkedBy: Number(header.checkedBy),
+      createdBy: employeeName,
+      department: Number(header.department),
+      financialYear,
+      instrumentCalibrationDetailsDTO: detailRows
+        .filter((r) => r.dateOfCalibration || r.frequency)
+        .map((r) => ({
+          dateOfCalibration: r.dateOfCalibration,
+          frequency: Number(r.frequency) || 0,
+          nextScheduleDate: r.nextScheduleDate,
+        })),
+      location: Number(header.locationId) || Number(header.location) || 0,
+      machineInstNo: Number(header.machineInstrument),
       orgId,
-      branch,
-      ...header,
-      calibrationDetails: detailRows.filter(
-        (r) => r.dateOfCalibration || r.frequency,
-      ),
-      summary,
-      createdBy: isUpdate ? data?.createdBy || usersId : usersId,
-      ...(isUpdate ? { updatedBy: usersId } : {}),
+      selectMachineInstNo: header.machineInstrumentNo,
+      ...(isUpdate ? { updatedBy: employeeName } : {}),
     };
 
     try {
@@ -664,7 +687,21 @@ const InstrumentCalibrationForm = ({ data, onBack }) => {
 
   /* ---------------------------------------------------------------------------- */
 
-  const activeTabMeta = CHILD_TABS.find((t) => t.key === activeChildTab);
+  const machineNoOptions = machineListOptions.map((m) => ({
+    value: m.value,
+    label: m.label,
+  }));
+  if (
+    header.machineInstrumentNo &&
+    !machineNoOptions.some(
+      (o) => String(o.value) === String(header.machineInstrumentNo),
+    )
+  ) {
+    machineNoOptions.unshift({
+      value: header.machineInstrumentNo,
+      label: header.machineInstrumentNo,
+    });
+  }
 
   return (
     <div className="w-full p-2">
@@ -689,29 +726,12 @@ const InstrumentCalibrationForm = ({ data, onBack }) => {
           <div className={fieldGrid}>
             <Field
               type="select"
-              label="Plant ID"
+              label="Plant"
               name="plantId"
               value={header.plantId}
               onChange={handleHeaderChange}
               error={fieldErrors.plantId}
               options={plantOptions}
-              required
-            />
-            <Field
-              label="Report No"
-              name="reportNo"
-              value={header.reportNo}
-              onChange={handleHeaderChange}
-              error={fieldErrors.reportNo}
-              required
-            />
-            <Field
-              type="date"
-              label="Date"
-              name="date"
-              value={header.date}
-              onChange={handleHeaderChange}
-              error={fieldErrors.date}
               required
             />
             <Field
@@ -741,7 +761,17 @@ const InstrumentCalibrationForm = ({ data, onBack }) => {
               value={header.machineInstrument}
               onChange={handleHeaderChange}
               error={fieldErrors.machineInstrument}
-              options={machineOptions}
+              options={machineTypeOptions}
+              required
+            />
+            <Field
+              type="select"
+              label="Machine/Instrument No"
+              name="machineInstrumentNo"
+              value={header.machineInstrumentNo}
+              onChange={handleHeaderChange}
+              error={fieldErrors.machineInstrumentNo}
+              options={machineNoOptions}
               required
             />
             <Field
@@ -749,14 +779,8 @@ const InstrumentCalibrationForm = ({ data, onBack }) => {
               name="location"
               value={header.location}
               onChange={handleHeaderChange}
-            />
-            <Field
-              label="Machine/Instrument No"
-              name="machineInstrumentNo"
-              value={header.machineInstrumentNo}
-              onChange={handleHeaderChange}
-              error={fieldErrors.machineInstrumentNo}
-              required
+              error={fieldErrors.location}
+              placeholder="Auto-filled from Machine/Instrument No"
             />
             <Field
               type="select"
@@ -766,6 +790,7 @@ const InstrumentCalibrationForm = ({ data, onBack }) => {
               onChange={handleHeaderChange}
               error={fieldErrors.calibrationAgency}
               options={agencyOptions}
+              placeholder="e.g. ABC Calibration Services Pvt Ltd"
               required
             />
             <Field
@@ -789,109 +814,49 @@ const InstrumentCalibrationForm = ({ data, onBack }) => {
           </div>
         </div>
 
-        {/* ---------------- Child Tabs ---------------- */}
+        {/* ---------------- Calibration Details ---------------- */}
         <section className="mt-0 bg-white dark:bg-gray-800">
-          {/* Tabs */}
           <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 mb-0">
-            <div className="flex flex-wrap">
-              {CHILD_TABS.map((tab) => (
-                <button
-                  key={tab.key}
-                  type="button"
-                  onClick={() => setActiveChildTab(tab.key)}
-                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap transition-colors ${
-                    activeChildTab === tab.key
-                      ? "bg-blue-600 text-white"
-                      : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-
-            {activeTabMeta?.kind === "table" && (
-              <button
-                type="button"
-                onClick={handleAddRow}
-                className="h-6 w-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-colors"
-              >
-                <Plus size={12} />
-              </button>
-            )}
+            <SectionHeader>Calibration Details</SectionHeader>
+            <button
+              type="button"
+              onClick={handleAddRow}
+              className="h-6 w-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-colors"
+            >
+              <Plus size={12} />
+            </button>
           </div>
 
-          {/* Tab 1: Calibration Details */}
-          {activeChildTab === "calibrationDetails" && (
-            <div className="pt-3">
-              <DynamicTable
-                columns={[
-                  {
-                    key: "dateOfCalibration",
-                    label: "Date of Calibration",
-                    type: "date",
-                  },
-                  {
-                    key: "frequency",
-                    label: "Frequency",
-                    type: "select",
-                    options: FREQUENCY_OPTIONS,
-                  },
-                  {
-                    key: "nextScheduleDate",
-                    label: "Next Schedule Date",
-                    type: "date",
-                  },
-                ]}
-                rows={detailRows}
-                onCellChange={handleCellChange}
-                onRemoveRow={handleRemoveRow}
-              />
-              {fieldErrors.calibrationDetails && (
-                <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
-                  {fieldErrors.calibrationDetails}
-                </p>
-              )}
-              {detailRows.some(
-                (r, i) => fieldErrors[`detail.${i}.dateOfCalibration`],
-              ) && (
-                <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
-                  Date of Calibration is required in every row
-                </p>
-              )}
-              {detailRows.some((r, i) => fieldErrors[`detail.${i}.frequency`]) && (
-                <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
-                  Frequency is required in every row
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Tab 2: Calibration Summary */}
-          {activeChildTab === "calibrationSummary" && (
-            <div className="pt-3">
-              <div className={fieldGrid}>
-                <Field
-                  type="textarea"
-                  label="Summary Notes"
-                  name="summaryNotes"
-                  value={summary.summaryNotes}
-                  onChange={handleSummaryChange}
-                  className="col-span-full"
-                />
-                <Field
-                  type="select"
-                  label="Overall Calibration Status"
-                  name="overallCalibrationStatus"
-                  value={summary.overallCalibrationStatus}
-                  onChange={handleSummaryChange}
-                  error={fieldErrors.overallCalibrationStatus}
-                  options={CALIBRATION_STATUS_OPTIONS}
-                  required
-                />
-              </div>
-            </div>
-          )}
+          <div className="pt-3">
+            <DynamicTable
+              columns={[
+                {
+                  key: "dateOfCalibration",
+                  label: "Date of Calibration",
+                  type: "date",
+                },
+                {
+                  key: "frequency",
+                  label: "Frequency",
+                  type: "select",
+                  options: frequencyOptions,
+                },
+                {
+                  key: "nextScheduleDate",
+                  label: "Next Schedule Date",
+                  type: "date",
+                },
+              ]}
+              rows={detailRows}
+              onCellChange={handleCellChange}
+              onRemoveRow={handleRemoveRow}
+            />
+            {fieldErrors.calibrationDetails && (
+              <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
+                {fieldErrors.calibrationDetails}
+              </p>
+            )}
+          </div>
         </section>
       </div>
 

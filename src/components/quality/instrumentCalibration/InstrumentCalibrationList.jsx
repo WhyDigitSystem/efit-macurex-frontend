@@ -14,8 +14,8 @@ const InstrumentCalibrationList = ({ onAddNew, onEdit, onBack, refreshTrigger })
     try {
       setLoading(true);
       const data = await instrumentCalibrationAPI.getInstrumentCalibrationByOrgId(
-        ORG_ID,
         BRANCH_ID,
+        ORG_ID,
       );
       data.sort((a, b) => (b.id || 0) - (a.id || 0));
       setRecords(data);
@@ -34,9 +34,9 @@ const InstrumentCalibrationList = ({ onAddNew, onEdit, onBack, refreshTrigger })
 
   const columns = [
     {
-      key: "reportNo",
-      label: "Report No",
-      accessor: (row) => row.reportNo,
+      key: "id",
+      label: "Id",
+      accessor: (row) => row.id,
       type: "text",
       noWrap: true,
     },
@@ -44,9 +44,9 @@ const InstrumentCalibrationList = ({ onAddNew, onEdit, onBack, refreshTrigger })
       key: "plantId",
       label: "Plant",
       accessor: (row) =>
-        typeof row.plantId === "object"
-          ? row.plantId.branchName || row.plantId.plantName || row.plantId.id
-          : row.plantName || row.plantId,
+        typeof row.branch === "object"
+          ? row.branch.branchName || row.branch.id
+          : row.branch || row.plantName || "",
       type: "text",
     },
     {
@@ -59,15 +59,31 @@ const InstrumentCalibrationList = ({ onAddNew, onEdit, onBack, refreshTrigger })
       type: "text",
     },
     {
-      key: "date",
-      label: "Date",
-      accessor: (row) => row.date || "",
+      key: "selectMachineInstNo",
+      label: "Machine/Instr No",
+      accessor: (row) =>
+        row.selectMachineInstNo ||
+        row.machineInstNo?.machineInstrumentNo ||
+        "",
       type: "text",
     },
     {
-      key: "machineInstrumentNo",
-      label: "Machine/Instr No",
-      accessor: (row) => row.machineInstrumentNo || row.machineNo || "",
+      key: "machineInstNo",
+      label: "Machine/Instrument",
+      accessor: (row) =>
+        row.machineInstNo?.machineInstrumentNo ||
+        row.machineInstNo?.machineInstrumentName ||
+        row.machineInstNo?.id ||
+        "",
+      type: "text",
+    },
+    {
+      key: "location",
+      label: "Location",
+      accessor: (row) =>
+        typeof row.location === "object"
+          ? row.location.locationName || row.location.id
+          : row.location || "",
       type: "text",
     },
     {
@@ -77,14 +93,19 @@ const InstrumentCalibrationList = ({ onAddNew, onEdit, onBack, refreshTrigger })
       type: "text",
     },
     {
-      key: "overallCalibrationStatus",
-      label: "Calibration Status",
+      key: "calibrationAgency",
+      label: "Calibration Agency",
+      accessor: (row) => row.calibrationAgency.code || "",
+      type: "text",
+    },
+    {
+      key: "checkedBy",
+      label: "Checked By",
       accessor: (row) =>
-        typeof row.overallCalibrationStatus === "object"
-          ? row.overallCalibrationStatus.valuesDescription ||
-            row.overallCalibrationStatus.label ||
-            row.overallCalibrationStatus.id
-          : row.overallCalibrationStatus || "",
+        row.checkedBy?.employeeName ||
+        row.checkedBy?.employeeCode ||
+        row.checkedBy?.employeeId ||
+        "",
       type: "text",
     },
     {
@@ -97,11 +118,22 @@ const InstrumentCalibrationList = ({ onAddNew, onEdit, onBack, refreshTrigger })
   ];
 
   const searchFields = [
-    "reportNo",
-    "plantId",
+    "id",
+    "branch",
+    "branch.branchName",
+    "branch.id",
     "department",
-    "machineInstrumentNo",
+    "department.departmentName",
+    "department.id",
+    "selectMachineInstNo",
+    "machineInstNo.machineInstrumentNo",
+    "machineInstNo.machineInstrumentName",
+    "location",
+    "location.locationName",
     "certificateNo",
+    "calibrationAgency",
+    "checkedBy.employeeName",
+    "checkedBy.employeeCode",
   ];
 
   return (
