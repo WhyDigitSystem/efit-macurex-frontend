@@ -3,38 +3,45 @@ import MaterialIndentForProductionList from "./MaterialIndentForProductionList";
 import MaterialIndentForProductionForm from "./MaterialIndentForProductionForm";
 
 const MaterialIndentForProduction = () => {
-    const [screen, setScreen] = useState("list");
-    const [editData, setEditData] = useState(null);
+  const [screen, setScreen] = useState("list");
+  const [editData, setEditData] = useState(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-    const addNew = () => {
-        console.log("Add button clicked");
-        setEditData(null);
-        setScreen("form");
-    };
+  const handleAddNew = () => {
+    setEditData(null);
+    setScreen("form");
+  };
 
-    const edit = (row) => {
-        setEditData(row);
-        setScreen("form");
-    };
+  const handleEdit = (row) => {
+    setEditData(row);
+    setScreen("form");
+  };
 
+  /* Bump refreshTrigger on the way back so the list re-fetches after a
+       create or update instead of showing stale rows. */
+  const handleBackToList = () => {
+    setEditData(null);
+    setScreen("list");
+    setRefreshTrigger((prev) => prev + 1);
+  };
+
+  if (screen === "form") {
     return (
-        <>
-            {screen === "list" && (
-                <MaterialIndentForProductionList
-                    onAddNew={addNew}
-                    onEdit={edit}
-                    onBack={() => window.history.back()}
-                />
-            )}
-
-            {screen === "form" && (
-                <MaterialIndentForProductionForm
-                    data={editData}
-                    onBack={() => setScreen("list")}
-                />
-            )}
-        </>
+      <MaterialIndentForProductionForm
+        data={editData}
+        onBack={handleBackToList}
+      />
     );
+  }
+
+  return (
+    <MaterialIndentForProductionList
+      onAddNew={handleAddNew}
+      onEdit={handleEdit}
+      onBack={() => window.history.back()}
+      refreshTrigger={refreshTrigger}
+    />
+  );
 };
 
 export default MaterialIndentForProduction;
