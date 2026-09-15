@@ -37,6 +37,18 @@ export const partyMasterAPI = {
         }
     },
 
+    getCustomerDetails: async (branch, orgId) => {
+        try {
+            const res = await apiClient.get(
+                `/api/dev/getCustomerDetails?branch=${branch}&orgId=${orgId}`,
+            );
+            return res?.paramObjectsMap?.customerDetails || [];
+        } catch (error) {
+            console.error("Error fetching customer details:", error);
+            throw error;
+        }
+    },
+
     createUpdatePartyMaster: async (customerDTO) => {
         try {
             const res = await apiClient.put(

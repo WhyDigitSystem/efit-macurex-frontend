@@ -326,17 +326,6 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
 /* ---------------------------------------------------------------------------- */
 /* Options                                                                      */
 
-const BELONGS_TO = ["APPLIANCES", "ELECTRICALS", "PACKAGING", "RAW MATERIAL"];
-const TYPES = ["Material Issue", "Material Return", "Job Work", "Scrap Disposal"];
-const MODES_OF_TRANSPORT = [
-  "Road",
-  "Rail",
-  "Air",
-  "Sea",
-  "Courier",
-  "Own Vehicle",
-  "Hand Carried",
-];
 const YES_NO = ["Yes", "No"];
 
 const CHILD_TABS = [
@@ -361,9 +350,6 @@ const emptyGatePassRow = () => ({
 
 const fmtDate = (value) => (value ? dayjs(value).format("YYYY-MM-DD") : "");
 
-const generateDocNo = () =>
-  `DCGP-${dayjs().format("YYYYMMDD")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
-
 /* ---------------------------------------------------------------------------- */
 
 const DeliveryChallanCumGatePassForm = ({ data, onBack }) => {
@@ -371,6 +357,10 @@ const DeliveryChallanCumGatePassForm = ({ data, onBack }) => {
   const orgId = Number(localStorage.getItem("orgId")) || 0;
   const branch = Number(localStorage.getItem("branchId")) || 0;
   const usersId = localStorage.getItem("usersId");
+  const username = localStorage.getItem("employeeName");
+  const financialYear = localStorage.getItem("finYear") || "";  
+
+  
 
   const userData = JSON.parse(localStorage.getItem("userData") || "{}");
   const orgName = (
@@ -385,33 +375,56 @@ const DeliveryChallanCumGatePassForm = ({ data, onBack }) => {
   const [fieldErrors, setFieldErrors] = useState({});
 
   const [plantOptions, setPlantOptions] = useState([]);
+  const [belongsToOptions, setBelongsToOptions] = useState([]);
+  const [typeOptions, setTypeOptions] = useState([]);
+  const [motOptions, setMotOptions] = useState([]);
+  const [workOrderOptions, setWorkOrderOptions] = useState([]);
   const [departmentOptions, setDepartmentOptions] = useState([]);
   const [partyOptions, setPartyOptions] = useState([]);
+  const [partyMap, setPartyMap] = useState({});
   const [locationOptions, setLocationOptions] = useState([]);
   const [itemOptions, setItemOptions] = useState([]);
   const [itemMasterMap, setItemMasterMap] = useState({});
   const [unitOptions, setUnitOptions] = useState([]);
   const [employeeOptions, setEmployeeOptions] = useState([]);
 
+   const [docNoGenerated, setDocNoGenerated] = useState(false);
+
+  const generateDocNo = useCallback(async () => {
+    if (docNoGenerated) return;
+    try {
+      const docId = await deliveryChallanCumGatePassAPI.getDeliveryChallanCumGatePassDocId(
+        financialYear,
+        orgId,
+      );
+      if (docId) {
+        setHeader((prev) => ({ ...prev, docNo: docId }));
+        setDocNoGenerated(true);
+      }
+    } catch (error) {
+      console.error("Failed to generate Doc No:", error);
+    }
+  }, [financialYear, orgId, docNoGenerated]);
+
   const [header, setHeader] = useState(() => {
     const base = {
       plantId: data?.plantId?.id ?? data?.plantId ?? "",
       belongsTo: data?.belongsTo || "",
       type: data?.type || "",
-      department: data?.department?.id ?? data?.department ?? "",
-      partyPlantId: data?.partyPlantId?.id ?? data?.partyPlantId ?? "",
+      department: parseInt(data?.department?.id ?? data?.department ?? 0) || 0,
+      partyPlantId: data?.partyPlantId?.id ?? data?.partyPlantId ?? 0,
       partyPlantName: data?.partyPlantName || "",
       refNo: data?.refNo || "",
       refDate: fmtDate(data?.refDate),
-      fromLocation: data?.fromLocation || "",
+      fromLocation: parseInt(data?.fromLocation?.id ?? data?.fromLocation ?? 0) || 0  ,
       modeOfTransport: data?.modeOfTransport || "",
       vehicleNo: data?.vehicleNo || "",
       workOrderNo: data?.workOrderNo || "",
-      docNo: data?.docNo || (data ? "" : generateDocNo()),
+      docNo: data?.docNo || "",
       docDate: data?.docDate || dayjs().format("YYYY-MM-DD"),
       isIgstApplicable: data?.isIgstApplicable || "",
       gstinNo: data?.gstinNo || "",
-      preparedBy: data?.preparedBy?.id ?? data?.preparedBy ?? "",
+      preparedBy: parseInt(data?.preparedBy?.id ?? data?.preparedBy ?? 0) || 0,
       remarks: data?.remarks || "",
       active: data?.active !== false,
     };
@@ -430,6 +443,8 @@ const DeliveryChallanCumGatePassForm = ({ data, onBack }) => {
   });
 
   /* ---------------- Lookup loading ---------------- */
+
+ 
 
   const loadPlants = useCallback(async () => {
     try {
@@ -456,10 +471,78 @@ const DeliveryChallanCumGatePassForm = ({ data, onBack }) => {
     }
   }, [orgId, isMacurex]);
 
-  // From Location reuses the same plant/branch list as Plant ID.
-  useEffect(() => {
-    setLocationOptions(plantOptions);
-  }, [plantOptions]);
+  // From Location: Location Master GetAll API
+  const loadLocations = useCallback(async () => {
+    try {
+      const res = await locationMasterAPI.getLocationMasterByOrgId(orgId, branch);
+      setLocationOptions(
+        (res || []).map((l) => ({
+          value: l.id,
+          label: l.locationName || l.locationId || l.id,
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to load location options:", error);
+      setLocationOptions([]);
+    }
+  }, [orgId, branch]);
+
+  // Belongs To: getListValuesGroup("Delivery Challan Cum Gate Pass")
+  const loadBelongsTo = useCallback(async () => {
+    try {
+      const res = await locationMasterAPI.getListValuesGroup(
+        "Delivery Challan Cum Gate Pass",
+        orgId,
+      );
+      setBelongsToOptions(
+        (res || []).map((v) => ({
+          value: v.valuesDescription,
+          label: v.valuesDescription,
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to load belongs to options:", error);
+      setBelongsToOptions([]);
+    }
+  }, [orgId]);
+
+  // Type: getListValuesGroup("Delivery Challan Cum Gate Pass Part/branch")
+  const loadTypes = useCallback(async () => {
+    try {
+      const res = await locationMasterAPI.getListValuesGroup(
+        "Delivery Challan Cum Gate Pass Part/branch",
+        orgId,
+      );
+      setTypeOptions(
+        (res || []).map((v) => ({
+          value: v.valuesDescription,
+          label: v.valuesDescription,
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to load type options:", error);
+      setTypeOptions([]);
+    }
+  }, [orgId]);
+
+  // Mode of Transport: getListValuesGroup("Delivery Challan Cum Gate Pass MOT")
+  const loadMot = useCallback(async () => {
+    try {
+      const res = await locationMasterAPI.getListValuesGroup(
+        "Delivery Challan Cum Gate Pass MOT",
+        orgId,
+      );
+      setMotOptions(
+        (res || []).map((v) => ({
+          value: v.valuesDescription,
+          label: v.valuesDescription,
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to load mode of transport options:", error);
+      setMotOptions([]);
+    }
+  }, [orgId]);
 
   const loadDepartments = useCallback(async () => {
     try {
@@ -471,46 +554,130 @@ const DeliveryChallanCumGatePassForm = ({ data, onBack }) => {
         );
       } else {
         setDepartmentOptions([
-          "Design",
-          "Purchase",
-          "Stores",
-          "Quality",
-          "Production",
+         ""
         ]);
       }
     } catch (error) {
       console.error("Failed to load department options:", error);
       setDepartmentOptions([
-        "Design",
-        "Purchase",
-        "Stores",
-        "Quality",
-        "Production",
+       ""
       ]);
     }
   }, [orgId, branch]);
 
   const loadParties = useCallback(async () => {
     try {
-      const res = await partyMasterAPI.getPartyByOrgId(orgId, branch);
-      setPartyOptions(
-        (res || []).map((c) => ({
-          value: c.id,
-          label: c.customerName || c.docId || c.id,
+      const map = {};
+      let options = [];
+      if (header.type === "PARTY") {
+        const res = await partyMasterAPI.getCustomerDetails(branch, orgId);
+        options = (res || []).map((c) => {
+          const label = c.customerName || c.customerCode || c.customerId;
+          map[String(c.customerId)] = {
+            label,
+            gstNo: c.gstNo,
+            isGstApplicable: c.isGstApplicable,
+          };
+          return { value: c.customerId, label };
+        });
+      } else if (header.type === "PLANT") {
+        const res = await branchAPI.getBranchByOrgId(orgId);
+        options = (res || []).map((b) => {
+          const label = b.branchName || b.branchCode || b.id;
+          map[String(b.id)] = { label, gstNo: b.gstinNo };
+          return { value: b.id, label };
+        });
+      }
+      setPartyOptions(options);
+      setPartyMap(map);
+    } catch (error) {
+      console.error("Failed to load party/plant options:", error);
+      setPartyOptions([]);
+      setPartyMap({});
+    }
+  }, [orgId, branch, header.type]);
+
+  const loadWorkOrders = useCallback(async () => {
+    try {
+      if (!header.partyPlantId) {
+        setWorkOrderOptions([]);
+        return;
+      }
+      console.log("[DCGP] loadWorkOrders running. header.type:", header.type, "| partyPlantId:", header.partyPlantId, "| branch:", branch, "| orgId:", orgId);
+      const res = await deliveryChallanCumGatePassAPI.getJobOrderNo(
+        branch,
+        header.partyPlantId,
+        orgId,
+      );
+      const mapped = (res || []).map((j) => ({
+        value: j.jobOrderNo,
+        label: j.jobOrderNo,
+      }));
+      console.log("[DCGP] loadWorkOrders -> mapped options count:", mapped.length, mapped.slice(0, 5));
+      setWorkOrderOptions(mapped);
+    } catch (error) {
+      console.error("Failed to load work order options:", error);
+      setWorkOrderOptions([]);
+    }
+  }, [orgId, branch, header.type, header.partyPlantId]);
+
+  const loadDcgpDetailsRows = useCallback(async () => {
+    console.log(
+      "[DCGP] loadDcgpDetailsRows CALLED. type:",
+      header.type,
+      "| partyPlantId:",
+      header.partyPlantId,
+      "| workOrderNo:",
+      header.workOrderNo,
+    );
+    try {
+      if (!header.partyPlantId || !header.workOrderNo) {
+        console.warn(
+          "[DCGP] loadDcgpDetailsRows guard-blocked (only party+workOrder required). partyPlantId:",
+          header.partyPlantId,
+          "| workOrderNo:",
+          header.workOrderNo,
+        );
+        return;
+      }
+      const res = await deliveryChallanCumGatePassAPI.getDcgpDetailsRows(
+        branch,
+        header.partyPlantId,
+        header.workOrderNo,
+        orgId,
+      );
+      if (!res || res.length === 0) {
+        setGatePassRows([emptyGatePassRow()]);
+        return;
+      }
+      setGatePassRows(
+        res.map((v) => ({
+          ...emptyGatePassRow(),
+          itemCode: v.itemCode || "",
+          itemDescription: v.itemDescription || "",
+          hsnSacCode: v.hsnSacCode || "",
+          unit: String(v.unit ?? ""),
+          unitDescription: v.unitDescription || "",
+          qty: v.qty ?? "",
+          rate: v.rate ?? "",
+          amount: v.rate && v.qty ? (parseFloat(v.rate) * parseFloat(v.qty)).toFixed(2) : "",
         })),
       );
     } catch (error) {
-      console.error("Failed to load party options:", error);
-      setPartyOptions([]);
+      console.error("Failed to load dcgp detail rows:", error);
+      setGatePassRows([emptyGatePassRow()]);
     }
-  }, [orgId, branch]);
+  }, [orgId, branch, header.type, header.partyPlantId, header.workOrderNo]);
 
   const loadItems = useCallback(async () => {
     try {
-      const res = await itemAPI.getItems(orgId, branch);
+      const res = await deliveryChallanCumGatePassAPI.getItemDetailsForSalesReturn(
+        branch,
+        orgId,
+      );
       const map = {};
       const options = (res || []).map((it) => {
-        map[it.itemCode] = it;
+        map[String(it.itemCode)] = it;
         return { value: it.itemCode, label: it.itemCode };
       });
       setItemOptions(options);
@@ -524,7 +691,7 @@ const DeliveryChallanCumGatePassForm = ({ data, onBack }) => {
 
   const loadUnits = useCallback(async () => {
     try {
-      const res = await unitMasterAPI.getUnits(branch, orgId);
+      const res = await unitMasterAPI.getUnits(orgId);
       setUnitOptions(
         (res || []).map((u) => ({
           value: u.id,
@@ -559,20 +726,53 @@ const DeliveryChallanCumGatePassForm = ({ data, onBack }) => {
   useEffect(() => {
     if (orgId && branch) {
       loadDepartments();
-      loadParties();
+      loadLocations();
       loadItems();
       loadUnits();
       loadEmployees();
+      loadBelongsTo();
+      loadTypes();
+      loadMot();
     }
   }, [
     orgId,
     branch,
     loadDepartments,
-    loadParties,
+    loadLocations,
     loadItems,
     loadUnits,
     loadEmployees,
+    loadBelongsTo,
+    loadTypes,
+    loadMot,
   ]);
+
+  useEffect(() => {
+    if (header.type) loadParties();
+  }, [header.type, loadParties]);
+
+  useEffect(() => {
+    if (header.partyPlantId) {
+      loadWorkOrders();
+    } else {
+      setWorkOrderOptions([]);
+    }
+  }, [header.partyPlantId, loadWorkOrders]);
+
+  useEffect(() => {
+    if (header.workOrderNo && !data) {
+      loadDcgpDetailsRows();
+    } else if (!header.workOrderNo) {
+      setGatePassRows([emptyGatePassRow()]);
+    }
+  }, [header.workOrderNo, loadDcgpDetailsRows, data]);
+
+  // Generate Doc No on mount for new records only
+  useEffect(() => {
+    if (!data && !docNoGenerated) {
+      generateDocNo();
+    }
+  }, [data, generateDocNo, docNoGenerated]);
 
   /* ---------------- Handlers ---------------- */
 
@@ -581,9 +781,20 @@ const DeliveryChallanCumGatePassForm = ({ data, onBack }) => {
     if (fieldErrors[name]) setFieldErrors((prev) => ({ ...prev, [name]: "" }));
     setHeader((prev) => {
       const next = { ...prev, [name]: value };
+      if (name === "type") {
+        next.partyPlantId = "";
+        next.partyPlantName = "";
+      }
       if (name === "partyPlantId") {
-        const party = partyOptions.find((p) => p.value === value);
-        next.partyPlantName = party?.label || "";
+        const record = partyMap[String(value)];
+        next.partyPlantName = record?.label || "";
+        next.gstinNo = record?.gstNo || "";
+        next.isIgstApplicable =
+          record && typeof record.isGstApplicable === "boolean"
+            ? record.isGstApplicable
+              ? "Yes"
+              : "No"
+            : "";
       }
       return next;
     });
@@ -601,9 +812,11 @@ const DeliveryChallanCumGatePassForm = ({ data, onBack }) => {
         let next = { ...row, [key]: value };
 
         if (key === "itemCode") {
-          const item = itemMasterMap[value];
+          const item = itemMasterMap[value] || itemMasterMap[String(value)];
           next.itemDescription = item?.itemDescription || "";
-          next.unit = item?.primaryUnits?.id || "";
+          next.hsnSacCode = item?.hsnSacCode || item?.hsnSacCode || "";
+          next.unit = item?.id || item?.primaryUnits?.id || "";
+          next.rate = item?.rate ?? "";
         }
 
         if (["qty", "rate", "lcRate"].includes(key)) {
@@ -675,14 +888,40 @@ const DeliveryChallanCumGatePassForm = ({ data, onBack }) => {
       ...(isUpdate ? { id: data.id } : {}),
       orgId,
       branch,
-      ...header,
-      gatePassDetails: gatePassRows.filter((r) => r.itemCode?.trim()),
-      gatePassSummary: {
-        totalQty: computedTotalQty ? computedTotalQty.toFixed(2) : "",
-        summaryNotes: summary.summaryNotes,
-      },
-      createdBy: isUpdate ? data?.createdBy || usersId : usersId,
-      ...(isUpdate ? { updatedBy: usersId } : {}),
+      active: header.active !== false,
+      createdBy: String(username || ""),
+      belongsTo: header.belongsTo || "",
+      type: header.type || "",
+      workOrderNo: header.workOrderNo || "",
+      modeOfTransport: header.modeOfTransport || "",
+      vehicleNo: header.vehicleNo || "",
+      remarks: header.remarks || "",
+      cancelRemarks: header.cancelRemarks || "",
+      gstnNo: header.gstinNo || "",
+      igstappl: header.isIgstApplicable === "Yes",
+      financialYear: header.financialYear || financialYear || localStorage.getItem("finYear") || "",
+      department: Number(header.department) || 0,
+      fromLocation: Number(header.fromLocation) || 0,
+      partyPlantId: Number(header.partyPlantId) || 0,
+      preparedBy: Number(header.preparedBy || 0) || 0,
+      totalQty: computedTotalQty ? Number(computedTotalQty) : 0,
+      deliveryChallanCumGatePassDetailsDTO: gatePassRows
+        .filter((r) => r.itemCode?.trim())
+        .map((r) => {
+          const item = itemMasterMap[String(r.itemCode)] || {};
+          return {
+            item: Number(item.itemId ?? r.itemId ?? 0),
+            unit: Number(r.id || item.unitId || 0),
+            hsnSacCode: Number(item.hsnId ?? r.hsnSacId ?? 0),
+            dueDate: r.dueDate || "",
+            qty: r.qty === "" ? 0 : Number(r.qty),
+            rate: r.rate === "" ? 0 : Number(r.rate),
+            lcRate: r.lcRate === "" ? 0 : Number(r.lcRate),
+            previousQty: r.previousQty === "" ? 0 : Number(r.previousQty),
+            availableQty: r.availableQty === "" ? 0 : Number(r.availableQty),
+            stock: r.stock === "" ? 0 : Number(r.stock),
+          };
+        }),
     };
 
     try {
@@ -750,6 +989,25 @@ const DeliveryChallanCumGatePassForm = ({ data, onBack }) => {
           <SectionHeader>Delivery Challan Cum Gate Pass</SectionHeader>
           <div className={fieldGrid}>
             <Field
+              label="Doc No"
+              name="docNo"
+              value={header.docNo}
+              onChange={handleHeaderChange}
+              error={fieldErrors.docNo}
+              required
+              disabled={!data}
+            />
+            <Field
+              type="date"
+              label="Doc Date"
+              name="docDate"
+              value={header.docDate}
+              onChange={handleHeaderChange}
+              error={fieldErrors.docDate}
+              required
+              disabled
+            />
+            <Field
               type="select"
               label="Plant ID"
               name="plantId"
@@ -766,17 +1024,7 @@ const DeliveryChallanCumGatePassForm = ({ data, onBack }) => {
               value={header.belongsTo}
               onChange={handleHeaderChange}
               error={fieldErrors.belongsTo}
-              options={BELONGS_TO}
-              required
-            />
-            <Field
-              type="select"
-              label="Type"
-              name="type"
-              value={header.type}
-              onChange={handleHeaderChange}
-              error={fieldErrors.type}
-              options={TYPES}
+              options={belongsToOptions}
               required
             />
             <Field
@@ -787,6 +1035,16 @@ const DeliveryChallanCumGatePassForm = ({ data, onBack }) => {
               onChange={handleHeaderChange}
               error={fieldErrors.department}
               options={departmentOptions}
+              required
+            />
+            <Field
+              type="select"
+              label="Type"
+              name="type"
+              value={header.type}
+              onChange={handleHeaderChange}
+              error={fieldErrors.type}
+              options={typeOptions}
               required
             />
             <Field
@@ -807,19 +1065,6 @@ const DeliveryChallanCumGatePassForm = ({ data, onBack }) => {
               disabled
             />
             <Field
-              label="Ref No"
-              name="refNo"
-              value={header.refNo}
-              onChange={handleHeaderChange}
-            />
-            <Field
-              type="date"
-              label="Ref Date"
-              name="refDate"
-              value={header.refDate}
-              onChange={handleHeaderChange}
-            />
-            <Field
               type="select"
               label="From Location"
               name="fromLocation"
@@ -835,7 +1080,7 @@ const DeliveryChallanCumGatePassForm = ({ data, onBack }) => {
               name="modeOfTransport"
               value={header.modeOfTransport}
               onChange={handleHeaderChange}
-              options={MODES_OF_TRANSPORT}
+              options={motOptions}
             />
             <Field
               label="Vehicle No"
@@ -843,31 +1088,17 @@ const DeliveryChallanCumGatePassForm = ({ data, onBack }) => {
               value={header.vehicleNo}
               onChange={handleHeaderChange}
             />
-            <Field
-              label="Work Order No"
-              name="workOrderNo"
-              value={header.workOrderNo}
-              onChange={handleHeaderChange}
-            />
-            <Field
-              label="Doc No"
-              name="docNo"
-              value={header.docNo}
-              onChange={handleHeaderChange}
-              error={fieldErrors.docNo}
-              required
-              disabled={!data}
-            />
-            <Field
-              type="date"
-              label="Doc Date"
-              name="docDate"
-              value={header.docDate}
-              onChange={handleHeaderChange}
-              error={fieldErrors.docDate}
-              required
-              disabled
-            />
+            {header.type === "PARTY" && (
+              <Field
+                type="select"
+                label="Work Order No"
+                name="workOrderNo"
+                value={header.workOrderNo}
+                onChange={handleHeaderChange}
+                options={workOrderOptions}
+              />
+            )}
+            
             <div>
               <ToggleField
                 label="Is IGST Applicable"
@@ -882,22 +1113,11 @@ const DeliveryChallanCumGatePassForm = ({ data, onBack }) => {
               name="gstinNo"
               value={header.gstinNo}
               onChange={handleHeaderChange}
+              error={fieldErrors.gstinNo}
+              required={header.isIgstApplicable === "Yes"}
+              disabled={header.isIgstApplicable !== "Yes"}
             />
-            <Field
-              type="select"
-              label="Prepared By"
-              name="preparedBy"
-              value={header.preparedBy}
-              onChange={handleHeaderChange}
-              options={employeeOptions}
-            />
-            <Field
-              type="textarea"
-              label="Remarks"
-              name="remarks"
-              value={header.remarks}
-              onChange={handleHeaderChange}
-            />
+
           </div>
         </div>
 
@@ -967,7 +1187,7 @@ const DeliveryChallanCumGatePassForm = ({ data, onBack }) => {
                   { key: "previousQty", label: "Previous Qty", type: "number" },
                   { key: "lcRate", label: "LC Rate", type: "number" },
                   { key: "rate", label: "Rate", type: "number" },
-                  { key: "amount", label: "Amount", readOnly: true },
+                  { key: "amount", label: "Amount" },
                 ]}
                 rows={gatePassRows}
                 onCellChange={handleGatePassCellChange}
@@ -993,12 +1213,21 @@ const DeliveryChallanCumGatePassForm = ({ data, onBack }) => {
                   onChange={handleSummaryChange}
                   disabled
                 />
+                 <Field
+                  type="select"
+                  label="Prepared By"
+                  name="preparedBy"
+                  value={header.preparedBy}
+                  onChange={handleHeaderChange}
+                  options={employeeOptions}
+                  required
+                />
                 <Field
                   type="textarea"
-                  label="Summary Notes"
-                  name="summaryNotes"
-                  value={summary.summaryNotes}
-                  onChange={handleSummaryChange}
+                  label="Remarks"
+                  name="remarks"
+                  value={header.remarks}
+                  onChange={handleHeaderChange}
                 />
               </div>
             </div>

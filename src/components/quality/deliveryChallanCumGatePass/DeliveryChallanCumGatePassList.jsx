@@ -41,7 +41,7 @@ const DeliveryChallanCumGatePassList = ({
     {
       key: "docNo",
       label: "Doc No",
-      accessor: (row) => row.docNo,
+      accessor: (row) => row.docId,
       type: "text",
       noWrap: true,
     },
@@ -55,8 +55,8 @@ const DeliveryChallanCumGatePassList = ({
       key: "plantId",
       label: "Plant",
       accessor: (row) =>
-        typeof row.plantId === "object"
-          ? row.plantId.branchName || row.plantId.id
+        typeof row.branch === "object"
+          ? row.branch.branchName || row.plantId.id
           : row.plantName || row.plantId,
       type: "text",
     },
@@ -85,27 +85,27 @@ const DeliveryChallanCumGatePassList = ({
       key: "partyPlantId",
       label: "Party/Plant",
       accessor: (row) =>
-        typeof row.partyPlantId === "object"
-          ? row.partyPlantId.customerName || row.partyPlantId.id
+        typeof row.customer === "object"
+          ? row.customer.customerName || row.partyPlantId.id
           : row.partyPlantName || row.partyPlantId,
       type: "text",
     },
-    {
-      key: "refNo",
-      label: "Ref No",
-      accessor: (row) => row.refNo,
-      type: "text",
-    },
+    // {
+    //   key: "refNo",
+    //   label: "Ref No",
+    //   accessor: (row) => row.refNo,
+    //   type: "text",
+    // },
     {
       key: "fromLocation",
       label: "From Location",
-      accessor: (row) => row.fromLocation,
+      accessor: (row) => row.fromLocation.locationName,
       type: "text",
     },
     {
       key: "vehicleNo",
       label: "Vehicle No",
-      accessor: (row) => row.vehicleNo,
+      accessor: (row) => row.vehicleNo || null,
       type: "text",
     },
     {
