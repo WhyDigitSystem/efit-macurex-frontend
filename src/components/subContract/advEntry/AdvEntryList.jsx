@@ -11,24 +11,19 @@ const AdvEntryList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  /* -------------------------------------------------------------- */
-  /* PDF Preview                                                     */
-  /* -------------------------------------------------------------- */
-
   const [pdfPreview, setPdfPreview] = useState(null);
 
   const ORG_ID = localStorage.getItem("orgId");
   const BRANCH_ID = localStorage.getItem("branchId");
 
-  /* -------------------------------------------------------------- */
-  /* Load Records                                                    */
-  /* -------------------------------------------------------------- */
-
   const loadRecords = useCallback(async () => {
     try {
       setLoading(true);
 
-      const data = await advEntryAPI.getAdvByOrgId(ORG_ID, BRANCH_ID);
+      const data = await advEntryAPI.getAdvForStoresByOrgIdAndBranch(
+        BRANCH_ID,
+        ORG_ID,
+      );
 
       const recordsArray = Array.isArray(data) ? data : [];
 
@@ -36,11 +31,9 @@ const AdvEntryList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
 
       setRecords(recordsArray);
     } catch (error) {
-      console.error("Failed to load ADV entries:", error);
-
+      console.error("Failed to load ADV For Stores entries:", error);
       setRecords([]);
-
-      toast.error("Failed to fetch ADV Entries");
+      toast.error("Failed to fetch ADV For Stores");
     } finally {
       setLoading(false);
     }
@@ -50,129 +43,111 @@ const AdvEntryList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     loadRecords();
   }, [loadRecords, refreshTrigger]);
 
-  /* -------------------------------------------------------------- */
-  /* PDF DOWNLOAD / PREVIEW                                         */
-  /* -------------------------------------------------------------- */
-
   const handleDownloadPDF = (row) => {
     try {
       console.log("ADV PDF Row:", row);
 
-      /*
-       * ADV details can come in different shapes depending
-       * on the backend response.
-       *
-       * Support:
-       *   row.advDetails
-       *   row.details
-       *   row.advDetail
-       */
-
-      const details = row?.advDetails || row?.details || row?.advDetail || [];
+      // advForStoresDetails is the current shape; keep fallbacks for safety.
+      const details =
+        row?.advForStoresDetails ||
+        row?.advDetails ||
+        row?.details ||
+        row?.advDetail ||
+        [];
 
       const items = Array.isArray(details)
         ? details.map((detail) => ({
-            itemCode:
-              detail?.itemCode ||
-              detail?.item?.itemCode ||
-              detail?.itemId ||
-              "",
-
-            itemDescription:
-              detail?.itemDescription ||
-              detail?.item?.itemDescription ||
-              detail?.item?.description ||
-              "",
-
-            unit:
-              detail?.unit || detail?.unitId || detail?.primaryUnit?.id || "",
-
-            unitLabel:
-              detail?.unitLabel ||
-              detail?.unitName ||
-              detail?.unit?.unitId ||
-              detail?.primaryUnit?.unitId ||
-              "",
-
-            bomQty: detail?.bomQty ?? detail?.bomQuantity ?? 0,
-
-            issueQty: detail?.issueQty ?? detail?.issueQuantity ?? 0,
-          }))
+          itemCode:
+            detail?.item?.itemCode ||
+            detail?.itemCode ||
+            detail?.itemId ||
+            "",
+          itemDescription:
+            detail?.item?.itemDescription ||
+            detail?.itemDescription ||
+            detail?.item?.description ||
+            "",
+          unit:
+            detail?.unit?.id ||
+            detail?.unit ||
+            detail?.unitId ||
+            "",
+          unitLabel:
+            detail?.unit?.unitId ||
+            detail?.unitLabel ||
+            detail?.unitName ||
+            "",
+          bomQty: detail?.bomQty ?? detail?.bomQuantity ?? 0,
+          issueQty: detail?.issueQty ?? detail?.issueQuantity ?? 0,
+        }))
         : [];
 
-      /*
-       * Prepared By can be returned from backend as:
-       *
-       *   preparedBy
-       *   summary.preparedBy
-       *   employeeName
-       */
-
+      // Prepared By is now an object: { id, employeeName }
       const preparedBy =
-        row?.preparedBy || row?.summary?.preparedBy || row?.employeeName || "";
+        row?.preparedBy?.employeeName ||
+        row?.preparedBy ||
+        row?.summary?.preparedBy ||
+        row?.employeeName ||
+        "";
 
-      /*
-       * Plant can be returned as:
-       *
-       *   plantName
-       *   plantId
-       *   plant object
-       */
-
+      // Plant comes from branch in the new shape
       const plantName =
+        row?.branch?.branchName ||
         row?.plantName ||
         row?.plant?.plantName ||
-        row?.plant?.branchName ||
         row?.plantId ||
-        row?.branch?.branchName ||
-        row?.branch ||
         "";
+
+      // Customer nested object
+      const partyName =
+        row?.customer?.customerName ||
+        row?.partyName ||
+        row?.party?.customerName ||
+        "";
+
+      const partyId =
+        row?.customer?.customerCode ||
+        row?.customer?.customerId ||
+        row?.partyId ||
+        "";
+
+      // Incoming part nested object
+      const incomingPartNo =
+        row?.incomingPartNo?.itemCode ||
+        row?.incomingPartNo ||
+        "";
+
+      const partName =
+        row?.incomingPartNo?.itemDescription ||
+        row?.partName ||
+        "";
+
+      // BOM nested object
+      const bomId = row?.bom?.docId || row?.bomId || "";
 
       const result = generateAdvEntryPDF({
         company: {
           name: row?.companyName || row?.organizationName || "Company Name",
         },
-
         adv: {
           id: row?.id,
-
-          docNo: row?.docNo || row?.advNo || row?.id || "",
-
+          docNo: row?.docNo || row?.docId || row?.id || "",
           docDate: row?.docDate || "",
-
-          plantId: row?.plantId || row?.plant?.id || "",
-
+          plantId: row?.branch?.id || row?.plantId || "",
           plantName,
-
           belongsTo: row?.belongsTo || "",
-
-          partyId: row?.partyId || row?.party?.id || "",
-
-          partyName:
-            row?.partyName ||
-            row?.party?.customerName ||
-            row?.party?.partyName ||
-            "",
-
-          incomingPartNo: row?.incomingPartNo || "",
-
-          partName: row?.partName || "",
-
-          bomId: row?.bomId || "",
-
+          partyId,
+          partyName,
+          incomingPartNo,
+          partName,
+          bomId,
           time: row?.time || "",
-
           preparedBy,
-
           active: row?.active !== false,
-
           remarks: row?.remarks || row?.summary?.remarks || "",
-
           cancelRemarks: row?.cancelRemarks || "",
-
           approved: row?.approved,
         },
-
         items,
       });
 
@@ -183,106 +158,89 @@ const AdvEntryList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
       }
     } catch (error) {
       console.error("ADV PDF generation failed:", error);
-
       toast.error(
         "Failed to generate PDF: " + (error?.message || "Unknown error"),
       );
     }
   };
 
-  /* -------------------------------------------------------------- */
-  /* Columns                                                         */
-  /* -------------------------------------------------------------- */
-
   const columns = [
     {
       key: "docNo",
       label: "Doc No",
-      accessor: "docNo",
+      accessor: (row) => row.docNo || row.docId || "",
       type: "text",
     },
-
     {
       key: "docDate",
       label: "Doc Date",
       accessor: "docDate",
       type: "text",
     },
-
     {
       key: "plantName",
       label: "Plant",
-      accessor: "plantName",
+      accessor: (row) => row.branch?.branchName || "",
       type: "text",
     },
-
     {
       key: "belongsTo",
       label: "Belongs To",
       accessor: "belongsTo",
       type: "text",
     },
-
     {
       key: "partyId",
       label: "Party Id",
-      accessor: "partyId",
+      accessor: (row) =>
+        row.customer?.customerCode || row.customer?.customerId || "",
       type: "text",
     },
-
     {
       key: "partyName",
       label: "Party Name",
-      accessor: "partyName",
+      accessor: (row) => row.customer?.customerName || "",
       type: "text",
     },
-
     {
       key: "incomingPartNo",
       label: "Incoming Part No",
-      accessor: "incomingPartNo",
+      accessor: (row) => row.incomingPartNo?.itemCode || "",
       type: "text",
     },
-
     {
       key: "partName",
       label: "Part Name",
-      accessor: "partName",
+      accessor: (row) => row.incomingPartNo?.itemDescription || "",
       type: "text",
     },
-
     {
       key: "preparedBy",
       label: "Prepared By",
-      accessor: "preparedBy",
+      accessor: (row) => row.preparedBy?.employeeName || "",
       type: "text",
     },
-
     {
       key: "active",
       label: "Status",
       accessor: "active",
       type: "status",
-
       statusVariants: {
         true: {
           label: "Active",
           className:
             "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
         },
-
         false: {
           label: "Inactive",
           className:
             "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
         },
-
         Active: {
           label: "Active",
           className:
             "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
         },
-
         Inactive: {
           label: "Inactive",
           className:
@@ -290,7 +248,6 @@ const AdvEntryList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
         },
       },
     },
-
     {
       key: "actions",
       label: "Actions",
@@ -300,33 +257,24 @@ const AdvEntryList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     },
   ];
 
-  /* -------------------------------------------------------------- */
-  /* Search Fields                                                   */
-  /* -------------------------------------------------------------- */
-
   const searchFields = [
     "docNo",
+    "docId",
     "docDate",
-    "plantName",
     "belongsTo",
-    "partyId",
-    "partyName",
-    "incomingPartNo",
-    "partName",
-    "preparedBy",
+    "remarks",
+    // Nested paths — CommonListViewTable should resolve them if it uses
+    // lodash-style path lookups, otherwise these simply won't match.
+    "customer.customerCode",
+    "customer.customerName",
+    "incomingPartNo.itemCode",
+    "incomingPartNo.itemDescription",
+    "preparedBy.employeeName",
+    "branch.branchName",
   ];
 
-  /* -------------------------------------------------------------- */
-  /* Filters                                                         */
-  /* -------------------------------------------------------------- */
-
   const filterOptions = [
-    {
-      value: "all",
-      label: "All",
-      field: null,
-    },
-
+    { value: "all", label: "All", field: null },
     {
       value: "active",
       label: "Active",
@@ -334,7 +282,6 @@ const AdvEntryList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
       filterValue: "active",
       activeValue: true,
     },
-
     {
       value: "inactive",
       label: "Inactive",
@@ -343,10 +290,6 @@ const AdvEntryList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
       activeValue: false,
     },
   ];
-
-  /* -------------------------------------------------------------- */
-  /* Render                                                           */
-  /* -------------------------------------------------------------- */
 
   return (
     <>
@@ -361,7 +304,6 @@ const AdvEntryList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
         onBack={onBack}
         onAddNew={onAddNew}
         onEdit={onEdit}
-        /* PDF */
         onDownload={handleDownloadPDF}
         onView={false}
         showSerialNumber={true}
@@ -372,12 +314,8 @@ const AdvEntryList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
         enableRefresh={true}
         onRefresh={loadRecords}
         enableExport={true}
-        exportFileName="AdvEntries"
+        exportFileName="AdvForStores"
       />
-
-      {/* ---------------------------------------------------------- */}
-      {/* PDF Preview Modal                                            */}
-      {/* ---------------------------------------------------------- */}
 
       {pdfPreview && (
         <PDFPreviewModal
@@ -387,7 +325,6 @@ const AdvEntryList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
             if (pdfPreview.blobUrl) {
               URL.revokeObjectURL(pdfPreview.blobUrl);
             }
-
             setPdfPreview(null);
           }}
         />

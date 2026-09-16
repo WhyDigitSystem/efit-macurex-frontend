@@ -298,6 +298,12 @@ const SECTIONS = [
         path: "/roles",
         screenCode: "ROLES",
       },
+      {
+        name: "Shift Master",
+        icon: BadgeCheck,
+        path: "/shift-master",
+        screenCode: "SM",
+      },
     ],
   },
 ];

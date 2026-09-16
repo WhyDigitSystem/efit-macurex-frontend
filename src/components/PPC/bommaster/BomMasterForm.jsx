@@ -1,9 +1,9 @@
 import { ArrowLeft, Save, X, Plus } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import dayjs from "dayjs";
 import bomMasterAPI from "../../../api/PPC/bomMasterAPI";
-import { itemAPI } from "../../../api/itemAPI";
 import { unitMasterAPI } from "../../../api/unitAPI";
+import listOfValuesAPI from "../../../api/listOfValuesAPI";
 import { useToast } from "../../Toast/ToastContext";
 
 /* ---------------------------------------------------------------------------- */
@@ -51,46 +51,11 @@ const MULTILINE_CLASSES =
   "dark:focus:ring-blue-400 dark:focus:border-blue-400";
 
 /* ---------------------------------------------------------------------------- */
-/* Lookup / option lists                                                        */
-
-// Static option lists used for screen design. These should be wired to the
-// relevant backend master lookups when the endpoints are available.
-const TYPE_OF_BOM_OPTIONS = [
-  { value: "MANUFACTURING", label: "Manufacturing" },
-  { value: "ENGINEERING", label: "Engineering" },
-  { value: "SALES", label: "Sales" },
-  { value: "SERVICE", label: "Service" },
-];
+/* Static options                                                              */
 
 const TYPE_OF_ITEM_OPTIONS = [
-  { value: "FG", label: "Finished Good (FG)" },
-  { value: "SFG", label: "Semi Finished Good (SFG)" },
-];
-
-const ITEM_TYPE_OPTIONS = [
   { value: "FG", label: "FG" },
   { value: "SFG", label: "SFG" },
-  { value: "RAW_MATERIAL", label: "Raw Material" },
-  { value: "PACKING_MATERIAL", label: "Packing Material" },
-  { value: "SPARES", label: "Spares" },
-];
-
-const FG_REFERENCE_TO_PROFIT_OPTIONS = [
-  { value: "PROFIT_CENTRE_1", label: "Profit Centre 1" },
-  { value: "PROFIT_CENTRE_2", label: "Profit Centre 2" },
-  { value: "PROFIT_CENTRE_3", label: "Profit Centre 3" },
-];
-
-const FILL_DETAILS_OF_OPTIONS = [
-  { value: "ITEM", label: "Item" },
-  { value: "MATERIAL", label: "Material" },
-  { value: "RAW_MATERIAL", label: "Raw Material" },
-  { value: "SUB_ASSEMBLY", label: "Sub Assembly" },
-];
-
-const SCRAP_ITEM_OPTIONS = [
-  { value: "YES", label: "Yes" },
-  { value: "NO", label: "No" },
 ];
 
 /* ---------------------------------------------------------------------------- */
@@ -108,6 +73,7 @@ const Field = ({
   className = "",
   disabled = false,
   placeholder,
+  readOnly,
 }) => {
   if (type === "select") {
     return (
@@ -181,8 +147,10 @@ const Field = ({
         value={value}
         onChange={onChange}
         disabled={disabled}
+        readOnly={readOnly}
         placeholder={placeholder}
-        className={`${controlClasses} ${error ? controlErrClasses : ""}`}
+        className={`${controlClasses} ${error ? controlErrClasses : ""} ${readOnly ? "bg-gray-100 dark:bg-gray-800" : ""
+          }`}
       />
 
       {error && (
@@ -237,13 +205,12 @@ const TableHead = ({ headers }) => (
       {headers.map((h, i) => (
         <th
           key={i}
-          className={`p-1 whitespace-nowrap ${
-            i === 0
+          className={`p-1 whitespace-nowrap ${i === 0
               ? "w-8 text-center"
               : i === headers.length - 1
                 ? "w-20 text-left"
                 : "text-left"
-          } dark:text-white`}
+            } dark:text-white`}
         >
           {h}
         </th>
@@ -261,11 +228,10 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
         type="button"
         onClick={onRemove}
         disabled={disabled}
-        className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-          disabled
+        className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
             ? "bg-gray-400 cursor-not-allowed"
             : "bg-red-600 hover:bg-red-700"
-        }`}
+          }`}
       >
         X
       </button>
@@ -292,13 +258,12 @@ const SelectCell = ({ value, onChange, options, error }) => (
 
 const InputCell = ({ value, onChange, type = "text", step, error }) => (
   <td
-    className={`p-1 align-top ${
-      type === "date"
+    className={`p-1 align-top ${type === "date"
         ? "min-w-[140px]"
         : type === "number"
           ? "min-w-[100px]"
           : "min-w-[120px]"
-    }`}
+      }`}
   >
     <input
       type={type}
@@ -321,20 +286,27 @@ const ReadOnlyCell = ({ value }) => (
 
 const fmtDate = (value) => (value ? dayjs(value).format("YYYY-MM-DD") : "");
 
+const toStr = (v) =>
+  v === undefined || v === null || v === "" ? "" : String(v);
+
 /* ---------------------------------------------------------------------------- */
 /* Empty state builders                                                        */
 
 const emptyHeader = () => ({
   typeOfBom: "",
   typeOfItem: "",
+  docId: "",
+  docDate: dayjs().format("YYYY-MM-DD"),
   fgSfgItemCode: "",
-  revisionNo: 1,
+  fgSfgItemId: "",
   fgSfgItemDescription: "",
   specifications: "",
   wef: dayjs().format("YYYY-MM-DD"),
   fgRefToProfit: "",
   fillDetailsOf: "",
   fillDetailsOfItem: "",
+  manufacturing: "",
+  revisionNo: 1,
 });
 
 const emptyMaterialRow = () => ({
@@ -360,18 +332,33 @@ const emptySummary = () => ({
 const BomMasterForm = ({ data, onBack }) => {
   const { addToast } = useToast();
   const orgId = Number(localStorage.getItem("orgId"));
+  const finYear = Number(localStorage.getItem("finYear"));
   const branch = Number(localStorage.getItem("branchId")) || 1000000001;
   const usersId = localStorage.getItem("usersId");
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loadingDocId, setLoadingDocId] = useState(false);
+  const [loadingRecord, setLoadingRecord] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [tableError, setTableError] = useState("");
   const [showErrors, setShowErrors] = useState(false);
 
   /* ---------------- Lookup options ---------------- */
+  const [typeOfBomOptions, setTypeOfBomOptions] = useState([]);
   const [itemOptions, setItemOptions] = useState([]);
   const [itemMap, setItemMap] = useState({});
   const [unitOptions, setUnitOptions] = useState([]);
+  const [unitMap, setUnitMap] = useState({});
+
+  const [fgSfgItemOptions, setFgSfgItemOptions] = useState([]);
+  const [fgSfgItemMap, setFgSfgItemMap] = useState({});
+
+  const [fillDetailsOptions, setFillDetailsOptions] = useState([]);
+
+  // Scrap details (item + unit) loaded from purchaseOrder/getScrapDetailsItem
+  const [scrapItemOptions, setScrapItemOptions] = useState([]);
+  const [scrapItemMap, setScrapItemMap] = useState({});
+  const [scrapUnitOptions, setScrapUnitOptions] = useState([]);
 
   /* ---------------- Form state ---------------- */
   const [header, setHeader] = useState(() => {
@@ -379,18 +366,23 @@ const BomMasterForm = ({ data, onBack }) => {
     return {
       ...emptyHeader(),
       ...d,
-      wef: fmtDate(d.wef),
+      wef: fmtDate(d.wef) || dayjs().format("YYYY-MM-DD"),
+      docDate: fmtDate(d.docDate) || dayjs().format("YYYY-MM-DD"),
     };
   });
 
   const [materialRows, setMaterialRows] = useState(() => {
-    const rows = data?.materialDetails || data?.materialDetailList || [];
+    const rows =
+      data?.billOfMaterialDetailsResponseDTO ||
+      data?.billOfMaterialDetailsDTO ||
+      data?.materialDetails ||
+      [];
     return rows.length
       ? rows.map((r) => ({
-          ...emptyMaterialRow(),
-          ...r,
-          sfgBomRefDate: fmtDate(r.sfgBomRefDate),
-        }))
+        ...emptyMaterialRow(),
+        ...r,
+        sfgBomRefDate: fmtDate(r.sfgBomRefDate),
+      }))
       : [emptyMaterialRow()];
   });
 
@@ -401,62 +393,333 @@ const BomMasterForm = ({ data, onBack }) => {
 
   /* ---------------- Lookup loading ---------------- */
 
-  useEffect(() => {
+  const loadTypeOfBom = useCallback(async () => {
     if (!orgId) return;
+    try {
+      const res = await listOfValuesAPI.getListValuesGroup(
+        "TYPE OF BOM",
+        orgId,
+      );
 
-    const loadItems = async () => {
-      try {
-        const res = await itemAPI.getItems(orgId, branch);
-        const map = {};
-        const opts = (res || []).map((it) => {
-          const code = it.itemCode || it.code || it.id?.toString() || "";
-          map[code] = it;
-          return { value: code, label: code };
+      let items = [];
+      if (res?.paramObjectsMap?.listValues)
+        items = res.paramObjectsMap.listValues;
+      else if (res?.data?.paramObjectsMap?.listValues)
+        items = res.data.paramObjectsMap.listValues;
+      else if (Array.isArray(res)) items = res;
+      else if (res?.listValues) items = res.listValues;
+
+      const options = items.map((item) => ({
+        value: item.id,
+        label:
+          item.valuesDescription ||
+          item.valueDescription ||
+          item.label ||
+          item.name ||
+          String(item.id),
+      }));
+
+      setTypeOfBomOptions(options);
+    } catch (err) {
+      console.error("Failed to load TYPE OF BOM list values:", err);
+      setTypeOfBomOptions([]);
+    }
+  }, [orgId]);
+
+  const loadGridItems = useCallback(async () => {
+    if (!orgId) return;
+    try {
+      const list = await bomMasterAPI.getGridDetailsFromBom(branch, orgId);
+      const map = {};
+      const opts = (list || []).map((it) => {
+        map[it.itemId] = it;
+        return {
+          value: it.itemId,
+          label: `${it.itemCode} - ${it.itemDescription}`,
+        };
+      });
+      setItemOptions(opts);
+      setItemMap(map);
+    } catch (err) {
+      console.error("Failed to load grid items:", err);
+      setItemOptions([]);
+      setItemMap({});
+    }
+  }, [orgId, branch]);
+
+  const loadUnits = useCallback(async () => {
+    if (!orgId) return;
+    try {
+      const res = await unitMasterAPI.getUnits(orgId);
+      const map = {};
+      const opts = (res || []).map((u) => {
+        map[u.id] = u;
+        return { value: u.id, label: u.unitId };
+      });
+      setUnitOptions(opts);
+      setUnitMap(map);
+    } catch (err) {
+      console.error("Failed to load units:", err);
+      setUnitOptions([]);
+      setUnitMap({});
+    }
+  }, [orgId]);
+
+  // NEW: load scrap item + unit options
+  const loadScrapDetails = useCallback(async () => {
+    if (!orgId || !branch) return;
+    try {
+      const list = await bomMasterAPI.getScrapDetailsItem(branch, orgId);
+
+      const map = {};
+      const itemOpts = [];
+      const unitMap = {};
+
+      (list || []).forEach((it) => {
+        map[it.itemId] = it;
+
+        itemOpts.push({
+          value: it.itemId,
+          label: `${it.itemCode} - ${it.itemDescription}`,
         });
-        setItemOptions(opts);
-        setItemMap(map);
-      } catch {
-        setItemOptions([]);
-        setItemMap({});
-      }
-    };
 
-    const loadUnits = async () => {
+        if (it.unit && !unitMap[it.unit]) {
+          unitMap[it.unit] = true;
+        }
+      });
+
+      // Build unique unit options from the payload
+      const unitOpts = Object.keys(unitMap).map((id) => {
+        const sample = (list || []).find(
+          (r) => String(r.unit) === String(id),
+        );
+        return {
+          value: Number(id),
+          label: sample?.unitDescription || `Unit ${id}`,
+        };
+      });
+
+      setScrapItemOptions(itemOpts);
+      setScrapItemMap(map);
+      setScrapUnitOptions(unitOpts);
+    } catch (err) {
+      console.error("Failed to load scrap details:", err);
+      setScrapItemOptions([]);
+      setScrapItemMap({});
+      setScrapUnitOptions([]);
+    }
+  }, [orgId, branch]);
+
+  const loadFgSfgItems = useCallback(
+    async (type) => {
+      if (!orgId || !type) {
+        setFgSfgItemOptions([]);
+        setFgSfgItemMap({});
+        return;
+      }
       try {
-        const res = await unitMasterAPI.getUnits(orgId);
-        setUnitOptions(
-          (res || []).map((u) => ({
-            value: u.unitCode || u.code || u.id?.toString() || "",
-            label:
-              u.unitName ||
-              u.name ||
-              u.unitCode ||
-              u.code ||
-              u.id?.toString() ||
-              "",
+        const list = await bomMasterAPI.getFgAndSfgItemDetails(
+          branch,
+          orgId,
+          type,
+        );
+        const map = {};
+        const opts = (list || []).map((it) => {
+          map[it.itemId] = it;
+          return {
+            value: it.itemId,
+            label: `${it.itemCode} - ${it.itemDescription}`,
+          };
+        });
+        setFgSfgItemOptions(opts);
+        setFgSfgItemMap(map);
+      } catch (err) {
+        console.error("Failed to load FG/SFG items:", err);
+        setFgSfgItemOptions([]);
+        setFgSfgItemMap({});
+      }
+    },
+    [orgId, branch],
+  );
+
+  const loadFillDetails = useCallback(
+    async (fgItem) => {
+      if (!orgId || !fgItem) {
+        setFillDetailsOptions([]);
+        return;
+      }
+      try {
+        const list = await bomMasterAPI.getFillDetailsOf(
+          branch,
+          fgItem,
+          orgId,
+        );
+        setFillDetailsOptions(
+          (list || []).map((row) => ({
+            value: row.docId,
+            label: row.docId,
           })),
         );
-      } catch {
-        setUnitOptions([]);
+      } catch (err) {
+        console.error("Failed to load fill details of:", err);
+        setFillDetailsOptions([]);
+      }
+    },
+    [orgId, branch],
+  );
+
+  const loadBomDocId = useCallback(async () => {
+    if (!orgId) return;
+    try {
+      setLoadingDocId(true);
+      const docId = await bomMasterAPI.getBillOfMaterialDocId(
+        finYear,
+        orgId,
+      );
+      if (docId) {
+        setHeader((prev) => ({ ...prev, docId }));
+      }
+    } catch (err) {
+      console.error("Failed to load BOM doc id:", err);
+    } finally {
+      setLoadingDocId(false);
+    }
+  }, [orgId, finYear]);
+
+  useEffect(() => {
+    if (!orgId) return;
+    loadTypeOfBom();
+    loadGridItems();
+    loadUnits();
+    loadScrapDetails(); // NEW
+  }, [orgId, loadTypeOfBom, loadGridItems, loadUnits, loadScrapDetails]);
+
+  // Fetch Doc ID ONLY for new records
+  useEffect(() => {
+    if (orgId && !data?.id && !data?.header?.id) {
+      loadBomDocId();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgId, data?.id]);
+
+  /* ---------------- Hydrate from getBillOfMaterialById ---------------- */
+
+  const hydrateFromRecord = useCallback((rec) => {
+    if (!rec) return;
+
+    // ---------------- Header ----------------
+    setHeader((prev) => ({
+      ...prev,
+      docId: rec.docId || prev.docId || "",
+      docDate: fmtDate(rec.docDate) || prev.docDate,
+      wef: fmtDate(rec.wef) || prev.wef,
+      typeOfBom: toStr(rec.typeOfBom?.id),
+      typeOfItem: rec.typeOfItem || "",
+      fgSfgItemCode: toStr(rec.fgItem?.id),
+      fgSfgItemId: toStr(rec.fgItem?.id),
+      fgSfgItemDescription: rec.fgItem?.itemDescription || "",
+      fgRefToProfit: rec.fgReferenceToProfit || "",
+      fillDetailsOf: rec.fillDetailsOf || "",
+      fillDetailsOfItem: toStr(rec.fillDetailsOfItem?.id),
+      specifications: rec.specifications || "",
+      manufacturing: rec.manufacturing || "",
+      revisionNo: rec.revisionNo ?? prev.revisionNo,
+      active: rec.active !== "Inactive",
+    }));
+
+    // ---------------- Summary ----------------
+    setSummary((prev) => ({
+      ...prev,
+      remarks: rec.remarks || "",
+    }));
+
+    // ---------------- Material grid ----------------
+    const rows = (rec.billOfMaterialDetailsResponseDTO || []).length
+      ? rec.billOfMaterialDetailsResponseDTO.map((r) => ({
+        id: r.id || 0,
+        itemCode: toStr(r.item?.id),
+        itemDescription: r.item?.itemDescription || "",
+        itemType: r.itemType || "",
+        uom: toStr(r.uom?.id),
+        weight: r.weight ?? "",
+        qty: r.qty ?? "",
+        sfgBomRefNo: r.sfgBomRefNo || "",
+        sfgBomRefDate: fmtDate(r.sfgBomRefDate),
+        scrapItem: toStr(r.scrapItem?.id ?? r.scrapItem),
+        scrapUnit: toStr(r.scrapUnit?.id ?? r.scrapUnit),
+        scrapQty: r.scrapQty ?? "",
+      }))
+      : [emptyMaterialRow()];
+
+    setMaterialRows(rows);
+  }, []);
+
+  // Fetch full record when editing
+  useEffect(() => {
+    const loadById = async () => {
+      if (!data?.id) return;
+      try {
+        setLoadingRecord(true);
+        const rec = await bomMasterAPI.getBillOfMaterialById(data.id);
+        if (rec) hydrateFromRecord(rec);
+      } catch (err) {
+        console.error("Failed to load BOM by id:", err);
+        addToast("Failed to load Bill of Material.", "error");
+      } finally {
+        setLoadingRecord(false);
       }
     };
+    loadById();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.id]);
 
-    Promise.all([loadItems(), loadUnits()]);
-  }, [orgId, branch]);
+  // Reload FG/SFG list when typeOfItem changes
+  useEffect(() => {
+    if (header.typeOfItem) {
+      loadFgSfgItems(header.typeOfItem);
+    } else {
+      setFgSfgItemOptions([]);
+      setFgSfgItemMap({});
+    }
+  }, [header.typeOfItem, loadFgSfgItems]);
+
+  // Reload Fill Details Of when the FG/SFG item changes
+  useEffect(() => {
+    if (header.fgSfgItemCode) {
+      loadFillDetails(header.fgSfgItemCode);
+    } else {
+      setFillDetailsOptions([]);
+    }
+  }, [header.fgSfgItemCode, loadFillDetails]);
 
   /* ---------------- Header handlers ---------------- */
 
   const handleHeaderChange = (e) => {
     const { name, value } = e.target;
     if (fieldErrors[name]) setFieldErrors((prev) => ({ ...prev, [name]: "" }));
+
     setHeader((prev) => {
-      let next = { ...prev, [name]: value };
-      // Auto-fill FG/SFG item description when the item code is chosen
+      const next = { ...prev, [name]: value };
+
       if (name === "fgSfgItemCode") {
-        const item = itemMap[value];
+        const item = fgSfgItemMap[value];
+        next.fgSfgItemId = value;
         next.fgSfgItemDescription =
           item?.itemDescription || item?.description || "";
+        next.fgRefToProfit = item?.profit || "";
+        next.fillDetailsOf = "";
+        next.fillDetailsOfItem = "";
       }
+
+      if (name === "typeOfItem") {
+        next.fgSfgItemCode = "";
+        next.fgSfgItemId = "";
+        next.fgSfgItemDescription = "";
+        next.fgRefToProfit = "";
+        next.fillDetailsOf = "";
+        next.fillDetailsOfItem = "";
+      }
+
       return next;
     });
   };
@@ -467,15 +730,23 @@ const BomMasterForm = ({ data, onBack }) => {
     setMaterialRows((prev) =>
       prev.map((row, i) => {
         if (i !== idx) return row;
-        let next = { ...row, [key]: value };
-        // Auto-fill item description when the item code is chosen
+        const next = { ...row, [key]: value };
+
         if (key === "itemCode") {
           const item = itemMap[value];
-          next.itemDescription = item?.itemDescription || item?.description || "";
-          if (item?.primaryUnits?.primaryUnit) {
-            next.uom = item.primaryUnits.primaryUnit;
+          next.itemDescription =
+            item?.itemDescription || item?.description || "";
+          if (!next.itemType && item?.itemType) {
+            next.itemType = item.itemType;
           }
         }
+
+        // NEW: auto-fill scrap unit from the scrap-item master
+        if (key === "scrapItem") {
+          const scrap = scrapItemMap[value];
+          next.scrapUnit = scrap?.unit ?? "";
+        }
+
         return next;
       }),
     );
@@ -498,27 +769,28 @@ const BomMasterForm = ({ data, onBack }) => {
   const validate = () => {
     const errors = {};
 
-    if (!header.typeOfBom?.trim()) errors.typeOfBom = "Type of BOM is required";
-    if (!header.typeOfItem?.trim()) errors.typeOfItem = "Type of Item is required";
-    if (!header.fgSfgItemCode?.trim())
+    if (!header.typeOfBom?.toString().trim())
+      errors.typeOfBom = "Type of BOM is required";
+    if (!header.typeOfItem?.trim())
+      errors.typeOfItem = "Type of Item is required";
+    if (!header.fgSfgItemCode?.toString().trim())
       errors.fgSfgItemCode = "FG / SFG Item Code is required";
     if (!header.wef) errors.wef = "WEF is required";
     if (!header.fillDetailsOf?.trim())
       errors.fillDetailsOf = "Fill Details Of is required";
-    if (!header.fillDetailsOfItem?.trim())
+    if (!header.fillDetailsOfItem?.toString().trim())
       errors.fillDetailsOfItem = "Fill Details Of Item is required";
 
     setFieldErrors(errors);
 
     const validRows = materialRows.every(
       (r) =>
-        r.itemCode?.trim() &&
+        r.itemCode &&
         r.itemType?.trim() &&
-        r.uom?.trim() &&
+        r.uom &&
         r.qty !== "" &&
         Number(r.qty) > 0,
     );
-
 
     const valid = Object.keys(errors).length === 0 && validRows;
     setShowErrors(!valid);
@@ -534,42 +806,62 @@ const BomMasterForm = ({ data, onBack }) => {
     }
 
     setIsSubmitting(true);
-
     const isUpdate = Boolean(data?.id ?? data?.header?.id);
 
-    // Single-transaction payload: header + material details + summary.
-    // The backend persists all of these together, links the BOM to the FG/SFG
-    // item and revision, and keeps the complete BOM history with material &
-    // scrap references (server-side validation).
+    const billOfMaterialDetailsDTO = materialRows.map((r) => ({
+      item: Number(r.itemCode) || 0,
+      itemType: r.itemType || "",
+      manbou: header.manufacturing || "",
+      qty: Number(r.qty) || 0,
+      scrapItem: Number(r.scrapItem) || 0,
+      scrapQty: Number(r.scrapQty) || 0,
+      scrapUnit: Number(r.scrapUnit) || 0,
+      sfgBomRefDate: r.sfgBomRefDate || null,
+      sfgBomRefNo: r.sfgBomRefNo || "",
+      uom: Number(r.uom) || 0,
+      weight: Number(r.weight) || 0,
+    }));
+
     const payload = {
-      ...(isUpdate ? { id: data?.id ?? data?.header?.id } : {}),
-      orgId,
-      header,
-      materialDetails: materialRows,
-      summary,
       active: data?.active ?? true,
+      billOfMaterialDetailsDTO,
+      branch,
+      cancel: false,
+      cancelRemarks: "",
       createdBy: isUpdate ? data?.createdBy || usersId : usersId,
-      ...(isUpdate ? { updatedBy: usersId } : {}),
+      fgItem: Number(header.fgSfgItemId || header.fgSfgItemCode) || 0,
+      fgReferenceToProfit: header.fgRefToProfit || "",
+      fillDetailsOf: header.fillDetailsOf || "",
+      fillDetailsOfItem: Number(header.fillDetailsOfItem) || 0,
+      financialYear: finYear,
+      manufacturing: header.manufacturing || "",
+      orgId,
+      remarks: summary.remarks || "",
+      specifications: header.specifications || "",
+      typeOfBom: Number(header.typeOfBom) || 0,
+      typeOfItem: header.typeOfItem || "",
+      wef: header.wef || null,
+      ...(isUpdate ? { id: data?.id ?? data?.header?.id } : {}),
     };
 
     try {
-      const response = await bomMasterAPI.createUpdate(payload);
+      const response = await bomMasterAPI.createUpdateBillOfMaterial(payload);
 
       if (response?.status) {
         addToast(
           response?.paramObjectsMap?.message ||
-            (isUpdate
-              ? "Bill of Material updated successfully!"
-              : "Bill of Material created successfully!"),
+          (isUpdate
+            ? "Bill of Material updated successfully!"
+            : "Bill of Material created successfully!"),
         );
         onBack?.();
       } else {
         addToast(
           response?.errors?.[0]?.shortMessage ||
-            response?.errors?.[0]?.longMessage ||
-            response?.message ||
-            response?.paramObjectsMap?.message ||
-            "Failed to save Bill of Material.",
+          response?.errors?.[0]?.longMessage ||
+          response?.message ||
+          response?.paramObjectsMap?.message ||
+          "Failed to save Bill of Material.",
           "error",
         );
       }
@@ -578,9 +870,9 @@ const BomMasterForm = ({ data, onBack }) => {
       if (err.response?.data) {
         addToast(
           err.response.data.message ||
-            err.response.data.statusMessage ||
-            err.response.data.error ||
-            JSON.stringify(err.response.data),
+          err.response.data.statusMessage ||
+          err.response.data.error ||
+          JSON.stringify(err.response.data),
           "error",
         );
       } else {
@@ -596,7 +888,7 @@ const BomMasterForm = ({ data, onBack }) => {
   const materialColumns = [
     { key: "itemCode", label: "Item Code *", type: "select" },
     { key: "itemDescription", label: "Item Description", readOnly: true },
-    { key: "itemType", label: "Item Type *", type: "select" },
+    { key: "itemType", label: "Item Type *", type: "text" },
     { key: "uom", label: "UOM *", type: "select" },
     { key: "weight", label: "Weight", type: "number", step: "0.001" },
     { key: "qty", label: "Qty *", type: "number", step: "0.001" },
@@ -609,15 +901,29 @@ const BomMasterForm = ({ data, onBack }) => {
 
   const rowErrors = showErrors
     ? materialRows.reduce((acc, row, idx) => {
-        const errs = {};
-        if (!row.itemCode?.trim()) errs.itemCode = true;
-        if (!row.itemType?.trim()) errs.itemType = true;
-        if (!row.uom?.trim()) errs.uom = true;
-        if (row.qty === "" || Number(row.qty) <= 0) errs.qty = true;
-        if (Object.keys(errs).length > 0) acc[idx] = errs;
-        return acc;
-      }, {})
+      const errs = {};
+      if (!row.itemCode) errs.itemCode = true;
+      if (!row.itemType?.trim()) errs.itemType = true;
+      if (!row.uom) errs.uom = true;
+      if (row.qty === "" || Number(row.qty) <= 0) errs.qty = true;
+      if (Object.keys(errs).length > 0) acc[idx] = errs;
+      return acc;
+    }, {})
     : {};
+
+  /* ---------------- Loading short-circuit ---------------- */
+
+  if (loadingRecord) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-500 dark:text-gray-400">
+          Loading Bill of Material...
+        </div>
+      </div>
+    );
+  }
+
+  /* ---------------- Render ---------------- */
 
   return (
     <div className="w-full p-2">
@@ -639,7 +945,6 @@ const BomMasterForm = ({ data, onBack }) => {
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
         {/* ---------------- Header Section ---------------- */}
         <div>
-          
           <div className={fieldGrid}>
             <Field
               type="select"
@@ -648,7 +953,7 @@ const BomMasterForm = ({ data, onBack }) => {
               value={header.typeOfBom}
               onChange={handleHeaderChange}
               error={fieldErrors.typeOfBom}
-              options={TYPE_OF_BOM_OPTIONS}
+              options={typeOfBomOptions}
               required
             />
             <Field
@@ -662,14 +967,41 @@ const BomMasterForm = ({ data, onBack }) => {
               required
             />
             <Field
+              label="Doc.ID"
+              name="docId"
+              value={loadingDocId ? "Generating..." : header.docId}
+              onChange={handleHeaderChange}
+              error={fieldErrors.docId}
+              required
+              readOnly
+            />
+            <Field
+              type="date"
+              label="Doc.Date"
+              name="docDate"
+              value={header.docDate}
+              onChange={handleHeaderChange}
+              error={fieldErrors.docDate}
+              required
+              disabled
+            />
+            <Field
               type="select"
               label="FG / SFG Item Code"
               name="fgSfgItemCode"
               value={header.fgSfgItemCode}
               onChange={handleHeaderChange}
               error={fieldErrors.fgSfgItemCode}
-              options={itemOptions}
+              options={fgSfgItemOptions}
+              disabled={!header.typeOfItem}
               required
+            />
+            <Field
+              label="FG / SFG Item Description"
+              name="fgSfgItemDescription"
+              value={header.fgSfgItemDescription}
+              onChange={handleHeaderChange}
+              disabled
             />
             <Field
               type="number"
@@ -680,11 +1012,32 @@ const BomMasterForm = ({ data, onBack }) => {
               disabled={Boolean(data)}
             />
             <Field
-              label="FG / SFG Item Description"
-              name="fgSfgItemDescription"
-              value={header.fgSfgItemDescription}
+              type="select"
+              label="Fill Details Of"
+              name="fillDetailsOf"
+              value={header.fillDetailsOf}
               onChange={handleHeaderChange}
-              disabled
+              error={fieldErrors.fillDetailsOf}
+              options={fillDetailsOptions}
+              disabled={!header.fgSfgItemCode}
+              required
+            />
+            <Field
+              label="Specifications"
+              name="specifications"
+              value={header.specifications}
+              onChange={handleHeaderChange}
+              placeholder="Enter specifications..."
+            />
+            <Field
+              type="select"
+              label="Fill Details Of Item"
+              name="fillDetailsOfItem"
+              value={header.fillDetailsOfItem}
+              onChange={handleHeaderChange}
+              error={fieldErrors.fillDetailsOfItem}
+              options={fgSfgItemOptions}
+              required
             />
             <Field
               type="date"
@@ -696,47 +1049,20 @@ const BomMasterForm = ({ data, onBack }) => {
               required
             />
             <Field
-              type="select"
               label="FG Reference To Profit"
               name="fgRefToProfit"
               value={header.fgRefToProfit}
               onChange={handleHeaderChange}
-              options={FG_REFERENCE_TO_PROFIT_OPTIONS}
+              readOnly
             />
             <Field
-              type="select"
-              label="Fill Details Of"
-              name="fillDetailsOf"
-              value={header.fillDetailsOf}
+              label="Manufacturing"
+              name="manufacturing"
+              value={header.manufacturing}
               onChange={handleHeaderChange}
-              error={fieldErrors.fillDetailsOf}
-              options={FILL_DETAILS_OF_OPTIONS}
-              required
+              placeholder="Enter manufacturing..."
             />
             <Field
-              type="select"
-              label="Fill Details Of Item"
-              name="fillDetailsOfItem"
-              value={header.fillDetailsOfItem}
-              onChange={handleHeaderChange}
-              error={fieldErrors.fillDetailsOfItem}
-              options={itemOptions}
-              required
-            />
-          </div>
-
-          <div className="mt-3">
-            <Field
-              type="textarea"
-              label="Specifications"
-              name="specifications"
-              value={header.specifications}
-              onChange={handleHeaderChange}
-              placeholder="Enter specifications..."
-            />
-          
-            <Field
-              type="textarea"
               label="Remarks"
               name="remarks"
               value={summary.remarks}
@@ -767,11 +1093,7 @@ const BomMasterForm = ({ data, onBack }) => {
 
           <TableWrapper>
             <TableHead
-              headers={[
-                "#",
-                ...materialColumns.map((c) => c.label),
-                "Action",
-              ]}
+              headers={["#", ...materialColumns.map((c) => c.label), "Action"]}
             />
             <tbody>
               {materialRows.map((row, idx) => {
@@ -786,15 +1108,15 @@ const BomMasterForm = ({ data, onBack }) => {
                     {materialColumns.map((col) => {
                       if (col.type === "select") {
                         const options =
-                          col.key === "itemCode" || col.key === "uom"
-                            ? col.key === "itemCode"
-                              ? itemOptions
-                              : unitOptions
-                            : col.key === "itemType"
-                              ? ITEM_TYPE_OPTIONS
+                          col.key === "itemCode"
+                            ? itemOptions
+                            : col.key === "uom"
+                              ? unitOptions
                               : col.key === "scrapItem"
-                                ? SCRAP_ITEM_OPTIONS
-                                : unitOptions;
+                                ? scrapItemOptions
+                                : col.key === "scrapUnit"
+                                  ? scrapUnitOptions
+                                  : [];
                         return (
                           <SelectCell
                             key={col.key}

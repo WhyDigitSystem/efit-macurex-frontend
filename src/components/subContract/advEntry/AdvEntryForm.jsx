@@ -1,12 +1,10 @@
 import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import advEntryAPI from "../../../api/advEntryAPI";
-import partyMasterAPI from "../../../api/partyMasterAPI";
-import itemAPI from "../../../api/itemAPI";
-import unitMasterAPI from "../../../api/unitAPI";
 import locationMasterAPI from "../../../api/locationMasterAPI";
 import branchAPI from "../../../api/branchAPI";
 import employeeAPI from "../../../api/employeeAPI";
+import listOfValuesAPI from "../../../api/listOfValuesAPI";
 import { useToast } from "../../Toast/ToastContext";
 
 /* ---------------------------------------------------------------------------- */
@@ -45,9 +43,14 @@ const labelClasses =
 const fieldGrid =
   "grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-x-4 gap-y-3 items-start";
 
-// Spacious grid used inside the child tabs so fields breathe more.
 const subTabFieldGrid =
   "grid grid-cols-[repeat(auto-fit,minmax(210px,1fr))] gap-x-5 gap-y-4 items-start";
+
+/* ---------------------------------------------------------------------------- */
+/* Module-level helpers                                                         */
+
+const toStr = (v) =>
+  v === undefined || v === null || v === "" ? "" : String(v);
 
 /* ---------------------------------------------------------------------------- */
 /* Shared building blocks                                                      */
@@ -144,7 +147,6 @@ const Field = ({
         disabled={disabled}
         className={`${controlClasses} ${error ? controlErrClasses : ""}`}
       />
-
       {error && (
         <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
           {error}
@@ -197,13 +199,12 @@ const TableHead = ({ headers }) => (
       {headers.map((h, i) => (
         <th
           key={i}
-          className={`p-2 whitespace-nowrap ${
-            i === 0
+          className={`p-2 whitespace-nowrap ${i === 0
               ? "w-8 text-center"
               : i === headers.length - 1
                 ? "w-20 text-left"
                 : "text-left"
-          } dark:text-white`}
+            } dark:text-white`}
         >
           {h}
         </th>
@@ -221,11 +222,10 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
         type="button"
         onClick={onRemove}
         disabled={disabled}
-        className={`h-6 w-6 rounded text-white flex items-center justify-center ${
-          disabled
+        className={`h-6 w-6 rounded text-white flex items-center justify-center ${disabled
             ? "bg-gray-400 cursor-not-allowed"
             : "bg-red-600 hover:bg-red-700"
-        }`}
+          }`}
       >
         <Trash2 size={12} />
       </button>
@@ -233,8 +233,6 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
   </tr>
 );
 
-/* Generic dynamic table. Supports text / number / date / select / readonly
-   columns. Options may be plain strings or { value, label } objects. */
 const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
   <TableWrapper>
     <TableHead headers={["#", ...columns.map((c) => c.label), "Action"]} />
@@ -251,7 +249,7 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
               return (
                 <td className="p-2 align-top" key={col.key}>
                   <select
-                    value={row[col.key]}
+                    value={row[col.key] ?? ""}
                     onChange={(e) => onCellChange(idx, col.key, e.target.value)}
                     className={cellInputClasses}
                   >
@@ -269,7 +267,13 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
             return (
               <td className="p-2 align-top" key={col.key}>
                 <input
-                  type={col.type === "number" ? "number" : col.type === "date" ? "date" : "text"}
+                  type={
+                    col.type === "number"
+                      ? "number"
+                      : col.type === "date"
+                        ? "date"
+                        : "text"
+                  }
                   value={row[col.key] ?? ""}
                   readOnly={col.readOnly}
                   onChange={(e) => onCellChange(idx, col.key, e.target.value)}
@@ -289,8 +293,12 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
 /* ---------------------------------------------------------------------------- */
 /* Options                                                                      */
 
-const BELONGS_TO = ["APPLIANCES", "ELECTRICALS", "PACKAGING", "RAW MATERIAL"];
-const BOM_IDS = ["BOM-001", "BOM-002", "BOM-003"];
+const BELONGS_TO_FALLBACK = [
+  "APPLIANCES",
+  "ELECTRICALS",
+  "PACKAGING",
+  "RAW MATERIAL",
+];
 
 const CHILD_TABS = [
   { key: "advDetails", label: "ADV Details", kind: "table" },
@@ -300,14 +308,12 @@ const CHILD_TABS = [
 const emptyDetailRow = () => ({
   itemCode: "",
   itemDescription: "",
-  unit: "",
+  unit: "",        // label, e.g. "KG"
+  unitId: "",      // numeric unit id (payload)
   bomQty: "",
   issueQty: "",
-});
-
-const emptySummary = () => ({
-  remarks: "",
-  preparedBy: "",
+  itemId: "",
+  bomDetailsId: "",
 });
 
 const todayStr = () => {
@@ -322,13 +328,19 @@ const nowTimeStr = () => {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 };
 
-const autoDocNo = () =>
-  `ADV-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, "0")}${String(new Date().getDate()).padStart(2, "0")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
+const getFinancialYear = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const startYear = now.getMonth() >= 3 ? year : year - 1;
+  const endYear = startYear + 1;
+  return `${String(startYear).slice(-2)}-${String(endYear).slice(-2)}`;
+};
 
 /* ---------------------------------------------------------------------------- */
 
 const AdvEntryForm = ({ data, onBack }) => {
   const [orgId] = useState(Number(localStorage.getItem("orgId")) || 0);
+  const [finYear] = useState(Number(localStorage.getItem("finYear")) || 0);
   const [branch] = useState(Number(localStorage.getItem("branchId")) || 0);
   const { addToast } = useToast();
 
@@ -338,35 +350,60 @@ const AdvEntryForm = ({ data, onBack }) => {
 
   const [activeChildTab, setActiveChildTab] = useState("advDetails");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loadingDocId, setLoadingDocId] = useState(false);
+  const [loadingRecord, setLoadingRecord] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
 
+  // Dropdown data
   const [plantOptions, setPlantOptions] = useState([]);
+  const [belongsToOptions, setBelongsToOptions] = useState([]);
   const [partyOptions, setPartyOptions] = useState([]);
+  const [partyMap, setPartyMap] = useState({});
   const [itemOptions, setItemOptions] = useState([]);
   const [itemMasterMap, setItemMasterMap] = useState({});
-  const [unitOptions, setUnitOptions] = useState([]);
+  const [bomOptions, setBomOptions] = useState([]);
+  const [bomMap, setBomMap] = useState({});
+  const [bomDetails, setBomDetails] = useState([]);
   const [employeeOptions, setEmployeeOptions] = useState([]);
+
+  // Guards the bomId effect from overwriting detailRows right after hydration
+  const hasHydratedRef = useRef(false);
 
   const [header, setHeader] = useState(() => ({
     plantId: data?.plantId || "",
     belongsTo: data?.belongsTo || "",
-    partyId: data?.partyId || "",
+    partyId: data?.partyId || data?.customer || "",
     partyName: data?.partyName || "",
     incomingPartNo: data?.incomingPartNo || "",
+    incomingPartId: data?.incomingPartId || data?.incomingPartNo || "",
     partName: data?.partName || "",
-    bomId: data?.bomId || "",
+    bomId: data?.bomId || data?.bom || "",
     time: data?.time || nowTimeStr(),
     docDate: data?.docDate || todayStr(),
-    docNo: data?.docNo || (data ? "" : autoDocNo()),
+    docNo: data?.docNo || "",
     active: data?.active !== false,
   }));
 
   const [detailRows, setDetailRows] = useState(
-    data?.advDetails?.length ? data.advDetails : [emptyDetailRow()],
+    data?.advForStoresDetails?.length
+      ? data.advForStoresDetails.map((r) => ({
+        itemCode: r.item?.id ?? r.item ?? "",
+        itemId: r.item?.id ?? r.item ?? "",
+        itemDescription: r.item?.itemDescription || r.itemDescription || "",
+        unit: r.unit?.unitId || "",
+        unitId: r.unit?.id ?? r.unitId ?? "",
+        bomQty: r.bomQty ?? "",
+        issueQty: r.issueQty ?? "",
+        bomDetailsId: r.bomDetailsId || "",
+      }))
+      : data?.advDetails?.length
+        ? data.advDetails
+        : [emptyDetailRow()],
   );
+
   const [summary, setSummary] = useState({
-    ...emptySummary(),
-    ...data?.summary,
+    remarks: data?.remarks || "",
+    preparedBy: data?.preparedBy || "",
   });
 
   /* ---------------- Lookup loading ---------------- */
@@ -396,28 +433,68 @@ const AdvEntryForm = ({ data, onBack }) => {
     }
   }, [orgId, isMacurex]);
 
+  const loadBelongsTo = useCallback(async () => {
+    try {
+      const res = await listOfValuesAPI.getListValuesGroup("SDS BELONGS TO", orgId);
+
+      let items = [];
+      if (res?.paramObjectsMap?.listValues) items = res.paramObjectsMap.listValues;
+      else if (res?.data?.paramObjectsMap?.listValues)
+        items = res.data.paramObjectsMap.listValues;
+      else if (Array.isArray(res)) items = res;
+      else if (res?.listValues) items = res.listValues;
+
+      const options = items.map((item) => ({
+        value: item.valuesDescription || item.valueDescription || item.id,
+        label: item.valuesDescription || item.valueDescription || item.id,
+      }));
+
+      setBelongsToOptions(
+        options.length
+          ? options
+          : BELONGS_TO_FALLBACK.map((v) => ({ value: v, label: v })),
+      );
+    } catch (error) {
+      console.error("Failed to load Belongs To options:", error);
+      setBelongsToOptions(
+        BELONGS_TO_FALLBACK.map((v) => ({ value: v, label: v })),
+      );
+    }
+  }, [orgId]);
+
   const loadParties = useCallback(async () => {
     try {
-      const res = await partyMasterAPI.getPartyByOrgId(orgId, branch);
-      setPartyOptions(
-        (res || []).map((p) => ({
-          value: p.id,
-          label: p.customerName || p.docId || p.id,
-        })),
+      const list = await advEntryAPI.getCustomerForSupplierRateContract(
+        branch,
+        orgId,
       );
+      const map = {};
+      const options = (list || []).map((p) => {
+        map[p.customerId] = p;
+        return {
+          value: p.customerId,
+          label: `${p.customerCode} - ${p.customerName}`,
+        };
+      });
+      setPartyOptions(options);
+      setPartyMap(map);
     } catch (error) {
       console.error("Failed to load party options:", error);
       setPartyOptions([]);
+      setPartyMap({});
     }
   }, [orgId, branch]);
 
   const loadItems = useCallback(async () => {
     try {
-      const res = await itemAPI.getItems(orgId, branch);
+      const list = await advEntryAPI.getFGAndSFGItems(branch, orgId);
       const map = {};
-      const options = (res || []).map((it) => {
-        map[it.itemCode] = it;
-        return { value: it.itemCode, label: it.itemCode };
+      const options = (list || []).map((it) => {
+        map[it.itemId] = it;
+        return {
+          value: it.itemId,
+          label: `${it.itemCode} - ${it.itemDescription}`,
+        };
       });
       setItemOptions(options);
       setItemMasterMap(map);
@@ -428,28 +505,87 @@ const AdvEntryForm = ({ data, onBack }) => {
     }
   }, [orgId, branch]);
 
-  const loadUnits = useCallback(async () => {
-    try {
-      const res = await unitMasterAPI.getUnits(branch, orgId);
-      setUnitOptions(
-        (res || []).map((u) => ({
-          value: u.id,
-          label: u.unitId,
-        })),
-      );
-    } catch (error) {
-      console.error("Failed to load unit options:", error);
-      setUnitOptions([]);
-    }
-  }, [orgId, branch]);
+  const loadBoms = useCallback(
+    async (itemId) => {
+      if (!itemId) {
+        setBomOptions([]);
+        setBomMap({});
+        return;
+      }
+      try {
+        const list = await advEntryAPI.getLatestBomDropdown(
+          branch,
+          itemId,
+          orgId,
+        );
+        const map = {};
+        const options = (list || []).map((b) => {
+          map[b.docId] = b;
+          return { value: b.docId, label: b.docId };
+        });
+        setBomOptions(options);
+        setBomMap(map);
+      } catch (error) {
+        console.error("Failed to load BOM dropdown:", error);
+        setBomOptions([]);
+        setBomMap({});
+      }
+    },
+    [orgId, branch],
+  );
+
+  const loadBomDetails = useCallback(
+    async (docId) => {
+      if (!docId) {
+        setBomDetails([]);
+        setDetailRows([emptyDetailRow()]);
+        return;
+      }
+      try {
+        const list = await advEntryAPI.getBomDetailsByDocId(
+          branch,
+          docId,
+          orgId,
+        );
+        setBomDetails(list || []);
+
+        const itemMasterMapFromBom = {};
+        (list || []).forEach((b) => {
+          itemMasterMapFromBom[b.itemId] = b;
+        });
+
+        setItemMasterMap((prev) => ({ ...prev, ...itemMasterMapFromBom }));
+
+        const rows = (list || []).length
+          ? list.map((b) => ({
+            itemCode: b.itemId,
+            itemId: b.itemId,
+            itemDescription: b.itemDescription || "",
+            unit: b.unitCode || "",          // label, e.g. "KG"
+            unitId: b.unitId ?? "",          // numeric unit id
+            bomQty: b.qty ?? "",
+            issueQty: "",
+            bomDetailsId: b.bomDetailsId,
+          }))
+          : [emptyDetailRow()];
+
+        setDetailRows(rows);
+      } catch (error) {
+        console.error("Failed to load BOM details:", error);
+        setBomDetails([]);
+        setDetailRows([emptyDetailRow()]);
+      }
+    },
+    [orgId, branch],
+  );
 
   const loadEmployees = useCallback(async () => {
     try {
       const res = await employeeAPI.getEmployeeByOrgId(orgId);
       setEmployeeOptions(
         (res || []).map((e) => ({
-          value: e.employeeName || e.id,
-          label: e.employeeName || e.id,
+          value: e.id,
+          label: e.employeeName || String(e.id),
         })),
       );
     } catch (error) {
@@ -458,38 +594,179 @@ const AdvEntryForm = ({ data, onBack }) => {
     }
   }, [orgId]);
 
+  const loadAdvDocId = useCallback(async () => {
+    if (!orgId) return;
+    try {
+      setLoadingDocId(true);
+      const docId = await advEntryAPI.getAdvForStoresDocId(finYear, orgId);
+      if (docId) {
+        setHeader((prev) => ({ ...prev, docNo: docId }));
+      }
+    } catch (error) {
+      console.error("Failed to load ADV doc id:", error);
+    } finally {
+      setLoadingDocId(false);
+    }
+  }, [orgId, finYear]);
+
+  /* ---------------- Hydrate from getAdvForStoresById ---------------- */
+
+  const hydrateFromRecord = useCallback((rec) => {
+    if (!rec) return;
+
+    setHeader((prev) => ({
+      ...prev,
+      plantId: toStr(rec.branch?.id),
+      belongsTo: rec.belongsTo || "",
+      docNo: rec.docNo || rec.docId || "",
+      docDate: rec.docDate || prev.docDate,
+      time: rec.time || prev.time,
+      partyId: toStr(rec.customer?.customerId),
+      partyName: rec.customer?.customerName || "",
+      incomingPartNo: toStr(rec.incomingPartNo?.id),
+      incomingPartId: toStr(rec.incomingPartNo?.id),
+      partName: rec.incomingPartNo?.itemDescription || "",
+      bomId: rec.bom?.docId || "",
+      active: rec.active !== false,
+    }));
+
+    setSummary((prev) => ({
+      ...prev,
+      remarks: rec.remarks || "",
+      preparedBy: toStr(rec.preparedBy?.id ?? rec.preparedBy),
+    }));
+
+    // Convert the loaded details into form rows, preserving issueQty
+    const rows = (rec.advForStoresDetails || []).length
+      ? rec.advForStoresDetails.map((r) => ({
+        id: r.id || 0,
+        itemCode: toStr(r.item?.id),
+        itemId: toStr(r.item?.id),
+        itemDescription: r.item?.itemDescription || "",
+        unit: r.unit?.unitId || "",          // label, e.g. "KG"
+        unitId: toStr(r.unit?.id),           // numeric id
+        bomQty: r.bomQty ?? "",
+        issueQty: r.issueQty ?? "",
+        bomDetailsId: r.bomDetailsId || "",
+      }))
+      : [emptyDetailRow()];
+
+    setDetailRows(rows);
+
+    // Populate bomDetails / itemMasterMap directly from the loaded record's
+    // details, so the Item Code <select> shows the saved option immediately.
+    const seededBomDetails = (rec.advForStoresDetails || []).map((r) => ({
+      itemId: r.item?.id,
+      itemCode: r.item?.itemCode || "",
+      itemDescription: r.item?.itemDescription || "",
+      unitCode: r.unit?.unitId || "",
+      unitId: r.unit?.id,
+      qty: r.bomQty ?? 0,
+      bomDetailsId: r.bomDetailsId,
+    }));
+    if (seededBomDetails.length) {
+      setBomDetails(seededBomDetails);
+
+      const seededMap = {};
+      seededBomDetails.forEach((b) => {
+        seededMap[b.itemId] = b;
+      });
+      setItemMasterMap((prev) => ({ ...prev, ...seededMap }));
+    }
+
+    hasHydratedRef.current = true;
+  }, []);
+
+  /* ---------------- Effects ---------------- */
+
   useEffect(() => {
-    if (orgId) loadPlants();
-  }, [orgId, loadPlants]);
+    if (orgId) {
+      loadPlants();
+      loadBelongsTo();
+      loadEmployees();
+    }
+  }, [orgId, loadPlants, loadBelongsTo, loadEmployees]);
 
   useEffect(() => {
     if (orgId && branch) {
       loadParties();
       loadItems();
-      loadUnits();
     }
-  }, [orgId, branch, loadParties, loadItems, loadUnits]);
+  }, [orgId, branch, loadParties, loadItems]);
 
+  // Fetch doc id ONLY for new records
   useEffect(() => {
-    if (orgId) loadEmployees();
-  }, [orgId, loadEmployees]);
+    if (orgId && !data?.id) {
+      loadAdvDocId();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgId, data?.id]);
+
+  // Fetch full record when editing
+  useEffect(() => {
+    const loadById = async () => {
+      if (!data?.id) return;
+      try {
+        setLoadingRecord(true);
+        const rec = await advEntryAPI.getAdvForStoresById(data.id);
+        if (rec) hydrateFromRecord(rec);
+      } catch (error) {
+        console.error("Failed to load ADV For Stores by id:", error);
+        addToast("Failed to load ADV For Stores.", "error");
+      } finally {
+        setLoadingRecord(false);
+      }
+    };
+    loadById();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.id]);
+
+  // Reload BOM list when the incoming part changes
+  useEffect(() => {
+    if (loadingRecord) return;
+    if (header.incomingPartId) {
+      loadBoms(header.incomingPartId);
+    } else {
+      setBomOptions([]);
+      setBomMap({});
+    }
+  }, [header.incomingPartId, loadBoms, loadingRecord]);
+
+  // Reload BOM details when BOM changes — skip the very first run after hydration
+  useEffect(() => {
+    if (loadingRecord) return;
+
+    if (hasHydratedRef.current) {
+      hasHydratedRef.current = false; // consume once
+      return;
+    }
+
+    if (header.bomId) {
+      loadBomDetails(header.bomId);
+    } else {
+      setBomDetails([]);
+    }
+  }, [header.bomId, loadBomDetails, loadingRecord]);
 
   /* ---------------- Handlers ---------------- */
 
   const handleHeaderChange = (e) => {
     const { name, value } = e.target;
     if (fieldErrors[name]) setFieldErrors((prev) => ({ ...prev, [name]: "" }));
+
     setHeader((prev) => {
       const next = { ...prev, [name]: value };
 
       if (name === "partyId") {
-        const party = partyOptions.find((p) => p.value === value);
-        next.partyName = party?.label || "";
+        const party = partyMap[value];
+        next.partyName = party?.customerName || "";
       }
 
       if (name === "incomingPartNo") {
         const item = itemMasterMap[value];
+        next.incomingPartId = value;
         next.partName = item?.itemDescription || "";
+        next.bomId = "";
       }
 
       return next;
@@ -508,11 +785,18 @@ const AdvEntryForm = ({ data, onBack }) => {
         if (i !== idx) return row;
         const next = { ...row, [key]: value };
         if (key === "itemCode") {
-          const item = itemMasterMap[value];
+          const bomLine = bomDetails.find(
+            (b) => String(b.itemId) === String(value),
+          );
+          const item = itemMasterMap[value] || bomLine;
           return {
             ...next,
             itemDescription: item?.itemDescription || "",
-            unit: item?.primaryUnits?.id || row.unit || "",
+            unit: bomLine?.unitCode || item?.unitCode || row.unit || "",
+            unitId: bomLine?.unitId ?? item?.unitId ?? row.unitId ?? "",
+            bomQty: bomLine?.qty ?? row.bomQty ?? "",
+            itemId: value,
+            bomDetailsId: bomLine?.bomDetailsId || row.bomDetailsId,
           };
         }
         return next;
@@ -543,7 +827,7 @@ const AdvEntryForm = ({ data, onBack }) => {
       (r) =>
         r.itemCode &&
         r.itemDescription &&
-        r.unit &&
+        r.unitId &&
         Number(r.issueQty) > 0,
     );
     if (!hasValidRow)
@@ -561,49 +845,65 @@ const AdvEntryForm = ({ data, onBack }) => {
     if (!validate()) return;
 
     setIsSubmitting(true);
-
     const isUpdate = Boolean(data?.id);
 
+    const advForStoresDetails = detailRows
+      .filter((r) => r.itemCode)
+      .map((r) => ({
+        bomQty: Number(r.bomQty) || 0,
+        issueQty: Number(r.issueQty) || 0,
+        item: Number(r.itemId ?? r.itemCode) || 0,
+        unit: Number(r.unitId) || 0,     // <-- numeric unit id
+      }));
+
     const payload = {
-      ...(isUpdate ? { id: data.id } : {}),
-      orgId,
+      active: header.active ?? true,
+      advForStoresDetails,
+      belongsTo: header.belongsTo || "",
+      bom: Number(bomMap?.[header.bomId]?.id) || 0,
       branch,
-      ...header,
-      advDetails: detailRows.filter((r) => r.itemCode?.trim()),
-      summary,
+      cancelRemarks: "",
       createdBy: isUpdate
         ? data?.createdBy || localStorage.getItem("usersId")
         : localStorage.getItem("usersId"),
-      ...(isUpdate ? { updatedBy: localStorage.getItem("usersId") } : {}),
+      customer: Number(header.partyId) || 0,
+      financialYear: finYear,
+      incomingPartNo:
+        Number(header.incomingPartId ?? header.incomingPartNo) || 0,
+      orgId,
+      preparedBy: Number(summary.preparedBy) || 0,
+      remarks: summary.remarks || "",
+      time: header.time || nowTimeStr(),
+      ...(isUpdate ? { id: data.id } : {}),
     };
 
     try {
-      const response = await advEntryAPI.createUpdateAdv(payload);
+      const response = await advEntryAPI.createUpdateAdvForStores(payload);
 
       if (response?.status) {
         addToast(
           response?.paramObjectsMap?.message ||
-            (isUpdate
-              ? "ADV Entry updated successfully!"
-              : "ADV Entry created successfully!"),
+          (isUpdate
+            ? "ADV For Stores updated successfully!"
+            : "ADV For Stores created successfully!"),
         );
         onBack?.();
       } else {
         addToast(
           response?.errors?.[0]?.shortMessage ||
-            response?.errors?.[0]?.longMessage ||
-            response?.message ||
-            "Failed to save ADV Entry.",
+          response?.errors?.[0]?.longMessage ||
+          response?.message ||
+          "Failed to save ADV For Stores.",
         );
       }
     } catch (err) {
-      console.error("Save ADV Entry Error:", err);
+      console.error("Save ADV For Stores Error:", err);
       if (err.response?.data) {
         addToast(
           err.response.data.message ||
-            err.response.data.statusMessage ||
-            err.response.data.error ||
-            JSON.stringify(err.response.data),
+          err.response.data.statusMessage ||
+          err.response.data.error ||
+          JSON.stringify(err.response.data),
         );
       } else {
         addToast("Something went wrong.");
@@ -614,6 +914,30 @@ const AdvEntryForm = ({ data, onBack }) => {
   };
 
   const activeTabMeta = CHILD_TABS.find((t) => t.key === activeChildTab);
+
+  const itemCodeOptions = useMemo(() => {
+    if (bomDetails?.length) {
+      return bomDetails.map((b) => ({
+        value: b.itemId,
+        label: `${b.itemCode} - ${b.itemDescription}`,
+      }));
+    }
+    return itemOptions;
+  }, [bomDetails, itemOptions]);
+
+  /* ---------------- Loading short-circuit ---------------- */
+
+  if (loadingRecord) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-500 dark:text-gray-400">
+          Loading ADV For Stores...
+        </div>
+      </div>
+    );
+  }
+
+  /* ---------------- Render ---------------- */
 
   return (
     <div className="w-full p-2">
@@ -633,7 +957,7 @@ const AdvEntryForm = ({ data, onBack }) => {
 
       {/* Main Card */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
-        {/* ---------------- Header Info ---------------- */}
+        {/* Header Info */}
         <div>
           <SectionHeader>ADV Entry</SectionHeader>
           <div className={fieldGrid}>
@@ -654,8 +978,27 @@ const AdvEntryForm = ({ data, onBack }) => {
               value={header.belongsTo}
               onChange={handleHeaderChange}
               error={fieldErrors.belongsTo}
-              options={BELONGS_TO}
+              options={belongsToOptions}
               required
+            />
+            <Field
+              label="Doc No"
+              name="docNo"
+              value={loadingDocId ? "Generating..." : header.docNo}
+              onChange={handleHeaderChange}
+              error={fieldErrors.docNo}
+              required
+              disabled
+            />
+            <Field
+              type="date"
+              label="Doc Date"
+              name="docDate"
+              value={header.docDate}
+              onChange={handleHeaderChange}
+              error={fieldErrors.docDate}
+              required
+              disabled
             />
             <Field
               type="select"
@@ -689,6 +1032,7 @@ const AdvEntryForm = ({ data, onBack }) => {
               name="partName"
               value={header.partName}
               onChange={handleHeaderChange}
+              disabled
             />
             <Field
               type="select"
@@ -696,7 +1040,7 @@ const AdvEntryForm = ({ data, onBack }) => {
               name="bomId"
               value={header.bomId}
               onChange={handleHeaderChange}
-              options={BOM_IDS}
+              options={bomOptions}
             />
             <Field
               label="Time"
@@ -705,31 +1049,11 @@ const AdvEntryForm = ({ data, onBack }) => {
               onChange={handleHeaderChange}
               disabled
             />
-            <Field
-              type="date"
-              label="Doc Date"
-              name="docDate"
-              value={header.docDate}
-              onChange={handleHeaderChange}
-              error={fieldErrors.docDate}
-              required
-              disabled
-            />
-            <Field
-              label="Doc No"
-              name="docNo"
-              value={header.docNo}
-              onChange={handleHeaderChange}
-              error={fieldErrors.docNo}
-              required
-              disabled={!data}
-            />
           </div>
         </div>
 
-        {/* ---------------- Child Tabs ---------------- */}
+        {/* Child Tabs */}
         <section className="mt-0 bg-white dark:bg-gray-800">
-          {/* Tabs */}
           <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 mb-0">
             <div className="flex flex-wrap">
               {CHILD_TABS.map((tab) => (
@@ -737,11 +1061,10 @@ const AdvEntryForm = ({ data, onBack }) => {
                   key={tab.key}
                   type="button"
                   onClick={() => setActiveChildTab(tab.key)}
-                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${
-                    activeChildTab === tab.key
+                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${activeChildTab === tab.key
                       ? "bg-blue-600 text-white"
                       : "text-gray-600 dark:text-gray-300"
-                  }`}
+                    }`}
                 >
                   {tab.label}
                 </button>
@@ -768,7 +1091,7 @@ const AdvEntryForm = ({ data, onBack }) => {
                     key: "itemCode",
                     label: "Item Code",
                     type: "select",
-                    options: itemOptions,
+                    options: itemCodeOptions,
                   },
                   {
                     key: "itemDescription",
@@ -776,12 +1099,15 @@ const AdvEntryForm = ({ data, onBack }) => {
                     readOnly: true,
                   },
                   {
-                    key: "unit",
+                    key: "unit",             // plain text input now
                     label: "Unit",
-                    type: "select",
-                    options: unitOptions,
                   },
-                  { key: "bomQty", label: "BOM Qty", type: "number" },
+                  {
+                    key: "bomQty",
+                    label: "BOM Qty",
+                    type: "number",
+                    readOnly: true,
+                  },
                   { key: "issueQty", label: "Issue Qty", type: "number" },
                 ]}
                 rows={detailRows}

@@ -13,16 +13,21 @@ const BomMasterList = ({
   const [loading, setLoading] = useState(false);
 
   const ORG_ID = localStorage.getItem("orgId");
+  const BRANCH_ID = localStorage.getItem("branchId");
 
   const loadBoms = useCallback(async () => {
     try {
       setLoading(true);
 
-      const boms = await bomMasterAPI.getByOrgId(ORG_ID);
+      const boms = await bomMasterAPI.getBillOfMaterialByOrgId(
+        BRANCH_ID,
+        ORG_ID,
+      );
 
-      boms.sort((a, b) => (b.id || 0) - (a.id || 0));
+      const recordsArray = Array.isArray(boms) ? boms : [];
+      recordsArray.sort((a, b) => (b.id || 0) - (a.id || 0));
 
-      setBomData(boms);
+      setBomData(recordsArray);
     } catch (error) {
       console.error("Failed to load BOM master records:", error);
       setBomData([]);
@@ -30,7 +35,7 @@ const BomMasterList = ({
     } finally {
       setLoading(false);
     }
-  }, [ORG_ID]);
+  }, [ORG_ID, BRANCH_ID]);
 
   useEffect(() => {
     loadBoms();
@@ -38,57 +43,59 @@ const BomMasterList = ({
 
   const columns = [
     {
-      key: "fgSfgItemCode",
-      label: "FG/SFG Item Code",
-      accessor: (row) =>
-        row.fgSfgItemCode ||
-        row.header?.fgSfgItemCode ||
-        row.fgSfgCode ||
-        "",
+      key: "docId",
+      label: "Doc No",
+      accessor: "docId",
       type: "text",
     },
     {
-      key: "fgSfgItemDescription",
+      key: "docDate",
+      label: "Doc Date",
+      accessor: "docDate",
+      type: "date",
+    },
+    {
+      key: "fgItemCode",
+      label: "FG/SFG Item Code",
+      accessor: (row) => row.fgItem?.itemCode || "",
+      type: "text",
+    },
+    {
+      key: "fgItemDescription",
       label: "FG/SFG Item Description",
-      accessor: (row) =>
-        row.fgSfgItemDescription ||
-        row.header?.fgSfgItemDescription ||
-        row.header?.productName ||
-        "",
+      accessor: (row) => row.fgItem?.itemDescription || "",
       type: "text",
     },
     {
       key: "typeOfBom",
       label: "Type of BOM",
-      accessor: (row) => row.typeOfBom || row.header?.typeOfBom || "",
+      accessor: (row) =>
+        row.typeOfBom?.listDescription || row.typeOfBom?.listCode || "",
       type: "text",
     },
     {
       key: "typeOfItem",
       label: "Type of Item",
-      accessor: (row) => row.typeOfItem || row.header?.typeOfItem || "",
+      accessor: "typeOfItem",
       type: "text",
     },
     {
       key: "revisionNo",
       label: "Revision",
-      accessor: (row) => row.revisionNo ?? row.header?.revisionNo ?? "",
+      accessor: "revisionNo",
       type: "text",
     },
     {
       key: "materials",
       label: "Materials",
-      accessor: (row) =>
-        row.materialDetails?.length ??
-        row.materialDetailList?.length ??
-        "",
+      accessor: (row) => row.billOfMaterialDetailsResponseDTO?.length || 0,
       type: "text",
     },
     {
       key: "wef",
       label: "WEF",
-      accessor: (row) => row.wef || row.header?.wef || "",
-      type: "text",
+      accessor: "wef",
+      type: "date",
     },
     {
       key: "active",
@@ -118,11 +125,11 @@ const BomMasterList = ({
   ];
 
   const searchFields = [
-  "fgSfgItemCode",
-  "fgSfgItemDescription",
-  "typeOfBom",
-  "revisionNo",
-];
+    "docId",
+    "typeOfItem",
+    "revisionNo",
+    "wef",
+  ];
 
   const filterOptions = [
     {

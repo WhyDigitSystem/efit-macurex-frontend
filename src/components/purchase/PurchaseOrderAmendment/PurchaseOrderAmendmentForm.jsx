@@ -22,22 +22,14 @@ const controlClasses =
 const labelClasses =
   "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
-const BELONGS_TO = ["Purchase", "Import", "Export"];
-const FREIGHT_TYPES = ["CIF", "FOB", "CFR", "EXW", "DDP", "ROAD"];
-const PACKING_TYPES = [
-  "Standard",
-  "Export",
-  "Waterproof",
-  "Wooden Crate",
-  "Pallet",
-];
+const FREIGHT_TYPES = ["Macurex", "Supplier"];
+const PACKING_TYPES = ["Macurex", "Supplier"];
 const MODE_OF_DISPATCH = [
-  "Road",
-  "Rail",
-  "Air",
-  "Sea",
-  "Road Transport",
-  "Courier",
+  " By Road",
+  "By Air",
+  "By Sea",
+  "By Sea/Air",
+  "By Courier",
 ];
 
 const asId = (value) => {
@@ -112,9 +104,8 @@ const SelectField = ({
           <select
             {...field}
             disabled={disabled}
-            className={`${controlClasses} ${
-              errorMessage ? "border-red-500 focus:border-red-500" : ""
-            }`}
+            className={`${controlClasses} ${errorMessage ? "border-red-500 focus:border-red-500" : ""
+              }`}
           >
             <option value="">Select {label}</option>
             {(options || []).map((opt) => (
@@ -165,9 +156,8 @@ const InputField = ({
             type={type}
             step={step}
             value={value !== undefined ? value : field.value}
-            className={`${controlClasses} ${
-              errorMessage ? "border-red-500 focus:border-red-500" : ""
-            }`}
+            className={`${controlClasses} ${errorMessage ? "border-red-500 focus:border-red-500" : ""
+              }`}
             placeholder={placeholder}
             disabled={disabled}
           />
@@ -192,13 +182,12 @@ const TableHead = ({ headers }) => (
       {headers.map((h, i) => (
         <th
           key={i}
-          className={`p-1 ${
-            i === 0
-              ? "w-8 text-center"
-              : i === headers.length - 1
-                ? "w-20 text-left"
-                : "text-left"
-          } dark:text-white`}
+          className={`p-1 ${i === 0
+            ? "w-8 text-center"
+            : i === headers.length - 1
+              ? "w-20 text-left"
+              : "text-left"
+            } dark:text-white`}
         >
           {h}
         </th>
@@ -212,7 +201,7 @@ const TableRow = ({
   index,
   onRemove,
   disabled,
-showDelete = true,
+  showDelete = true,
   showPreview = false,
   previewDisabled = false,
   onPreview,
@@ -226,14 +215,13 @@ showDelete = true,
           type="button"
           onClick={onPreview}
           disabled={previewDisabled}
-          className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-            previewDisabled
-              ? "bg-gray-400 cursor-not-allowed"
-              : "bg-sky-600 hover:bg-sky-700"
-          }`}
+          className={`h-5 w-5 rounded text-white flex items-center justify-center ${previewDisabled
+            ? "bg-gray-400 cursor-not-allowed"
+            : "bg-sky-600 hover:bg-sky-700"
+            }`}
           title={previewDisabled ? "No file to preview" : "Preview"}
         >
-        <Eye size={10} />
+          <Eye size={10} />
         </button>
       </td>
     )}
@@ -243,11 +231,10 @@ showDelete = true,
           type="button"
           onClick={onRemove}
           disabled={disabled}
-          className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-            disabled
-              ? "bg-gray-400 cursor-not-allowed"
-              : "bg-red-600 hover:bg-red-700"
-          }`}
+          className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
+            ? "bg-gray-400 cursor-not-allowed"
+            : "bg-red-600 hover:bg-red-700"
+            }`}
         >
           <Trash2 size={10} />
         </button>
@@ -267,9 +254,8 @@ const SelectCell = ({ control, name, options, required, errors }) => {
         render={({ field }) => (
           <select
             {...field}
-            className={`${controlClasses} h-8 text-xs ${
-              errorMessage ? "border-red-500 focus:border-red-500" : ""
-            }`}
+            className={`${controlClasses} h-8 text-xs ${errorMessage ? "border-red-500 focus:border-red-500" : ""
+              }`}
           >
             <option value="">Select an option</option>
             {(options || []).map((opt) => (
@@ -327,9 +313,8 @@ const InputCell = ({
               type={type}
               step={step}
               readOnly={forceReadOnly}
-              className={`${controlClasses} ${
-                forceReadOnly ? "bg-gray-100 dark:bg-gray-800 text-gray-500" : ""
-              } ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
+              className={`${controlClasses} ${forceReadOnly ? "bg-gray-100 dark:bg-gray-800 text-gray-500" : ""
+                } ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
               placeholder={placeholder}
               onChange={(e) => {
                 field.onChange(e);
@@ -559,50 +544,50 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
     );
     if (match) setValue("poNo", match.docId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [isEditMode, poOptions, data, setValue]);
+  }, [isEditMode, poOptions, data, setValue]);
 
-/* ---------------- Auto-set Currency & Exchange Rate on PO Select ----------------*/
+  /* ---------------- Auto-set Currency & Exchange Rate on PO Select ----------------*/
 
   //  Fetches currency details from the backend when the PO No changes and stores
   //  the currency ID (e.g. 10006000029203 for EURO) in a ref for use on submit.
 
-   useEffect(() => {
-     if (isEditMode) return; // only auto in create mode
-     if (!watchPoNo) {
-       setValue("currency", "");
-       setValue("exchangeRate", "");
-       currencyIdRef.current = null;
-       return;
-     }
-     purchaseOrderAmendmentAPI.getCurrencyExchangeRateforPurchaseOrderAmendment(
-       branchId,
-       watchPoNo,
-       orgId,
-     ).then((currencyDetails) => {
-       if (currencyDetails && currencyDetails.length > 0) {
-         const first = currencyDetails[0];
-         setValue("currency", first.currency || "");
-         setValue("exchangeRate", first.exchangeRate ?? first.buyingExRate ?? 0);
-         currencyIdRef.current = first.currencyId || null;
-       } else {
-         setValue("currency", "");
-         setValue("exchangeRate", "");
-         currencyIdRef.current = null;
-       }
-     }).catch((error) => {
-       console.error("Failed to fetch currency exchange rate:", error);
-       setValue("currency", "");
-       setValue("exchangeRate", "");
-       currencyIdRef.current = null;
-     });
-   }, [watchPoNo, isEditMode, branchId, orgId]);
+  useEffect(() => {
+    if (isEditMode) return; // only auto in create mode
+    if (!watchPoNo) {
+      setValue("currency", "");
+      setValue("exchangeRate", "");
+      currencyIdRef.current = null;
+      return;
+    }
+    purchaseOrderAmendmentAPI.getCurrencyExchangeRateforPurchaseOrderAmendment(
+      branchId,
+      watchPoNo,
+      orgId,
+    ).then((currencyDetails) => {
+      if (currencyDetails && currencyDetails.length > 0) {
+        const first = currencyDetails[0];
+        setValue("currency", first.currency || "");
+        setValue("exchangeRate", first.exchangeRate ?? first.buyingExRate ?? 0);
+        currencyIdRef.current = first.currencyId || null;
+      } else {
+        setValue("currency", "");
+        setValue("exchangeRate", "");
+        currencyIdRef.current = null;
+      }
+    }).catch((error) => {
+      console.error("Failed to fetch currency exchange rate:", error);
+      setValue("currency", "");
+      setValue("exchangeRate", "");
+      currencyIdRef.current = null;
+    });
+  }, [watchPoNo, isEditMode, branchId, orgId]);
 
   /* ---------------- Fetch Belongs To list on mount ----------------
    * Populates the belongsTo dropdown from the commonmaster API.
    */
   useEffect(() => {
     purchaseOrderAmendmentAPI.getListValuesGroup(
-      "PURCHASE ORDER AMENDMENT",
+      "SDS BELONGS TO",
       orgId,
     ).then((listValues) => {
       setBelongsToOptions(
@@ -864,8 +849,7 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
         JSON.parse(localStorage.getItem("user") || "{}")?.token;
 
       const response = await axios.get(
-        `${
-          import.meta.env.VITE_API_URL
+        `${import.meta.env.VITE_API_URL
         }/api/files/download?path=${encodeURIComponent(sourcePath)}`,
         {
           responseType: "blob",
@@ -921,207 +905,207 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
   /* ---------------- Save ---------------- */
 
   const onSubmit = async (formData) => {
-  setSaving(true);
+    setSaving(true);
 
-  try {
-    const isUpdate = Boolean(data?.id);
+    try {
+      const isUpdate = Boolean(data?.id);
 
-    // Prepare Purchase Order Amendment data
-    const poAmendmentData = {
-      ...(isUpdate ? { id: data.id } : {}),
+      // Prepare Purchase Order Amendment data
+      const poAmendmentData = {
+        ...(isUpdate ? { id: data.id } : {}),
 
-      active: formData.active !== false,
+        active: formData.active !== false,
 
-      belongsTo: formData.belongsTo || "Purchase",
+        belongsTo: formData.belongsTo || "Purchase",
 
-      branch: Number(formData.branch),
+        branch: Number(formData.branch),
 
-      cancelRemarks: data?.cancelRemarks || "",
+        cancelRemarks: data?.cancelRemarks || "",
 
-      createdBy:
-        (isUpdate ? data?.createdBy : null) ||
-        localStorage.getItem("usersId") ||
-        loginUserName ||
-        "SYSTEM",
+        createdBy:
+          (isUpdate ? data?.createdBy : null) ||
+          localStorage.getItem("usersId") ||
+          loginUserName ||
+          "SYSTEM",
 
-      currency: currencyIdRef.current || 0,
+        currency: currencyIdRef.current || 0,
 
-      customer: Number(formData.customer),
+        customer: Number(formData.customer),
 
-      exchangeRate: Number(formData.exchangeRate || 0),
+        exchangeRate: Number(formData.exchangeRate || 0),
 
-      freightType: formData.freightType || "",
+        freightType: formData.freightType || "",
 
-      insuranceAmount: Number(formData.insuranceAmount || 0),
+        insuranceAmount: Number(formData.insuranceAmount || 0),
 
-      modeOfDespatch: formData.modeOfDespatch || "",
+        modeOfDespatch: formData.modeOfDespatch || "",
 
-      orgId: orgId,
+        orgId: orgId,
 
-      packingType: formData.packingType || "",
+        packingType: formData.packingType || "",
 
-      purchaseordernumber: formData.poNo || "",
+        purchaseordernumber: formData.poNo || "",
 
-      remarks: formData.remarks || "",
+        remarks: formData.remarks || "",
 
-      revisionNo: Number(formData.revisionNo || 1),
+        revisionNo: Number(formData.revisionNo || 1),
 
-      taxDescription: formData.taxDescription || "",
+        taxDescription: formData.taxDescription || "",
 
-      details: (formData.details || [])
-        .filter((item) => item.item)
-        .map((item) => {
-          const unitMatch = unitOptions.find(
-            (u) => String(u.value) === String(item.unit),
-          );
-          return {
-            item: Number(item.item),
+        details: (formData.details || [])
+          .filter((item) => item.item)
+          .map((item) => {
+            const unitMatch = unitOptions.find(
+              (u) => String(u.value) === String(item.unit),
+            );
+            return {
+              item: Number(item.item),
 
-            unit: unitMatch
-              ? Number(unitMatch.value)
-              : item.unit
-                ? Number(item.unit)
-                : null,
+              unit: unitMatch
+                ? Number(unitMatch.value)
+                : item.unit
+                  ? Number(item.unit)
+                  : null,
 
-            oldQty: Number(item.oldQty || 0),
+              oldQty: Number(item.oldQty || 0),
 
-            newQty: Number(item.newQty || 0),
+              newQty: Number(item.newQty || 0),
 
-            oldRate: Number(item.oldRate || 0),
+              oldRate: Number(item.oldRate || 0),
 
-            newRate: Number(item.newRate || 0),
+              newRate: Number(item.newRate || 0),
 
-            oldDeliveryDate: item.oldDeliveryDate || "",
+              oldDeliveryDate: item.oldDeliveryDate || "",
 
-            newDeliveryDate: item.newDeliveryDate || "",
-          };
-        }),
-    };
+              newDeliveryDate: item.newDeliveryDate || "",
+            };
+          }),
+      };
 
-    // Create multipart FormData
-    const formDataToSend = new FormData();
+      // Create multipart FormData
+      const formDataToSend = new FormData();
 
-    // Convert PO Amendment JSON into Blob
-    const poAmendmentJSON = JSON.stringify(poAmendmentData);
+      // Convert PO Amendment JSON into Blob
+      const poAmendmentJSON = JSON.stringify(poAmendmentData);
 
-    const poAmendmentBlob = new Blob([poAmendmentJSON], {
-      type: "application/json",
-    });
+      const poAmendmentBlob = new Blob([poAmendmentJSON], {
+        type: "application/json",
+      });
 
-    // Append JSON DTO
-    formDataToSend.append(
-      "PurchaseOrderAmendmentDTO",
-      poAmendmentBlob,
-      "poAmendmentDTO.json",
-    );
-
-    // Add attachment files
-    const attachments = formData.attachments || [];
-
-    if (attachments.length > 0) {
-      for (let i = 0; i < attachments.length; i++) {
-        const attachment = attachments[i]?.file;
-
-        if (attachment instanceof File) {
-          // New file
-          formDataToSend.append(
-            "files",
-            attachment,
-            attachment.name,
-          );
-        } else if (
-          attachment &&
-          typeof attachment === "object" &&
-          attachment.filePath
-        ) {
-          // Existing file
-          console.log(
-            "Existing file:",
-            attachment.filePath,
-          );
-        } else if (
-          attachment &&
-          typeof attachment === "string"
-        ) {
-          // Existing file path
-          console.log(
-            "Existing file path:",
-            attachment,
-          );
-        }
-      }
-    }
-
-    // Debug - JSON data
-    console.log(
-      "Sending PO Amendment data:",
-      poAmendmentData,
-    );
-
-    // Debug - Multipart contents
-    for (const [key, value] of formDataToSend.entries()) {
-      console.log("FormData:", key, value);
-    }
-
-    // Call API
-    const response =
-      await purchaseOrderAmendmentAPI.createUpdate(
-        formDataToSend,
+      // Append JSON DTO
+      formDataToSend.append(
+        "PurchaseOrderAmendmentDTO",
+        poAmendmentBlob,
+        "poAmendmentDTO.json",
       );
 
-    console.log(
-      "Full PO Amendment API Response:",
-      response,
-    );
+      // Add attachment files
+      const attachments = formData.attachments || [];
 
-    // Check API success
-    const isSuccess =
-      response?.status === true ||
-      response?.success === true ||
-      response?.status === "SUCCESS" ||
-      response?.status === 200 ||
-      response?.statusCode === 200 ||
-      response?.statusFlag === "Ok";
+      if (attachments.length > 0) {
+        for (let i = 0; i < attachments.length; i++) {
+          const attachment = attachments[i]?.file;
 
-    if (isSuccess) {
-      addToast(
-        response?.paramObjectsMap?.message ||
+          if (attachment instanceof File) {
+            // New file
+            formDataToSend.append(
+              "files",
+              attachment,
+              attachment.name,
+            );
+          } else if (
+            attachment &&
+            typeof attachment === "object" &&
+            attachment.filePath
+          ) {
+            // Existing file
+            console.log(
+              "Existing file:",
+              attachment.filePath,
+            );
+          } else if (
+            attachment &&
+            typeof attachment === "string"
+          ) {
+            // Existing file path
+            console.log(
+              "Existing file path:",
+              attachment,
+            );
+          }
+        }
+      }
+
+      // Debug - JSON data
+      console.log(
+        "Sending PO Amendment data:",
+        poAmendmentData,
+      );
+
+      // Debug - Multipart contents
+      for (const [key, value] of formDataToSend.entries()) {
+        console.log("FormData:", key, value);
+      }
+
+      // Call API
+      const response =
+        await purchaseOrderAmendmentAPI.createUpdate(
+          formDataToSend,
+        );
+
+      console.log(
+        "Full PO Amendment API Response:",
+        response,
+      );
+
+      // Check API success
+      const isSuccess =
+        response?.status === true ||
+        response?.success === true ||
+        response?.status === "SUCCESS" ||
+        response?.status === 200 ||
+        response?.statusCode === 200 ||
+        response?.statusFlag === "Ok";
+
+      if (isSuccess) {
+        addToast(
+          response?.paramObjectsMap?.message ||
           (isUpdate
             ? "Amendment updated successfully"
             : "Amendment created successfully"),
-        "success",
+          "success",
+        );
+
+        reset(getDefaultValues());
+
+        onBack();
+      } else {
+        const errorMessage =
+          response?.message ||
+          response?.paramObjectsMap?.message ||
+          response?.errorMessage ||
+          response?.error ||
+          "Failed to save amendment";
+
+        addToast(errorMessage, "error");
+      }
+    } catch (error) {
+      console.error(
+        "Error saving PO amendment:",
+        error,
       );
 
-      reset(getDefaultValues());
-
-      onBack();
-    } else {
       const errorMessage =
-        response?.message ||
-        response?.paramObjectsMap?.message ||
-        response?.errorMessage ||
-        response?.error ||
-        "Failed to save amendment";
+        error?.response?.data?.message ||
+        error?.response?.data?.paramObjectsMap?.message ||
+        error?.message ||
+        "Failed to save amendment. Please try again.";
 
       addToast(errorMessage, "error");
+    } finally {
+      setSaving(false);
     }
-  } catch (error) {
-    console.error(
-      "Error saving PO amendment:",
-      error,
-    );
-
-    const errorMessage =
-      error?.response?.data?.message ||
-      error?.response?.data?.paramObjectsMap?.message ||
-      error?.message ||
-      "Failed to save amendment. Please try again.";
-
-    addToast(errorMessage, "error");
-  } finally {
-    setSaving(false);
-  }
-};
+  };
 
   /* ---------------- Item autofill ---------------- */
 
@@ -1197,29 +1181,11 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
             required
             errors={errors}
           />
-<SelectField
-              control={control}
-              name="belongsTo"
-              label="Belongs To"
-              options={belongsToOptions}
-              errors={errors}
-            />
-
           <SelectField
             control={control}
-            name="customer"
-            label="Customer"
-            options={customerOptions}
-            required
-            errors={errors}
-          />
-
-          <InputField
-            control={control}
-            name="amendmentDate"
-            label="Amendment Date"
-            type="date"
-            required
+            name="belongsTo"
+            label="Belongs To"
+            options={belongsToOptions}
             errors={errors}
           />
 
@@ -1232,7 +1198,34 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
             errors={errors}
           />
 
-           <SelectField
+          <InputField
+            control={control}
+            name="amendmentDate"
+            label="Amendment Date"
+            type="date"
+            required
+            errors={errors}
+          />
+
+          <SelectField
+            control={control}
+            name="customer"
+            label="Party Id"
+            options={customerOptions}
+            required
+            errors={errors}
+          />
+
+          <InputField
+            control={control}
+            name="customerName"
+            label="Party Name"
+            errors={errors}
+            placeholder="Auto-filled"
+            disabled
+          />
+
+          <SelectField
             control={control}
             name="poNo"
             label="PO No"
@@ -1243,12 +1236,11 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
           />
 
           <InputField
+            type="date"
             control={control}
-            name="customerName"
-            label="Customer Name"
+            name="poDate"
+            label="P.O.Date"
             errors={errors}
-            placeholder="Auto-filled"
-            disabled
           />
 
           <InputField
@@ -1256,6 +1248,22 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
             name="currency"
             label="Currency"
             placeholder="Enter currency"
+            errors={errors}
+          />
+
+          <InputField
+            control={control}
+            name="refNo"
+            label="Ref No."
+            placeholder="Enter Ref No."
+            errors={errors}
+          />
+
+          <InputField
+            control={control}
+            type="date"
+            name="refDate"
+            label="Ref Date"
             errors={errors}
           />
 
@@ -1286,17 +1294,16 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
               {[
                 { key: "poDetail", label: "PO Detail" },
                 { key: "summary", label: "Summary" },
-                { key: "attachment", label: "Attachment" },
+                // { key: "attachment", label: "Attachment" },
               ].map((tab) => (
                 <button
                   key={tab.key}
                   type="button"
                   onClick={() => setActiveTab(tab.key)}
-                  className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${
-                    activeTab === tab.key
-                      ? "bg-blue-600 text-white"
-                      : "text-gray-600 dark:text-gray-300"
-                  }`}
+                  className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${activeTab === tab.key
+                    ? "bg-blue-600 text-white"
+                    : "text-gray-600 dark:text-gray-300"
+                    }`}
                 >
                   {tab.label}
                 </button>
@@ -1320,9 +1327,8 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
                 <TableHead
                   headers={[
                     "S.No",
-                    <>Item <span className="text-red-500">*</span></>,
                     "Item Code",
-                    "Item Name",
+                    "Item Description",
                     "Unit",
                     "Old Qty",
                     "New Qty",
@@ -1340,85 +1346,78 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
                         o.value != null && String(o.value) === String(field.item),
                     );
                     return (
-                    <TableRow
-                      key={field.id}
-                      index={index}
-                      onRemove={() => handleRemove("poDetail", index)}
-                      disabled={detailsArray.fields.length <= 1}
-                    >
-                      <SelectCell
-                        control={control}
-                        name={`details.${index}.item`}
-                        options={itemOptions}
-                        required
-                        errors={errors}
-                      />
-                      <InputCell
-                        control={control}
-                        name={`details.${index}.itemCode`}
-                        placeholder="Item Code"
-                        readOnly
-                        overrideValue={selectedItem?.itemCode}
-                        errors={errors}
-                      />
-                      <InputCell
-                        control={control}
-                        name={`details.${index}.itemName`}
-                        placeholder="Item Name"
-                        overrideValue={selectedItem?.itemDescription}
-                        errors={errors}
-                      />
-                      <SelectField
+                      <TableRow
+                        key={field.id}
+                        index={index}
+                        onRemove={() => handleRemove("poDetail", index)}
+                        disabled={detailsArray.fields.length <= 1}
+                      >
+                        <SelectCell
                           control={control}
-                          name={`details.${index}.unit`}
-                          options={unitOptions}
+                          name={`details.${index}.itemCode`}
+                          options={itemOptions}
+                          required
                           errors={errors}
                         />
-                      <InputCell
-                        control={control}
-                        name={`details.${index}.oldQty`}
-                        type="number"
-                        step="0.001"
-                        placeholder="Old Qty"
-                        errors={errors}
-                      />
-                      <InputCell
-                        control={control}
-                        name={`details.${index}.newQty`}
-                        type="number"
-                        step="0.001"
-                        placeholder="New Qty"
-                        errors={errors}
-                      />
-                      <InputCell
-                        control={control}
-                        name={`details.${index}.oldRate`}
-                        type="number"
-                        step="0.01"
-                        placeholder="Old Rate"
-                        errors={errors}
-                      />
-                      <InputCell
-                        control={control}
-                        name={`details.${index}.newRate`}
-                        type="number"
-                        step="0.01"
-                        placeholder="New Rate"
-                        errors={errors}
-                      />
-                      <InputCell
-                        control={control}
-                        name={`details.${index}.oldDeliveryDate`}
-                        type="date"
-                        errors={errors}
-                      />
-                      <InputCell
-                        control={control}
-                        name={`details.${index}.newDeliveryDate`}
-                        type="date"
-                        errors={errors}
-                      />
-                    </TableRow>
+                        <InputCell
+                          control={control}
+                          name={`details.${index}.itemName`}
+                          placeholder="Item Description"
+                          readOnly
+                          overrideValue={selectedItem?.itemCode}
+                          errors={errors}
+                        />
+                        <InputCell
+                          control={control}
+                          name={`details.${index}.unit`}
+                          placeholder="unit"
+                          errors={errors}
+                        />
+                        <InputCell
+                          control={control}
+                          name={`details.${index}.oldQty`}
+                          type="number"
+                          step="0.001"
+                          placeholder="Old Qty"
+                          errors={errors}
+                        />
+                        <InputCell
+                          control={control}
+                          name={`details.${index}.newQty`}
+                          type="number"
+                          step="0.001"
+                          placeholder="New Qty"
+                          errors={errors}
+                        />
+                        <InputCell
+                          control={control}
+                          name={`details.${index}.oldRate`}
+                          type="number"
+                          step="0.01"
+                          placeholder="Old Rate"
+                          errors={errors}
+                        />
+                        <InputCell
+                          control={control}
+                          name={`details.${index}.newRate`}
+                          type="number"
+                          step="0.01"
+                          placeholder="New Rate"
+                          errors={errors}
+                        />
+                        <InputCell
+                          control={control}
+                          name={`details.${index}.oldDeliveryDate`}
+                          type="date"
+                          errors={errors}
+                        />
+                        <InputCell
+                          control={control}
+                          name={`details.${index}.newDeliveryDate`}
+                          type="date"
+                          errors={errors}
+                        />
+                      </TableRow>
                     );
                   })}
                 </tbody>

@@ -129,6 +129,7 @@ import securityRoutes from "./securityRoutes";
 import productionRoutes from "./productionRoutes";
 import PlantMainten from "./plantMaintenanceRoutes";
 import plantMaintenanceRoutes from "./plantMaintenanceRoutes";
+import ShiftMaster from "../components/masters/shiftMaster/ShiftMaster";
 export const routesConfig = [
   { path: "/", label: "Dashboard", element: <Dashboard /> },
 
@@ -583,6 +584,12 @@ export const routesConfig = [
     label: "Roles & Responsibilities",
     keywords: ["role"],
     element: <RolesAndResponsibilitySetup />,
+  },
+  {
+    path: "/shift-master",
+    label: "Shift Master",
+    keywords: ["shift"],
+    element: <ShiftMaster />,
   },
   {
     path: "/myprofile",

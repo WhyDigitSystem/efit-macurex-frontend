@@ -112,7 +112,7 @@ const purchaseOrderAmendmentAPI = {
   }) => {
     try {
       const res = await apiClient.get(
-        "/api/purchasedeliveryschedule/getPurchaseOrderDropdownForPurchaseOrderAmendment",
+        "/api/develop/getPurchaseOrderDropdownForPurchaseOrderAmendment",
         {
           params: {
             branch: Number(branch),
