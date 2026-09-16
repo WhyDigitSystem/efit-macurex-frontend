@@ -3,38 +3,42 @@ import ProductionTransferSlipList from "./ProductionTransferSlipList";
 import ProductionTransferSlipForm from "./ProductionTransferSlipForm";
 
 const ProductionTransferSlip = () => {
-    const [screen, setScreen] = useState("list");
-    const [editData, setEditData] = useState(null);
+  const [screen, setScreen] = useState("list");
+  const [editData, setEditData] = useState(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-    const addNew = () => {
-        console.log("Add button clicked");
-        setEditData(null);
-        setScreen("form");
-    };
+  const handleAddNew = () => {
+    setEditData(null);
+    setScreen("form");
+  };
 
-    const edit = (row) => {
-        setEditData(row);
-        setScreen("form");
-    };
+  const handleEdit = (row) => {
+    setEditData(row);
+    setScreen("form");
+  };
 
+  /* Bump refreshTrigger on the way back so the list re-fetches after a
+       create or update instead of showing stale rows. */
+  const handleBackToList = () => {
+    setEditData(null);
+    setScreen("list");
+    setRefreshTrigger((prev) => prev + 1);
+  };
+
+  if (screen === "form") {
     return (
-        <>
-            {screen === "list" && (
-                <ProductionTransferSlipList
-                    onAddNew={addNew}
-                    onEdit={edit}
-                    onBack={() => window.history.back()}
-                />
-            )}
-
-            {screen === "form" && (
-                <ProductionTransferSlipForm
-                    data={editData}
-                    onBack={() => setScreen("list")}
-                />
-            )}
-        </>
+      <ProductionTransferSlipForm data={editData} onBack={handleBackToList} />
     );
+  }
+
+  return (
+    <ProductionTransferSlipList
+      onAddNew={handleAddNew}
+      onEdit={handleEdit}
+      onBack={() => window.history.back()}
+      refreshTrigger={refreshTrigger}
+    />
+  );
 };
 
 export default ProductionTransferSlip;

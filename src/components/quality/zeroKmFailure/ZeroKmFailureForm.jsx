@@ -4,12 +4,8 @@ import dayjs from "dayjs";
 import { useToast } from "../../Toast/ToastContext";
 import zeroKmFailureAPI from "../../../api/quality/zeroKmFailureAPI";
 import branchAPI from "../../../api/branchAPI";
-import locationMasterAPI from "../../../api/locationMasterAPI";
 import partyMasterAPI from "../../../api/partyMasterAPI";
 import itemAPI from "../../../api/itemAPI";
-
-/* ---------------------------------------------------------------------------- */
-/* Shared design tokens                                                        */
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -38,7 +34,8 @@ const cellReadOnlyClasses =
   "bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 " +
   "text-gray-500 dark:text-gray-400";
 
-const labelClasses = "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
+const labelClasses =
+  "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
 // Spacious grid for the header section so fields breathe.
 const fieldGrid =
@@ -47,8 +44,7 @@ const fieldGrid =
 const subTabFieldGrid =
   "grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-x-5 gap-y-4 items-start";
 
-/* ---------------------------------------------------------------------------- */
-/* Shared building blocks                                                      */
+const YES_NO = ["Yes", "No"];
 
 const Field = ({
   label,
@@ -72,7 +68,7 @@ const Field = ({
 
         <select
           name={name}
-          value={value}
+          value={value ?? ""}
           onChange={onChange}
           disabled={disabled}
           className={`${controlClasses} ${error ? controlErrClasses : ""}`}
@@ -104,7 +100,7 @@ const Field = ({
 
         <textarea
           name={name}
-          value={value}
+          value={value ?? ""}
           onChange={onChange}
           rows={1}
           className={
@@ -137,7 +133,7 @@ const Field = ({
       <input
         type={type}
         name={name}
-        value={value}
+        value={value ?? ""}
         onChange={onChange}
         disabled={disabled}
         className={`${controlClasses} ${error ? controlErrClasses : ""}`}
@@ -249,7 +245,7 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
               return (
                 <td className="p-2 align-top" key={col.key}>
                   <select
-                    value={row[col.key]}
+                    value={row[col.key] ?? ""}
                     onChange={(e) => onCellChange(idx, col.key, e.target.value)}
                     className={cellInputClasses}
                   >
@@ -268,7 +264,7 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
               return (
                 <td className="p-2 align-top" key={col.key}>
                   <textarea
-                    value={row[col.key]}
+                    value={row[col.key] ?? ""}
                     rows={1}
                     onChange={(e) => onCellChange(idx, col.key, e.target.value)}
                     className={
@@ -284,6 +280,19 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
               );
             }
 
+            if (col.readOnly) {
+              return (
+                <td className="p-2 align-top" key={col.key}>
+                  <div
+                    className={cellReadOnlyClasses}
+                    title={row[col.key] ?? ""}
+                  >
+                    {row[col.key] ?? ""}
+                  </div>
+                </td>
+              );
+            }
+
             return (
               <td className="p-2 align-top" key={col.key}>
                 <input
@@ -294,12 +303,9 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
                         ? "date"
                         : "text"
                   }
-                  value={row[col.key]}
-                  readOnly={col.readOnly}
+                  value={row[col.key] ?? ""}
                   onChange={(e) => onCellChange(idx, col.key, e.target.value)}
-                  className={
-                    col.readOnly ? cellReadOnlyClasses : cellInputClasses
-                  }
+                  className={cellInputClasses}
                 />
               </td>
             );
@@ -310,119 +316,136 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
   </TableWrapper>
 );
 
-/* ---------------------------------------------------------------------------- */
-/* Options                                                                      */
-
 const CHILD_TABS = [
   { key: "zeroEntryDetails", label: "Zero Entry Details", kind: "table" },
   { key: "summary", label: "Summary", kind: "fields" },
+  { key: "cancelInfo", label: "Cancel", kind: "fields" },
 ];
 
+/* Matches zeroEntryDetailDTO: { id?, partNo, partName, failureQty, reason } */
 const emptyDetailRow = () => ({
   partNo: "",
   partName: "",
-  failureQty: 0,
+  failureQty: "",
   reason: "",
 });
 
 const fmtDate = (value) => (value ? dayjs(value).format("YYYY-MM-DD") : "");
+const todayISO = () => dayjs().format("YYYY-MM-DD");
 
-const generateDocNo = () =>
-  `ZK-${dayjs().format("YYYYMMDD")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
+const toNumber = (value, fallback = 0) => {
+  if (value === null || value === undefined || value === "") return fallback;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+};
+
+const toInteger = (value, fallback = 0) => {
+  const n = parseInt(value, 10);
+  return Number.isFinite(n) ? n : fallback;
+};
+
+/* A detail row counts as "filled" if the user touched Part No or Reason,
+   so blank trailing rows aren't sent to the backend. */
+const rowHasValue = (row) =>
+  String(row.partNo ?? "").trim() !== "" ||
+  String(row.reason ?? "").trim() !== "";
 
 /* ---------------------------------------------------------------------------- */
 
 const ZeroKmFailureForm = ({ data, onBack }) => {
   const { addToast } = useToast();
   const orgId = Number(localStorage.getItem("orgId")) || 0;
-  const branch = Number(localStorage.getItem("branchId")) || 0;
+  const branchId = Number(localStorage.getItem("branchId")) || 0;
   const usersId = localStorage.getItem("usersId");
 
-  const userData = JSON.parse(localStorage.getItem("userData") || "{}");
-  const orgName = (
-    userData?.companyVO?.companyName ||
-    userData?.orgName ||
-    ""
-  ).trim();
-  const isMacurex = ["mecurex", "macurex"].includes(orgName.toLowerCase());
+  const isEditMode = Boolean(data?.id);
 
   const [activeChildTab, setActiveChildTab] = useState("zeroEntryDetails");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
+  const [generatingDocId, setGeneratingDocId] = useState(false);
+  const [docIdGenerationFailed, setDocIdGenerationFailed] = useState(false);
 
-  const [plantOptions, setPlantOptions] = useState([]);
-  const [partyOptions, setPartyOptions] = useState([]);
+  const [branchOptions, setBranchOptions] = useState([]);
+  const [customerOptions, setCustomerOptions] = useState([]);
+  const [customerMap, setCustomerMap] = useState({});
   const [partOptions, setPartOptions] = useState([]);
   const [partMasterMap, setPartMasterMap] = useState({});
 
-  const [header, setHeader] = useState(() => {
-    const base = {
-      plantId: data?.plantId?.id ?? data?.plantId ?? "",
-      docNo: data?.docNo || (data ? "" : generateDocNo()),
-      docDate: data?.docDate || dayjs().format("YYYY-MM-DD"),
-      partyId: data?.partyId?.id ?? data?.partyId ?? "",
-      partyName: data?.partyName || "",
-    };
-    base.docDate = fmtDate(base.docDate);
-    return base;
-  });
+  const [header, setHeader] = useState(() => ({
+    branch: data?.branch?.id ?? data?.branch ?? branchId ?? "",
+    docId: data?.docId || "",
+    docDate: fmtDate(data?.docDate) || todayISO(),
+    financialYear: data?.financialYear || String(new Date().getFullYear()),
+    customer: data?.customer?.id ?? data?.customer ?? "",
+    partyName: data?.partyName || "",
+    active: data?.active !== false,
+  }));
 
   const [detailRows, setDetailRows] = useState(
-    data?.zeroEntryDetails?.length
-      ? data.zeroEntryDetails
+    data?.zeroEntryDetailDTO?.length
+      ? data.zeroEntryDetailDTO
       : [emptyDetailRow()],
   );
 
   const [summary, setSummary] = useState({
-    remarks: data?.summary?.remarks || "",
+    remarks: data?.remarks || "",
+  });
+
+  const [cancelInfo, setCancelInfo] = useState({
+    cancel: data?.cancel ? "Yes" : "No",
+    cancelRemarks: data?.cancelRemarks || "",
   });
 
   /* ---------------- Lookup loading ---------------- */
 
-  const loadPlants = useCallback(async () => {
+  const loadBranches = useCallback(async () => {
     try {
-      if (isMacurex) {
-        const res = await locationMasterAPI.getPlants(orgId);
-        setPlantOptions(
-          (res || []).map((p) => ({
-            value: p.id,
-            label: p.plantName || p.plantId || p.id,
-          })),
-        );
-      } else {
-        const res = await branchAPI.getBranchByOrgId(orgId);
-        setPlantOptions(
-          (res || []).map((b) => ({
-            value: b.id,
-            label: b.branchName || b.branchCode || b.id,
-          })),
-        );
-      }
-    } catch (error) {
-      console.error("Failed to load plant options:", error);
-      setPlantOptions([]);
-    }
-  }, [orgId, isMacurex]);
-
-  const loadParties = useCallback(async () => {
-    try {
-      const res = await partyMasterAPI.getPartyByOrgId(orgId, branch);
-      setPartyOptions(
-        (res || []).map((c) => ({
-          value: c.id,
-          label: c.customerCode || c.docId || c.id,
-          partyName: c.customerName || "",
+      if (!orgId) return;
+      const res = await branchAPI.getBranchByOrgId(orgId);
+      const list = Array.isArray(res)
+        ? res
+        : res?.paramObjectsMap?.branches ||
+          res?.paramObjectsMap?.branchVO ||
+          [];
+      setBranchOptions(
+        list.map((b) => ({
+          value: b.id,
+          label: b.branchName || b.branchCode || `Branch ${b.id}`,
         })),
       );
     } catch (error) {
-      console.error("Failed to load party options:", error);
-      setPartyOptions([]);
+      console.error("Failed to load branch options:", error);
+      setBranchOptions([]);
     }
-  }, [orgId, branch]);
+  }, [orgId]);
+
+  /* partyMasterAPI.getPartyByOrgId hits /api/partyMaster/getCustomerByOrgId
+     and already unwraps paramObjectsMap.customerList for us. Dropdown shows
+     customerCode; Party Name is filled in from customerName of whichever
+     customer is selected. */
+  const loadCustomers = useCallback(async () => {
+    try {
+      if (!orgId) return;
+      const list = await partyMasterAPI.getPartyByOrgId(orgId, branchId);
+      const map = {};
+      const options = list.map((c) => {
+        map[c.id] = c;
+        return { value: c.id, label: c.customerCode || c.id };
+      });
+      setCustomerOptions(options);
+      setCustomerMap(map);
+    } catch (error) {
+      console.error("Failed to load customer options:", error);
+      setCustomerOptions([]);
+      setCustomerMap({});
+    }
+  }, [orgId, branchId]);
 
   const loadParts = useCallback(async () => {
     try {
-      const res = await itemAPI.getItems(orgId, branch);
+      if (!orgId) return;
+      const res = await itemAPI.getItems(orgId, branchId);
       const map = {};
       const options = (res || []).map((it) => {
         map[it.id] = it;
@@ -435,18 +458,57 @@ const ZeroKmFailureForm = ({ data, onBack }) => {
       setPartOptions([]);
       setPartMasterMap({});
     }
-  }, [orgId, branch]);
+  }, [orgId, branchId]);
 
   useEffect(() => {
-    if (orgId) loadPlants();
-  }, [orgId, loadPlants]);
+    loadBranches();
+    loadCustomers();
+    loadParts();
+  }, [loadBranches, loadCustomers, loadParts]);
 
   useEffect(() => {
-    if (orgId) {
-      loadParties();
-      loadParts();
-    }
-  }, [orgId, loadParties, loadParts]);
+    if (isEditMode) return;
+
+    let cancelled = false;
+
+    const generate = async () => {
+      setGeneratingDocId(true);
+      setDocIdGenerationFailed(false);
+      try {
+        const docId = await zeroKmFailureAPI.getZeroKmFailureEntryDocId(
+          orgId,
+          header.financialYear,
+        );
+        if (!cancelled) {
+          setHeader((prev) => ({ ...prev, docId: docId || "" }));
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error(
+            "Error generating Zero Km Failure Entry doc id:",
+            error,
+          );
+        
+          addToast(
+            error?.message ||
+              error?.response?.data?.paramObjectsMap?.errorMessage ||
+              "Failed to generate Doc No",
+            "error",
+          );
+          setDocIdGenerationFailed(true);
+        }
+      } finally {
+        if (!cancelled) setGeneratingDocId(false);
+      }
+    };
+
+    generate();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [header.financialYear, isEditMode]);
 
   /* ---------------- Handlers ---------------- */
 
@@ -455,11 +517,9 @@ const ZeroKmFailureForm = ({ data, onBack }) => {
     if (fieldErrors[name]) setFieldErrors((prev) => ({ ...prev, [name]: "" }));
     setHeader((prev) => {
       const next = { ...prev, [name]: value };
-      if (name === "partyId") {
-        const party = partyOptions.find(
-          (p) => String(p.value) === String(value),
-        );
-        next.partyName = party?.partyName || "";
+      if (name === "customer") {
+        const customer = customerMap[value];
+        next.partyName = customer?.customerName || "";
       }
       return next;
     });
@@ -482,12 +542,19 @@ const ZeroKmFailureForm = ({ data, onBack }) => {
   const handleAddRow = () =>
     setDetailRows((prev) => [...prev, emptyDetailRow()]);
   const handleRemoveRow = (idx) =>
-    setDetailRows((prev) => prev.filter((_, i) => i !== idx));
+    setDetailRows((prev) => {
+      if (prev.length <= 1) return prev;
+      return prev.filter((_, i) => i !== idx);
+    });
 
   const handleSummaryChange = (e) => {
     const { name, value } = e.target;
-    if (fieldErrors[name]) setFieldErrors((prev) => ({ ...prev, [name]: "" }));
     setSummary((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleCancelInfoChange = (e) => {
+    const { name, value } = e.target;
+    setCancelInfo((prev) => ({ ...prev, [name]: value }));
   };
 
   /* ---------------- Validation & Save ---------------- */
@@ -495,22 +562,27 @@ const ZeroKmFailureForm = ({ data, onBack }) => {
   const validate = () => {
     const errors = {};
 
-    if (!header.plantId) errors.plantId = "Plant ID is required";
-    if (!header.docNo?.trim()) errors.docNo = "Doc No is required";
+    if (!header.branch) errors.branch = "Plant ID is required";
+    if (!header.docId) errors.docId = "Doc No is required";
     if (!header.docDate) errors.docDate = "Doc Date is required";
-    if (!header.partyId) errors.partyId = "Party ID is required";
+    if (!header.customer) errors.customer = "Party ID is required";
 
-    const validRows = detailRows.filter(
-      (r) => r.partNo?.trim() || r.reason?.trim(),
-    );
-    if (!validRows.length)
+    const validRows = detailRows.filter(rowHasValue);
+    if (!validRows.length) {
       errors.zeroEntryDetails =
         "Add at least one Zero Entry Details row with Part No";
+    }
     validRows.forEach((r, i) => {
-      if (!r.partNo?.trim()) errors[`detail.${i}.partNo`] = "Part No is required";
-      if (r.failureQty === "" || r.failureQty === null || r.failureQty === undefined)
+      if (!r.partNo?.trim())
+        errors[`detail.${i}.partNo`] = "Part No is required";
+      if (
+        r.failureQty === "" ||
+        r.failureQty === null ||
+        r.failureQty === undefined
+      )
         errors[`detail.${i}.failureQty`] = "Failure Qty is required";
-      if (!r.reason?.trim()) errors[`detail.${i}.reason`] = "Reason is required";
+      if (!r.reason?.trim())
+        errors[`detail.${i}.reason`] = "Reason is required";
     });
 
     setFieldErrors(errors);
@@ -522,28 +594,41 @@ const ZeroKmFailureForm = ({ data, onBack }) => {
 
     setIsSubmitting(true);
 
-    const isUpdate = Boolean(data?.id);
-
-    // Single-transaction payload: header + zero entry details + summary.
+    // Payload shape matches zeroKmFailureEntryDTO exactly.
     const payload = {
-      ...(isUpdate ? { id: data.id } : {}),
+      ...(isEditMode && { id: data.id }),
       orgId,
-      branch,
-      ...header,
-      zeroEntryDetails: detailRows,
-      summary,
-      createdBy: isUpdate ? data?.createdBy || usersId : usersId,
-      ...(isUpdate ? { updatedBy: usersId } : {}),
+      branch: toInteger(header.branch),
+      docId: header.docId || "",
+      docDate: header.docDate || todayISO(),
+      financialYear: header.financialYear || String(new Date().getFullYear()),
+      customer: toInteger(header.customer),
+      partyName: header.partyName || "",
+      active: header.active !== false,
+      remarks: summary.remarks || "",
+      cancel: cancelInfo.cancel === "Yes",
+      cancelRemarks: cancelInfo.cancelRemarks || "",
+
+      zeroEntryDetailDTO: detailRows.filter(rowHasValue).map((row) => ({
+        ...(row.id ? { id: row.id } : {}),
+        partNo: toInteger(row.partNo),
+        partName: row.partName || "",
+        failureQty: toNumber(row.failureQty),
+        reason: row.reason || "",
+      })),
+
+      createdBy: isEditMode ? data?.createdBy || usersId : usersId,
+      ...(isEditMode && { updatedBy: usersId }),
     };
 
     try {
       const response =
-        await zeroKmFailureAPI.createUpdateZeroKmFailure(payload);
+        await zeroKmFailureAPI.createUpdateZeroKmFailureEntry(payload);
 
       if (response?.status) {
         addToast(
           response?.paramObjectsMap?.message ||
-            (isUpdate
+            (isEditMode
               ? "Zero Km Failure Entry updated successfully!"
               : "Zero Km Failure Entry created successfully!"),
         );
@@ -588,7 +673,9 @@ const ZeroKmFailureForm = ({ data, onBack }) => {
         </button>
 
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-          {data ? "Edit Zero Km Failure Entry" : "Add Zero Km Failure Entry"}
+          {isEditMode
+            ? "Edit Zero Km Failure Entry"
+            : "Add Zero Km Failure Entry"}
         </h2>
       </div>
 
@@ -601,21 +688,28 @@ const ZeroKmFailureForm = ({ data, onBack }) => {
             <Field
               type="select"
               label="Plant ID"
-              name="plantId"
-              value={header.plantId}
+              name="branch"
+              value={header.branch}
               onChange={handleHeaderChange}
-              error={fieldErrors.plantId}
-              options={plantOptions}
+              error={fieldErrors.branch}
+              options={branchOptions}
               required
             />
             <Field
               label="Doc No"
-              name="docNo"
-              value={header.docNo}
-              onChange={handleHeaderChange}
-              error={fieldErrors.docNo}
+              name="docId"
+              value={generatingDocId ? "Generating..." : header.docId}
+              onChange={docIdGenerationFailed ? handleHeaderChange : () => {}}
+              error={
+                fieldErrors.docId ||
+                (docIdGenerationFailed
+                  ? "Auto-numbering failed — enter a Doc No manually"
+                  : "")
+              }
+              disabled={
+                generatingDocId || (isEditMode ? true : !docIdGenerationFailed)
+              }
               required
-              disabled={!data}
             />
             <Field
               type="date"
@@ -629,11 +723,11 @@ const ZeroKmFailureForm = ({ data, onBack }) => {
             <Field
               type="select"
               label="Party ID"
-              name="partyId"
-              value={header.partyId}
+              name="customer"
+              value={header.customer}
               onChange={handleHeaderChange}
-              error={fieldErrors.partyId}
-              options={partyOptions}
+              error={fieldErrors.customer}
+              options={customerOptions}
               required
             />
             <Field
@@ -642,6 +736,13 @@ const ZeroKmFailureForm = ({ data, onBack }) => {
               value={header.partyName}
               onChange={handleHeaderChange}
               disabled
+            />
+            <Field
+              label="Financial Year"
+              name="financialYear"
+              value={header.financialYear}
+              onChange={handleHeaderChange}
+              disabled={isEditMode}
             />
           </div>
         </div>
@@ -707,7 +808,9 @@ const ZeroKmFailureForm = ({ data, onBack }) => {
                   Part No is required in every row
                 </p>
               )}
-              {detailRows.some((r, i) => fieldErrors[`detail.${i}.failureQty`]) && (
+              {detailRows.some(
+                (r, i) => fieldErrors[`detail.${i}.failureQty`],
+              ) && (
                 <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
                   Failure Qty is required in every row
                 </p>
@@ -734,13 +837,39 @@ const ZeroKmFailureForm = ({ data, onBack }) => {
               </div>
             </div>
           )}
+
+          {/* Tab 3: Cancel */}
+          {activeChildTab === "cancelInfo" && (
+            <div className="pt-3">
+              <div className={subTabFieldGrid}>
+                <Field
+                  type="select"
+                  label="Cancel this Entry"
+                  name="cancel"
+                  value={cancelInfo.cancel}
+                  onChange={handleCancelInfoChange}
+                  options={YES_NO}
+                />
+
+                {cancelInfo.cancel === "Yes" && (
+                  <Field
+                    type="textarea"
+                    label="Cancel Remarks"
+                    name="cancelRemarks"
+                    value={cancelInfo.cancelRemarks}
+                    onChange={handleCancelInfoChange}
+                  />
+                )}
+              </div>
+            </div>
+          )}
         </section>
 
         <FormButtons
           onCancel={onBack}
           onSave={handleSave}
           isSubmitting={isSubmitting}
-          saveLabel={data ? "Update" : "Save"}
+          saveLabel={isEditMode ? "Update" : "Save"}
         />
       </div>
     </div>

@@ -20,11 +20,11 @@ const ZeroKmFailureMaster = () => {
   const handleEdit = useCallback(async (row) => {
     try {
       const fresh =
-        (await zeroKmFailureAPI.getZeroKmFailureById(row.id)) || row;
+        (await zeroKmFailureAPI.getZeroKmFailureEntryById(row.id)) || row;
       setEditData(fresh);
       setView("form");
     } catch (error) {
-      console.error("Failed to fetch zero km failure for edit:", error);
+      console.error("Failed to fetch zero km failure entry for edit:", error);
       toast.error("Failed to load Zero Km Failure Entry details");
     }
   }, []);

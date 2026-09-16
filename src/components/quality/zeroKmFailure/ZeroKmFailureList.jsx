@@ -13,14 +13,14 @@ const ZeroKmFailureList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   const loadRecords = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await zeroKmFailureAPI.getZeroKmFailureByOrgId(
+      const data = await zeroKmFailureAPI.getZeroKmFailureEntryByOrgId(
         ORG_ID,
         BRANCH_ID,
       );
       data.sort((a, b) => (b.id || 0) - (a.id || 0));
       setRecords(data);
     } catch (error) {
-      console.error("Failed to load zero km failures:", error);
+      console.error("Failed to load zero km failure entries:", error);
       setRecords([]);
       toast.error("Failed to fetch Zero Km Failure Entries");
     } finally {
@@ -34,9 +34,9 @@ const ZeroKmFailureList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
 
   const columns = [
     {
-      key: "docNo",
+      key: "docId",
       label: "Doc No",
-      accessor: (row) => row.docNo,
+      accessor: (row) => row.docId,
       type: "text",
       noWrap: true,
     },
@@ -47,21 +47,21 @@ const ZeroKmFailureList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
       type: "text",
     },
     {
-      key: "plantId",
+      key: "branch",
       label: "Plant",
       accessor: (row) =>
-        typeof row.plantId === "object"
-          ? row.plantId.branchName || row.plantId.plantName || row.plantId.id
-          : row.plantName || row.plantId,
+        typeof row.branch === "object"
+          ? row.branch.branchName || row.branch.branchCode || row.branch.id
+          : row.branch,
       type: "text",
     },
     {
-      key: "partyId",
+      key: "customer",
       label: "Party",
       accessor: (row) =>
-        typeof row.partyId === "object"
-          ? row.partyId.customerCode || row.partyId.id
-          : row.partyCode || row.partyId,
+        typeof row.customer === "object"
+          ? row.customer.customerCode || row.customer.id
+          : row.customer,
       type: "text",
     },
     {
@@ -80,14 +80,12 @@ const ZeroKmFailureList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   ];
 
   const searchFields = [
-    "docNo",
+    "docId",
     "docDate",
-    "plantId",
-    "plantId.branchName",
-    "plantName",
-    "partyId",
-    "partyCode",
-    "partyId.customerCode",
+    "branch",
+    "branch.branchName",
+    "customer",
+    "customer.customerCode",
     "partyName",
   ];
 
