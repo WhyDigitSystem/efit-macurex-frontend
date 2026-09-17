@@ -3,12 +3,7 @@ import CommonListViewTable from "../../../utils/CommonListViewTable";
 import setUpApprovalAPI from "../../../api/quality/setUpApprovalAPI";
 import { toast } from "../../../utils/toast";
 
-const SetUpApprovalList = ({
-  onAddNew,
-  onEdit,
-  onBack,
-  refreshTrigger,
-}) => {
+const SetUpApprovalList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -41,7 +36,7 @@ const SetUpApprovalList = ({
     {
       key: "inspectionNo",
       label: "Inspection No",
-      accessor: (row) => row.inspectionNo,
+      accessor: (row) => row.docId || row.inspectionNo || row.id,
       type: "text",
       noWrap: true,
     },
@@ -52,36 +47,27 @@ const SetUpApprovalList = ({
       type: "text",
     },
     {
-      key: "plantId",
+      key: "plant",
       label: "Plant",
-      accessor: (row) =>
-        typeof row.plantId === "object"
-          ? row.plantId.branchName || row.plantId.id
-          : row.plantName || row.plantId,
+      accessor: (row) => row.branch?.branchName || row.branch?.id,
       type: "text",
     },
     {
       key: "shift",
       label: "Shift",
-      accessor: (row) => row.shift,
+      accessor: (row) => row.shift?.shiftName || row.shift?.shiftCode,
       type: "text",
     },
     {
       key: "itemCode",
       label: "Item Code",
-      accessor: (row) =>
-        typeof row.itemCode === "object"
-          ? row.itemCode.itemCode || row.itemCode.id
-          : row.itemCode,
+      accessor: (row) => row.item?.itemCode,
       type: "text",
     },
     {
       key: "itemDescription",
       label: "Item Description",
-      accessor: (row) =>
-        typeof row.itemDescription === "object"
-          ? row.itemDescription.itemDescription || row.itemDescription.id
-          : row.itemDescription,
+      accessor: (row) => row.item?.itemDescription,
       type: "text",
     },
     {
@@ -91,12 +77,10 @@ const SetUpApprovalList = ({
       type: "text",
     },
     {
-      key: "partyId",
+      key: "party",
       label: "Party",
       accessor: (row) =>
-        typeof row.partyId === "object"
-          ? row.partyId.customerCode || row.partyId.id
-          : row.partyCode || row.partyId,
+        row.customer?.customerCode || row.customer?.customerName,
       type: "text",
     },
     {
@@ -127,19 +111,16 @@ const SetUpApprovalList = ({
   ];
 
   const searchFields = [
+    "docId",
     "inspectionNo",
     "date",
-    "plantId",
-    "plantId.branchName",
-    "plantName",
-    "shift",
-    "itemCode",
-    "itemCode.itemCode",
-    "itemDescription",
+    "branch.branchName",
+    "shift.shiftName",
+    "item.itemCode",
+    "item.itemDescription",
     "processSheetNo",
-    "partyId",
-    "partyId.customerCode",
-    "partyCode",
+    "customer.customerCode",
+    "customer.customerName",
   ];
 
   const filterOptions = [

@@ -1,19 +1,10 @@
-import {
-  ArrowLeft,
-  Save,
-  X,
-  Plus,
-  Trash2,
-} from "lucide-react";
+import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import dayjs from "dayjs";
 import { useToast } from "../../Toast/ToastContext";
 import setUpApprovalAPI from "../../../api/quality/setUpApprovalAPI";
-import controlPlanAPI from "../../../api/quality/controlPlanAPI";
 import branchAPI from "../../../api/branchAPI";
 import locationMasterAPI from "../../../api/locationMasterAPI";
-import itemAPI from "../../../api/itemAPI";
-import partyMasterAPI from "../../../api/partyMasterAPI";
 import { employeeAPI } from "../../../api/employeeAPI";
 import { PARAMETER_TYPES } from "../../../api/quality/parameterMasterAPI";
 
@@ -47,12 +38,12 @@ const cellReadOnlyClasses =
   "bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 " +
   "text-gray-500 dark:text-gray-400";
 
-const labelClasses = "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
+const labelClasses =
+  "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
 const fieldGrid =
   "grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-x-4 gap-y-3 items-start";
 
-// Spacious grid used inside the child tabs so fields breathe more.
 const subTabFieldGrid =
   "grid grid-cols-[repeat(auto-fit,minmax(210px,1fr))] gap-x-5 gap-y-4 items-start";
 
@@ -240,8 +231,6 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
   </tr>
 );
 
-/* Generic dynamic table. Supports text / number / select / textarea /
-   readonly columns. Options may be plain strings or { value, label } objects. */
 const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
   <TableWrapper>
     <TableHead headers={["#", ...columns.map((c) => c.label), "Action"]} />
@@ -320,9 +309,8 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
 );
 
 /* ---------------------------------------------------------------------------- */
-/* Options                                                                      */
+/* Options / constants                                                         */
 
-const SHIFTS = ["A", "B", "C"];
 const RECEIVED_FOR_PRODUCTION = ["Yes", "No"];
 
 const CHILD_TABS = [
@@ -335,28 +323,33 @@ const emptyDetailRow = () => ({
   operationNo: "",
   description: "",
   specification: "",
-  mv1: "",
-  mv2: "",
-  mv3: "",
-  mv4: "",
-  mv5: "",
-  mv6: "",
-  mv7: "",
-  mv8: "",
+  value1: "",
+  value2: "",
+  value3: "",
+  value4: "",
+  value5: "",
+  value6: "",
+  value7: "",
+  value8: "",
   time: dayjs().format("HH:mm:ss"),
   remarks: "",
 });
 
 const emptyParameterRow = () => ({
-  parameter: "",
+  parameters: "",
   parameterType: "",
   tol: "",
 });
 
 const fmtDate = (value) => (value ? dayjs(value).format("YYYY-MM-DD") : "");
 
-const generateInspectionNo = () =>
-  `SUA-${dayjs().format("YYYYMMDD")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
+// Apr-Mar Indian financial year, e.g. "2026" for anything between
+// Apr 2026 and Mar 2027. Swap for docTypeMappingAPI lookup (screenCode
+// "SUA", unconfirmed) if that's this project's confirmed convention here.
+const getCurrentFinancialYear = () => {
+  const now = dayjs();
+  return String(now.month() >= 3 ? now.year() : now.year() - 1);
+};
 
 /* ---------------------------------------------------------------------------- */
 
@@ -381,51 +374,68 @@ const SetUpApprovalForm = ({ data, onBack }) => {
   const [plantOptions, setPlantOptions] = useState([]);
   const [itemOptions, setItemOptions] = useState([]);
   const [itemMasterMap, setItemMasterMap] = useState({});
+  const [shiftOptions, setShiftOptions] = useState([]);
   const [processSheetOptions, setProcessSheetOptions] = useState([]);
-  const [controlPlanOptions, setControlPlanOptions] = useState([]);
   const [partyOptions, setPartyOptions] = useState([]);
   const [employeeOptions, setEmployeeOptions] = useState([]);
 
+  const isUpdate = Boolean(data?.id);
+
   const [header, setHeader] = useState(() => {
     const base = {
-      plantId: data?.plantId?.id ?? data?.plantId ?? "",
-      shift: data?.shift || "",
-      inspectionNo: data?.inspectionNo || (data ? "" : generateInspectionNo()),
+      plantId: data?.branch?.id ?? "",
+      shift: data?.shift?.id ?? "",
+      inspectionNo: data?.docId || data?.inspectionNo || "",
       date: data?.date || dayjs().format("YYYY-MM-DD"),
-      itemCode: data?.itemCode?.id ?? data?.itemCode ?? "",
-      itemDescription: data?.itemDescription || "",
+      itemCode: data?.item?.id ?? "",
+      itemDescription: data?.item?.itemDescription || "",
+      drawingNo: "",
       processSheetNo: data?.processSheetNo || "",
-      drawingNo: data?.drawingNo || "",
-      partyId: data?.partyId?.id ?? data?.partyId ?? "",
-      partyName: data?.partyName || "",
-      controlPlan: data?.controlPlan?.id ?? data?.controlPlan ?? "",
-      active: data?.active !== false,
+      partyId: data?.customer?.id ?? "",
+      partyName: data?.customer?.customerName || "",
+      controlPlan: data?.controlPlan || "",
+      financialYear: data?.financialYear || getCurrentFinancialYear(),
+      active: data ? data.active !== "Inactive" : true,
+      cancelRemarks: data?.cancelRemarks || "",
     };
     base.date = fmtDate(base.date);
     return base;
   });
 
   const [detailRows, setDetailRows] = useState(
-    data?.approvalDetails?.length
-      ? data.approvalDetails
+    data?.setUpApprovalDetailsResponseDTO?.length
+      ? data.setUpApprovalDetailsResponseDTO.map((r) => ({
+          operationNo: r.operationNo || "",
+          description: r.description || "",
+          specification: r.specification || "",
+          value1: r.details1 || "",
+          value2: r.details2 || "",
+          value3: r.details3 || "",
+          value4: r.details4 || "",
+          value5: r.details5 || "",
+          value6: r.details6 || "",
+          value7: r.details7 || "",
+          value8: r.details8 || "",
+          time: r.time || dayjs().format("HH:mm:ss"),
+          remarks: r.remarks || "",
+        }))
       : [emptyDetailRow()],
   );
 
   const [summary, setSummary] = useState({
-    checkedBy:
-      data?.approvalSummary?.checkedBy?.id ??
-      data?.approvalSummary?.checkedBy ??
-      "",
-    approvedBy:
-      data?.approvalSummary?.approvedBy?.id ??
-      data?.approvalSummary?.approvedBy ??
-      "",
-    receivedForProduction:
-      data?.approvalSummary?.receivedForProduction || "",
+    checkedBy: data?.checkedBy?.id ?? "",
+    approvedBy: data?.approvedBy?.id ?? "",
+    receivedForProduction: data?.recommendedForProduction || "",
   });
 
   const [parameterRows, setParameterRows] = useState(
-    data?.parameters?.length ? data.parameters : [emptyParameterRow()],
+    data?.setUpApprovalParametersDetailsResponeDTO?.length
+      ? data.setUpApprovalParametersDetailsResponeDTO.map((r) => ({
+          parameters: r.parameters || "",
+          parameterType: r.parameterType || "",
+          tol: r.tol || "",
+        }))
+      : [emptyParameterRow()],
   );
 
   /* ---------------- Lookup loading ---------------- */
@@ -457,11 +467,11 @@ const SetUpApprovalForm = ({ data, onBack }) => {
 
   const loadItems = useCallback(async () => {
     try {
-      const res = await itemAPI.getItems(orgId, branch);
+      const res = await setUpApprovalAPI.getFgSfgItemDropdown(orgId, branch);
       const map = {};
       const options = (res || []).map((it) => {
-        map[it.id] = it;
-        return { value: it.id, label: it.itemCode };
+        map[it.itemId] = it;
+        return { value: it.itemId, label: it.itemCode };
       });
       setItemOptions(options);
       setItemMasterMap(map);
@@ -472,43 +482,28 @@ const SetUpApprovalForm = ({ data, onBack }) => {
     }
   }, [orgId, branch]);
 
-  const loadProcessSheets = useCallback(async () => {
+  const loadShifts = useCallback(async () => {
     try {
-      const res = await controlPlanAPI.getProcessSheets(orgId);
-      setProcessSheetOptions(
-        (res || []).map((p) => ({
-          value: p.processSheetNo || p.id,
-          label: p.processSheetNo || p.processSheetName || p.id,
+      const res = await setUpApprovalAPI.getShiftByOrgId(orgId);
+      setShiftOptions(
+        (res || []).map((s) => ({
+          value: s.id,
+          label: s.shiftName || s.shiftCode || s.id,
         })),
       );
     } catch (error) {
-      console.error("Failed to load process sheet options:", error);
-      setProcessSheetOptions([]);
-    }
-  }, [orgId]);
-
-  const loadControlPlans = useCallback(async () => {
-    try {
-      const res = await controlPlanAPI.getControlPlans(orgId);
-      setControlPlanOptions(
-        (res || []).map((c) => ({
-          value: c.id,
-          label: c.planNo || c.controlPlanNo || c.id,
-        })),
-      );
-    } catch (error) {
-      console.error("Failed to load control plan options:", error);
-      setControlPlanOptions([]);
+      console.error("Failed to load shift options:", error);
+      setShiftOptions([]);
     }
   }, [orgId]);
 
   const loadParties = useCallback(async () => {
     try {
-      const res = await partyMasterAPI.getPartyByOrgId(orgId, branch);
+      const res = await setUpApprovalAPI.getCustomerByOrgId(orgId, branch);
       setPartyOptions(
         (res || []).map((c) => ({
           value: c.id,
-          label: c.customerCode || c.docId || c.id,
+          label: c.customerCode || c.id,
           partyName: c.customerName || "",
         })),
       );
@@ -533,6 +528,74 @@ const SetUpApprovalForm = ({ data, onBack }) => {
     }
   }, [orgId]);
 
+  // Process sheet options depend on the selected item.
+  const loadProcessSheets = useCallback(
+    async (itemId) => {
+      if (!itemId) {
+        setProcessSheetOptions([]);
+        return;
+      }
+      try {
+        const res = await setUpApprovalAPI.getProcessSheetNo(
+          orgId,
+          branch,
+          itemId,
+        );
+        setProcessSheetOptions(
+          (res || [])
+            .filter((p) => p.processSheetNo)
+            .map((p) => ({ value: p.processSheetNo, label: p.processSheetNo })),
+        );
+      } catch (error) {
+        console.error("Failed to load process sheet options:", error);
+        setProcessSheetOptions([]);
+      }
+    },
+    [orgId, branch],
+  );
+
+  // Control plan details depend on item + process sheet; drives both the
+  // read-only Control Plan header field and the Approval Details rows.
+  const loadControlPlanDetails = useCallback(
+    async (itemId, processSheetNo) => {
+      if (!itemId || !processSheetNo) return;
+      try {
+        const res = await setUpApprovalAPI.getControlPlanDetails(
+          orgId,
+          branch,
+          itemId,
+          processSheetNo,
+        );
+        if (res?.length) {
+          setHeader((prev) => ({
+            ...prev,
+            controlPlan: res[0].controlPlanNo || "",
+          }));
+          setDetailRows(
+            res.map((r) => ({
+              operationNo: r.operationNo || "",
+              description: r.description || "",
+              specification: r.specification || "",
+              value1: "",
+              value2: "",
+              value3: "",
+              value4: "",
+              value5: "",
+              value6: "",
+              value7: "",
+              value8: "",
+              time: dayjs().format("HH:mm:ss"),
+              remarks: "",
+            })),
+          );
+        }
+      } catch (error) {
+        console.error("Failed to load control plan details:", error);
+      }
+    },
+    [orgId, branch],
+  );
+
   useEffect(() => {
     if (orgId) loadPlants();
   }, [orgId, loadPlants]);
@@ -540,43 +603,88 @@ const SetUpApprovalForm = ({ data, onBack }) => {
   useEffect(() => {
     if (orgId) {
       loadItems();
-      loadProcessSheets();
-      loadControlPlans();
+      loadShifts();
       loadParties();
       loadEmployees();
     }
-  }, [
-    orgId,
-    loadItems,
-    loadProcessSheets,
-    loadControlPlans,
-    loadParties,
-    loadEmployees,
-  ]);
+  }, [orgId, loadItems, loadShifts, loadParties, loadEmployees]);
+
+  // Auto-generate Inspection No for new records once we know the FY.
+  useEffect(() => {
+    if (!data && orgId && !header.inspectionNo) {
+      setUpApprovalAPI
+        .getSetUpApprovalDocId(orgId, header.financialYear)
+        .then((docId) => {
+          if (docId) setHeader((prev) => ({ ...prev, inspectionNo: docId }));
+        })
+        .catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgId]);
+
+  // On edit, once item options are loaded, backfill drawing no. from the map
+  // (the by-id response's nested item object doesn't include drawingNo).
+  useEffect(() => {
+    if (header.itemCode && !header.drawingNo) {
+      const item = itemMasterMap[header.itemCode];
+      if (item?.drawingNo) {
+        setHeader((prev) => ({ ...prev, drawingNo: item.drawingNo }));
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itemMasterMap]);
+
+  // On edit, load process sheet options for the already-selected item.
+  useEffect(() => {
+    if (isUpdate && header.itemCode) {
+      loadProcessSheets(header.itemCode);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isUpdate, header.itemCode]);
 
   /* ---------------- Handlers ---------------- */
 
   const handleHeaderChange = (e) => {
     const { name, value } = e.target;
     if (fieldErrors[name]) setFieldErrors((prev) => ({ ...prev, [name]: "" }));
-    setHeader((prev) => {
-      const next = { ...prev, [name]: value };
-      if (name === "itemCode") {
-        const item = itemMasterMap[value];
-        next.itemDescription = item?.itemDescription || "";
-        next.drawingNo = item?.drawingNo || item?.itemDrawingNo || "";
-      }
-      if (name === "partyId") {
-        const party = partyOptions.find(
-          (p) => String(p.value) === String(value),
-        );
-        next.partyName = party?.partyName || "";
-      }
-      if (name === "processSheetNo") {
-        next.drawingNo = next.drawingNo || "";
-      }
-      return next;
-    });
+
+    if (name === "itemCode") {
+      const item = itemMasterMap[value];
+      setHeader((prev) => ({
+        ...prev,
+        itemCode: value,
+        itemDescription: item?.itemDescription || "",
+        drawingNo: item?.drawingNo || "",
+        processSheetNo: "",
+        controlPlan: "",
+      }));
+      setProcessSheetOptions([]);
+      setDetailRows([emptyDetailRow()]);
+      loadProcessSheets(value);
+      return;
+    }
+
+    if (name === "processSheetNo") {
+      setHeader((prev) => ({
+        ...prev,
+        processSheetNo: value,
+        controlPlan: "",
+      }));
+      if (value) loadControlPlanDetails(header.itemCode, value);
+      return;
+    }
+
+    if (name === "partyId") {
+      const party = partyOptions.find((p) => String(p.value) === String(value));
+      setHeader((prev) => ({
+        ...prev,
+        partyId: value,
+        partyName: party?.partyName || "",
+      }));
+      return;
+    }
+
+    setHeader((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleDetailCellChange = (idx, key, value) => {
@@ -621,7 +729,9 @@ const SetUpApprovalForm = ({ data, onBack }) => {
     if (!header.processSheetNo)
       errors.processSheetNo = "Process Sheet No is required";
     if (!header.partyId) errors.partyId = "Party ID is required";
-    if (!header.controlPlan) errors.controlPlan = "Control Plan is required";
+    if (!header.controlPlan)
+      errors.controlPlan =
+        "Control Plan could not be resolved for this Item / Process Sheet";
 
     const validDetails = detailRows.filter(
       (r) => r.operationNo?.trim() || r.description?.trim(),
@@ -630,12 +740,12 @@ const SetUpApprovalForm = ({ data, onBack }) => {
       errors.approvalDetails =
         "Add at least one approval detail row with Operation No or Description";
 
-    const validParameters = parameterRows.filter((r) => r.parameter?.trim());
+    const validParameters = parameterRows.filter((r) => r.parameters?.trim());
     if (!validParameters.length)
       errors.parameters = "Add at least one Parameter row with a Parameter";
     validParameters.forEach((r, i) => {
-      if (!r.parameter?.trim())
-        errors[`parameter.${i}.parameter`] = "Parameter is required";
+      if (!r.parameters?.trim())
+        errors[`parameter.${i}.parameters`] = "Parameter is required";
       if (!r.parameterType)
         errors[`parameter.${i}.parameterType`] = "Parameter Type is required";
       if (!r.tol && Number(r.tol) !== 0)
@@ -656,23 +766,48 @@ const SetUpApprovalForm = ({ data, onBack }) => {
 
     setIsSubmitting(true);
 
-    const isUpdate = Boolean(data?.id);
-
-    // Single-transaction payload: header + approval details + summary +
-    // parameters. The backend maintains the complete approval history with
-    // parameters and summary tracking (server-side validation).
     const payload = {
       ...(isUpdate ? { id: data.id } : {}),
       orgId,
-      branch,
-      ...header,
-      approvalDetails: detailRows.filter(
-        (r) => r.operationNo?.trim() || r.description?.trim(),
-      ),
-      approvalSummary: summary,
-      parameters: parameterRows.filter((r) => r.parameter?.trim()),
+      branch: header.plantId,
+      shift: header.shift,
+      item: header.itemCode,
+      processSheetNo: header.processSheetNo,
+      customer: header.partyId,
+      controlPlan: header.controlPlan,
+      financialYear: header.financialYear,
+      active: header.active,
+      cancelRemarks: header.cancelRemarks,
+      checkedBy: summary.checkedBy,
+      approvedBy: summary.approvedBy,
+      recommendedForProduction: summary.receivedForProduction,
       createdBy: isUpdate ? data?.createdBy || usersId : usersId,
-      ...(isUpdate ? { updatedBy: usersId } : {}),
+      setUpApprovalDetailsDTO: detailRows
+        .filter((r) => r.operationNo?.trim() || r.description?.trim())
+        .map((r) => ({
+          operationNo: r.operationNo,
+          description: r.description,
+          specification: r.specification,
+          details1: r.value1,
+          details2: r.value2,
+          details3: r.value3,
+          details4: r.value4,
+          details5: r.value5,
+          details6: r.value6,
+          details7: r.value7,
+          details8: r.value8,
+          details9: "",
+          details10: "",
+          time: r.time,
+          remarks: r.remarks,
+        })),
+      setUpApprovalParametersDetailsDTO: parameterRows
+        .filter((r) => r.parameters?.trim())
+        .map((r) => ({
+          parameters: r.parameters,
+          parameterType: r.parameterType,
+          tol: r.tol,
+        })),
     };
 
     try {
@@ -763,7 +898,7 @@ const SetUpApprovalForm = ({ data, onBack }) => {
               value={header.shift}
               onChange={handleHeaderChange}
               error={fieldErrors.shift}
-              options={SHIFTS}
+              options={shiftOptions}
               required
             />
             <Field
@@ -773,7 +908,7 @@ const SetUpApprovalForm = ({ data, onBack }) => {
               onChange={handleHeaderChange}
               error={fieldErrors.inspectionNo}
               required
-              disabled={!data}
+              disabled
             />
             <Field
               type="date"
@@ -810,12 +945,14 @@ const SetUpApprovalForm = ({ data, onBack }) => {
               error={fieldErrors.processSheetNo}
               options={processSheetOptions}
               required
+              disabled={!header.itemCode}
             />
             <Field
               label="Drawing No"
               name="drawingNo"
               value={header.drawingNo}
               onChange={handleHeaderChange}
+              disabled
             />
             <Field
               type="select"
@@ -835,13 +972,12 @@ const SetUpApprovalForm = ({ data, onBack }) => {
               disabled
             />
             <Field
-              type="select"
               label="Control Plan"
               name="controlPlan"
               value={header.controlPlan}
               onChange={handleHeaderChange}
               error={fieldErrors.controlPlan}
-              options={controlPlanOptions}
+              disabled
               required
             />
           </div>
@@ -887,14 +1023,14 @@ const SetUpApprovalForm = ({ data, onBack }) => {
                   { key: "operationNo", label: "Operation No" },
                   { key: "description", label: "Description" },
                   { key: "specification", label: "Specification" },
-                  { key: "mv1", label: "Value 1", type: "number" },
-                  { key: "mv2", label: "Value 2", type: "number" },
-                  { key: "mv3", label: "Value 3", type: "number" },
-                  { key: "mv4", label: "Value 4", type: "number" },
-                  { key: "mv5", label: "Value 5", type: "number" },
-                  { key: "mv6", label: "Value 6", type: "number" },
-                  { key: "mv7", label: "Value 7", type: "number" },
-                  { key: "mv8", label: "Value 8", type: "number" },
+                  { key: "value1", label: "Value 1", type: "number" },
+                  { key: "value2", label: "Value 2", type: "number" },
+                  { key: "value3", label: "Value 3", type: "number" },
+                  { key: "value4", label: "Value 4", type: "number" },
+                  { key: "value5", label: "Value 5", type: "number" },
+                  { key: "value6", label: "Value 6", type: "number" },
+                  { key: "value7", label: "Value 7", type: "number" },
+                  { key: "value8", label: "Value 8", type: "number" },
                   { key: "time", label: "Time", readOnly: true },
                   { key: "remarks", label: "Remarks", type: "textarea" },
                 ]}
@@ -936,7 +1072,7 @@ const SetUpApprovalForm = ({ data, onBack }) => {
                 />
                 <Field
                   type="select"
-                  label="Received For Production"
+                  label="Recmnd For Production"
                   name="receivedForProduction"
                   value={summary.receivedForProduction}
                   onChange={handleSummaryChange}
@@ -953,14 +1089,14 @@ const SetUpApprovalForm = ({ data, onBack }) => {
             <div className="pt-3">
               <DynamicTable
                 columns={[
-                  { key: "parameter", label: "Parameter" },
+                  { key: "parameters", label: "Parameters" },
                   {
                     key: "parameterType",
                     label: "Parameter Type",
                     type: "select",
                     options: PARAMETER_TYPES,
                   },
-                  { key: "tol", label: "TOL", type: "number" },
+                  { key: "tol", label: "TOL" },
                 ]}
                 rows={parameterRows}
                 onCellChange={handleParameterCellChange}
