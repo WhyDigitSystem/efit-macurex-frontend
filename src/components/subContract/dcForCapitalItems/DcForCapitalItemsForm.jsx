@@ -1,13 +1,10 @@
 import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import dcForCapitalItemsAPI from "../../../api/dcForCapitalItemsAPI";
-import internalIndentAPI from "../../../api/Inventory/internalIndentAPI";
-import partyMasterAPI from "../../../api/partyMasterAPI";
-import itemAPI from "../../../api/itemAPI";
-import unitMasterAPI from "../../../api/unitAPI";
 import locationMasterAPI from "../../../api/locationMasterAPI";
 import branchAPI from "../../../api/branchAPI";
 import employeeAPI from "../../../api/employeeAPI";
+import { departmentAPI } from "../../../api/departmentAPI";
 import { useToast } from "../../Toast/ToastContext";
 
 /* ---------------------------------------------------------------------------- */
@@ -313,12 +310,9 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
 );
 
 /* ---------------------------------------------------------------------------- */
-/* Options                                                                      */
+/* Static options (only ones that truly have no backend source)                */
 
-const DEPARTMENTS = ["Purchase", "Stores", "Quality", "Production", "Finance"];
-const BELONGS_TO = ["APPLIANCES", "ELECTRICALS", "PACKAGING", "RAW MATERIAL"];
-const DC_TYPES = ["Regular", "Extra", "Rush"];
-const YES_NO = ["YES", "NO"];
+const YES_NO = ["Yes", "No"];
 const APPROVAL_STATUS = ["Pending", "Approved", "Rejected"];
 
 const CHILD_TABS = [
@@ -327,11 +321,12 @@ const CHILD_TABS = [
 ];
 
 const emptyOutGoingItemRow = () => ({
-  outgoingItemCode: "",
+  outgoingItemCode: "", // holds the item's numeric id (select value); itemCode is shown as the label
   outgoingItemDescription: "",
   stock: "",
-  unit: "",
-  fromLocation: "",
+  unit: "", // display-only unit code text, e.g. "KG"
+  unitId: "", // numeric unit id sent to the backend as "unit"
+  fromLocation: "", // numeric location id
   availableStock: "",
   issueQty: "",
   unitRate: "",
@@ -351,10 +346,11 @@ const todayStr = () => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
 
-const autoDcCiNo = () =>
-  `DCCI-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, "0")}${String(new Date().getDate()).padStart(2, "0")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
-
 const toNum = (n) => (Number.isNaN(Number(n)) ? 0 : Number(n));
+const toInt = (n) => {
+  const parsed = parseInt(n, 10);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
 
 /* ---------------------------------------------------------------------------- */
 
@@ -364,12 +360,21 @@ const DcForCapitalItemsForm = ({ data, onBack }) => {
   const { addToast } = useToast();
 
   const userData = JSON.parse(localStorage.getItem("userData") || "{}");
-  const orgName = (userData?.companyVO?.companyName || userData?.orgName || "").trim();
+  const orgName = (
+    userData?.companyVO?.companyName ||
+    userData?.orgName ||
+    ""
+  ).trim();
   const isMacurex = ["mecurex", "macurex"].includes(orgName.toLowerCase());
+
+  const financialYear = String(new Date().getFullYear());
+
+  const isEditMode = Boolean(data?.id);
 
   const [activeChildTab, setActiveChildTab] = useState("outGoingItem");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
+  const [generatingDocId, setGeneratingDocId] = useState(false);
 
   const [plantOptions, setPlantOptions] = useState([]);
   const [vendorOptions, setVendorOptions] = useState([]);
@@ -377,12 +382,14 @@ const DcForCapitalItemsForm = ({ data, onBack }) => {
   const [locationOptions, setLocationOptions] = useState([]);
   const [itemOptions, setItemOptions] = useState([]);
   const [itemMasterMap, setItemMasterMap] = useState({});
-  const [unitOptions, setUnitOptions] = useState([]);
   const [employeeOptions, setEmployeeOptions] = useState([]);
+  const [belongsToOptions, setBelongsToOptions] = useState([]);
+  const [departmentOptions, setDepartmentOptions] = useState([]);
+  const [dcTypeOptions, setDcTypeOptions] = useState([]);
 
   const [header, setHeader] = useState(() => ({
     plantId: data?.plantId || "",
-    dcCiNo: data?.dcCiNo || (data ? "" : autoDcCiNo()),
+    dcCiNo: data?.dcCiNo || "",
     scDcDate: data?.scDcDate || todayStr(),
     belongsTo: data?.belongsTo || "",
     department: data?.department || "",
@@ -392,11 +399,12 @@ const DcForCapitalItemsForm = ({ data, onBack }) => {
     indentNo: data?.indentNo || "",
     transportName: data?.transportName || "",
     vehicleNo: data?.vehicleNo || "",
-    dcType: data?.dcType || "Regular",
-    approvalByStores: data?.approvalByStores || "",
+    dcType: data?.dcType || "",
+    approvalByStores: data?.approvalByStores || "Yes",
     preparedBy: data?.preparedBy || "",
     approvedBy: data?.approvedBy || "",
     remarks: data?.remarks || "",
+    cancelRemarks: data?.cancelRemarks || "",
     active: data?.active !== false,
   }));
 
@@ -435,13 +443,22 @@ const DcForCapitalItemsForm = ({ data, onBack }) => {
     }
   }, [orgId, isMacurex]);
 
+  // Vendor Id shows customerCode; Vendor Name is auto-filled from customerName.
   const loadVendors = useCallback(async () => {
     try {
-      const res = await partyMasterAPI.getPartyByOrgId(orgId, branch);
+      const list =
+        await dcForCapitalItemsAPI.getCustomerForSupplierRateContract(
+          branch,
+          orgId,
+        );
       setVendorOptions(
-        (res || []).map((v) => ({
-          value: v.id,
-          label: v.customerName || v.docId || v.id,
+        (list || []).map((v) => ({
+          value: v.customerId,
+          label: v.customerCode || String(v.customerId),
+          customerName: v.customerName || "",
+          address: v.address || "",
+          gstState: v.gstState || "",
+          gstNo: v.gstNo || "",
         })),
       );
     } catch (error) {
@@ -450,12 +467,16 @@ const DcForCapitalItemsForm = ({ data, onBack }) => {
     }
   }, [orgId, branch]);
 
+  // Indent No dropdown, using docId as the visible/selected value.
   const loadIndents = useCallback(async () => {
     try {
-      const res = await internalIndentAPI.getInternalIndentByOrgId(orgId);
+      const list = await dcForCapitalItemsAPI.getPurchaseIndentByOrgId(
+        branch,
+        orgId,
+      );
       setIndentOptions(
-        (res || []).map((ii) => {
-          const no = ii.header?.docId || ii.docId || ii.id;
+        (list || []).map((pi) => {
+          const no = pi.docId || String(pi.id);
           return { value: no, label: no };
         }),
       );
@@ -463,15 +484,21 @@ const DcForCapitalItemsForm = ({ data, onBack }) => {
       console.error("Failed to load indent options:", error);
       setIndentOptions([]);
     }
-  }, [orgId]);
+  }, [orgId, branch]);
 
+  // "customerLocation" (Party Location) and "fromLocation" in the item table
+  // both need the numeric location id in the payload, so id is the value and
+  // the location name is just the label shown to the user.
   const loadLocations = useCallback(async () => {
     try {
-      const res = await locationMasterAPI.getLocationMasterByOrgId(orgId, branch);
+      const res = await locationMasterAPI.getLocationMasterByOrgId(
+        orgId,
+        branch,
+      );
       setLocationOptions(
         (res || []).map((l) => ({
-          value: l.locationName || l.id,
-          label: l.locationName || l.id,
+          value: l.id,
+          label: l.locationName || `Location ${l.id}`,
         })),
       );
     } catch (error) {
@@ -480,13 +507,19 @@ const DcForCapitalItemsForm = ({ data, onBack }) => {
     }
   }, [orgId, branch]);
 
+  // Outgoing Item Code / Description / Unit all come from this one API.
+  // "outgoingItem" in the payload needs the numeric item id, so that's the
+  // select value; itemCode is shown as the label.
   const loadItems = useCallback(async () => {
     try {
-      const res = await itemAPI.getItems(orgId, branch);
+      const list = await dcForCapitalItemsAPI.getItemDetailsForSalesReturn(
+        branch,
+        orgId,
+      );
       const map = {};
-      const options = (res || []).map((it) => {
-        map[it.itemCode] = it;
-        return { value: it.itemCode, label: it.itemCode };
+      const options = (list || []).map((it) => {
+        map[it.itemId] = it;
+        return { value: it.itemId, label: it.itemCode };
       });
       setItemOptions(options);
       setItemMasterMap(map);
@@ -497,33 +530,94 @@ const DcForCapitalItemsForm = ({ data, onBack }) => {
     }
   }, [orgId, branch]);
 
-  const loadUnits = useCallback(async () => {
-    try {
-      const res = await unitMasterAPI.getUnits(branch, orgId);
-      setUnitOptions(
-        (res || []).map((u) => ({
-          value: u.id,
-          label: u.unitId,
-        })),
-      );
-    } catch (error) {
-      console.error("Failed to load unit options:", error);
-      setUnitOptions([]);
-    }
-  }, [orgId, branch]);
-
+  // "preparedBy" / "approvedBy" need the numeric employee id in the payload.
   const loadEmployees = useCallback(async () => {
     try {
       const res = await employeeAPI.getEmployeeByOrgId(orgId);
       setEmployeeOptions(
         (res || []).map((e) => ({
-          value: e.employeeName || e.id,
-          label: e.employeeName || e.id,
+          value: e.id,
+          label: e.employeeName || `Employee ${e.id}`,
         })),
       );
     } catch (error) {
       console.error("Failed to load employee options:", error);
       setEmployeeOptions([]);
+    }
+  }, [orgId]);
+
+  const loadBelongsTo = useCallback(async () => {
+    try {
+      const list = await dcForCapitalItemsAPI.getListValuesGroup(
+        "BELONGS TO",
+        orgId,
+      );
+      setBelongsToOptions(
+        list.map((item) => ({
+          value:
+            item.valuesDescription ||
+            item.valueDescription ||
+            item.description ||
+            "",
+          label:
+            item.valuesDescription ||
+            item.valueDescription ||
+            item.description ||
+            "",
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to load Belongs To values:", error);
+      setBelongsToOptions([]);
+    }
+  }, [orgId]);
+
+  const loadDepartments = useCallback(async () => {
+    try {
+      const response = await departmentAPI.getAllDepartments(orgId);
+      const list =
+        response?.paramObjectsMap?.departmentVO ||
+        response?.paramObjectsMap?.departmentMasterVO ||
+        response?.paramObjectsMap?.departments ||
+        (Array.isArray(response) ? response : []);
+      setDepartmentOptions(
+        list.map((department) => ({
+          value: department.id,
+          label:
+            department.departmentName ||
+            department.name ||
+            `Dept ${department.id}`,
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to load departments:", error);
+      setDepartmentOptions([]);
+    }
+  }, [orgId]);
+
+  const loadDcTypes = useCallback(async () => {
+    try {
+      const list = await dcForCapitalItemsAPI.getListValuesGroup(
+        "D.C.TYPE",
+        orgId,
+      );
+      setDcTypeOptions(
+        list.map((item) => ({
+          value:
+            item.valuesDescription ||
+            item.valueDescription ||
+            item.description ||
+            "",
+          label:
+            item.valuesDescription ||
+            item.valueDescription ||
+            item.description ||
+            "",
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to load D.C Type values:", error);
+      setDcTypeOptions([]);
     }
   }, [orgId]);
 
@@ -536,17 +630,54 @@ const DcForCapitalItemsForm = ({ data, onBack }) => {
       loadVendors();
       loadLocations();
       loadItems();
-      loadUnits();
+      loadIndents();
     }
-  }, [orgId, branch, loadVendors, loadLocations, loadItems, loadUnits]);
+  }, [orgId, branch, loadVendors, loadLocations, loadItems, loadIndents]);
 
   useEffect(() => {
-    if (orgId) loadIndents();
-  }, [orgId, loadIndents]);
+    if (orgId) {
+      loadEmployees();
+      loadBelongsTo();
+      loadDepartments();
+      loadDcTypes();
+    }
+  }, [orgId, loadEmployees, loadBelongsTo, loadDepartments, loadDcTypes]);
+
+  /* ---------------- Auto-generated DC CI No ---------------- */
 
   useEffect(() => {
-    if (orgId) loadEmployees();
-  }, [orgId, loadEmployees]);
+    if (isEditMode || !orgId) return;
+
+    let cancelled = false;
+
+    const generateDocId = async () => {
+      setGeneratingDocId(true);
+      try {
+        const docId =
+          await dcForCapitalItemsAPI.getDeliveryChallanCapitalItemsDocId(
+            financialYear,
+            orgId,
+          );
+        if (!cancelled) {
+          setHeader((prev) => ({ ...prev, dcCiNo: docId || "" }));
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error("Error generating DC CI No:", error);
+          addToast("Failed to generate DC CI No", "error");
+        }
+      } finally {
+        if (!cancelled) setGeneratingDocId(false);
+      }
+    };
+
+    generateDocId();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditMode, orgId]);
 
   /* ---------------- Handlers ---------------- */
 
@@ -556,8 +687,10 @@ const DcForCapitalItemsForm = ({ data, onBack }) => {
     setHeader((prev) => {
       const next = { ...prev, [name]: value };
       if (name === "vendorId") {
-        const vendor = vendorOptions.find((v) => v.value === value);
-        next.vendorName = vendor?.label || "";
+        const vendor = vendorOptions.find(
+          (v) => String(v.value) === String(value),
+        );
+        next.vendorName = vendor?.customerName || "";
       }
       return next;
     });
@@ -579,8 +712,8 @@ const DcForCapitalItemsForm = ({ data, onBack }) => {
           next = {
             ...next,
             outgoingItemDescription: item?.itemDescription || "",
-            availableStock: item?.availableStock ?? item?.stock ?? "",
-            unit: item?.primaryUnits?.id || row.unit || "",
+            unit: item?.unitCode || "",
+            unitId: item?.unitId ?? "",
           };
         }
 
@@ -607,91 +740,234 @@ const DcForCapitalItemsForm = ({ data, onBack }) => {
   const validate = () => {
     const errors = {};
 
-    if (!header.plantId) errors.plantId = "Plant is required";
-    if (!header.dcCiNo?.trim()) errors.dcCiNo = "DC CI No is required";
-    if (!header.scDcDate) errors.scDcDate = "SC DC Date is required";
-    if (!header.belongsTo) errors.belongsTo = "Belongs To is required";
-    if (!header.department) errors.department = "Department is required";
-    if (!header.vendorId) errors.vendorId = "Vendor Id is required";
-    if (!header.vendorName?.trim())
-      errors.vendorName = "Vendor Name is required";
-    if (!header.partyLocation)
-      errors.partyLocation = "Party Location is required";
-    if (!header.indentNo) errors.indentNo = "Indent No is required";
-    if (!header.dcType) errors.dcType = "D.C Type is required";
-    if (!header.approvalByStores)
-      errors.approvalByStores = "Approval By Stores is required";
-    if (!header.preparedBy) errors.preparedBy = "Prepared By is required";
-    if (!header.approvedBy) errors.approvedBy = "Approved By is required";
+    if (!header.plantId) {
+      errors.plantId = "Plant is required";
+    }
 
-    const hasValidRow = outGoingItemRows.some(
-      (r) =>
+    if (!header.dcCiNo?.trim()) {
+      errors.dcCiNo = "DC CI No is required";
+    }
+
+    if (!header.scDcDate) {
+      errors.scDcDate = "SC DC Date is required";
+    }
+
+    if (!header.belongsTo) {
+      errors.belongsTo = "Belongs To is required";
+    }
+
+    if (!header.department) {
+      errors.department = "Department is required";
+    }
+
+    if (!header.vendorId) {
+      errors.vendorId = "Vendor Id is required";
+    }
+
+    if (!header.vendorName?.trim()) {
+      errors.vendorName = "Vendor Name is required";
+    }
+
+    if (!header.partyLocation) {
+      errors.partyLocation = "Party Location is required";
+    }
+
+    if (!header.indentNo) {
+      errors.indentNo = "Indent No is required";
+    }
+
+    if (!header.dcType) {
+      errors.dcType = "D.C Type is required";
+    }
+
+    if (!header.approvalByStores) {
+      errors.approvalByStores = "Approval By Stores is required";
+    }
+
+    if (!header.preparedBy) {
+      errors.preparedBy = "Prepared By is required";
+    }
+
+    if (!header.approvedBy) {
+      errors.approvedBy = "Approved By is required";
+    }
+
+    // Validate item rows
+    const hasValidRow = outGoingItemRows.some((r) => {
+      return (
         r.outgoingItemCode &&
         r.unit &&
         r.fromLocation &&
         toNum(r.issueQty) > 0 &&
-        toNum(r.unitRate) > 0,
-    );
-    if (!hasValidRow)
+        toNum(r.unitRate) > 0
+      );
+    });
+
+    if (!hasValidRow) {
       errors.outGoingItems =
-        "Add at least one item with an Outgoing Item Code, Unit, From Location, an Issue Qty and Unit Rate greater than 0";
+        "Add at least one item with Item Code, From Location, Issue Qty and Unit Rate greater than 0";
+    }
 
     setFieldErrors(errors);
-    return Object.keys(errors).length === 0;
+
+    // IMPORTANT:
+    // Show the validation error immediately instead of making it
+    // look like Save is doing nothing.
+    if (Object.keys(errors).length > 0) {
+      const firstError = Object.values(errors)[0];
+      addToast(firstError, "error");
+
+      console.log("DC Capital Items Validation Errors:", errors);
+      console.log("Current Header:", header);
+      console.log("Current Item Rows:", outGoingItemRows);
+
+      return false;
+    }
+
+    return true;
   };
 
   const handleSave = async () => {
-    if (!validate()) return;
+    console.log("========== DC CAPITAL ITEMS SAVE CLICKED ==========");
+
+    console.log("orgId:", orgId);
+    console.log("branch:", branch);
+    console.log("header:", header);
+    console.log("outGoingItemRows:", outGoingItemRows);
+
+    // Stop if validation fails
+    const isValid = validate();
+
+    console.log("Validation result:", isValid);
+
+    if (!isValid) {
+      console.log("SAVE STOPPED BECAUSE VALIDATION FAILED");
+      return;
+    }
 
     setIsSubmitting(true);
 
     const isUpdate = Boolean(data?.id);
 
+    const details = outGoingItemRows
+      .filter((r) => r.outgoingItemCode)
+      .map((r) => ({
+        amount: toNum(r.amount),
+        availableStock: toNum(r.availableStock),
+        fromLocation: toInt(r.fromLocation),
+        issueQty: toNum(r.issueQty),
+        outgoingItem: toInt(r.outgoingItemCode),
+        remarks: r.remarks || "",
+        stock: toNum(r.stock),
+        unit: toInt(r.unitId),
+        unitRate: toNum(r.unitRate),
+      }));
+
     const payload = {
-      ...(isUpdate ? { id: data.id } : {}),
-      orgId,
-      branch,
-      ...header,
-      outGoingItems: outGoingItemRows.filter((r) => r.outgoingItemCode?.trim()),
-      summary,
+      ...(isUpdate && data?.id ? { id: data.id } : {}),
+
+      active: header.active,
+      approvalByStores: header.approvalByStores || "",
+      approvedBy: toInt(header.approvedBy),
+      belongsTo: header.belongsTo || "",
+      branch: toInt(branch),
+      cancelRemarks: header.cancelRemarks || "",
+
       createdBy: isUpdate
-        ? data?.createdBy || localStorage.getItem("usersId")
-        : localStorage.getItem("usersId"),
-      ...(isUpdate ? { updatedBy: localStorage.getItem("usersId") } : {}),
+        ? data?.createdBy || localStorage.getItem("usersId") || "SYSTEM"
+        : localStorage.getItem("usersId") || "SYSTEM",
+
+      customerLocation: toInt(header.partyLocation),
+      dcType: header.dcType || "",
+      department: toInt(header.department),
+
+      details,
+
+      financialYear,
+      indentNo: header.indentNo || "",
+      orgId: toInt(orgId),
+      preparedBy: toInt(header.preparedBy),
+      remarks: header.remarks || "",
+      transportName: header.transportName || "",
+      vehicleNo: header.vehicleNo || "",
+      vendor: toInt(header.vendorId),
     };
+
+    console.log("========== FINAL DC CAPITAL ITEMS PAYLOAD ==========");
+
+    console.log(JSON.stringify(payload, null, 2));
 
     try {
       const response =
-        await dcForCapitalItemsAPI.createUpdateDcForCapitalItems(payload);
+        await dcForCapitalItemsAPI.createUpdateDeliveryChallanCapitalItems(
+          payload,
+        );
 
-      if (response?.status) {
+      console.log("========== DC CAPITAL ITEMS API RESPONSE ==========");
+
+      console.log(response);
+
+      if (response?.status === true) {
         addToast(
           response?.paramObjectsMap?.message ||
             (isUpdate
               ? "DC For Capital Items updated successfully!"
               : "DC For Capital Items created successfully!"),
+          "success",
         );
+
         onBack?.();
-      } else {
-        addToast(
-          response?.errors?.[0]?.shortMessage ||
-            response?.errors?.[0]?.longMessage ||
-            response?.message ||
-            "Failed to save DC For Capital Items.",
-        );
+
+        return;
       }
+
+      // Some APIs return status as a string
+      if (String(response?.status).toLowerCase() === "true") {
+        addToast(
+          response?.paramObjectsMap?.message ||
+            (isUpdate
+              ? "DC For Capital Items updated successfully!"
+              : "DC For Capital Items created successfully!"),
+          "success",
+        );
+
+        onBack?.();
+
+        return;
+      }
+
+      console.error("API returned unsuccessful response:", response);
+
+      addToast(
+        response?.errors?.[0]?.shortMessage ||
+          response?.errors?.[0]?.longMessage ||
+          response?.statusMessage ||
+          response?.message ||
+          "Failed to save DC For Capital Items.",
+        "error",
+      );
     } catch (err) {
-      console.error("Save DC For Capital Items Error:", err);
-      if (err.response?.data) {
-        addToast(
-          err.response.data.message ||
-            err.response.data.statusMessage ||
-            err.response.data.error ||
-            JSON.stringify(err.response.data),
-        );
-      } else {
-        addToast("Something went wrong.");
-      }
+      console.error("========== DC CAPITAL ITEMS SAVE ERROR ==========");
+
+      console.error(err);
+
+      console.error("Response:", err?.response);
+      console.error("Response data:", err?.response?.data);
+      console.error("Response status:", err?.response?.status);
+
+      const errorData = err?.response?.data;
+
+      addToast(
+        errorData?.errors?.[0]?.shortMessage ||
+          errorData?.errors?.[0]?.longMessage ||
+          errorData?.message ||
+          errorData?.statusMessage ||
+          errorData?.error ||
+          (typeof errorData === "string"
+            ? errorData
+            : "Something went wrong while saving DC For Capital Items."),
+        "error",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -734,15 +1010,15 @@ const DcForCapitalItemsForm = ({ data, onBack }) => {
             <Field
               label="DC CI No"
               name="dcCiNo"
-              value={header.dcCiNo}
-              onChange={handleHeaderChange}
+              value={generatingDocId ? "Generating..." : header.dcCiNo}
+              onChange={() => {}}
               error={fieldErrors.dcCiNo}
               required
-              disabled={!data}
+              disabled
             />
             <Field
               type="date"
-              label="SC DC Date"
+              label="SC. DC Date"
               name="scDcDate"
               value={header.scDcDate}
               onChange={handleHeaderChange}
@@ -757,7 +1033,7 @@ const DcForCapitalItemsForm = ({ data, onBack }) => {
               value={header.belongsTo}
               onChange={handleHeaderChange}
               error={fieldErrors.belongsTo}
-              options={BELONGS_TO}
+              options={belongsToOptions}
               required
             />
             <Field
@@ -767,7 +1043,7 @@ const DcForCapitalItemsForm = ({ data, onBack }) => {
               value={header.department}
               onChange={handleHeaderChange}
               error={fieldErrors.department}
-              options={DEPARTMENTS}
+              options={departmentOptions}
               required
             />
             <Field
@@ -828,7 +1104,7 @@ const DcForCapitalItemsForm = ({ data, onBack }) => {
               value={header.dcType}
               onChange={handleHeaderChange}
               error={fieldErrors.dcType}
-              options={DC_TYPES}
+              options={dcTypeOptions}
               required
             />
             <Field
@@ -923,8 +1199,7 @@ const DcForCapitalItemsForm = ({ data, onBack }) => {
                   {
                     key: "unit",
                     label: "Unit",
-                    type: "select",
-                    options: unitOptions,
+                    readOnly: true,
                   },
                   {
                     key: "fromLocation",
@@ -935,7 +1210,7 @@ const DcForCapitalItemsForm = ({ data, onBack }) => {
                   {
                     key: "availableStock",
                     label: "Available Stock",
-                    readOnly: true,
+                    type: "number",
                   },
                   { key: "issueQty", label: "Issue Qty", type: "number" },
                   { key: "unitRate", label: "Unit Rate", type: "number" },
