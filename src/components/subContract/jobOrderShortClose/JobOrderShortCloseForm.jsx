@@ -1,14 +1,7 @@
 import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import jobOrderShortCloseAPI from "../../../api/jobOrderShortCloseAPI";
-import jobOrderAPI from "../../../api/jobOrderAPI";
-import subContractingGrnAPI from "../../../api/Inventory/subContractingGrnAPI";
-import partyMasterAPI from "../../../api/partyMasterAPI";
-import itemAPI from "../../../api/itemAPI";
 import { useToast } from "../../Toast/ToastContext";
-
-/* ---------------------------------------------------------------------------- */
-/* Shared design tokens                                                        */
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -43,12 +36,12 @@ const labelClasses =
 const fieldGrid =
   "grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-x-4 gap-y-3 items-start";
 
-// Spacious grid used inside the detail sections so fields breathe more.
 const subTabFieldGrid =
   "grid grid-cols-[repeat(auto-fit,minmax(210px,1fr))] gap-x-5 gap-y-4 items-start";
 
-/* ---------------------------------------------------------------------------- */
-/* Shared building blocks                                                      */
+/* ==========================================================================
+   FIELD
+========================================================================== */
 
 const Field = ({
   label,
@@ -78,6 +71,7 @@ const Field = ({
           className={`${controlClasses} ${error ? controlErrClasses : ""}`}
         >
           <option value="">-- Select --</option>
+
           {(options || []).map((opt) => (
             <option key={opt.value ?? opt} value={opt.value ?? opt}>
               {opt.label ?? opt}
@@ -108,9 +102,12 @@ const Field = ({
           onChange={onChange}
           rows={1}
           className={
-            "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors resize-none pt-1 scrollbar-hide " +
+            "w-full h-[30px] px-2 rounded border text-xs leading-none " +
+            "transition-colors resize-none pt-1 scrollbar-hide " +
             "bg-white dark:bg-gray-900 " +
-            `${error ? controlErrClasses : "border-gray-300 dark:border-gray-600"} ` +
+            `${
+              error ? controlErrClasses : "border-gray-300 dark:border-gray-600"
+            } ` +
             "text-gray-900 dark:text-gray-100 " +
             "placeholder-gray-400 dark:placeholder-gray-500 " +
             "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
@@ -152,11 +149,19 @@ const Field = ({
   );
 };
 
+/* ==========================================================================
+   SECTION HEADER
+========================================================================== */
+
 const SectionHeader = ({ children }) => (
   <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">
     {children}
   </h3>
 );
+
+/* ==========================================================================
+   FORM BUTTONS
+========================================================================== */
 
 const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
   <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
@@ -180,8 +185,9 @@ const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
   </div>
 );
 
-/* ---------------------------------------------------------------------------- */
-/* Table helpers                                                               */
+/* ==========================================================================
+   TABLE
+========================================================================== */
 
 const TableWrapper = ({ children }) => (
   <div className="w-full overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
@@ -213,7 +219,9 @@ const TableHead = ({ headers }) => (
 const TableRow = ({ children, index, onRemove, disabled }) => (
   <tr className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
     <td className="p-2 text-center font-medium dark:text-white">{index + 1}</td>
+
     {children}
+
     <td className="p-2 text-center">
       <button
         type="button"
@@ -231,11 +239,10 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
   </tr>
 );
 
-/* Generic dynamic table. Supports text / number / date / select / readonly
-   columns. Options may be plain strings or { value, label } objects. */
 const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
   <TableWrapper>
     <TableHead headers={["#", ...columns.map((c) => c.label), "Action"]} />
+
     <tbody>
       {rows.map((row, idx) => (
         <TableRow
@@ -254,6 +261,7 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
                     className={cellInputClasses}
                   >
                     <option value="">-- Select --</option>
+
                     {(col.options || []).map((opt) => (
                       <option key={opt.value ?? opt} value={opt.value ?? opt}>
                         {opt.label ?? opt}
@@ -267,7 +275,13 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
             return (
               <td className="p-2 align-top" key={col.key}>
                 <input
-                  type={col.type === "number" ? "number" : col.type === "date" ? "date" : "text"}
+                  type={
+                    col.type === "number"
+                      ? "number"
+                      : col.type === "date"
+                        ? "date"
+                        : "text"
+                  }
                   value={row[col.key] ?? ""}
                   readOnly={col.readOnly}
                   onChange={(e) => onCellChange(idx, col.key, e.target.value)}
@@ -284,7 +298,13 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
   </TableWrapper>
 );
 
-/* ---------------------------------------------------------------------------- */
+/* ==========================================================================
+   EMPTY DETAIL ROW
+
+   IMPORTANT:
+   No id is required for a new detail row.
+   If editing an existing row, the existing id is populated from API data.
+========================================================================== */
 
 const emptyDetailRow = () => ({
   itemCode: "",
@@ -296,256 +316,603 @@ const emptyDetailRow = () => ({
   shortCloseQty: "",
 });
 
+/* ==========================================================================
+   HELPERS
+========================================================================== */
+
 const todayStr = () => {
   const d = new Date();
   const pad = (n) => String(n).padStart(2, "0");
+
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
 
-const autoShortCloseNo = () =>
-  `JOSC-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, "0")}${String(new Date().getDate()).padStart(2, "0")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
-
 const toNum = (n) => (Number.isNaN(Number(n)) ? 0 : Number(n));
 
-/* ---------------------------------------------------------------------------- */
+const toInt = (n) => {
+  const parsed = parseInt(n, 10);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+/* ==========================================================================
+   MAIN COMPONENT
+========================================================================== */
 
 const JobOrderShortCloseForm = ({ data, onBack }) => {
   const [orgId] = useState(Number(localStorage.getItem("orgId")) || 0);
+
   const [branch] = useState(Number(localStorage.getItem("branchId")) || 0);
+
   const { addToast } = useToast();
 
+  const financialYear = String(new Date().getFullYear());
+
+  /*
+   * TRUE only when Edit button supplied an existing record.
+   *
+   * Create:
+   *   data = undefined/null
+   *   isEditMode = false
+   *
+   * Edit:
+   *   data.id = existing database id
+   *   isEditMode = true
+   */
+  const isEditMode = Boolean(data?.id);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
+
   const [fieldErrors, setFieldErrors] = useState({});
 
+  const [generatingDocId, setGeneratingDocId] = useState(false);
+
   const [customerOptions, setCustomerOptions] = useState([]);
+
   const [jobOrderOptions, setJobOrderOptions] = useState([]);
-  const [jobOrderMap, setJobOrderMap] = useState({});
-  const [grnOptions, setGrnOptions] = useState([]);
+
   const [itemOptions, setItemOptions] = useState([]);
+
   const [itemMasterMap, setItemMasterMap] = useState({});
 
+  /* ==========================================================================
+     HEADER
+  ========================================================================== */
+
   const [header, setHeader] = useState(() => ({
-    customerId: data?.customerId || "",
-    customerName: data?.customerName || "",
+    customerId: data?.customerId ?? data?.customer?.customerId ?? "",
+
+    customerName: data?.customerName ?? data?.customer?.customerName ?? "",
+
     jobOrderNo: data?.jobOrderNo || "",
-    grnNo: data?.grnNo || "",
-    shortCloseNo: data?.shortCloseNo || (data ? "" : autoShortCloseNo()),
-    date: data?.date || todayStr(),
+
+    grnNo: data?.grnNo ?? data?.customer?.gstNo ?? "",
+
+    shortCloseNo: data?.shortCloseNo ?? data?.docId ?? "",
+
+    date: data?.date ?? data?.docDate ?? todayStr(),
+
+    referenceForSc: data?.referenceForSc ?? data?.referenceForSC ?? "",
+
+    cancelRemarks: data?.cancelRemarks || "",
+
     active: data?.active !== false,
   }));
 
-  const [detailRows, setDetailRows] = useState(
-    data?.shortCloseDetails?.length ? data.shortCloseDetails : [emptyDetailRow()],
-  );
-  const [summary, setSummary] = useState({
-    referenceForSC: data?.summary?.referenceForSC || "",
+  /* ==========================================================================
+     DETAIL ROWS
+
+     Existing detail:
+       id is retained.
+
+     New detail:
+       no id property is created.
+  ========================================================================== */
+
+  const [detailRows, setDetailRows] = useState(() => {
+    const raw = data?.jobOrderShortCloseDetails || data?.shortCloseDetails;
+
+    if (!raw?.length) {
+      return [emptyDetailRow()];
+    }
+
+    return raw.map((d) => {
+      const row = {
+        itemCode: d.item?.id ?? d.item ?? "",
+
+        itemDescription: d.item?.itemDescription ?? d.itemDescription ?? "",
+
+        orderQty: d.orderQty ?? "",
+        suppliedQty: d.suppliedQty ?? "",
+        pendingQty: d.pendingQty ?? "",
+        requiredQty: d.requiredQty ?? "",
+        shortCloseQty: d.shortCloseQty ?? "",
+      };
+
+      /*
+       * Only add id when the backend supplied an existing detail id.
+       */
+      if (d.id) {
+        row.id = d.id;
+      }
+
+      return row;
+    });
   });
 
-  /* ---------------- Lookup loading ---------------- */
+  /* ==========================================================================
+     LOAD CUSTOMERS
+  ========================================================================== */
 
   const loadCustomers = useCallback(async () => {
     try {
-      const res = await partyMasterAPI.getPartyByOrgId(orgId, branch);
+      const list =
+        await jobOrderShortCloseAPI.getCustomerForSupplierRateContract(
+          branch,
+          orgId,
+        );
+
       setCustomerOptions(
-        (res || []).map((c) => ({
-          value: c.id,
-          label: c.customerName || c.docId || c.id,
+        (list || []).map((c) => ({
+          value: c.customerId,
+          label: c.customerCode || String(c.customerId),
+          customerName: c.customerName || "",
+          gstNo: c.gstNo || "",
         })),
       );
     } catch (error) {
       console.error("Failed to load customer options:", error);
+
       setCustomerOptions([]);
     }
   }, [orgId, branch]);
 
-  const loadJobOrders = useCallback(async () => {
-    try {
-      const res = await jobOrderAPI.getJobOrderByOrgId(orgId, branch);
-      const map = {};
-      const options = (res || []).map((jo) => {
-        map[jo.jobOrderNo] = jo;
-        return { value: jo.jobOrderNo, label: jo.jobOrderNo };
-      });
-      setJobOrderOptions(options);
-      setJobOrderMap(map);
-    } catch (error) {
-      console.error("Failed to load job order options:", error);
-      setJobOrderOptions([]);
-      setJobOrderMap({});
-    }
-  }, [orgId, branch]);
+  /* ==========================================================================
+     LOAD JOB ORDERS
 
-  const loadGrns = useCallback(async () => {
-    try {
-      const res = await subContractingGrnAPI.getGrnByOrgId(orgId);
-      setGrnOptions(
-        (res || []).map((g) => ({
-          value: g.scGrnNo,
-          label: g.scGrnNo,
-        })),
-      );
-    } catch (error) {
-      console.error("Failed to load GRN options:", error);
-      setGrnOptions([]);
-    }
-  }, [orgId]);
+     Backend response:
+       paramObjectsMap.jobOrderList
+  ========================================================================== */
 
-  const loadItems = useCallback(async () => {
-    try {
-      const res = await itemAPI.getItems(orgId, branch);
-      const map = {};
-      const options = (res || []).map((it) => {
-        map[it.itemCode] = it;
-        return { value: it.itemCode, label: it.itemCode };
-      });
-      setItemOptions(options);
-      setItemMasterMap(map);
-    } catch (error) {
-      console.error("Failed to load item options:", error);
-      setItemOptions([]);
-      setItemMasterMap({});
-    }
-  }, [orgId, branch]);
+  const loadJobOrders = useCallback(
+    async (customerId) => {
+      if (!customerId) {
+        setJobOrderOptions([]);
+        return;
+      }
+
+      try {
+        const list =
+          await jobOrderShortCloseAPI.getJobOrderNoAndDateForJobOrderAmd(
+            branch,
+            customerId,
+            orgId,
+          );
+
+        console.log("Job Order list:", list);
+
+        setJobOrderOptions(
+          (list || []).map((jo) => ({
+            value: jo.jobOrderNo,
+            label: jo.jobOrderNo,
+          })),
+        );
+      } catch (error) {
+        console.error("Failed to load job order options:", error);
+
+        setJobOrderOptions([]);
+      }
+    },
+    [orgId, branch],
+  );
+
+  /* ==========================================================================
+     LOAD ITEMS
+  ========================================================================== */
+
+  const loadItems = useCallback(
+    async (customerId, jobOrderNo) => {
+      if (!customerId || !jobOrderNo) {
+        setItemOptions([]);
+        setItemMasterMap({});
+        return;
+      }
+
+      try {
+        const list =
+          await jobOrderShortCloseAPI.getJobOrderItemDetailsForJobOrderAmd(
+            branch,
+            customerId,
+            jobOrderNo,
+            orgId,
+          );
+
+        const map = {};
+
+        const options = (list || []).map((it) => {
+          map[it.item] = it;
+
+          return {
+            value: it.item,
+            label: it.itemCode,
+          };
+        });
+
+        setItemOptions(options);
+        setItemMasterMap(map);
+      } catch (error) {
+        console.error("Failed to load item options:", error);
+
+        setItemOptions([]);
+        setItemMasterMap({});
+      }
+    },
+    [orgId, branch],
+  );
+
+  /* ==========================================================================
+     INITIAL CUSTOMER LOAD
+  ========================================================================== */
 
   useEffect(() => {
     if (orgId && branch) {
       loadCustomers();
-      loadJobOrders();
-      loadItems();
     }
-  }, [orgId, branch, loadCustomers, loadJobOrders, loadItems]);
+  }, [orgId, branch, loadCustomers]);
+
+  /* ==========================================================================
+     RELOAD JOB ORDERS WHEN CUSTOMER CHANGES
+
+     This also handles Edit mode because header.customerId
+     is initialized from the existing record.
+  ========================================================================== */
 
   useEffect(() => {
-    if (orgId) loadGrns();
-  }, [orgId, loadGrns]);
+    if (header.customerId) {
+      loadJobOrders(header.customerId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [header.customerId]);
 
-  /* ---------------- Handlers ---------------- */
+  /* ==========================================================================
+     RELOAD ITEMS
+  ========================================================================== */
+
+  useEffect(() => {
+    if (header.customerId && header.jobOrderNo) {
+      loadItems(header.customerId, header.jobOrderNo);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [header.customerId, header.jobOrderNo]);
+
+  /* ==========================================================================
+     AUTO-GENERATE SHORT CLOSE NO
+
+     IMPORTANT:
+     This happens ONLY during CREATE.
+
+     Edit mode:
+       No new document number is generated.
+       Existing document number stays as it is.
+  ========================================================================== */
+
+  useEffect(() => {
+    if (isEditMode || !orgId) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const generateDocId = async () => {
+      setGeneratingDocId(true);
+
+      try {
+        const docId = await jobOrderShortCloseAPI.getJobOrderShortCloseDocId(
+          financialYear,
+          orgId,
+        );
+
+        if (!cancelled) {
+          setHeader((prev) => ({
+            ...prev,
+            shortCloseNo: docId || "",
+          }));
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error("Error generating Short Close No:", error);
+
+          addToast("Failed to generate Short Close No", "error");
+        }
+      } finally {
+        if (!cancelled) {
+          setGeneratingDocId(false);
+        }
+      }
+    };
+
+    generateDocId();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditMode, orgId]);
+
+  /* ==========================================================================
+     HEADER CHANGE
+  ========================================================================== */
 
   const handleHeaderChange = (e) => {
     const { name, value } = e.target;
-    if (fieldErrors[name]) setFieldErrors((prev) => ({ ...prev, [name]: "" }));
-    setHeader((prev) => {
-      const next = { ...prev, [name]: value };
 
+    if (fieldErrors[name]) {
+      setFieldErrors((prev) => ({
+        ...prev,
+        [name]: "",
+      }));
+    }
+
+    setHeader((prev) => {
+      const next = {
+        ...prev,
+        [name]: value,
+      };
+
+      /* Customer changed */
       if (name === "customerId") {
-        const customer = customerOptions.find((c) => c.value === value);
-        next.customerName = customer?.label || "";
+        const customer = customerOptions.find(
+          (c) => String(c.value) === String(value),
+        );
+
+        next.customerName = customer?.customerName || "";
+
+        next.grnNo = customer?.gstNo || "";
+
+        next.jobOrderNo = "";
+
+        setDetailRows([emptyDetailRow()]);
       }
 
+      /* Job Order changed */
       if (name === "jobOrderNo") {
-        const job = jobOrderMap[value];
-        if (job) {
-          const details = job.orderDetails || [];
-          setDetailRows(
-            details.length
-              ? details.map((d) => {
-                  const code = d.incomingItem || d.itemCode || "";
-                  const orderQty = toNum(d.orderQty);
-                  const suppliedQty = toNum(d.suppliedQty ?? d.receivedQty);
-                  return {
-                    itemCode: code,
-                    itemDescription:
-                      d.itemDescription || itemMasterMap[code]?.itemDescription || "",
-                    orderQty,
-                    suppliedQty,
-                    pendingQty: (orderQty - suppliedQty).toFixed(2),
-                    requiredQty: "",
-                    shortCloseQty: "",
-                  };
-                })
-              : [emptyDetailRow()],
-          );
-        }
+        setDetailRows([emptyDetailRow()]);
       }
 
       return next;
     });
   };
 
-  const handleSummaryChange = (e) => {
-    const { name, value } = e.target;
-    setSummary((prev) => ({ ...prev, [name]: value }));
-  };
+  /* ==========================================================================
+     COMPUTE PENDING QTY
+  ========================================================================== */
 
   const computeRows = (current) =>
     current.map((row) => {
       const orderQty = toNum(row.orderQty);
+
       const suppliedQty = toNum(row.suppliedQty);
+
       return {
         ...row,
         pendingQty: (orderQty - suppliedQty).toFixed(2),
       };
     });
 
-  const handleCellChange = (idx, key, value) => {
+  /* ==========================================================================
+     DETAIL CELL CHANGE
+  ========================================================================== */
+
+  const handleCellChange = async (idx, key, value) => {
     let next = detailRows.map((row, i) =>
-      i === idx ? { ...row, [key]: value } : row,
+      i === idx
+        ? {
+            ...row,
+            [key]: value,
+          }
+        : row,
     );
 
     if (key === "itemCode") {
       const item = itemMasterMap[value];
+
       next = next.map((row, i) =>
         i === idx
-          ? { ...row, itemDescription: item?.itemDescription || "" }
+          ? {
+              ...row,
+              itemDescription: item?.itemDescription || "",
+            }
           : row,
       );
     }
 
     next = computeRows(next);
+
     setDetailRows(next);
+
+    /* Fetch supplied qty */
+    if (key === "itemCode" && value && header.jobOrderNo) {
+      try {
+        const issueQty =
+          await jobOrderShortCloseAPI.getTotalSuppliedQtyforJobOrderClose(
+            branch,
+            value,
+            header.jobOrderNo,
+            orgId,
+          );
+
+        setDetailRows((prev) =>
+          computeRows(
+            prev.map((row, i) =>
+              i === idx
+                ? {
+                    ...row,
+                    suppliedQty: issueQty,
+                  }
+                : row,
+            ),
+          ),
+        );
+      } catch (error) {
+        console.error("Failed to fetch supplied qty:", error);
+      }
+    }
   };
+
+  /* ==========================================================================
+     ADD / REMOVE ROW
+  ========================================================================== */
 
   const handleAddRow = () =>
     setDetailRows((prev) => [...prev, emptyDetailRow()]);
+
   const handleRemoveRow = (idx) =>
     setDetailRows((prev) =>
       prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx),
     );
 
-  /* ---------------- Validation & Save ---------------- */
+  /* ==========================================================================
+     VALIDATION
+  ========================================================================== */
 
   const validate = () => {
     const errors = {};
 
-    if (!header.customerId) errors.customerId = "Customer Id is required";
-    if (!header.jobOrderNo) errors.jobOrderNo = "Job Order No is required";
-    if (!header.shortCloseNo?.trim())
+    if (!header.customerId) {
+      errors.customerId = "Customer Id is required";
+    }
+
+    if (!header.jobOrderNo) {
+      errors.jobOrderNo = "Job Order No is required";
+    }
+
+    if (!header.shortCloseNo?.trim()) {
       errors.shortCloseNo = "Short Close No is required";
-    if (!header.date) errors.date = "Date is required";
+    }
+
+    if (!header.date) {
+      errors.date = "Date is required";
+    }
 
     const hasValidRow = detailRows.some(
       (r) => r.itemCode && toNum(r.shortCloseQty) > 0,
     );
-    if (!hasValidRow)
+
+    if (!hasValidRow) {
       errors.shortCloseDetails =
         "Add at least one item with an Item Code and a Short Close Qty greater than 0";
+    }
 
-    if (!summary.referenceForSC?.trim())
-      errors.referenceForSC = "Reference For SC is required";
+    if (!header.referenceForSc?.trim()) {
+      errors.referenceForSc = "Reference For SC is required";
+    }
 
     setFieldErrors(errors);
+
     return Object.keys(errors).length === 0;
   };
 
+  /* ==========================================================================
+     SAVE
+
+     IMPORTANT ID RULE:
+
+     CREATE:
+       No top-level id
+       No detail id
+
+     EDIT:
+       Top-level existing id
+       Existing detail ids
+
+     Newly added detail during EDIT:
+       No id
+  ========================================================================== */
+
   const handleSave = async () => {
-    if (!validate()) return;
+    if (!validate()) {
+      return;
+    }
 
     setIsSubmitting(true);
 
     const isUpdate = Boolean(data?.id);
 
     const payload = {
-      ...(isUpdate ? { id: data.id } : {}),
-      orgId,
-      branch,
-      ...header,
-      shortCloseDetails: detailRows.filter((r) => r.itemCode?.trim()),
-      summary,
+      /*
+       * CREATE:
+       *   id is completely omitted.
+       *
+       * EDIT:
+       *   existing database id is sent.
+       */
+      ...(isUpdate
+        ? {
+            id: data.id,
+          }
+        : {}),
+
+      active: header.active,
+
+      branch: toInt(branch),
+
+      cancelRemarks: header.cancelRemarks || "",
+
       createdBy: isUpdate
         ? data?.createdBy || localStorage.getItem("usersId")
         : localStorage.getItem("usersId"),
-      ...(isUpdate ? { updatedBy: localStorage.getItem("usersId") } : {}),
+
+      customer: toInt(header.customerId),
+
+      financialYear,
+
+      jobOrderNo: header.jobOrderNo || "",
+
+      jobOrderShortCloseDetails: detailRows
+        .filter((r) => r.itemCode)
+        .map((r) => ({
+          /*
+           * Existing detail:
+           *   send id
+           *
+           * New detail:
+           *   don't send id
+           */
+          ...(r.id
+            ? {
+                id: r.id,
+              }
+            : {}),
+
+          item: toInt(r.itemCode),
+
+          orderQty: toNum(r.orderQty),
+
+          pendingQty: toNum(r.pendingQty),
+
+          requiredQty: toNum(r.requiredQty),
+
+          shortCloseQty: toNum(r.shortCloseQty),
+
+          suppliedQty: toNum(r.suppliedQty),
+        })),
+
+      orgId: toInt(orgId),
+
+      referenceForSc: header.referenceForSc || "",
     };
+
+    /*
+     * Useful for checking exactly what is being sent.
+     */
+    console.log(
+      "Job Order Short Close Save Mode:",
+      isUpdate ? "EDIT" : "CREATE",
+    );
+
+    console.log(
+      "Job Order Short Close Payload:",
+      JSON.stringify(payload, null, 2),
+    );
 
     try {
       const response =
@@ -558,6 +925,7 @@ const JobOrderShortCloseForm = ({ data, onBack }) => {
               ? "Job Order Short Close updated successfully!"
               : "Job Order Short Close created successfully!"),
         );
+
         onBack?.();
       } else {
         addToast(
@@ -569,6 +937,7 @@ const JobOrderShortCloseForm = ({ data, onBack }) => {
       }
     } catch (err) {
       console.error("Save Job Order Short Close Error:", err);
+
       if (err.response?.data) {
         addToast(
           err.response.data.message ||
@@ -584,9 +953,12 @@ const JobOrderShortCloseForm = ({ data, onBack }) => {
     }
   };
 
+  /* ==========================================================================
+     UI
+  ========================================================================== */
+
   return (
     <div className="w-full p-2">
-      {/* Header */}
       <div className="flex items-center gap-2 mb-3">
         <button
           onClick={onBack}
@@ -600,11 +972,14 @@ const JobOrderShortCloseForm = ({ data, onBack }) => {
         </h2>
       </div>
 
-      {/* Main Card */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
-        {/* ---------------- Header Info ---------------- */}
+        {/* ==================================================================
+            HEADER
+        ================================================================== */}
+
         <div>
           <SectionHeader>Job Order Short Close</SectionHeader>
+
           <div className={fieldGrid}>
             <Field
               type="select"
@@ -616,6 +991,7 @@ const JobOrderShortCloseForm = ({ data, onBack }) => {
               options={customerOptions}
               required
             />
+
             <Field
               label="Customer Name"
               name="customerName"
@@ -623,6 +999,7 @@ const JobOrderShortCloseForm = ({ data, onBack }) => {
               onChange={handleHeaderChange}
               disabled
             />
+
             <Field
               type="select"
               label="Job Order No"
@@ -631,25 +1008,28 @@ const JobOrderShortCloseForm = ({ data, onBack }) => {
               onChange={handleHeaderChange}
               error={fieldErrors.jobOrderNo}
               options={jobOrderOptions}
+              disabled={!header.customerId}
               required
             />
+
             <Field
-              type="select"
               label="GRN No"
               name="grnNo"
               value={header.grnNo}
               onChange={handleHeaderChange}
-              options={grnOptions}
+              disabled
             />
+
             <Field
               label="Short Close No"
               name="shortCloseNo"
-              value={header.shortCloseNo}
-              onChange={handleHeaderChange}
+              value={generatingDocId ? "Generating..." : header.shortCloseNo}
+              onChange={() => {}}
               error={fieldErrors.shortCloseNo}
               required
-              disabled={!data}
+              disabled
             />
+
             <Field
               type="date"
               label="Date"
@@ -662,10 +1042,14 @@ const JobOrderShortCloseForm = ({ data, onBack }) => {
           </div>
         </div>
 
-        {/* ---------------- Section 1: Short Close Detail ---------------- */}
+        {/* ==================================================================
+            DETAIL
+        ================================================================== */}
+
         <div>
           <div className="flex items-center justify-between mb-2">
             <SectionHeader>Short Close Detail</SectionHeader>
+
             <button
               type="button"
               onClick={handleAddRow}
@@ -674,6 +1058,7 @@ const JobOrderShortCloseForm = ({ data, onBack }) => {
               <Plus size={12} />
             </button>
           </div>
+
           <DynamicTable
             columns={[
               {
@@ -682,21 +1067,48 @@ const JobOrderShortCloseForm = ({ data, onBack }) => {
                 type: "select",
                 options: itemOptions,
               },
+
               {
                 key: "itemDescription",
                 label: "Item Description",
                 readOnly: true,
               },
-              { key: "orderQty", label: "Order Qty", readOnly: true },
-              { key: "suppliedQty", label: "Supplied Qty", readOnly: true },
-              { key: "pendingQty", label: "Pending Qty", readOnly: true },
-              { key: "requiredQty", label: "Required Qty", type: "number" },
-              { key: "shortCloseQty", label: "Short Close Qty", type: "number" },
+
+              {
+                key: "orderQty",
+                label: "Order Qty",
+                type: "number",
+              },
+
+              {
+                key: "suppliedQty",
+                label: "Supplied Qty",
+                readOnly: true,
+              },
+
+              {
+                key: "pendingQty",
+                label: "Pending Qty",
+                readOnly: true,
+              },
+
+              {
+                key: "requiredQty",
+                label: "Required Qty",
+                type: "number",
+              },
+
+              {
+                key: "shortCloseQty",
+                label: "Short Close Qty",
+                type: "number",
+              },
             ]}
             rows={detailRows}
             onCellChange={handleCellChange}
             onRemoveRow={handleRemoveRow}
           />
+
           {fieldErrors.shortCloseDetails && (
             <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
               {fieldErrors.shortCloseDetails}
@@ -704,21 +1116,29 @@ const JobOrderShortCloseForm = ({ data, onBack }) => {
           )}
         </div>
 
-        {/* ---------------- Section 2: Short Close Summary ---------------- */}
+        {/* ==================================================================
+            SUMMARY
+        ================================================================== */}
+
         <div>
           <SectionHeader>Short Close Summary</SectionHeader>
+
           <div className={subTabFieldGrid}>
             <Field
               type="textarea"
               label="Reference For SC"
-              name="referenceForSC"
-              value={summary.referenceForSC}
-              onChange={handleSummaryChange}
-              error={fieldErrors.referenceForSC}
+              name="referenceForSc"
+              value={header.referenceForSc}
+              onChange={handleHeaderChange}
+              error={fieldErrors.referenceForSc}
               required
             />
           </div>
         </div>
+
+        {/* ==================================================================
+            BUTTONS
+        ================================================================== */}
 
         <FormButtons
           onCancel={onBack}

@@ -54,6 +54,16 @@ const SubContractingGrnMaster = () => {
     setRefreshTrigger((prev) => prev + 1);
   };
 
+
+
+
+
+  
+
+
+
+
+
   // List screen back button -> return to the Sub Contract module home.
   // (Form's back button goes back to the list via handleBack.)
   const handleNavigateHome = () => {

@@ -19,7 +19,7 @@ const JobOrderShortCloseMaster = () => {
     setView("form");
   };
 
-  // Pencil icon click -> fetch fresh data by orgId, find the matching record, open form
+
   const handleEdit = useCallback(
     async (row) => {
       try {
@@ -42,12 +42,10 @@ const JobOrderShortCloseMaster = () => {
   const handleBack = () => {
     setEditData(null);
     setView("list");
-    // bump refreshTrigger so the list re-fetches after add/update
+   
     setRefreshTrigger((prev) => prev + 1);
   };
 
-  // List screen back button -> return to the Sub Contract module home.
-  // (Form's back button goes back to the list via handleBack.)
   const handleNavigateHome = () => {
     navigate("/subcontract");
   };
