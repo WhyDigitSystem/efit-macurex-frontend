@@ -3,21 +3,34 @@ import CommonListViewTable from "../../../utils/CommonListViewTable";
 import supplierChangeRequestAPI from "../../../api/TDC/supplierChangeRequestAPI";
 import { toast } from "../../../utils/toast";
 
-const SupplierChangeRequestList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
+const SupplierChangeRequestList = ({
+  onAddNew,
+  onEdit,
+  onBack,
+  refreshTrigger,
+}) => {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const ORG_ID = localStorage.getItem("orgId");
-  const BRANCH_ID = localStorage.getItem("branchId");
+  const ORG_ID = Number(localStorage.getItem("orgId")) || 0;
+  const BRANCH_ID = Number(localStorage.getItem("branchId")) || 0;
 
   const loadRecords = useCallback(async () => {
+    if (!ORG_ID || !BRANCH_ID) {
+      setRecords([]);
+      return;
+    }
+
     try {
       setLoading(true);
-      const data = await supplierChangeRequestAPI.getScrByOrgId(
-        ORG_ID,
-        BRANCH_ID,
-      );
+
+      const data = await supplierChangeRequestAPI.getByOrgIdAndBranch({
+        branch: BRANCH_ID,
+        orgId: ORG_ID,
+      });
+
       data.sort((a, b) => (b.id || 0) - (a.id || 0));
+
       setRecords(data);
     } catch (error) {
       console.error("Failed to load supplier change requests:", error);
@@ -32,78 +45,80 @@ const SupplierChangeRequestList = ({ onAddNew, onEdit, onBack, refreshTrigger })
     loadRecords();
   }, [loadRecords, refreshTrigger]);
 
+  /* ---------------- Accessors ---------------- */
+
+  const getPlantLabel = (row) =>
+    row?.branch?.branchName || row?.branch?.branchCode || row?.branch?.id || "";
+
+  const getVendorLabel = (row) =>
+    row?.vendorCode?.customerName ||
+    row?.vendorCode?.vendorCode ||
+    row?.vendorCode?.id ||
+    "";
+
+  const getEmployeeName = (obj) =>
+    (obj && typeof obj === "object" ? obj.employeeName || obj.employeeId : obj) ||
+    "";
+
+  /* ---------------- Columns ---------------- */
+
   const columns = [
     {
-      key: "scrNo",
+      key: "docId",
       label: "SCR No",
-      accessor: (row) => row.scrNo,
+      accessor: (row) => row?.docId || "",
       type: "text",
       noWrap: true,
     },
     {
-      key: "date",
+      key: "docDate",
       label: "Date",
-      accessor: (row) => row.date,
+      accessor: (row) => row?.docDate || "",
       type: "text",
     },
     {
-      key: "plantId",
+      key: "branch",
       label: "Plant",
-      accessor: (row) =>
-        typeof row.plantId === "object"
-          ? row.plantId.branchName || row.plantId.id
-          : row.plantName || row.plantId,
+      accessor: (row) => getPlantLabel(row),
       type: "text",
     },
     {
       key: "vendorCode",
       label: "Vendor",
-      accessor: (row) =>
-        typeof row.vendorCode === "object"
-          ? row.vendorCode.customerName || row.vendorCode.docId || row.vendorCode.id
-          : row.supplierName || row.vendorCode,
+      accessor: (row) => getVendorLabel(row),
       type: "text",
     },
     {
-      key: "supplierName",
-      label: "Supplier Name",
-      accessor: (row) => row.supplierName,
-      type: "text",
-    },
-    {
-      key: "partNumber",
+      key: "partNo",
       label: "Part Number",
-      accessor: (row) => row.partNumber,
+      accessor: (row) => row?.partNo || "",
       type: "text",
     },
     {
       key: "partDescription",
       label: "Part Description",
-      accessor: (row) => row.partDescription,
+      accessor: (row) => row?.partDescription || "",
       type: "text",
     },
     {
       key: "buyerName",
       label: "Buyer Name",
-      accessor: (row) =>
-        typeof row.buyerName === "object"
-          ? row.buyerName.employeeName || row.buyerName.id
-          : row.buyerName,
+      accessor: (row) => getEmployeeName(row?.buyerName),
       type: "text",
     },
     {
       key: "sourceTriggeredBy",
       label: "Source/Process Triggered By",
-      accessor: (row) =>
-        typeof row.sourceTriggeredBy === "object"
-          ? row.sourceTriggeredBy.employeeName || row.sourceTriggeredBy.id
-          : row.sourceTriggeredBy,
+      accessor: (row) => getEmployeeName(row?.sourceTriggeredBy),
       type: "text",
     },
     {
       key: "active",
       label: "Status",
-      accessor: "active",
+      accessor: (row) =>
+        row?.active === true || row?.active === "Active"
+          ? "Active"
+          : "Inactive",
       type: "status",
       statusVariants: {
         Active: {
@@ -127,20 +142,17 @@ const SupplierChangeRequestList = ({ onAddNew, onEdit, onBack, refreshTrigger })
     },
   ];
 
+  /* ---------------- Search / Filter ---------------- */
+
   const searchFields = [
-    "scrNo",
-    "date",
-    "plantId",
-    "plantId.branchName",
-    "plantName",
-    "vendorCode",
+    "docId",
+    "docDate",
+    "branch.branchName",
     "vendorCode.customerName",
-    "supplierName",
-    "partNumber",
+    "vendorCode.vendorCode",
+    "partNo",
     "partDescription",
-    "buyerName",
     "buyerName.employeeName",
-    "sourceTriggeredBy",
     "sourceTriggeredBy.employeeName",
   ];
 

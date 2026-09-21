@@ -8,9 +8,6 @@ import branchAPI from "../../../api/branchAPI";
 import { partyMasterAPI } from "../../../api/partyMasterAPI";
 import { useToast } from "../../Toast/ToastContext";
 
-/* ---------------------------------------------------------------------------- */
-/* Shared design tokens                                                        */
-
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
   "bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 " +
@@ -47,6 +44,7 @@ const getDefaultValues = () => ({
   customer: "",
   customerName: "",
   poNo: "",
+  poDate: "",
   currency: "",
   exchangeRate: "",
   refNo: "",
@@ -65,6 +63,7 @@ const getDefaultValues = () => ({
       item: "",
       itemCode: "",
       itemName: "",
+      hsnSacCode: "",
       unit: "",
       oldQty: "",
       newQty: "",
@@ -80,7 +79,6 @@ const getDefaultValues = () => ({
 const fmtDate = (value) =>
   value ? dayjs(value).format("YYYY-MM-DD") : "";
 
-/* Helper Components (mirror Quotation) */
 const SelectField = ({
   control,
   name,
@@ -288,7 +286,6 @@ const InputCell = ({
   errors,
   readOnly,
   onChange,
-  overrideValue,
 }) => {
   const errorMessage = errors?.[name]?.message;
   return (
@@ -297,32 +294,22 @@ const InputCell = ({
         name={name}
         control={control}
         rules={required ? { required: "This field is required" } : undefined}
-        render={({ field }) => {
-          const hasOverride =
-            overrideValue !== undefined &&
-            overrideValue !== null &&
-            overrideValue !== "";
-          const effectiveValue = hasOverride
-            ? String(overrideValue)
-            : field.value;
-          const forceReadOnly = readOnly || (hasOverride && effectiveValue !== field.value);
-          return (
-            <input
-              {...field}
-              value={effectiveValue ?? ""}
-              type={type}
-              step={step}
-              readOnly={forceReadOnly}
-              className={`${controlClasses} ${forceReadOnly ? "bg-gray-100 dark:bg-gray-800 text-gray-500" : ""
-                } ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
-              placeholder={placeholder}
-              onChange={(e) => {
-                field.onChange(e);
-                if (onChange) onChange(e, field);
-              }}
-            />
-          );
-        }}
+        render={({ field }) => (
+          <input
+            {...field}
+            value={field.value ?? ""}
+            type={type}
+            step={step}
+            readOnly={readOnly}
+            className={`${controlClasses} ${readOnly ? "bg-gray-100 dark:bg-gray-800 text-gray-500" : ""
+              } ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
+            placeholder={placeholder}
+            onChange={(e) => {
+              field.onChange(e);
+              if (onChange) onChange(e, field);
+            }}
+          />
+        )}
       />
       {errorMessage && (
         <div className="text-red-500 text-[10px] mt-0.5 whitespace-nowrap">
@@ -333,14 +320,11 @@ const InputCell = ({
   );
 };
 
-/* ---------------------------------------------------------------------------- */
-/* Main Component                                                              */
-
 const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
   const { addToast } = useToast();
   const orgId = Number(localStorage.getItem("orgId")) || 0;
   const branchId = Number(localStorage.getItem("branchId")) || 1000000001;
-  const loginUserName = localStorage.getItem("userName") || "SYSTEM";
+  const loginUserName = localStorage.getItem("userName") || "";
 
   const isEditMode = Boolean(data?.id);
   const dataLoadedRef = useRef(false);
@@ -358,7 +342,6 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
   const [poOptions, setPoOptions] = useState([]);
   const [belongsToOptions, setBelongsToOptions] = useState([]);
   const [itemOptions, setItemOptions] = useState([]);
-  const [currencyOptions, setCurrencyOptions] = useState([]);
   const [unitOptions, setUnitOptions] = useState([]);
   const [preview, setPreview] = useState({
     url: "",
@@ -398,8 +381,6 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
         return detailsArray;
     }
   };
-
-  /* ---------------- Master data dropdowns ---------------- */
 
   const loadBranches = useCallback(async () => {
     try {
@@ -451,8 +432,7 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
           (response || []).map((item) => ({
             value: item.id ?? item.itemCode,
             label: item.itemCode || String(item.id ?? ""),
-            itemCode: item.itemCode || "",
-            itemDescription: item.itemDescription || "",
+            itemName: item.itemDescription || "",
             hsnSacCode: item.hsnSacCode || "",
           })),
         );
@@ -485,6 +465,7 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
             value: po.docId,
             label: po.docId,
             docId: po.docId,
+            docDate: po.docDate, // keep docDate for PO Date auto-fill
             id: po.id,
           })),
       );
@@ -497,40 +478,34 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
   useEffect(() => {
     loadBranches();
     loadCustomers();
-    loadPoOptions();
-  }, [loadBranches, loadCustomers, loadPoOptions]);
+  }, [loadBranches, loadCustomers]);
 
   useEffect(() => {
     if (!branchId) return;
     loadCustomers();
+  }, [branchId, loadCustomers]);
+
+  useEffect(() => {
     loadPoOptions();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [branchId, loadCustomers, loadPoOptions]);
+  }, [loadPoOptions]);
 
   useEffect(() => {
     loadItems(watchPoNo);
-    const fetchCurrencyRate = async () => {
-      if (!watchPoNo) return;
-      try {
-        const currencyDetails = await purchaseOrderAmendmentAPI.getCurrencyExchangeRateforPurchaseOrderAmendment(
-          branchId,
-          watchPoNo,
-          orgId,
-        );
-        if (currencyDetails.length > 0) {
-          const first = currencyDetails[0];
-          setValue("currency", first.currency || "");
-          setValue("exchangeRate", first.exchangeRate ?? first.buyingExRate ?? 0);
-        }
-      } catch (error) {
-        console.error("Failed to fetch currency exchange rate:", error);
-      }
-    };
-    fetchCurrencyRate();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watchPoNo]);
 
-  /* ---------------- Edit PO reconciliation ---------------- */
+  useEffect(() => {
+    if (!watchPoNo) {
+      setValue("poDate", "");
+      return;
+    }
+    const match = poOptions.find(
+      (po) => String(po.docId) === String(watchPoNo),
+    );
+    if (match?.docDate) {
+      setValue("poDate", dayjs(match.docDate).format("YYYY-MM-DD"));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchPoNo, poOptions]);
 
   useEffect(() => {
     if (!isEditMode || !data) return;
@@ -546,13 +521,8 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEditMode, poOptions, data, setValue]);
 
-  /* ---------------- Auto-set Currency & Exchange Rate on PO Select ----------------*/
-
-  //  Fetches currency details from the backend when the PO No changes and stores
-  //  the currency ID (e.g. 10006000029203 for EURO) in a ref for use on submit.
-
   useEffect(() => {
-    if (isEditMode) return; // only auto in create mode
+    if (isEditMode) return;
     if (!watchPoNo) {
       setValue("currency", "");
       setValue("exchangeRate", "");
@@ -582,9 +552,6 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
     });
   }, [watchPoNo, isEditMode, branchId, orgId]);
 
-  /* ---------------- Fetch Belongs To list on mount ----------------
-   * Populates the belongsTo dropdown from the commonmaster API.
-   */
   useEffect(() => {
     purchaseOrderAmendmentAPI.getListValuesGroup(
       "SDS BELONGS TO",
@@ -604,9 +571,6 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
     });
   }, [orgId]);
 
-  /* ---------------- Fetch Unit Master on mount ----------------
-   * Populates the unit dropdown from the commonmaster API.
-   */
   useEffect(() => {
     purchaseOrderAmendmentAPI.getUnitMasterByOrgId(orgId).then((unitList) => {
       setUnitOptions(
@@ -622,8 +586,6 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
       ]);
     });
   }, [orgId]);
-
-  /* ---------------- Edit data mapping ---------------- */
 
   useEffect(() => {
     if (!isEditMode || dataLoadedRef.current) return;
@@ -641,6 +603,7 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
     setValue("customer", asId(src.customer));
     setValue("customerName", src.customer?.customerName || "");
     setValue("poNo", src.purchaseordernumber || "");
+    setValue("poDate", fmtDate(src.poDate || src.purchaseOrderDate));
     setValue("currency", src.currency || "");
     setValue("exchangeRate", src.exchangeRate ?? "");
     setValue("revisionNo", src.revisionNo ?? "");
@@ -657,6 +620,7 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
       item: asId(d.item),
       itemCode: d.item?.itemCode || "",
       itemName: d.item?.itemDescription || "",
+      hsnSacCode: d.item?.hsnSacCode || d.item?.hsn || "",
       unit: d.unit || "",
       oldQty: d.oldQty ?? "",
       newQty: d.newQty ?? "",
@@ -707,8 +671,6 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
     dataLoadedRef.current = true;
   }, [isEditMode, data, setValue]);
 
-  /* ---------------- Amendment No auto-generation (Add) ---------------- */
-
   useEffect(() => {
     if (isEditMode || amendmentNoLoadedRef.current) return;
 
@@ -738,8 +700,6 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEditMode, orgId, setValue]);
 
-  /* ---------------- Revision No auto-fill (Add) ---------------- */
-
   useEffect(() => {
     if (isEditMode || !watchPoNo) return;
 
@@ -768,8 +728,6 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEditMode, watchPoNo, orgId, setValue]);
 
-  /* ---------------- Tab handlers ---------------- */
-
   const handleAdd = (tab) => {
     if (tab === "poDetail") {
       detailsArray.append(
@@ -783,8 +741,6 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
   const handleRemove = (tab, index) => {
     getFieldArray(tab).remove(index);
   };
-
-  /* ---------------- Attachment preview ---------------- */
 
   const getAttachmentName = (row) => {
     if (!row) return "Attachment";
@@ -809,7 +765,6 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
   const handleAttachmentPreview = async (row) => {
     const name = getAttachmentName(row);
 
-    // New file (just chosen in this session) → local object URL, no auth needed
     if (row.file && row.file instanceof File) {
       const url = URL.createObjectURL(row.file);
       setTimeout(() => URL.revokeObjectURL(url), 60000);
@@ -825,7 +780,6 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
       return;
     }
 
-    // Existing attachment → fetch through authenticated download endpoint
     const existing = row.existing;
     let sourcePath = "";
     if (existing && typeof existing === "object") {
@@ -902,15 +856,12 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
     }
   };
 
-  /* ---------------- Save ---------------- */
-
   const onSubmit = async (formData) => {
     setSaving(true);
 
     try {
       const isUpdate = Boolean(data?.id);
 
-      // Prepare Purchase Order Amendment data
       const poAmendmentData = {
         ...(isUpdate ? { id: data.id } : {}),
 
@@ -982,24 +933,20 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
           }),
       };
 
-      // Create multipart FormData
       const formDataToSend = new FormData();
 
-      // Convert PO Amendment JSON into Blob
       const poAmendmentJSON = JSON.stringify(poAmendmentData);
 
       const poAmendmentBlob = new Blob([poAmendmentJSON], {
         type: "application/json",
       });
 
-      // Append JSON DTO
       formDataToSend.append(
         "PurchaseOrderAmendmentDTO",
         poAmendmentBlob,
         "poAmendmentDTO.json",
       );
 
-      // Add attachment files
       const attachments = formData.attachments || [];
 
       if (attachments.length > 0) {
@@ -1007,58 +954,28 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
           const attachment = attachments[i]?.file;
 
           if (attachment instanceof File) {
-            // New file
             formDataToSend.append(
               "files",
               attachment,
               attachment.name,
             );
-          } else if (
-            attachment &&
-            typeof attachment === "object" &&
-            attachment.filePath
-          ) {
-            // Existing file
-            console.log(
-              "Existing file:",
-              attachment.filePath,
-            );
-          } else if (
-            attachment &&
-            typeof attachment === "string"
-          ) {
-            // Existing file path
-            console.log(
-              "Existing file path:",
-              attachment,
-            );
           }
         }
       }
 
-      // Debug - JSON data
-      console.log(
-        "Sending PO Amendment data:",
-        poAmendmentData,
-      );
+      console.log("Sending PO Amendment data:", poAmendmentData);
 
-      // Debug - Multipart contents
       for (const [key, value] of formDataToSend.entries()) {
         console.log("FormData:", key, value);
       }
 
-      // Call API
       const response =
         await purchaseOrderAmendmentAPI.createUpdate(
           formDataToSend,
         );
 
-      console.log(
-        "Full PO Amendment API Response:",
-        response,
-      );
+      console.log("Full PO Amendment API Response:", response);
 
-      // Check API success
       const isSuccess =
         response?.status === true ||
         response?.success === true ||
@@ -1090,10 +1007,7 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
         addToast(errorMessage, "error");
       }
     } catch (error) {
-      console.error(
-        "Error saving PO amendment:",
-        error,
-      );
+      console.error("Error saving PO amendment:", error);
 
       const errorMessage =
         error?.response?.data?.message ||
@@ -1107,28 +1021,33 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
     }
   };
 
-  /* ---------------- Item autofill ---------------- */
-
   useEffect(() => {
     watchDetails?.forEach((row, index) => {
       if (!row?.item) return;
       const selectedItem = itemOptions.find(
         (item) => String(item.value) === String(row.item),
       );
-      if (selectedItem) {
-        const isMapped = mappedItemsRef.current.has(String(row.item));
-        if (isMapped && (row.itemCode || row.itemName)) return;
-        setValue(`details.${index}.itemCode`, selectedItem.itemCode || "");
-        setValue(
-          `details.${index}.itemName`,
-          selectedItem.itemDescription || "",
-        );
-      }
+      if (!selectedItem) return;
+
+      const isMapped = mappedItemsRef.current.has(String(row.item));
+      if (isMapped && (row.itemCode || row.itemName)) return;
+
+      setValue(`details.${index}.itemCode`, selectedItem.itemCode || "", {
+        shouldDirty: true,
+      });
+      setValue(
+        `details.${index}.itemName`,
+        selectedItem.itemDescription || "",
+        { shouldDirty: true },
+      );
+      setValue(
+        `details.${index}.hsnSacCode`,
+        selectedItem.hsnSacCode || "",
+        { shouldDirty: true },
+      );
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watchDetails, itemOptions, setValue]);
-
-  /* ---------------- Customer Name autofill ---------------- */
 
   useEffect(() => {
     if (!watchCustomer) {
@@ -1241,6 +1160,7 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
             name="poDate"
             label="P.O.Date"
             errors={errors}
+            disabled
           />
 
           <InputField
@@ -1294,7 +1214,7 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
               {[
                 { key: "poDetail", label: "PO Detail" },
                 { key: "summary", label: "Summary" },
-                // { key: "attachment", label: "Attachment" },
+                { key: "attachment", label: "Attachment" },
               ].map((tab) => (
                 <button
                   key={tab.key}
@@ -1329,6 +1249,7 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
                     "S.No",
                     "Item Code",
                     "Item Description",
+                    "HSN_SAC_CODE",
                     "Unit",
                     "Old Qty",
                     "New Qty",
@@ -1340,86 +1261,87 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
                   ]}
                 />
                 <tbody>
-                  {detailsArray.fields.map((field, index) => {
-                    const selectedItem = itemOptions.find(
-                      (o) =>
-                        o.value != null && String(o.value) === String(field.item),
-                    );
-                    return (
-                      <TableRow
-                        key={field.id}
-                        index={index}
-                        onRemove={() => handleRemove("poDetail", index)}
-                        disabled={detailsArray.fields.length <= 1}
-                      >
-                        <SelectCell
-                          control={control}
-                          name={`details.${index}.itemCode`}
-                          options={itemOptions}
-                          required
-                          errors={errors}
-                        />
-                        <InputCell
-                          control={control}
-                          name={`details.${index}.itemName`}
-                          placeholder="Item Description"
-                          readOnly
-                          overrideValue={selectedItem?.itemCode}
-                          errors={errors}
-                        />
-                        <InputCell
-                          control={control}
-                          name={`details.${index}.unit`}
-                          placeholder="unit"
-                          errors={errors}
-                        />
-                        <InputCell
-                          control={control}
-                          name={`details.${index}.oldQty`}
-                          type="number"
-                          step="0.001"
-                          placeholder="Old Qty"
-                          errors={errors}
-                        />
-                        <InputCell
-                          control={control}
-                          name={`details.${index}.newQty`}
-                          type="number"
-                          step="0.001"
-                          placeholder="New Qty"
-                          errors={errors}
-                        />
-                        <InputCell
-                          control={control}
-                          name={`details.${index}.oldRate`}
-                          type="number"
-                          step="0.01"
-                          placeholder="Old Rate"
-                          errors={errors}
-                        />
-                        <InputCell
-                          control={control}
-                          name={`details.${index}.newRate`}
-                          type="number"
-                          step="0.01"
-                          placeholder="New Rate"
-                          errors={errors}
-                        />
-                        <InputCell
-                          control={control}
-                          name={`details.${index}.oldDeliveryDate`}
-                          type="date"
-                          errors={errors}
-                        />
-                        <InputCell
-                          control={control}
-                          name={`details.${index}.newDeliveryDate`}
-                          type="date"
-                          errors={errors}
-                        />
-                      </TableRow>
-                    );
-                  })}
+                  {detailsArray.fields.map((field, index) => (
+                    <TableRow
+                      key={field.id}
+                      index={index}
+                      onRemove={() => handleRemove("poDetail", index)}
+                      disabled={detailsArray.fields.length <= 1}
+                    >
+                      {/* Item dropdown - bound to the item ID */}
+                      <SelectCell
+                        control={control}
+                        name={`details.${index}.item`}
+                        options={itemOptions}
+                        required
+                        errors={errors}
+                      />
+                      <InputCell
+                        control={control}
+                        name={`details.${index}.itemName`}
+                        placeholder="Item Description"
+                        readOnly
+                        errors={errors}
+                      />
+                      <InputCell
+                        control={control}
+                        name={`details.${index}.hsnSacCode`}
+                        placeholder="HSN/SAC Code"
+                        readOnly
+                        errors={errors}
+                      />
+                      <InputCell
+                        control={control}
+                        name={`details.${index}.unit`}
+                        placeholder="unit"
+                        errors={errors}
+                      />
+                      <InputCell
+                        control={control}
+                        name={`details.${index}.oldQty`}
+                        type="number"
+                        step="0.001"
+                        placeholder="Old Qty"
+                        errors={errors}
+                      />
+                      <InputCell
+                        control={control}
+                        name={`details.${index}.newQty`}
+                        type="number"
+                        step="0.001"
+                        placeholder="New Qty"
+                        errors={errors}
+                      />
+                      <InputCell
+                        control={control}
+                        name={`details.${index}.oldRate`}
+                        type="number"
+                        step="0.01"
+                        placeholder="Old Rate"
+                        errors={errors}
+                      />
+                      <InputCell
+                        control={control}
+                        name={`details.${index}.newRate`}
+                        type="number"
+                        step="0.01"
+                        placeholder="New Rate"
+                        errors={errors}
+                      />
+                      <InputCell
+                        control={control}
+                        name={`details.${index}.oldDeliveryDate`}
+                        type="date"
+                        errors={errors}
+                      />
+                      <InputCell
+                        control={control}
+                        name={`details.${index}.newDeliveryDate`}
+                        type="date"
+                        errors={errors}
+                      />
+                    </TableRow>
+                  ))}
                 </tbody>
               </TableWrapper>
             </div>

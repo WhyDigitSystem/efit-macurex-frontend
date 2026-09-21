@@ -12,13 +12,22 @@ const MaterialPlanningList = ({
   const [planData, setPlanData] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const ORG_ID = localStorage.getItem("orgId");
+  const ORG_ID = Number(localStorage.getItem("orgId")) || 0;
+  const BRANCH_ID = Number(localStorage.getItem("branchId")) || 0;
 
   const loadPlans = useCallback(async () => {
+    if (!ORG_ID || !BRANCH_ID) {
+      setPlanData([]);
+      return;
+    }
+
     try {
       setLoading(true);
 
-      const plans = await materialPlanningAPI.getByOrgId(ORG_ID);
+      const plans = await materialPlanningAPI.getByOrgIdAndBranch({
+        branch: BRANCH_ID,
+        orgId: ORG_ID,
+      });
 
       plans.sort((a, b) => (b.id || 0) - (a.id || 0));
 
@@ -30,47 +39,57 @@ const MaterialPlanningList = ({
     } finally {
       setLoading(false);
     }
-  }, [ORG_ID]);
+  }, [ORG_ID, BRANCH_ID]);
 
   useEffect(() => {
     loadPlans();
   }, [loadPlans, refreshTrigger]);
 
+  /* ---------------- Accessors ---------------- */
+
+  const getDocNo = (row) => row?.docId ?? ""; // backend returns docId (may be null)
+  const getBranchName = (row) => row?.branch?.branchName ?? "";
+
+  /* ---------------- Columns ---------------- */
+
   const columns = [
     {
-      key: "docNo",
+      key: "docId",
       label: "Doc No",
-      accessor: (row) => row.docNo,
+      accessor: (row) => getDocNo(row),
       type: "text",
     },
     {
       key: "fromDate",
       label: "From Date",
-      accessor: (row) => row.fromDate,
-      type: "text",
-    },
-    {
-      key: "toDate",
-      label: "To Date",
-      accessor: (row) => row.toDate,
+      accessor: (row) => row?.fromDate ?? "",
       type: "text",
     },
     {
       key: "docDate",
       label: "Doc Date",
-      accessor: (row) => row.docDate,
+      accessor: (row) => row?.docDate ?? "",
       type: "text",
     },
     {
       key: "mrpType",
       label: "MRP Type",
-      accessor: (row) => row.mrpType,
+      accessor: (row) => row?.mrpType ?? "",
+      type: "text",
+    },
+    {
+      key: "branch",
+      label: "Branch",
+      accessor: (row) => getBranchName(row),
       type: "text",
     },
     {
       key: "active",
       label: "Status",
-      accessor: "active",
+      accessor: (row) =>
+        row?.active === true || row?.active === "Active"
+          ? "Active"
+          : "Inactive",
       type: "status",
       statusVariants: {
         Active: {
@@ -94,27 +113,31 @@ const MaterialPlanningList = ({
     },
   ];
 
-  const searchFields = ["docNo", "mrpType", "fromDate", "toDate"];
+  /* ---------------- Search / Filter ---------------- */
+
+  const searchFields = [
+    "docId",
+    "mrpType",
+    "fromDate",
+    "docDate",
+    "branch.branchName",
+  ];
 
   const filterOptions = [
-    {
-      value: "all",
-      label: "All",
-      field: null,
-    },
+    { value: "all", label: "All", field: null },
     {
       value: "active",
       label: "Active",
       field: "active",
       filterValue: "active",
-      activeValue: "Active",
+      activeValue: true,
     },
     {
       value: "inactive",
       label: "Inactive",
       field: "active",
       filterValue: "inactive",
-      activeValue: "Active",
+      activeValue: true,
     },
   ];
 

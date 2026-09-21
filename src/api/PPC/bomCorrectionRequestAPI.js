@@ -1,20 +1,71 @@
 import apiClient from "../apiClient";
 
-/* BOM Correction Request/Note API
-   Mirrors the commonmaster API convention used across this app.
-   The backend persists the header + change details + approval records in a
-   single transaction, links the record to the FG part and customer and keeps
-   the complete correction history with approval tracking for audit purposes
-   (server-side validation). */
+/* BOM Correction Request/Note API */
 const bomCorrectionRequestAPI = {
-  getByOrgId: async (orgId) => {
+  getDocId: async ({ financialYear, orgId }) => {
     try {
       const res = await apiClient.get(
-        `/api/commonmaster/getBomCorrectionRequestByOrgId?orgId=${orgId}`,
+        `/api/subContract/getBomCorrectionRequestNoteDocId?financialYear=${financialYear}&orgId=${orgId}`,
       );
-      return res?.paramObjectsMap?.bomCorrectionRequestList || [];
+      return res?.paramObjectsMap?.bomCorrectionRequestNoteDocId || "";
     } catch (error) {
-      console.error("Error fetching BOM correction requests:", error);
+      console.error("Error fetching BOM Correction Request DocId:", error);
+      throw error;
+    }
+  },
+
+  getFGItems: async (branch, orgId) => {
+    try {
+      const res = await apiClient.get(
+        `/api/subContract/getFGItemsforBOMCorrectionRequestNote?branch=${branch}&orgId=${orgId}`,
+      );
+      return res?.paramObjectsMap?.itemDetails || [];
+    } catch (error) {
+      console.error("Error fetching FG items:", error);
+      throw error;
+    }
+  },
+
+  getAllItemsNotFG: async (branch, orgId) => {
+    try {
+      const res = await apiClient.get(
+        `/api/subContract/getAllItemsNotFGforBOMCorrectionRequestNote?branch=${branch}&orgId=${orgId}`,
+      );
+      return res?.paramObjectsMap?.itemDetails || [];
+    } catch (error) {
+      console.error("Error fetching non-FG items:", error);
+      throw error;
+    }
+  },
+
+  getEmployeesByDepartment: async ({ branch, department, orgId }) => {
+    try {
+      const res = await apiClient.get(
+        `/api/subContract/getEmployeesByDepartmentforBOMCorrectionRequestNote?branch=${branch}&department=${encodeURIComponent(
+          department,
+        )}&orgId=${orgId}`,
+      );
+      return res?.paramObjectsMap?.employeeList || [];
+    } catch (error) {
+      console.error(
+        `Error fetching employees for department ${department}:`,
+        error,
+      );
+      throw error;
+    }
+  },
+
+  getByOrgIdAndBranch: async ({ branch, orgId }) => {
+    try {
+      const res = await apiClient.get(
+        `/api/subContract/getBomCorrectionRequestNoteByOrgIdAndBranch?branch=${branch}&orgId=${orgId}`,
+      );
+      return res?.paramObjectsMap?.bomCorrectionRequestNote || [];
+    } catch (error) {
+      console.error(
+        "Error fetching BOM correction requests by org & branch:",
+        error,
+      );
       throw error;
     }
   },
@@ -22,9 +73,9 @@ const bomCorrectionRequestAPI = {
   getById: async (id) => {
     try {
       const res = await apiClient.get(
-        `/api/commonmaster/getBomCorrectionRequestById?id=${id}`,
+        `/api/subContract/getBomCorrectionRequestNoteById?id=${id}`,
       );
-      return res?.paramObjectsMap?.bomCorrectionRequestVO || null;
+      return res?.paramObjectsMap?.bomCorrectionRequestNote || null;
     } catch (error) {
       console.error("Error fetching BOM correction request by id:", error);
       throw error;
@@ -33,8 +84,8 @@ const bomCorrectionRequestAPI = {
 
   createUpdate: async (data) => {
     try {
-      const res = await apiClient.post(
-        "/api/commonmaster/createUpdateBomCorrectionRequest",
+      const res = await apiClient.put(
+        "/api/subContract/createUpdateBomCorrectionRequestNote",
         data,
       );
       return res;

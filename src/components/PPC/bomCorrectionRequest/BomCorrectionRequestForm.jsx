@@ -1,12 +1,10 @@
 import { ArrowLeft, Save, X, Plus } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import dayjs from "dayjs";
 import bomCorrectionRequestAPI from "../../../api/PPC/bomCorrectionRequestAPI";
-import { itemAPI } from "../../../api/itemAPI";
-import { unitMasterAPI } from "../../../api/unitAPI";
-import { branchAPI } from "../../../api/branchAPI";
-import { employeeAPI } from "../../../api/employeeAPI";
+import branchAPI from "../../../api/branchAPI";
 import { useToast } from "../../Toast/ToastContext";
+import employeeAPI from "../../../api/employeeAPI";
 
 /* ---------------------------------------------------------------------------- */
 /* Shared design tokens                                                        */
@@ -52,8 +50,15 @@ const ADDED_REMOVED_OPTIONS = [
   { value: "REPLACED", label: "Replaced" },
 ];
 
-/* ---------------------------------------------------------------------------- */
-/* Shared building blocks                                                      */
+/* ---------------- Department mapping for approval managers ---------------- */
+
+const APPROVAL_DEPARTMENTS = {
+  managerProduction: "Production",
+  managerQuality: "Quality",
+  managerTdCi: "TDC",
+  managerPurchase: "Purchase",
+  authorisedSignatory: "DIRECTOR MARKETING",
+};
 
 const Field = ({
   label,
@@ -69,6 +74,12 @@ const Field = ({
   placeholder,
 }) => {
   if (type === "select") {
+    const safeValue = value === null || value === undefined ? "" : value;
+    const inOptions = (options || []).some(
+      (opt) => String(opt.value ?? opt) === String(safeValue),
+    );
+    const showGhost = safeValue !== "" && !inOptions;
+
     return (
       <div className={`w-full ${className}`}>
         <label className={labelClasses}>
@@ -78,12 +89,15 @@ const Field = ({
 
         <select
           name={name}
-          value={value}
+          value={safeValue}
           onChange={onChange}
           disabled={disabled}
           className={`${controlClasses} ${error ? controlErrClasses : ""}`}
         >
           <option value="">Select {label}</option>
+          {showGhost && (
+            <option value={safeValue}>{String(safeValue)}</option>
+          )}
           {(options || []).map((opt) => (
             <option key={opt.value ?? opt} value={opt.value ?? opt}>
               {opt.label ?? opt}
@@ -189,9 +203,6 @@ const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
   </div>
 );
 
-/* ---------------------------------------------------------------------------- */
-/* Table helpers                                                                */
-
 const TableWrapper = ({ children }) => (
   <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
     <table className="w-full text-xs">{children}</table>
@@ -204,13 +215,12 @@ const TableHead = ({ headers }) => (
       {headers.map((h, i) => (
         <th
           key={i}
-          className={`p-1 whitespace-nowrap ${
-            i === 0
+          className={`p-1 whitespace-nowrap ${i === 0
               ? "w-8 text-center"
               : i === headers.length - 1
                 ? "w-20 text-left"
                 : "text-left"
-          } dark:text-white`}
+            } dark:text-white`}
         >
           {h}
         </th>
@@ -228,11 +238,10 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
         type="button"
         onClick={onRemove}
         disabled={disabled}
-        className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-          disabled
+        className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
             ? "bg-gray-400 cursor-not-allowed"
             : "bg-red-600 hover:bg-red-700"
-        }`}
+          }`}
       >
         X
       </button>
@@ -240,34 +249,51 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
   </tr>
 );
 
-const SelectCell = ({ value, onChange, options }) => (
-  <td className="p-1 align-top min-w-[140px]">
-    <select value={value} onChange={onChange} className={cellInputClasses}>
-      <option value="">-- Select --</option>
-      {(options || []).map((opt) => (
-        <option key={opt.value ?? opt} value={opt.value ?? opt}>
-          {opt.label ?? opt}
-        </option>
-      ))}
-    </select>
-  </td>
-);
+const SelectCell = ({ value, onChange, options }) => {
+  const safeValue = value === null || value === undefined ? "" : value;
+  const inOptions = (options || []).some(
+    (opt) => String(opt.value ?? opt) === String(safeValue),
+  );
+  const showGhost = safeValue !== "" && !inOptions;
+
+  return (
+    <td className="p-1 align-top min-w-[140px]">
+      <select
+        value={safeValue}
+        onChange={onChange}
+        className={cellInputClasses}
+      >
+        <option value="">-- Select --</option>
+        {showGhost && <option value={safeValue}>{String(safeValue)}</option>}
+        {(options || []).map((opt) => (
+          <option key={opt.value ?? opt} value={opt.value ?? opt}>
+            {opt.label ?? opt}
+          </option>
+        ))}
+      </select>
+    </td>
+  );
+};
 
 const ToggleCell = ({ value, onChange }) => (
   <td className="p-1 align-top min-w-[100px]">
     <button
       type="button"
       onClick={() => onChange(!value)}
-      className={`relative flex items-center w-9 h-5 rounded-full transition-colors ${
-        value ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
-      }`}
+      className={`relative flex items-center w-9 h-5 rounded-full transition-colors ${value ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
+        }`}
     >
       <span
-        className={`absolute h-4 w-4 bg-white rounded-full shadow transition-transform ${
-          value ? "translate-x-[18px]" : "translate-x-0.5"
-        }`}
+        className={`absolute h-4 w-4 bg-white rounded-full shadow transition-transform ${value ? "translate-x-[18px]" : "translate-x-0.5"
+          }`}
       />
     </button>
+  </td>
+);
+
+const ReadOnlyCell = ({ value }) => (
+  <td className="p-1 align-top min-w-[140px]">
+    <input value={value ?? ""} readOnly className={cellReadOnlyClasses} />
   </td>
 );
 
@@ -308,9 +334,8 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
             return (
               <td
                 key={col.key}
-                className={`p-1 align-top ${
-                  col.type === "date" ? "min-w-[140px]" : "min-w-[120px]"
-                }`}
+                className={`p-1 align-top ${col.type === "date" ? "min-w-[140px]" : "min-w-[120px]"
+                  }`}
               >
                 <input
                   type={col.type || "text"}
@@ -327,22 +352,11 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
   </TableWrapper>
 );
 
-const ReadOnlyCell = ({ value }) => (
-  <td className="p-1 align-top min-w-[140px]">
-    <input value={value ?? ""} readOnly className={cellReadOnlyClasses} />
-  </td>
-);
-
-/* ---------------------------------------------------------------------------- */
-/* Helpers                                                                      */
-
 const fmtDate = (value) => (value ? dayjs(value).format("YYYY-MM-DD") : "");
-
-/* ---------------------------------------------------------------------------- */
-/* Empty state builders                                                        */
 
 const emptyHeader = () => ({
   plantId: "",
+  docId: "",
   correctionRequestedBy: "",
   date: dayjs().format("YYYY-MM-DD"),
   correctionRequestApprovedBy: "",
@@ -358,7 +372,7 @@ const emptyChangeRow = () => ({
   partNo: "",
   partDescription: "",
   unit: "",
-  bomOnly: false,
+  bomQty: "",
   addedRemoved: "",
 });
 
@@ -371,8 +385,6 @@ const emptyApproval = () => ({
   decision: "",
 });
 
-/* ---------------------------------------------------------------------------- */
-
 const CHILD_TABS = [
   { key: "changeDetails", label: "Details of Change Required", type: "table" },
   { key: "approval", label: "Correction Approved By", type: "fields" },
@@ -384,6 +396,10 @@ const BomCorrectionRequestForm = ({ data, onBack }) => {
   const branch = Number(localStorage.getItem("branchId"));
   const usersId = localStorage.getItem("usersId");
 
+  const isEditMode = Boolean(data?.id);
+  const docIdLoadedRef = useRef(false);
+  const itemMapRef = useRef({});
+
   const [activeTab, setActiveTab] = useState("changeDetails");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
@@ -391,16 +407,17 @@ const BomCorrectionRequestForm = ({ data, onBack }) => {
 
   /* ---------------- Lookup options ---------------- */
   const [plantOptions, setPlantOptions] = useState([]);
-  const [employeeOptions, setEmployeeOptions] = useState([]);
   const [itemOptions, setItemOptions] = useState([]);
-  const [itemMap, setItemMap] = useState({});
-  const [unitOptions, setUnitOptions] = useState([]);
+  const [fgItemOptions, setFgItemOptions] = useState([]);
+  const [allEmployeeOptions, setAllEmployeeOptions] = useState([]);
+  const [employeeOptionsByDept, setEmployeeOptionsByDept] = useState({});
 
   /* ---------------- Form state ---------------- */
   const [header, setHeader] = useState(() => ({
     ...emptyHeader(),
-    ...data?.header,
-    date: fmtDate(data?.header?.date),
+    ...(data?.header || {}),
+    date:
+      fmtDate(data?.header?.date) || dayjs().format("YYYY-MM-DD"),
   }));
 
   const [changeRows, setChangeRows] = useState(() =>
@@ -411,92 +428,188 @@ const BomCorrectionRequestForm = ({ data, onBack }) => {
 
   const [approval, setApproval] = useState(() => ({
     ...emptyApproval(),
-    ...data?.approval,
+    ...(data?.approval || {}),
   }));
 
-  /* ---------------- Lookup loading ---------------- */
+  /* ---------------- Re-sync when data prop changes ---------------- */
 
   useEffect(() => {
-    if (!orgId) return;
+    if (!data) return;
 
-    const loadPlants = async () => {
+    setHeader({
+      ...emptyHeader(),
+      ...(data.header || {}),
+      date:
+        fmtDate(data.header?.date) || dayjs().format("YYYY-MM-DD"),
+    });
+
+    setChangeRows(
+      data.changeDetails?.length
+        ? data.changeDetails.map((d) => ({ ...emptyChangeRow(), ...d }))
+        : [emptyChangeRow()],
+    );
+
+    setApproval({
+      ...emptyApproval(),
+      ...(data.approval || {}),
+    });
+  }, [data]);
+
+  /* ---------------- Load master data ---------------- */
+
+  useEffect(() => {
+    if (!orgId || !branch) return;
+
+    (async () => {
       try {
         const res = await branchAPI.getBranchByOrgId(orgId);
         setPlantOptions(
           (res || []).map((b) => ({
             value: b.id,
-            label: b.branchName || b.branchcode || b.id,
+            label: b.branchName || b.branchCode || b.id,
           })),
         );
-      } catch {
+      } catch (err) {
+        console.error("Failed to load branches:", err);
         setPlantOptions([]);
       }
-    };
+    })();
 
-    const loadEmployees = async () => {
+    (async () => {
       try {
-        const res = await employeeAPI.getEmployeeByOrgId(orgId);
-        setEmployeeOptions(
-          (res || []).map((e) => ({
+        const list = await employeeAPI.getEmployeeByOrgId(orgId);
+        setAllEmployeeOptions(
+          (list || []).map((e) => ({
             value: e.id,
-            label: e.employeeName || e.name || e.id,
+            label: e.employeeName || e.employeeId || String(e.id),
           })),
         );
-      } catch {
-        setEmployeeOptions([]);
+      } catch (err) {
+        console.error("Failed to load all employees:", err);
+        setAllEmployeeOptions([]);
       }
-    };
+    })();
 
-    const loadItems = async () => {
+    (async () => {
       try {
-        const res = await itemAPI.getItems(orgId, branch);
-        const map = {};
-        const opts = (res || []).map((it) => {
-          const code = it.itemCode || it.code || it.id?.toString() || "";
+        const list = await bomCorrectionRequestAPI.getFGItems(branch, orgId);
+        const map = { ...itemMapRef.current };
+        const opts = (list || []).map((it) => {
+          const code = it.itemCode ?? String(it.itemId ?? "");
           map[code] = it;
           return { value: code, label: code };
         });
-        setItemOptions(opts);
-        setItemMap(map);
-      } catch {
-        setItemOptions([]);
-        setItemMap({});
+        itemMapRef.current = map;
+        setFgItemOptions(opts);
+      } catch (err) {
+        console.error("Failed to load FG items:", err);
+        setFgItemOptions([]);
       }
-    };
+    })();
 
-    const loadUnits = async () => {
+    (async () => {
       try {
-        const res = await unitMasterAPI.getUnits(branch, orgId);
-        setUnitOptions(
-          (res || []).map((u) => ({
-            value: u.unitCode || u.code || u.id?.toString() || "",
-            label:
-              u.unitName || u.name || u.unitCode || u.code || u.id?.toString() || "",
-          })),
+        const list = await bomCorrectionRequestAPI.getAllItemsNotFG(
+          branch,
+          orgId,
         );
-      } catch {
-        setUnitOptions([]);
+        const map = { ...itemMapRef.current };
+        const opts = (list || []).map((it) => {
+          const code = it.itemCode ?? String(it.itemId ?? "");
+          map[code] = it;
+          return { value: code, label: code };
+        });
+        itemMapRef.current = map;
+        setItemOptions(opts);
+      } catch (err) {
+        console.error("Failed to load non-FG items:", err);
+        setItemOptions([]);
       }
+    })();
+  }, [orgId, branch]);
+
+  /* ---------------- Load employees per approval department ---------------- */
+
+  useEffect(() => {
+    if (!orgId || !branch) return;
+
+    const loadAll = async () => {
+      const entries = Object.entries(APPROVAL_DEPARTMENTS);
+      const result = {};
+
+      await Promise.all(
+        entries.map(async ([key, dept]) => {
+          try {
+            const list =
+              await bomCorrectionRequestAPI.getEmployeesByDepartment({
+                branch,
+                department: dept,
+                orgId,
+              });
+            result[key] = (list || []).map((e) => ({
+              value: e.id ?? e.employeeId,
+              label: e.employeeName || e.employeeId || String(e.id),
+            }));
+          } catch (err) {
+            console.error(`Failed to load employees for ${dept}:`, err);
+            result[key] = [];
+          }
+        }),
+      );
+
+      setEmployeeOptionsByDept(result);
     };
 
-    Promise.all([loadPlants(), loadEmployees(), loadItems(), loadUnits()]);
+    loadAll();
   }, [orgId, branch]);
+
+  /* ---------------- Doc Id auto-generation (Add mode) ---------------- */
+
+  useEffect(() => {
+    if (isEditMode || docIdLoadedRef.current) return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const financialYear = String(new Date().getFullYear());
+        const docId = await bomCorrectionRequestAPI.getDocId({
+          financialYear,
+          orgId,
+        });
+        if (!cancelled && docId) {
+          setHeader((prev) => ({ ...prev, docId }));
+          docIdLoadedRef.current = true;
+        }
+      } catch (err) {
+        console.error("Failed to generate Doc Id:", err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isEditMode, orgId]);
 
   /* ---------------- Header handlers ---------------- */
 
   const handleHeaderChange = (e) => {
     const { name, value } = e.target;
     if (fieldErrors[name]) setFieldErrors((prev) => ({ ...prev, [name]: "" }));
-    setHeader((prev) => ({ ...prev, [name]: value }));
 
-    if (name === "fgPartNo") {
-      const item = itemMap[value];
-      setHeader((prev) => ({
-        ...prev,
-        fgPartNo: value,
-        productName: item?.itemDescription || prev.productName,
-      }));
-    }
+    setHeader((prev) => {
+      const next = { ...prev, [name]: value };
+
+      if (name === "fgPartNo") {
+        const item = itemMapRef.current[value];
+        if (item) {
+          next.customerName = item.itemDescription || next.customerName;
+          next.customerPartNo = item.customerPartNo || next.customerPartNo;
+        }
+      }
+
+      return next;
+    });
   };
 
   /* ---------------- Change detail row handlers ---------------- */
@@ -505,14 +618,19 @@ const BomCorrectionRequestForm = ({ data, onBack }) => {
     setChangeRows((prev) =>
       prev.map((row, i) => {
         if (i !== idx) return row;
-        let next = { ...row, [key]: value };
+        const next = { ...row, [key]: value };
+
         if (key === "partNo") {
-          const item = itemMap[value];
-          next.partDescription = item?.itemDescription || "";
-          if (item?.primaryUnits?.primaryUnit) {
-            next.unit = item.primaryUnits.primaryUnit;
+          const item = itemMapRef.current[value];
+          if (item) {
+            next.partDescription = item.itemDescription || "";
+            next.unit = item.unitId || item.unitmasterId || "";
+          } else {
+            next.partDescription = "";
+            next.unit = "";
           }
         }
+
         return next;
       }),
     );
@@ -520,6 +638,7 @@ const BomCorrectionRequestForm = ({ data, onBack }) => {
 
   const handleAddRow = () =>
     setChangeRows((prev) => [...prev, emptyChangeRow()]);
+
   const handleRemoveRow = (idx) =>
     setChangeRows((prev) => prev.filter((_, i) => i !== idx));
 
@@ -543,7 +662,7 @@ const BomCorrectionRequestForm = ({ data, onBack }) => {
     if (!header.correctionRequestApprovedBy)
       errors.correctionRequestApprovedBy =
         "Correction Request Approved By is required";
-    if (!header.fgPartNo?.trim()) errors.fgPartNo = "FG Part No is required";
+    if (!header.fgPartNo) errors.fgPartNo = "FG Part No is required";
     if (!header.reasonForChange?.trim())
       errors.reasonForChange = "Reason for Change is required";
 
@@ -561,16 +680,16 @@ const BomCorrectionRequestForm = ({ data, onBack }) => {
       approval.authorisedSignatory;
 
     if (!validRows)
-      setTableError("Complete all mandatory columns in the Details of Change Required tab");
+      setTableError(
+        "Complete all mandatory columns in the Details of Change Required tab",
+      );
     else if (!validApproval)
-      setTableError("Complete all mandatory managers in the Correction Approved By tab");
+      setTableError(
+        "Complete all mandatory managers in the Correction Approved By tab",
+      );
     else setTableError("");
 
-    return (
-      Object.keys(errors).length === 0 &&
-      validRows &&
-      validApproval
-    );
+    return Object.keys(errors).length === 0 && validRows && validApproval;
   };
 
   /* ---------------- Save ---------------- */
@@ -581,41 +700,101 @@ const BomCorrectionRequestForm = ({ data, onBack }) => {
     setIsSubmitting(true);
 
     const isUpdate = Boolean(data?.id);
+    const financialYear = String(new Date().getFullYear());
 
-    // Single-transaction payload: header + change details + approval records.
-    // Linked to FG part & customer and keeps complete correction history with
-    // approval tracking (server-side validation).
+    const resolveItemId = (code) => {
+      const it = itemMapRef.current[code];
+      return it?.itemId ?? 0;
+    };
+
+    const resolveUnitId = (unitVal) => {
+      if (unitVal === null || unitVal === undefined || unitVal === "") {
+        return 0;
+      }
+
+      if (typeof unitVal === "number") {
+        return unitVal;
+      }
+
+      const found = Object.values(itemMapRef.current).find(
+        (it) =>
+          String(it.unitId) === String(unitVal) ||
+          String(it.unitmasterId) === String(unitVal),
+      );
+
+      return Number(found?.unitmasterId ?? unitVal) || 0;
+    };
+
     const payload = {
       ...(isUpdate ? { id: data.id } : {}),
-      orgId,
-      header,
-      changeDetails: changeRows
-        .filter((r) => r.partNo?.trim())
-        .map((r, i) => ({ ...r, sno: i + 1 })),
-      approval,
+
       active: data?.active ?? true,
-      createdBy: isUpdate ? data?.createdBy || usersId : usersId,
-      ...(isUpdate ? { updatedBy: usersId } : {}),
+      cancel: data?.cancel ?? false,
+      cancelRemarks: data?.cancelRemarks ?? "",
+
+      orgId: Number(orgId),
+      branch: Number(header.plantId) || 0,
+      financialYear,
+
+      createdBy: isUpdate ? data?.createdBy ?? usersId ?? "" : usersId ?? "",
+
+      correctionRequestedBy: Number(header.correctionRequestedBy) || 0,
+      correctionRequestApprovedBy:
+        Number(header.correctionRequestApprovedBy) || 0,
+
+      fgPartNo: resolveItemId(header.fgPartNo),
+      productName: header.productName || "",
+      customerPartNo: header.customerPartNo || "",
+      customerName: header.customerName || "",
+      supplier: header.supplier || "",
+      reasonForChange: header.reasonForChange || "",
+
+      managerProduction: Number(approval.managerProduction) || 0,
+      managerQuality: Number(approval.managerQuality) || 0,
+      managerTdc: Number(approval.managerTdCi) || 0,
+      managerPurchase: Number(approval.managerPurchase) || 0,
+      authorisedSignator: Number(approval.authorisedSignatory) || 0,
+
+      decision: approval.decision || "",
+
+      details: changeRows
+        .filter((r) => r.partNo?.trim())
+        .map((r) => ({
+          partNo: resolveItemId(r.partNo),
+          unit: resolveUnitId(r.unit),
+          bomQty: Number(r.bomQty || 0),
+          addedRemoved: r.addedRemoved || "",
+        })),
     };
+
+    console.log("Saving BOM Correction Request payload:", payload);
 
     try {
       const response = await bomCorrectionRequestAPI.createUpdate(payload);
 
-      if (response?.status) {
+      const isSuccess =
+        response?.status === true ||
+        response?.statusFlag === "Ok" ||
+        response?.status === 200 ||
+        response?.statusCode === 200;
+
+      if (isSuccess) {
         addToast(
           response?.paramObjectsMap?.message ||
-            (isUpdate
-              ? "BOM Correction Request updated successfully!"
-              : "BOM Correction Request created successfully!"),
+          (isUpdate
+            ? "BOM Correction Request updated successfully!"
+            : "BOM Correction Request created successfully!"),
+          "success",
         );
         onBack?.();
       } else {
         addToast(
           response?.errors?.[0]?.shortMessage ||
-            response?.errors?.[0]?.longMessage ||
-            response?.message ||
-            response?.paramObjectsMap?.message ||
-            "Failed to save BOM Correction Request.",
+          response?.errors?.[0]?.longMessage ||
+          response?.message ||
+          response?.paramObjectsMap?.message ||
+          "Failed to save BOM Correction Request.",
+          "error",
         );
       }
     } catch (err) {
@@ -623,12 +802,13 @@ const BomCorrectionRequestForm = ({ data, onBack }) => {
       if (err.response?.data) {
         addToast(
           err.response.data.message ||
-            err.response.data.statusMessage ||
-            err.response.data.error ||
-            JSON.stringify(err.response.data),
+          err.response.data.statusMessage ||
+          err.response.data.error ||
+          "Failed to save BOM Correction Request.",
+          "error",
         );
       } else {
-        addToast("Something went wrong.");
+        addToast("Something went wrong.", "error");
       }
     } finally {
       setIsSubmitting(false);
@@ -643,19 +823,16 @@ const BomCorrectionRequestForm = ({ data, onBack }) => {
       options: itemOptions,
     },
     { key: "partDescription", label: "Part Description", readOnly: true },
-    { key: "unit", label: "Unit", type: "select", options: unitOptions },
-    { key: "bomOnly", label: "BOM Only", type: "toggle" },
+    { key: "unit", label: "Unit", readOnly: true },
+    { key: "bomQty", label: "BOM Qty", type: "number" },
     {
       key: "addedRemoved",
-      label: "Added/Removed *",
-      type: "select",
-      options: ADDED_REMOVED_OPTIONS,
+      label: "Added/Removed",
     },
   ];
 
   return (
     <div className="w-full p-2">
-      {/* Header */}
       <div className="flex items-center gap-2 mb-3">
         <button
           onClick={onBack}
@@ -671,9 +848,7 @@ const BomCorrectionRequestForm = ({ data, onBack }) => {
         </h2>
       </div>
 
-      {/* Main Card */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
-        {/* ---------------- Header Fields ---------------- */}
         <div>
           <SectionHeader>BOM Correction Request Details</SectionHeader>
           <div className={fieldGrid}>
@@ -688,14 +863,12 @@ const BomCorrectionRequestForm = ({ data, onBack }) => {
               required
             />
             <Field
-              type="select"
-              label="Correction Requested By"
-              name="correctionRequestedBy"
-              value={header.correctionRequestedBy}
+              label="Doc Id"
+              name="docId"
+              value={header.docId}
               onChange={handleHeaderChange}
-              error={fieldErrors.correctionRequestedBy}
-              options={employeeOptions}
-              required
+              error={fieldErrors.docId}
+              disabled
             />
             <Field
               type="date"
@@ -708,12 +881,22 @@ const BomCorrectionRequestForm = ({ data, onBack }) => {
             />
             <Field
               type="select"
+              label="Correction Requested By"
+              name="correctionRequestedBy"
+              value={header.correctionRequestedBy}
+              onChange={handleHeaderChange}
+              error={fieldErrors.correctionRequestedBy}
+              options={allEmployeeOptions}
+              required
+            />
+            <Field
+              type="select"
               label="Correction Request Approved By"
               name="correctionRequestApprovedBy"
               value={header.correctionRequestApprovedBy}
               onChange={handleHeaderChange}
               error={fieldErrors.correctionRequestApprovedBy}
-              options={employeeOptions}
+              options={allEmployeeOptions}
               required
             />
             <Field
@@ -723,7 +906,7 @@ const BomCorrectionRequestForm = ({ data, onBack }) => {
               value={header.fgPartNo}
               onChange={handleHeaderChange}
               error={fieldErrors.fgPartNo}
-              options={itemOptions}
+              options={fgItemOptions}
               required
             />
             <Field
@@ -763,9 +946,7 @@ const BomCorrectionRequestForm = ({ data, onBack }) => {
           </div>
         </div>
 
-        {/* ---------------- Child Tabs ---------------- */}
         <section className="mt-0 bg-white dark:bg-gray-800">
-          {/* Tabs */}
           <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 mb-0">
             <div className="flex overflow-x-auto">
               {CHILD_TABS.map((tab) => (
@@ -776,11 +957,10 @@ const BomCorrectionRequestForm = ({ data, onBack }) => {
                     setActiveTab(tab.key);
                     setTableError("");
                   }}
-                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${
-                    activeTab === tab.key
+                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${activeTab === tab.key
                       ? "bg-blue-600 text-white"
                       : "text-gray-600 dark:text-gray-300"
-                  }`}
+                    }`}
                 >
                   {tab.label}
                 </button>
@@ -798,7 +978,6 @@ const BomCorrectionRequestForm = ({ data, onBack }) => {
             )}
           </div>
 
-          {/* Active tab's content */}
           <div className="pt-2">
             {tableError && (
               <p className="text-[11px] text-red-500 dark:text-red-400 mb-2">
@@ -824,7 +1003,7 @@ const BomCorrectionRequestForm = ({ data, onBack }) => {
                   value={approval.managerProduction}
                   onChange={handleApprovalChange}
                   error={fieldErrors.managerProduction}
-                  options={employeeOptions}
+                  options={employeeOptionsByDept.managerProduction || []}
                   required
                 />
                 <Field
@@ -834,7 +1013,7 @@ const BomCorrectionRequestForm = ({ data, onBack }) => {
                   value={approval.managerQuality}
                   onChange={handleApprovalChange}
                   error={fieldErrors.managerQuality}
-                  options={employeeOptions}
+                  options={employeeOptionsByDept.managerQuality || []}
                   required
                 />
                 <Field
@@ -844,7 +1023,7 @@ const BomCorrectionRequestForm = ({ data, onBack }) => {
                   value={approval.managerTdCi}
                   onChange={handleApprovalChange}
                   error={fieldErrors.managerTdCi}
-                  options={employeeOptions}
+                  options={employeeOptionsByDept.managerTdCi || []}
                   required
                 />
                 <Field
@@ -854,7 +1033,7 @@ const BomCorrectionRequestForm = ({ data, onBack }) => {
                   value={approval.managerPurchase}
                   onChange={handleApprovalChange}
                   error={fieldErrors.managerPurchase}
-                  options={employeeOptions}
+                  options={employeeOptionsByDept.managerPurchase || []}
                   required
                 />
                 <Field
@@ -864,7 +1043,7 @@ const BomCorrectionRequestForm = ({ data, onBack }) => {
                   value={approval.authorisedSignatory}
                   onChange={handleApprovalChange}
                   error={fieldErrors.authorisedSignatory}
-                  options={employeeOptions}
+                  options={employeeOptionsByDept.authorisedSignatory || []}
                   required
                 />
                 <Field

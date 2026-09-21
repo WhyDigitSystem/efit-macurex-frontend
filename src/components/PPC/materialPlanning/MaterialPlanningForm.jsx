@@ -1,5 +1,5 @@
-import { ArrowLeft, Save, X, CalendarCheck, Boxes } from "lucide-react";
-import { useState } from "react";
+import { ArrowLeft, Save, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import dayjs from "dayjs";
 import materialPlanningAPI from "../../../api/PPC/materialPlanningAPI";
 import { useToast } from "../../Toast/ToastContext";
@@ -26,10 +26,8 @@ const fieldGrid =
   "grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-x-6 gap-y-4 items-start";
 
 const MRP_TYPE_OPTIONS = [
-  { value: "MRP", label: "MRP" },
-  { value: "LIGHT | LOP | MRP", label: "Light | LOP | MRP" },
-  { value: "MPS | MRP", label: "MPS | MRP" },
-  { value: "MRP II", label: "MRP II" },
+  { value: "Provisional", label: "Provisional" },
+  { value: "Final", label: "Final" },
 ];
 
 /* ---------------------------------------------------------------------------- */
@@ -139,50 +137,79 @@ const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
 
 const fmtDate = (value) => (value ? dayjs(value).format("YYYY-MM-DD") : "");
 
-const generateDocNo = () => `MPL${dayjs().format("YYYYMMDDHHmmss")}`;
-
-const nowTimestamp = () => dayjs().format("YYYY-MM-DD HH:mm:ss");
-
 /* ---------------------------------------------------------------------------- */
 /* Empty state builder                                                         */
 
 const emptyHeader = () => ({
   fromDate: dayjs().format("YYYY-MM-DD"),
   toDate: dayjs().add(7, "day").format("YYYY-MM-DD"),
-  docNo: generateDocNo(),
+  docNo: "",
   docDate: dayjs().format("YYYY-MM-DD"),
   mrpType: "",
 });
 
-const emptyExecution = () => ({
-  postPlanningDone: false,
-  postPlanningAt: "",
-  mrpRunDone: false,
-  mrpRunAt: "",
-});
+/* ---------------------------------------------------------------------------- */
 
 const MaterialPlanningForm = ({ data, onBack }) => {
   const { addToast } = useToast();
   const orgId = Number(localStorage.getItem("orgId"));
+  const branch = Number(localStorage.getItem("branchId"));
   const usersId = localStorage.getItem("usersId");
+
+  const isEditMode = Boolean(data?.id);
+  const docIdLoadedRef = useRef(false);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
-  const [execError, setExecError] = useState("");
 
   /* ---------------- Form state ---------------- */
   const [header, setHeader] = useState(() => {
-    const base = { ...emptyHeader(), ...data?.header };
+    const base = { ...emptyHeader(), ...(data?.header || {}) };
     base.fromDate = fmtDate(base.fromDate);
     base.toDate = fmtDate(base.toDate);
-    base.docDate = fmtDate(base.docDate);
+    base.docDate = fmtDate(base.docDate) || dayjs().format("YYYY-MM-DD");
+    base.docNo = data?.header?.docNo || data?.docId || "";
     return base;
   });
 
-  const [execution, setExecution] = useState(() => ({
-    ...emptyExecution(),
-    ...data?.execution,
-  }));
+  /* ---------------- Re-sync when data prop changes ---------------- */
+  useEffect(() => {
+    if (!data) return;
+    const base = { ...emptyHeader(), ...(data.header || {}) };
+    base.fromDate = fmtDate(base.fromDate);
+    base.toDate = fmtDate(base.toDate);
+    base.docDate = fmtDate(base.docDate) || dayjs().format("YYYY-MM-DD");
+    base.docNo = data.header?.docNo || data.docId || "";
+    setHeader(base);
+  }, [data]);
+
+  /* ---------------- Doc Id auto-generation (Add mode) ---------------- */
+  useEffect(() => {
+    if (isEditMode || docIdLoadedRef.current) return;
+    if (!orgId) return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const financialYear = String(new Date().getFullYear());
+        const docId = await materialPlanningAPI.getDocId({
+          financialYear,
+          orgId,
+        });
+        if (!cancelled && docId) {
+          setHeader((prev) => ({ ...prev, docNo: docId }));
+          docIdLoadedRef.current = true;
+        }
+      } catch (err) {
+        console.error("Failed to generate Material Planning DocId:", err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isEditMode, orgId]);
 
   /* ---------------- Header handlers ---------------- */
 
@@ -192,7 +219,7 @@ const MaterialPlanningForm = ({ data, onBack }) => {
     setHeader((prev) => ({ ...prev, [name]: value }));
   };
 
-  /* ---------------- Execution handlers ---------------- */
+  /* ---------------- Validation ---------------- */
 
   const validateHeader = () => {
     const errors = {};
@@ -214,40 +241,6 @@ const MaterialPlanningForm = ({ data, onBack }) => {
     return Object.keys(errors).length === 0;
   };
 
-  // Post Planning action button
-  const handlePostPlanning = () => {
-    setExecError("");
-    if (!validateHeader()) {
-      setExecError(
-        "Complete all mandatory Planning Header fields before running Post Planning.",
-      );
-      return;
-    }
-    setExecution((prev) => ({
-      ...prev,
-      postPlanningDone: true,
-      postPlanningAt: prev.postPlanningAt || nowTimestamp(),
-    }));
-    addToast("Post Planning run completed. You can now click MRP Run.");
-  };
-
-  // MRP Run action button (enabled only after Post Planning)
-  const handleMrpRun = () => {
-    setExecError("");
-    if (!execution.postPlanningDone) {
-      setExecError(
-        "Please run Post Planning first before clicking the MRP Run button.",
-      );
-      return;
-    }
-    setExecution((prev) => ({
-      ...prev,
-      mrpRunDone: true,
-      mrpRunAt: prev.mrpRunAt || nowTimestamp(),
-    }));
-    addToast("MRP Run completed successfully.");
-  };
-
   /* ---------------- Save ---------------- */
 
   const handleSave = async () => {
@@ -256,41 +249,56 @@ const MaterialPlanningForm = ({ data, onBack }) => {
     setIsSubmitting(true);
 
     const isUpdate = Boolean(data?.id);
+    const financialYear = String(new Date().getFullYear());
 
-    // Single-transaction payload: header + execution records.
-    // The execution records maintain the complete planning history and the
-    // backend keeps the audit trail (server-side validation).
+    /* ---- Payload matches the backend contract exactly ---- */
     const payload = {
       ...(isUpdate ? { id: data.id } : {}),
-      orgId,
-      header: {
-        ...header,
-        docNo: header.docNo || generateDocNo(),
-      },
-      execution,
+
       active: data?.active ?? true,
-      createdBy: isUpdate ? data?.createdBy || usersId : usersId,
-      ...(isUpdate ? { updatedBy: usersId } : {}),
+      cancelRemarks: data?.cancelRemarks ?? "",
+
+      orgId: Number(orgId),
+      branch: Number(branch) || 0,
+      financialYear,
+
+      createdBy: isUpdate ? data?.createdBy ?? usersId ?? "" : usersId ?? "",
+
+      docDate: header.docDate || dayjs().format("YYYY-MM-DD"),
+      fromDate: header.fromDate || "",
+      toDate: header.toDate || "",
+
+      mrpType: header.mrpType || "",
     };
+
+    console.log("Saving Material Planning payload:", payload);
 
     try {
       const response = await materialPlanningAPI.createUpdate(payload);
 
-      if (response?.status) {
+      const isSuccess =
+        response?.status === true ||
+        response?.statusFlag === "Ok" ||
+        response?.status === 200 ||
+        response?.statusCode === 200;
+
+      if (isSuccess) {
         addToast(
           response?.paramObjectsMap?.message ||
-            (isUpdate
-              ? "Material Planning record updated successfully!"
-              : "Material Planning record created successfully!"),
+          (isUpdate
+            ? "Material Planning record updated successfully!"
+            : "Material Planning record created successfully!"),
+          "success",
         );
         onBack?.();
       } else {
         addToast(
           response?.errors?.[0]?.shortMessage ||
-            response?.errors?.[0]?.longMessage ||
-            response?.message ||
-            response?.paramObjectsMap?.message ||
-            "Failed to save Material Planning record.",
+          response?.errors?.[0]?.longMessage ||
+          response?.message ||
+          response?.paramObjectsMap?.message ||
+          "Failed to save Material Planning record.",
+          "error",
         );
       }
     } catch (err) {
@@ -298,12 +306,13 @@ const MaterialPlanningForm = ({ data, onBack }) => {
       if (err.response?.data) {
         addToast(
           err.response.data.message ||
-            err.response.data.statusMessage ||
-            err.response.data.error ||
-            JSON.stringify(err.response.data),
+          err.response.data.statusMessage ||
+          err.response.data.error ||
+          "Failed to save Material Planning record.",
+          "error",
         );
       } else {
-        addToast("Something went wrong.");
+        addToast("Something went wrong.", "error");
       }
     } finally {
       setIsSubmitting(false);
@@ -312,7 +321,6 @@ const MaterialPlanningForm = ({ data, onBack }) => {
 
   return (
     <div className="w-full p-2">
-      {/* Header */}
       <div className="flex items-center gap-2 mb-3">
         <button
           onClick={onBack}
@@ -326,9 +334,7 @@ const MaterialPlanningForm = ({ data, onBack }) => {
         </h2>
       </div>
 
-      {/* Main Card */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
-        {/* ---------------- Planning Header Section ---------------- */}
         <div>
           <SectionHeader>Planning Header</SectionHeader>
           <div className={fieldGrid}>
@@ -379,56 +385,6 @@ const MaterialPlanningForm = ({ data, onBack }) => {
               options={MRP_TYPE_OPTIONS}
               required
             />
-          </div>
-        </div>
-
-        {/* ---------------- Planning Execution Section ---------------- */}
-        <div>
-          <SectionHeader>Planning Execution</SectionHeader>
-
-          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md px-3 py-2 text-xs text-blue-700 dark:text-blue-300 mb-3">
-            First do Post Planning, then click on MRP Run button for MRP Run to
-            happen.
-          </div>
-
-          {execError && (
-            <p className="text-[11px] text-red-500 dark:text-red-400 mb-2">
-              {execError}
-            </p>
-          )}
-
-          <div className="flex flex-wrap items-center gap-4">
-            <button
-              type="button"
-              onClick={handlePostPlanning}
-              disabled={execution.postPlanningDone}
-              className={`flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white transition-colors ${
-                execution.postPlanningDone
-                  ? "bg-green-600 cursor-default"
-                  : "bg-indigo-600 hover:bg-indigo-700"
-              }`}
-            >
-              <CalendarCheck className="h-3 w-3" />
-              {execution.postPlanningDone
-                ? "Post Planning Done"
-                : "Post Planning"}
-            </button>
-
-            <button
-              type="button"
-              onClick={handleMrpRun}
-              disabled={!execution.postPlanningDone || execution.mrpRunDone}
-              className={`flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white transition-colors ${
-                execution.mrpRunDone
-                  ? "bg-green-600 cursor-default"
-                  : !execution.postPlanningDone
-                    ? "bg-gray-300 dark:bg-gray-600 cursor-not-allowed"
-                    : "bg-blue-600 hover:bg-blue-700"
-              }`}
-            >
-              <Boxes className="h-3 w-3" />
-              {execution.mrpRunDone ? "MRP Run Done" : "MRP Run"}
-            </button>
           </div>
         </div>
 

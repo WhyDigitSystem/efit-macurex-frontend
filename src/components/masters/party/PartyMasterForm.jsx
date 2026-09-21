@@ -634,7 +634,7 @@ const PartyMasterForm = ({ data, onBack }) => {
       console.error("Failed to load states:", error);
       setStateData([]);
     }
-  }, [orgId]);
+  }, [branch, orgId]);
 
   const loadStates = useCallback(async () => {
     try {
@@ -877,7 +877,7 @@ const PartyMasterForm = ({ data, onBack }) => {
 
       // Customer Categories
       customerCategory: general.partyCategories.length > 0 ? Number(general.partyCategories[0]) : 0,
-      customerCategory1: general.partyCategories2 ? Number(general.partyCategories2) : 0,
+      customerCategory1: general.supplierCategory ? Number(general.supplierCategory) : 0,
       customerCategory2: general.partyCategories3 ? Number(general.partyCategories3) : 0,
 
       // Customer Contact Details

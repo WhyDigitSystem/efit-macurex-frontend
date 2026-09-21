@@ -1,12 +1,10 @@
 import { ArrowLeft, Save, X } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import dayjs from "dayjs";
 import { useToast } from "../../Toast/ToastContext";
 import supplierChangeRequestAPI from "../../../api/TDC/supplierChangeRequestAPI";
 import branchAPI from "../../../api/branchAPI";
 import locationMasterAPI from "../../../api/locationMasterAPI";
-import { employeeAPI } from "../../../api/employeeAPI";
-import partyMasterAPI from "../../../api/partyMasterAPI";
 
 /* ---------------------------------------------------------------------------- */
 /* Shared design tokens                                                        */
@@ -29,7 +27,6 @@ const labelClasses = "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5"
 const fieldGrid =
   "grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-x-4 gap-y-3 items-start";
 
-// Spacious grid used inside the child tabs so fields breathe more.
 const subTabFieldGrid =
   "grid grid-cols-[repeat(auto-fit,minmax(210px,1fr))] gap-x-5 gap-y-4 items-start";
 
@@ -49,6 +46,12 @@ const Field = ({
   disabled = false,
 }) => {
   if (type === "select") {
+    const safeValue = value === null || value === undefined ? "" : value;
+    const inOptions = (options || []).some(
+      (opt) => String(opt.value ?? opt) === String(safeValue),
+    );
+    const showGhost = safeValue !== "" && !inOptions;
+
     return (
       <div className={`w-full ${className}`}>
         <label className={labelClasses}>
@@ -58,12 +61,15 @@ const Field = ({
 
         <select
           name={name}
-          value={value}
+          value={safeValue}
           onChange={onChange}
           disabled={disabled}
           className={`${controlClasses} ${error ? controlErrClasses : ""}`}
         >
           <option value="">-- Select --</option>
+          {showGhost && (
+            <option value={safeValue}>{String(safeValue)}</option>
+          )}
           {(options || []).map((opt) => (
             <option key={opt.value ?? opt} value={opt.value ?? opt}>
               {opt.label ?? opt}
@@ -171,12 +177,7 @@ const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
 
 const YES_NO = ["Yes", "No"];
 
-const DISPOSITIONS = [
-  "Approved",
-  "Approved with Condition",
-  "Not Approved",
-  "Pending",
-];
+const DISPOSITIONS = ["APPROVED", "DISAPPROVED"];
 
 const CHILD_TABS = [
   { key: "reasonForChange", label: "Reason for Change", kind: "fields" },
@@ -188,10 +189,16 @@ const CHILD_TABS = [
   },
 ];
 
-const fmtDate = (value) => (value ? dayjs(value).format("YYYY-MM-DD") : "");
+/* ---------------- Department mapping for the Sign-by fields ---------------- */
 
-const generateScrNo = () =>
-  `SCR-${dayjs().format("YYYYMMDD")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
+const SIGNBY_DEPARTMENTS = {
+  purchaseSignBy: "Purchase",
+  tqcSignBy: "Quality",
+  productionSignBy: "Production",
+  qualitySignBy: "Quality",
+};
+
+const fmtDate = (value) => (value ? dayjs(value).format("YYYY-MM-DD") : "");
 
 /* ---------------------------------------------------------------------------- */
 
@@ -209,17 +216,23 @@ const SupplierChangeRequestForm = ({ data, onBack }) => {
   ).trim();
   const isMacurex = ["mecurex", "macurex"].includes(orgName.toLowerCase());
 
+  const isEditMode = Boolean(data?.id);
+  const docIdLoadedRef = useRef(false);
+
   const [activeChildTab, setActiveChildTab] = useState("reasonForChange");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
 
+  /* ---------------- Lookup options ---------------- */
   const [plantOptions, setPlantOptions] = useState([]);
   const [vendorOptions, setVendorOptions] = useState([]);
-  const [employeeOptions, setEmployeeOptions] = useState([]);
+  const [buyerEmployeeOptions, setBuyerEmployeeOptions] = useState([]); // Buyer Name (Purchase)
+  const [sourceEmployeeOptions, setSourceEmployeeOptions] = useState([]); // Source Triggered By (all employees)
+  const [signByOptionsByRole, setSignByOptionsByRole] = useState({});
 
   const [header, setHeader] = useState(() => {
     const base = {
-      scrNo: data?.scrNo || (data ? "" : generateScrNo()),
+      scrNo: data?.scrNo || "",
       plantId: data?.plantId?.id ?? data?.plantId ?? "",
       date: data?.date || dayjs().format("YYYY-MM-DD"),
       vendorCode: data?.vendorCode?.id ?? data?.vendorCode ?? "",
@@ -289,16 +302,156 @@ const SupplierChangeRequestForm = ({ data, onBack }) => {
   });
 
   const [authorizedSignatures, setAuthorizedSignatures] = useState({
-    purchaseSignBy: data?.authorizedSignatures?.purchaseSignBy?.id ?? data?.authorizedSignatures?.purchaseSignBy ?? "",
+    purchaseSignBy:
+      data?.authorizedSignatures?.purchaseSignBy?.id ??
+      data?.authorizedSignatures?.purchaseSignBy ??
+      "",
     purchaseDisposition: data?.authorizedSignatures?.purchaseDisposition || "",
-    tqcSignBy: data?.authorizedSignatures?.tqcSignBy?.id ?? data?.authorizedSignatures?.tqcSignBy ?? "",
+    tqcSignBy:
+      data?.authorizedSignatures?.tqcSignBy?.id ??
+      data?.authorizedSignatures?.tqcSignBy ??
+      "",
     tqcDisposition: data?.authorizedSignatures?.tqcDisposition || "",
-    productionSignBy: data?.authorizedSignatures?.productionSignBy?.id ?? data?.authorizedSignatures?.productionSignBy ?? "",
-    productionDisposition: data?.authorizedSignatures?.productionDisposition || "",
-    qualitySignBy: data?.authorizedSignatures?.qualitySignBy?.id ?? data?.authorizedSignatures?.qualitySignBy ?? "",
+    productionSignBy:
+      data?.authorizedSignatures?.productionSignBy?.id ??
+      data?.authorizedSignatures?.productionSignBy ??
+      "",
+    productionDisposition:
+      data?.authorizedSignatures?.productionDisposition || "",
+    qualitySignBy:
+      data?.authorizedSignatures?.qualitySignBy?.id ??
+      data?.authorizedSignatures?.qualitySignBy ??
+      "",
     qualityDisposition: data?.authorizedSignatures?.qualityDisposition || "",
     note: data?.authorizedSignatures?.note || "",
   });
+
+  /* ---------------- Re-sync when data prop changes ---------------- */
+  useEffect(() => {
+    if (!data) return;
+
+    setHeader((prev) => ({
+      ...prev,
+      scrNo: data?.scrNo || prev.scrNo,
+      plantId: data?.plantId?.id ?? data?.plantId ?? "",
+      date: fmtDate(data?.date) || prev.date,
+      vendorCode: data?.vendorCode?.id ?? data?.vendorCode ?? "",
+      supplierName: data?.supplierName || "",
+      partNumber: data?.partNumber || "",
+      partDescription: data?.partDescription || "",
+      supplierContact: data?.supplierContact || "",
+      supplierPhoneNo: data?.supplierPhoneNo ?? "",
+      supplierEmailId: data?.supplierEmailId || "",
+      buyerName: data?.buyerName?.id ?? data?.buyerName ?? "",
+      buyerPhoneNo: data?.buyerPhoneNo ?? "",
+      buyerEmailId: data?.buyerEmailId || "",
+      sourceTriggeredBy:
+        data?.sourceTriggeredBy?.id ?? data?.sourceTriggeredBy ?? "",
+      sourcePhoneNo: data?.sourcePhoneNo ?? "",
+      sourceEmailId: data?.sourceEmailId || "",
+      active: data?.active !== false,
+    }));
+
+    setReasonForChange({
+      capacityIssueExistingSupplier:
+        data?.reasonForChange?.capacityIssueExistingSupplier || "",
+      customerRequirementDemandIncreased:
+        data?.reasonForChange?.customerRequirementDemandIncreased || "",
+      alternativeRmSource: data?.reasonForChange?.alternativeRmSource || "",
+      internalCapacityIssue:
+        data?.reasonForChange?.internalCapacityIssue || "",
+      supplierBaseChange: data?.reasonForChange?.supplierBaseChange || "",
+      supplierCommercialIssue:
+        data?.reasonForChange?.supplierCommercialIssue || "",
+      customerApprovedSource:
+        data?.reasonForChange?.customerApprovedSource || "",
+      others: data?.reasonForChange?.others || "",
+      changeDescriptionDetails:
+        data?.reasonForChange?.changeDescriptionDetails || "",
+      proposedProcessOutsourced:
+        data?.reasonForChange?.proposedProcessOutsourced || "",
+    });
+
+    setImpactOfChange({
+      qualityImprovement: data?.impactOfChange?.qualityImprovement || "",
+      reducedLeadTime: data?.impactOfChange?.reducedLeadTime || "",
+      costReduction: data?.impactOfChange?.costReduction || "",
+      increaseManufacturingEfficiency:
+        data?.impactOfChange?.increaseManufacturingEfficiency || "",
+      othersSpecify: data?.impactOfChange?.othersSpecify || "",
+      effectOfChanges: data?.impactOfChange?.effectOfChanges || "",
+      riskAssessment: data?.impactOfChange?.riskAssessment || "",
+      proposedImplementationDate: fmtDate(
+        data?.impactOfChange?.proposedImplementationDate,
+      ),
+      supplierEvaluationReport:
+        data?.impactOfChange?.supplierEvaluationReport || "",
+      reliabilityFunctionalReportTdc:
+        data?.impactOfChange?.reliabilityFunctionalReportTdc || "",
+      customerApproval: data?.impactOfChange?.customerApproval || "",
+      onJobTrainingReportManufacturing:
+        data?.impactOfChange?.onJobTrainingReportManufacturing || "",
+      processAuditReport: data?.impactOfChange?.processAuditReport || "",
+      supplierRegistrationForm:
+        data?.impactOfChange?.supplierRegistrationForm || "",
+      ppapSirRequired: data?.impactOfChange?.ppapSirRequired || "",
+      changeRequestApproval: data?.impactOfChange?.changeRequestApproval || "",
+    });
+
+    setAuthorizedSignatures({
+      purchaseSignBy:
+        data?.authorizedSignatures?.purchaseSignBy?.id ??
+        data?.authorizedSignatures?.purchaseSignBy ??
+        "",
+      purchaseDisposition:
+        data?.authorizedSignatures?.purchaseDisposition || "",
+      tqcSignBy:
+        data?.authorizedSignatures?.tqcSignBy?.id ??
+        data?.authorizedSignatures?.tqcSignBy ??
+        "",
+      tqcDisposition: data?.authorizedSignatures?.tqcDisposition || "",
+      productionSignBy:
+        data?.authorizedSignatures?.productionSignBy?.id ??
+        data?.authorizedSignatures?.productionSignBy ??
+        "",
+      productionDisposition:
+        data?.authorizedSignatures?.productionDisposition || "",
+      qualitySignBy:
+        data?.authorizedSignatures?.qualitySignBy?.id ??
+        data?.authorizedSignatures?.qualitySignBy ??
+        "",
+      qualityDisposition: data?.authorizedSignatures?.qualityDisposition || "",
+      note: data?.authorizedSignatures?.note || "",
+    });
+  }, [data]);
+
+  /* ---------------- Doc Id auto-generation (Add mode) ---------------- */
+  useEffect(() => {
+    if (isEditMode || docIdLoadedRef.current) return;
+    if (!orgId) return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const financialYear = String(new Date().getFullYear());
+        const docId = await supplierChangeRequestAPI.getDocId({
+          financialYear,
+          orgId,
+        });
+        if (!cancelled && docId) {
+          setHeader((prev) => ({ ...prev, scrNo: docId }));
+          docIdLoadedRef.current = true;
+        }
+      } catch (err) {
+        console.error("Failed to generate SCR DocId:", err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isEditMode, orgId]);
 
   /* ---------------- Lookup loading ---------------- */
 
@@ -329,11 +482,15 @@ const SupplierChangeRequestForm = ({ data, onBack }) => {
 
   const loadVendors = useCallback(async () => {
     try {
-      const res = await partyMasterAPI.getPartyByOrgId(orgId, branch);
+      const list = await supplierChangeRequestAPI.getVendorCodeDropdown({
+        branch,
+        orgId,
+      });
       setVendorOptions(
-        (res || []).map((v) => ({
+        (list || []).map((v) => ({
           value: v.id,
-          label: v.customerName || v.docId || v.id,
+          label: v.vendorCode || String(v.id),
+          supplierName: v.supplierName || "",
         })),
       );
     } catch (error) {
@@ -342,18 +499,39 @@ const SupplierChangeRequestForm = ({ data, onBack }) => {
     }
   }, [orgId, branch]);
 
-  const loadEmployees = useCallback(async () => {
+  // Buyer Name — purchase employees only
+  const loadBuyerEmployees = useCallback(async () => {
     try {
-      const res = await employeeAPI.getEmployeeByOrgId(orgId);
-      setEmployeeOptions(
-        (res || []).map((e) => ({
-          value: e.id,
-          label: e.employeeName || e.name || e.id,
+      const list =
+        await supplierChangeRequestAPI.getPurchaseEmployeesDropdown({
+          branch,
+          orgId,
+        });
+      setBuyerEmployeeOptions(
+        (list || []).map((e) => ({
+          value: e.employeeId,
+          label: e.employeeName || e.employeeCode || String(e.employeeId),
         })),
       );
     } catch (error) {
-      console.error("Failed to load employee options:", error);
-      setEmployeeOptions([]);
+      console.error("Failed to load purchase employees:", error);
+      setBuyerEmployeeOptions([]);
+    }
+  }, [orgId, branch]);
+
+  // ✅ Source/Process Triggered By — ALL employees
+  const loadAllEmployees = useCallback(async () => {
+    try {
+      const list = await supplierChangeRequestAPI.getAllEmployees(orgId);
+      setSourceEmployeeOptions(
+        (list || []).map((e) => ({
+          value: e.id,
+          label: e.employeeName || e.employeeId || String(e.id),
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to load all employees:", error);
+      setSourceEmployeeOptions([]);
     }
   }, [orgId]);
 
@@ -364,9 +542,47 @@ const SupplierChangeRequestForm = ({ data, onBack }) => {
   useEffect(() => {
     if (orgId && branch) {
       loadVendors();
-      loadEmployees();
+      loadBuyerEmployees();
     }
-  }, [orgId, branch, loadVendors, loadEmployees]);
+  }, [orgId, branch, loadVendors, loadBuyerEmployees]);
+
+  useEffect(() => {
+    if (orgId) loadAllEmployees();
+  }, [orgId, loadAllEmployees]);
+
+  /* ---------------- Sign-by dropdowns — one per department ---------------- */
+  useEffect(() => {
+    if (!orgId || !branch) return;
+
+    const loadAll = async () => {
+      const entries = Object.entries(SIGNBY_DEPARTMENTS);
+      const result = {};
+
+      await Promise.all(
+        entries.map(async ([key, dept]) => {
+          try {
+            const list =
+              await supplierChangeRequestAPI.getEmployeesByDepartment({
+                branch,
+                department: dept,
+                orgId,
+              });
+            result[key] = (list || []).map((e) => ({
+              value: e.employeeId ?? e.id,
+              label: e.employeeName || e.employeeCode || String(e.employeeId),
+            }));
+          } catch (err) {
+            console.error(`Failed to load employees for ${dept}:`, err);
+            result[key] = [];
+          }
+        }),
+      );
+
+      setSignByOptionsByRole(result);
+    };
+
+    loadAll();
+  }, [orgId, branch]);
 
   /* ---------------- Handlers ---------------- */
 
@@ -376,8 +592,10 @@ const SupplierChangeRequestForm = ({ data, onBack }) => {
     setHeader((prev) => {
       const next = { ...prev, [name]: value };
       if (name === "vendorCode") {
-        const vendor = vendorOptions.find((v) => v.value === value);
-        next.supplierName = vendor?.label || "";
+        const vendor = vendorOptions.find(
+          (v) => String(v.value) === String(value),
+        );
+        next.supplierName = vendor?.supplierName || "";
       }
       return next;
     });
@@ -400,7 +618,7 @@ const SupplierChangeRequestForm = ({ data, onBack }) => {
     setAuthorizedSignatures((prev) => ({ ...prev, [name]: value }));
   };
 
-  /* ---------------- Validation & Save ---------------- */
+  /* ---------------- Validation ---------------- */
 
   const validate = () => {
     const errors = {};
@@ -426,46 +644,132 @@ const SupplierChangeRequestForm = ({ data, onBack }) => {
     return Object.keys(errors).length === 0;
   };
 
+  /* ---------------- Save ---------------- */
+
   const handleSave = async () => {
     if (!validate()) return;
 
     setIsSubmitting(true);
 
     const isUpdate = Boolean(data?.id);
+    const financialYear = String(new Date().getFullYear());
 
-    // Single-transaction payload: header + reason/impact/authorization
-    // records. The backend keeps the complete change history with approval
-    // tracking across departments (server-side validation).
+    /* ---- Payload remapped to the exact backend contract ---- */
     const payload = {
       ...(isUpdate ? { id: data.id } : {}),
-      orgId,
-      branch,
-      ...header,
-      reasonForChange,
-      impactOfChange,
-      authorizedSignatures,
-      createdBy: isUpdate ? data?.createdBy || usersId : usersId,
-      ...(isUpdate ? { updatedBy: usersId } : {}),
+
+      active: header.active !== false,
+      orgId: Number(orgId),
+      branch: Number(header.plantId) || Number(branch) || 0,
+      financialYear,
+
+      createdBy: isUpdate ? data?.createdBy ?? usersId ?? "" : usersId ?? "",
+
+      /* Header */
+      vendorCode: Number(header.vendorCode) || 0,
+      partNo: header.partNumber || "",
+      partDescription: header.partDescription || "",
+
+      supplierContact: header.supplierContact || "",
+      supplierPhoneNo: Number(header.supplierPhoneNo) || 0,
+      supplierEmailId: header.supplierEmailId || "",
+
+      buyerName: Number(header.buyerName) || 0,
+      buyerPhoneNo: Number(header.buyerPhoneNo) || 0,
+      buyerEmailId: header.buyerEmailId || "",
+
+      sourceTriggeredBy: Number(header.sourceTriggeredBy) || 0,
+      sourcePhoneNo: Number(header.sourcePhoneNo) || 0,
+      sourceEmailId: header.sourceEmailId || "",
+
+      /* Reason for Change — backend key names */
+      capacityIssueWithExisitingSupplier:
+        reasonForChange.capacityIssueExistingSupplier || "",
+      customerRequirementDemandIncreased:
+        reasonForChange.customerRequirementDemandIncreased || "",
+      alternativeRMSourceorAdditionalRMSource:
+        reasonForChange.alternativeRmSource || "",
+      internalCapacityIssue: reasonForChange.internalCapacityIssue || "",
+      changeInSupplierBaseQualityIssueinExisitingSupplier:
+        reasonForChange.supplierBaseChange || "",
+      supplierCommercialIssue: reasonForChange.supplierCommercialIssue || "",
+      customeApprovedSource: reasonForChange.customerApprovedSource || "",
+      others: reasonForChange.others || "",
+      changeDescriptionInDetails:
+        reasonForChange.changeDescriptionDetails || "",
+      detailOfProposedProcessOfOutSourced:
+        reasonForChange.proposedProcessOutsourced || "",
+
+      /* Impact of Change — backend key names */
+      qualityImprovement: impactOfChange.qualityImprovement || "",
+      reducedLeadTime: impactOfChange.reducedLeadTime || "",
+      costReduction: impactOfChange.costReduction || "",
+      increaseManufacturingEfficiency:
+        impactOfChange.increaseManufacturingEfficiency || "",
+      othersPleaseSpecify: impactOfChange.othersSpecify || "",
+      effectOfChanges: impactOfChange.effectOfChanges || "",
+      riskAssessment: impactOfChange.riskAssessment || "",
+      proposedIntroductionImplementationDate:
+        impactOfChange.proposedImplementationDate || "",
+      supplierEvaluationReport:
+        impactOfChange.supplierEvaluationReport || "",
+      reliabilityFunctionalReportFromTDC:
+        impactOfChange.reliabilityFunctionalReportTdc || "",
+      customerApproval: impactOfChange.customerApproval || "",
+      onJobTrainingReportFromMfg:
+        impactOfChange.onJobTrainingReportManufacturing || "",
+      processAuditReport: impactOfChange.processAuditReport || "",
+      supplierRegistrationFrom:
+        impactOfChange.supplierRegistrationForm || "",
+      ppapIsirRequired: impactOfChange.ppapSirRequired || "",
+      changeRequestApproval: impactOfChange.changeRequestApproval || "",
+
+      /* Authorized Signatures — flattened */
+      signByPurchase: Number(authorizedSignatures.purchaseSignBy) || 0,
+      purchaseDisposition: authorizedSignatures.purchaseDisposition || "",
+
+      signByTDC: Number(authorizedSignatures.tqcSignBy) || 0,
+      tdcDisposition: authorizedSignatures.tqcDisposition || "",
+
+      signByProduction: Number(authorizedSignatures.productionSignBy) || 0,
+      productionDisposition:
+        authorizedSignatures.productionDisposition || "",
+
+      signByQuality: Number(authorizedSignatures.qualitySignBy) || 0,
+      qualityDisposition: authorizedSignatures.qualityDisposition || "",
+
+      note: authorizedSignatures.note || "",
     };
 
-    try {
-      const response = await supplierChangeRequestAPI.createUpdateScr(payload);
+    console.log("Saving Supplier Change Request payload:", payload);
 
-      if (response?.status) {
+    try {
+      const response =
+        await supplierChangeRequestAPI.createUpdateScr(payload);
+
+      const isSuccess =
+        response?.status === true ||
+        response?.statusFlag === "Ok" ||
+        response?.status === 200 ||
+        response?.statusCode === 200;
+
+      if (isSuccess) {
         addToast(
           response?.paramObjectsMap?.message ||
-            (isUpdate
-              ? "Supplier Change Request updated successfully!"
-              : "Supplier Change Request created successfully!"),
+          (isUpdate
+            ? "Supplier Change Request updated successfully!"
+            : "Supplier Change Request created successfully!"),
+          "success",
         );
         onBack?.();
       } else {
         addToast(
           response?.errors?.[0]?.shortMessage ||
-            response?.errors?.[0]?.longMessage ||
-            response?.message ||
-            response?.paramObjectsMap?.message ||
-            "Failed to save Supplier Change Request.",
+          response?.errors?.[0]?.longMessage ||
+          response?.message ||
+          response?.paramObjectsMap?.message ||
+          "Failed to save Supplier Change Request.",
+          "error",
         );
       }
     } catch (err) {
@@ -473,19 +777,18 @@ const SupplierChangeRequestForm = ({ data, onBack }) => {
       if (err.response?.data) {
         addToast(
           err.response.data.message ||
-            err.response.data.statusMessage ||
-            err.response.data.error ||
-            JSON.stringify(err.response.data),
+          err.response.data.statusMessage ||
+          err.response.data.error ||
+          "Failed to save Supplier Change Request.",
+          "error",
         );
       } else {
-        addToast("Something went wrong.");
+        addToast("Something went wrong.", "error");
       }
     } finally {
       setIsSubmitting(false);
     }
   };
-
-  const activeTabMeta = CHILD_TABS.find((t) => t.key === activeChildTab);
 
   return (
     <div className="w-full p-2">
@@ -518,7 +821,7 @@ const SupplierChangeRequestForm = ({ data, onBack }) => {
               onChange={handleHeaderChange}
               error={fieldErrors.scrNo}
               required
-              disabled={!data}
+              disabled
             />
             <Field
               type="select"
@@ -591,6 +894,7 @@ const SupplierChangeRequestForm = ({ data, onBack }) => {
               value={header.supplierEmailId}
               onChange={handleHeaderChange}
             />
+            {/* Buyer Name — purchase employees only */}
             <Field
               type="select"
               label="Buyer Name"
@@ -598,7 +902,7 @@ const SupplierChangeRequestForm = ({ data, onBack }) => {
               value={header.buyerName}
               onChange={handleHeaderChange}
               error={fieldErrors.buyerName}
-              options={employeeOptions}
+              options={buyerEmployeeOptions}
               required
             />
             <Field
@@ -615,6 +919,7 @@ const SupplierChangeRequestForm = ({ data, onBack }) => {
               value={header.buyerEmailId}
               onChange={handleHeaderChange}
             />
+            {/* ✅ Source/Process Triggered By — ALL employees */}
             <Field
               type="select"
               label="Source/Process Triggered By"
@@ -622,7 +927,7 @@ const SupplierChangeRequestForm = ({ data, onBack }) => {
               value={header.sourceTriggeredBy}
               onChange={handleHeaderChange}
               error={fieldErrors.sourceTriggeredBy}
-              options={employeeOptions}
+              options={sourceEmployeeOptions}
               required
             />
             <Field
@@ -644,7 +949,6 @@ const SupplierChangeRequestForm = ({ data, onBack }) => {
 
         {/* ---------------- Child Tabs ---------------- */}
         <section className="mt-0 bg-white dark:bg-gray-800">
-          {/* Tabs */}
           <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 mb-0">
             <div className="flex flex-wrap">
               {CHILD_TABS.map((tab) => (
@@ -652,11 +956,10 @@ const SupplierChangeRequestForm = ({ data, onBack }) => {
                   key={tab.key}
                   type="button"
                   onClick={() => setActiveChildTab(tab.key)}
-                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${
-                    activeChildTab === tab.key
+                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${activeChildTab === tab.key
                       ? "bg-blue-600 text-white"
                       : "text-gray-600 dark:text-gray-300"
-                  }`}
+                    }`}
                 >
                   {tab.label}
                 </button>
@@ -897,7 +1200,7 @@ const SupplierChangeRequestForm = ({ data, onBack }) => {
                   name="purchaseSignBy"
                   value={authorizedSignatures.purchaseSignBy}
                   onChange={handleSignatureChange}
-                  options={employeeOptions}
+                  options={signByOptionsByRole.purchaseSignBy || []}
                 />
                 <Field
                   type="select"
@@ -913,7 +1216,7 @@ const SupplierChangeRequestForm = ({ data, onBack }) => {
                   name="tqcSignBy"
                   value={authorizedSignatures.tqcSignBy}
                   onChange={handleSignatureChange}
-                  options={employeeOptions}
+                  options={signByOptionsByRole.tqcSignBy || []}
                 />
                 <Field
                   type="select"
@@ -929,7 +1232,7 @@ const SupplierChangeRequestForm = ({ data, onBack }) => {
                   name="productionSignBy"
                   value={authorizedSignatures.productionSignBy}
                   onChange={handleSignatureChange}
-                  options={employeeOptions}
+                  options={signByOptionsByRole.productionSignBy || []}
                 />
                 <Field
                   type="select"
@@ -945,7 +1248,7 @@ const SupplierChangeRequestForm = ({ data, onBack }) => {
                   name="qualitySignBy"
                   value={authorizedSignatures.qualitySignBy}
                   onChange={handleSignatureChange}
-                  options={employeeOptions}
+                  options={signByOptionsByRole.qualitySignBy || []}
                 />
                 <Field
                   type="select"

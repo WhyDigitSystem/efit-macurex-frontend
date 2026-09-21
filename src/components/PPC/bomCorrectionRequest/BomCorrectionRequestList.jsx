@@ -12,14 +12,24 @@ const BomCorrectionRequestList = ({
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const ORG_ID = localStorage.getItem("orgId");
+  const ORG_ID = Number(localStorage.getItem("orgId")) || 0;
+  const BRANCH_ID = Number(localStorage.getItem("branchId")) || 0;
 
   const loadRecords = useCallback(async () => {
+    if (!ORG_ID || !BRANCH_ID) {
+      setData([]);
+      return;
+    }
+
     try {
       setLoading(true);
 
-      const records = await bomCorrectionRequestAPI.getByOrgId(ORG_ID);
+      const records = await bomCorrectionRequestAPI.getByOrgIdAndBranch({
+        branch: BRANCH_ID,
+        orgId: ORG_ID,
+      });
 
+      // newest first
       records.sort((a, b) => (b.id || 0) - (a.id || 0));
 
       setData(records);
@@ -30,42 +40,76 @@ const BomCorrectionRequestList = ({
     } finally {
       setLoading(false);
     }
-  }, [ORG_ID]);
+  }, [ORG_ID, BRANCH_ID]);
 
   useEffect(() => {
     loadRecords();
   }, [loadRecords, refreshTrigger]);
 
+  const getFgPartNo = (row) =>
+    row?.fgPartNo?.itemCode || row?.fgPartNo || "";
+
+  const getRequestedByName = (row) =>
+    row?.correctionRequestedBy?.employeeName ||
+    row?.correctionRequestedBy ||
+    "";
+
+  const getApprovedByName = (row) =>
+    row?.correctionRequestApprovedBy?.employeeName ||
+    row?.correctionRequestApprovedBy ||
+    "";
+
+  const getDocDate = (row) => {
+    const d = row?.docDate;
+    if (!d) return "";
+    // Already YYYY-MM-DD; keep as-is. Swap to dayjs if you want formatted output.
+    return d;
+  };
+
   const columns = [
     {
-      key: "fgPartNo",
-      label: "FG Part No",
-      accessor: (row) => row.header?.fgPartNo || row.fgPartNo,
+      key: "docId",
+      label: "Doc Id",
+      accessor: (row) => row?.docId || "",
       type: "text",
     },
     {
-      key: "date",
+      key: "docDate",
       label: "Date",
-      accessor: (row) => row.header?.date || row.date,
+      accessor: (row) => getDocDate(row),
+      type: "text",
+    },
+    {
+      key: "fgPartNo",
+      label: "FG Part No",
+      accessor: (row) => getFgPartNo(row),
       type: "text",
     },
     {
       key: "correctionRequestedBy",
       label: "Requested By",
-      accessor: (row) =>
-        row.header?.correctionRequestedBy || row.correctionRequestedBy,
+      accessor: (row) => getRequestedByName(row),
+      type: "text",
+    },
+    {
+      key: "correctionRequestApprovedBy",
+      label: "Approved By",
+      accessor: (row) => getApprovedByName(row),
       type: "text",
     },
     {
       key: "reasonForChange",
       label: "Reason for Change",
-      accessor: (row) => row.header?.reasonForChange || row.reasonForChange,
+      accessor: (row) => row?.reasonForChange || "",
       type: "text",
     },
     {
       key: "active",
       label: "Status",
-      accessor: "active",
+      accessor: (row) =>
+        row?.active === true || row?.active === "Active"
+          ? "Active"
+          : "Inactive",
       type: "status",
       statusVariants: {
         Active: {
@@ -90,33 +134,31 @@ const BomCorrectionRequestList = ({
   ];
 
   const searchFields = [
-    "header.fgPartNo",
-    "fgPartNo",
-    "header.correctionRequestedBy",
-    "correctionRequestedBy",
-    "header.date",
-    "date",
+    "docId",
+    "fgPartNo.itemCode",
+    "correctionRequestedBy.employeeName",
+    "correctionRequestApprovedBy.employeeName",
+    "productName",
+    "customerName",
+    "supplier",
+    "reasonForChange",
   ];
 
   const filterOptions = [
-    {
-      value: "all",
-      label: "All",
-      field: null,
-    },
+    { value: "all", label: "All", field: null },
     {
       value: "active",
       label: "Active",
       field: "active",
       filterValue: "active",
-      activeValue: "Active",
+      activeValue: true,
     },
     {
       value: "inactive",
       label: "Inactive",
       field: "active",
       filterValue: "inactive",
-      activeValue: "Active",
+      activeValue: true,
     },
   ];
 
