@@ -12,13 +12,18 @@ const ActivityMasterList = ({
   const [activityData, setActivityData] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const ORG_ID = parseInt(localStorage.getItem("orgId"));
+  const ORG_ID = Number(localStorage.getItem("orgId")) || 0;
 
   const loadActivities = useCallback(async () => {
+    if (!ORG_ID) {
+      setActivityData([]);
+      return;
+    }
+
     try {
       setLoading(true);
 
-      const response = await activityMasterAPI.getActivities(ORG_ID);
+      const response = await activityMasterAPI.getByOrgId(ORG_ID);
 
       const sortedActivities = (response || []).sort(
         (a, b) => (b.id || 0) - (a.id || 0),
@@ -42,19 +47,50 @@ const ActivityMasterList = ({
     onEdit(activity);
   };
 
+  /* ---------------- Accessors ---------------- */
+
+  const getDepartmentLabel = (row) =>
+    row?.department?.departmentName ||
+    row?.department?.departmentCode ||
+    (typeof row?.department === "string" ? row.department : "") ||
+    "";
+
+  /* ---------------- Columns ---------------- */
+
   const columns = [
     {
       key: "department",
       label: "Department",
-      accessor: "department",
+      accessor: (row) => getDepartmentLabel(row),
       type: "text",
       noWrap: true,
     },
     {
       key: "activity",
       label: "Activity",
-      accessor: "activity",
+      accessor: (row) => row?.activity || "",
       type: "text",
+    },
+    {
+      key: "active",
+      label: "Status",
+      accessor: (row) =>
+        row?.active === true || row?.active === "Active"
+          ? "Active"
+          : "Inactive",
+      type: "status",
+      statusVariants: {
+        Active: {
+          label: "Active",
+          className:
+            "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+        },
+        Inactive: {
+          label: "Inactive",
+          className:
+            "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+        },
+      },
     },
     {
       key: "actions",
@@ -65,7 +101,7 @@ const ActivityMasterList = ({
     },
   ];
 
-  const searchFields = ["department", "activity"];
+  const searchFields = ["department.departmentName", "activity"];
 
   return (
     <CommonListViewTable

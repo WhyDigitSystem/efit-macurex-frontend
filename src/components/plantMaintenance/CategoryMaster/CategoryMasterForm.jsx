@@ -1,9 +1,10 @@
 import { ArrowLeft, FilePlus2, Save, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import categoryMasterAPI, {
-  APPLICABLE_FOR_OPTIONS,
+  APPLICABLE_FOR_LIST_NAME,
 } from "../../../api/plantMaintenance/categoryMasterAPI";
 import { useToast } from "../../Toast/ToastContext";
+import listOfValuesAPI from "../../../api/listOfValuesAPI";
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -15,7 +16,8 @@ const controlClasses =
 const labelClasses =
   "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
-const fieldGrid = "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4";
+const fieldGrid =
+  "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4";
 
 const CategoryMasterForm = ({ onBack, onSave, editData, editId }) => {
   const ORG_ID = Number(localStorage.getItem("orgId")) || 0;
@@ -26,6 +28,7 @@ const CategoryMasterForm = ({ onBack, onSave, editData, editId }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loading, setLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
+  const [applicableForOptions, setApplicableForOptions] = useState([]);
   const saveCounter = useRef(0);
 
   const fieldLabels = {
@@ -41,6 +44,54 @@ const CategoryMasterForm = ({ onBack, onSave, editData, editId }) => {
     createdBy: CREATED_BY,
   });
 
+  /* ---------------- Load Applicable For from list-of-values ---------------- */
+  useEffect(() => {
+    if (!ORG_ID) return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const list = await listOfValuesAPI.getListValuesGroup(
+          APPLICABLE_FOR_LIST_NAME,
+          ORG_ID,
+        );
+
+        const opts = (list || [])
+          .map((item) => {
+            if (item == null) return null;
+            if (typeof item === "object") {
+              const value = item.id ?? item.value ?? item.valuesCode ?? "";
+              const label =
+                item.valuesDescription ??
+                item.valueDescription ??
+                item.description ??
+                item.value ??
+                item.label ??
+                String(value);
+              return value !== "" ? { value, label } : null;
+            }
+            return { value: item, label: String(item) };
+          })
+          .filter(Boolean);
+
+        if (!cancelled) {
+          setApplicableForOptions(opts);
+        }
+      } catch (error) {
+        console.error("Failed to load Applicable For list:", error);
+        if (!cancelled) {
+          setApplicableForOptions([]);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [ORG_ID]);
+
+  /* ---------------- Initialize for edit / add ---------------- */
   useEffect(() => {
     const initializeForm = async () => {
       if (editId && editId > 0) {
@@ -56,7 +107,7 @@ const CategoryMasterForm = ({ onBack, onSave, editData, editId }) => {
   const populateFormFromEditData = (data) => {
     setForm({
       id: data.id || 0,
-      applicableFor: data.applicableFor || "",
+      applicableFor: data.applicableFor?.id ?? data.applicableFor ?? "",
       category: data.category || "",
       orgId: data.orgId || ORG_ID,
       createdBy: data.createdBy || CREATED_BY,
@@ -71,7 +122,10 @@ const CategoryMasterForm = ({ onBack, onSave, editData, editId }) => {
       if (categoryData) {
         setForm({
           id: categoryData.id || 0,
-          applicableFor: categoryData.applicableFor || "",
+          applicableFor:
+            categoryData.applicableFor?.id ??
+            categoryData.applicableFor ??
+            "",
           category: categoryData.category || "",
           orgId: categoryData.orgId || ORG_ID,
           createdBy: categoryData.createdBy || CREATED_BY,
@@ -109,7 +163,7 @@ const CategoryMasterForm = ({ onBack, onSave, editData, editId }) => {
   const validate = () => {
     const errors = {};
 
-    if (!form.applicableFor.trim()) {
+    if (!form.applicableFor) {
       errors.applicableFor = "Applicable For is required";
     }
 
@@ -135,13 +189,20 @@ const CategoryMasterForm = ({ onBack, onSave, editData, editId }) => {
     setIsSubmitting(true);
     saveCounter.current += 1;
 
+    const financialYear = String(new Date().getFullYear());
+
     const payload = {
-      ...(form.id && form.id > 0 && { id: form.id }),
-      applicableFor: form.applicableFor.trim(),
+      ...(form.id && form.id > 0 ? { id: form.id } : {}),
+
+      active: true,
+      orgId: Number(ORG_ID) || 0,
+      financialYear,
+
+      applicableFor: Number(form.applicableFor) || 0,
       category: form.category.trim().toUpperCase(),
-      orgId: form.orgId,
-      createdBy: form.createdBy,
-      requestNo: `REQ-${Date.now()}-${saveCounter.current}`,
+
+      cancelRemarks: "",
+      createdBy: form.createdBy || CREATED_BY,
     };
 
     console.log("Submitting Category Payload:", payload);
@@ -149,7 +210,8 @@ const CategoryMasterForm = ({ onBack, onSave, editData, editId }) => {
     try {
       const response = await categoryMasterAPI.createUpdateCategory(payload);
 
-      const status = response?.status === true || response?.statusFlag === "Ok";
+      const status =
+        response?.status === true || response?.statusFlag === "Ok";
 
       if (status) {
         const successMessage =
@@ -171,6 +233,8 @@ const CategoryMasterForm = ({ onBack, onSave, editData, editId }) => {
         }
       } else {
         const errorMessage =
+          response?.errors?.[0]?.shortMessage ||
+          response?.errors?.[0]?.longMessage ||
           response?.paramObjectsMap?.message ||
           response?.paramObjectsMap?.errorMessage ||
           response?.message ||
@@ -219,7 +283,7 @@ const CategoryMasterForm = ({ onBack, onSave, editData, editId }) => {
       {/* Main Card */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
         <div className={fieldGrid}>
-          {/* Applicable For (dropdown, mandatory) */}
+          {/* Applicable For (dropdown from list-of-values, mandatory) */}
           <div>
             <label className={labelClasses}>
               Applicable For <span className="text-red-500">*</span>
@@ -229,14 +293,13 @@ const CategoryMasterForm = ({ onBack, onSave, editData, editId }) => {
               name="applicableFor"
               value={form.applicableFor}
               onChange={handleChange}
-              className={`${controlClasses} ${
-                fieldErrors.applicableFor ? "border-red-500" : ""
-              }`}
+              className={`${controlClasses} ${fieldErrors.applicableFor ? "border-red-500" : ""
+                }`}
             >
               <option value="">-- Select Applicable For --</option>
-              {APPLICABLE_FOR_OPTIONS.map((option) => (
-                <option key={option} value={option}>
-                  {option}
+              {applicableForOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
                 </option>
               ))}
             </select>
@@ -259,11 +322,9 @@ const CategoryMasterForm = ({ onBack, onSave, editData, editId }) => {
               value={form.category}
               onChange={handleChange}
               placeholder="Enter category"
-              className={`${controlClasses} ${
-                fieldErrors.category ? "border-red-500" : ""
-              }`}
+              className={`${controlClasses} ${fieldErrors.category ? "border-red-500" : ""
+                }`}
             />
-
             {fieldErrors.category && (
               <p className="text-red-500 text-[11px] mt-1">
                 {fieldErrors.category}
@@ -281,15 +342,6 @@ const CategoryMasterForm = ({ onBack, onSave, editData, editId }) => {
           >
             <X className="h-3 w-3" />
             Cancel
-          </button>
-
-          <button
-            onClick={handleNew}
-            disabled={isSubmitting}
-            className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-blue-300 dark:border-blue-600 text-blue-600 dark:text-blue-400 bg-white dark:bg-gray-800 hover:bg-blue-50 dark:hover:bg-blue-700 disabled:opacity-60"
-          >
-            <FilePlus2 className="h-3 w-3" />
-            New
           </button>
 
           <button

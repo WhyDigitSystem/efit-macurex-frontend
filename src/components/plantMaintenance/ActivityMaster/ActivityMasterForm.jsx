@@ -1,5 +1,5 @@
 import { ArrowLeft, FilePlus2, Save, X } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import activityMasterAPI from "../../../api/plantMaintenance/activityMasterAPI";
 import { departmentAPI } from "../../../api/departmentAPI";
 import { useToast } from "../../Toast/ToastContext";
@@ -14,7 +14,8 @@ const controlClasses =
 const labelClasses =
   "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
-const fieldGrid = "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4";
+const fieldGrid =
+  "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4";
 
 const ActivityMasterForm = ({ onBack, onSave, editData, editId }) => {
   const ORG_ID = Number(localStorage.getItem("orgId")) || 0;
@@ -27,7 +28,6 @@ const ActivityMasterForm = ({ onBack, onSave, editData, editId }) => {
   const [loading, setLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [departmentOptions, setDepartmentOptions] = useState([]);
-  const saveCounter = useRef(0);
 
   const fieldLabels = {
     department: "Department",
@@ -42,32 +42,21 @@ const ActivityMasterForm = ({ onBack, onSave, editData, editId }) => {
     createdBy: CREATED_BY,
   });
 
+  /* ---------------- Load Departments ---------------- */
   const loadDepartments = useCallback(async () => {
     try {
       const res = await departmentAPI.getAllDepartments(ORG_ID);
       const departments = res?.paramObjectsMap?.departmentVO || [];
-      if (departments.length) {
-        setDepartmentOptions(
-          departments.map((d) => ({ value: d.departmentName, label: d.departmentName })),
-        );
-      } else {
-        setDepartmentOptions([
-          { value: "Design", label: "Design" },
-          { value: "Purchase", label: "Purchase" },
-          { value: "Stores", label: "Stores" },
-          { value: "Quality", label: "Quality" },
-          { value: "Production", label: "Production" },
-        ]);
-      }
+
+      setDepartmentOptions(
+        (departments || []).map((d) => ({
+          value: d.id ?? d.departmentName,
+          label: d.departmentName || String(d.id),
+        })),
+      );
     } catch (error) {
       console.error("Failed to load department options:", error);
-      setDepartmentOptions([
-        { value: "Design", label: "Design" },
-        { value: "Purchase", label: "Purchase" },
-        { value: "Stores", label: "Stores" },
-        { value: "Quality", label: "Quality" },
-        { value: "Production", label: "Production" },
-      ]);
+      setDepartmentOptions([]);
     }
   }, [ORG_ID, BRANCH]);
 
@@ -75,6 +64,7 @@ const ActivityMasterForm = ({ onBack, onSave, editData, editId }) => {
     loadDepartments();
   }, [loadDepartments]);
 
+  /* ---------------- Initialize for edit / add ---------------- */
   useEffect(() => {
     const initializeForm = async () => {
       if (editId && editId > 0) {
@@ -90,7 +80,7 @@ const ActivityMasterForm = ({ onBack, onSave, editData, editId }) => {
   const populateFormFromEditData = (data) => {
     setForm({
       id: data.id || 0,
-      department: data.department || "",
+      department: data.department?.id ?? data.department ?? "",
       activity: data.activity || "",
       orgId: data.orgId || ORG_ID,
       createdBy: data.createdBy || CREATED_BY,
@@ -100,12 +90,13 @@ const ActivityMasterForm = ({ onBack, onSave, editData, editId }) => {
   const loadActivityData = async (activityId) => {
     try {
       setLoading(true);
-      const activityData = await activityMasterAPI.getActivityById(activityId);
+      const activityData = await activityMasterAPI.getById(activityId);
 
       if (activityData) {
         setForm({
           id: activityData.id || 0,
-          department: activityData.department || "",
+          department:
+            activityData.department?.id ?? activityData.department ?? "",
           activity: activityData.activity || "",
           orgId: activityData.orgId || ORG_ID,
           createdBy: activityData.createdBy || CREATED_BY,
@@ -143,7 +134,7 @@ const ActivityMasterForm = ({ onBack, onSave, editData, editId }) => {
   const validate = () => {
     const errors = {};
 
-    if (!form.department.trim()) {
+    if (!form.department) {
       errors.department = "Department is required";
     }
 
@@ -167,15 +158,28 @@ const ActivityMasterForm = ({ onBack, onSave, editData, editId }) => {
     if (!validate()) return;
 
     setIsSubmitting(true);
-    saveCounter.current += 1;
 
+    const isUpdate = Boolean(form.id && form.id > 0);
+    const financialYear = String(new Date().getFullYear());
+
+    /* ---- Payload matches the backend contract exactly ---- */
     const payload = {
-      ...(form.id && form.id > 0 && { id: form.id }),
-      department: form.department.trim(),
+      ...(isUpdate ? { id: form.id } : {}),
+
+      active: true,
+      orgId: Number(ORG_ID) || 0,
+      financialYear,
+
+      department: Number(form.department) || 0,
       activity: form.activity.trim().toUpperCase(),
-      orgId: form.orgId,
-      createdBy: form.createdBy,
-      requestNo: `REQ-${Date.now()}-${saveCounter.current}`,
+
+      cancel: false,
+      cancelRemarks: "",
+
+      createdBy: form.createdBy || CREATED_BY,
+      ...(isUpdate
+        ? { updatedBy: localStorage.getItem("userName") || CREATED_BY }
+        : {}),
     };
 
     console.log("Submitting Activity Payload:", payload);
@@ -183,12 +187,13 @@ const ActivityMasterForm = ({ onBack, onSave, editData, editId }) => {
     try {
       const response = await activityMasterAPI.createUpdateActivity(payload);
 
-      const status = response?.status === true || response?.statusFlag === "Ok";
+      const status =
+        response?.status === true || response?.statusFlag === "Ok";
 
       if (status) {
         const successMessage =
           response?.paramObjectsMap?.message ||
-          (form.id && form.id > 0
+          (isUpdate
             ? "Activity updated successfully!"
             : "Activity created successfully!");
 
@@ -197,7 +202,7 @@ const ActivityMasterForm = ({ onBack, onSave, editData, editId }) => {
         if (onSave) {
           const savedData = {
             ...payload,
-            id: response?.paramObjectsMap?.activityVO?.id || payload.id,
+            id: response?.paramObjectsMap?.activityMasterVO?.id || payload.id,
           };
           onSave(savedData);
         } else {
@@ -205,6 +210,8 @@ const ActivityMasterForm = ({ onBack, onSave, editData, editId }) => {
         }
       } else {
         const errorMessage =
+          response?.errors?.[0]?.shortMessage ||
+          response?.errors?.[0]?.longMessage ||
           response?.paramObjectsMap?.message ||
           response?.paramObjectsMap?.errorMessage ||
           response?.message ||
@@ -263,9 +270,8 @@ const ActivityMasterForm = ({ onBack, onSave, editData, editId }) => {
               name="department"
               value={form.department}
               onChange={handleChange}
-              className={`${controlClasses} ${
-                fieldErrors.department ? "border-red-500" : ""
-              }`}
+              className={`${controlClasses} ${fieldErrors.department ? "border-red-500" : ""
+                }`}
             >
               <option value="">-- Select Department --</option>
               {departmentOptions.map((option) => (
@@ -293,9 +299,8 @@ const ActivityMasterForm = ({ onBack, onSave, editData, editId }) => {
               value={form.activity}
               onChange={handleChange}
               placeholder="Enter activity"
-              className={`${controlClasses} ${
-                fieldErrors.activity ? "border-red-500" : ""
-              }`}
+              className={`${controlClasses} ${fieldErrors.activity ? "border-red-500" : ""
+                }`}
             />
 
             {fieldErrors.activity && (
@@ -315,15 +320,6 @@ const ActivityMasterForm = ({ onBack, onSave, editData, editId }) => {
           >
             <X className="h-3 w-3" />
             Cancel
-          </button>
-
-          <button
-            onClick={handleNew}
-            disabled={isSubmitting}
-            className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-blue-300 dark:border-blue-600 text-blue-600 dark:text-blue-400 bg-white dark:bg-gray-800 hover:bg-blue-50 dark:hover:bg-blue-700 disabled:opacity-60"
-          >
-            <FilePlus2 className="h-3 w-3" />
-            New
           </button>
 
           <button

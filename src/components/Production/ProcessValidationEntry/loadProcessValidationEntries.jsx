@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
+import processValidationEntryAPI from "../../../api/Production/processValidationEntryAPI";
 import { toast } from "../../../utils/toast";
 
 const ProcessValidationEntryList = ({
@@ -11,16 +12,23 @@ const ProcessValidationEntryList = ({
   const [entryData, setEntryData] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const ORG_ID = Number(localStorage.getItem("orgId"));
+  const ORG_ID = Number(localStorage.getItem("orgId")) || 0;
+  const BRANCH_ID = Number(localStorage.getItem("branchId")) || 0;
 
   const loadProcessValidationEntries = useCallback(async () => {
+    if (!ORG_ID || !BRANCH_ID) {
+      setEntryData([]);
+      return;
+    }
+
     try {
       setLoading(true);
 
       const response =
-        await processValidationEntryAPI.getProcessValidationEntryByOrgId(
-          ORG_ID,
-        );
+        await processValidationEntryAPI.getByOrgIdAndBranch({
+          branch: BRANCH_ID,
+          orgId: ORG_ID,
+        });
 
       const sortedData = (response || []).sort(
         (a, b) => (b.id || 0) - (a.id || 0),
@@ -34,60 +42,123 @@ const ProcessValidationEntryList = ({
     } finally {
       setLoading(false);
     }
-  }, [ORG_ID]);
+  }, [ORG_ID, BRANCH_ID]);
 
   useEffect(() => {
     loadProcessValidationEntries();
   }, [loadProcessValidationEntries, refreshTrigger]);
 
+  /* ---------------- Accessors ---------------- */
+
+  const getPlantLabel = (row) =>
+    row?.branch?.branchName ||
+    row?.branch?.branchCode ||
+    row?.branch?.id ||
+    "";
+
+  const getItemLabel = (row) =>
+    row?.item?.itemCode || row?.item?.id || "";
+
+  const getPartyLabel = (row) =>
+    row?.customer?.customerName || row?.customer?.id || "";
+
+  /* ✅ Fixed: fall back through readable fields before the raw id */
+  const getProcessSheetLabel = (row) => {
+    const ps = row?.processSheetNo;
+    if (!ps) return "";
+
+    return (
+      ps.docId ||                     // preferred display id
+      ps.processSheetNo ||            // alt field name
+      ps.planNo ||                    // another possible backend key
+      ps.bomId ||                     // e.g. "BOM-001"
+      ps.itemDescription ||           // e.g. "Component Routing for Finished Product"
+      ps.fgSfgItemCode?.itemCode ||   // e.g. "123"
+      String(ps.id)                   // last resort: numeric id
+    );
+  };
+
+  const getControlPlanLabel = (row) =>
+    row?.controlPlan?.planNo || row?.controlPlan?.id || "";
+
+  /* ---------------- Columns ---------------- */
+
   const columns = [
     {
-      key: "docNo",
+      key: "docId",
       label: "Doc No.",
-      accessor: (row) => row.header?.docNo,
+      accessor: (row) => row?.docId || "",
       type: "text",
+      noWrap: true,
     },
     {
-      key: "date",
+      key: "docDate",
       label: "Date",
-      accessor: (row) => row.header?.date,
-      type: "date",
+      accessor: (row) => row?.docDate || "",
+      type: "text",
     },
     {
-      key: "plant",
+      key: "branch",
       label: "Plant Id",
-      accessor: (row) => row.header?.plant,
+      accessor: (row) => getPlantLabel(row),
       type: "text",
     },
     {
-      key: "itemCode",
+      key: "item",
       label: "Item Code",
-      accessor: (row) => row.header?.itemCode,
+      accessor: (row) => getItemLabel(row),
       type: "text",
     },
     {
-      key: "partyName",
+      key: "customer",
       label: "Party Name",
-      accessor: (row) => row.header?.partyName,
+      accessor: (row) => getPartyLabel(row),
+      type: "text",
+    },
+    {
+      key: "processSheetNo",
+      label: "Process Sheet No",
+      accessor: (row) => getProcessSheetLabel(row),
+      type: "text",
+    },
+    {
+      key: "controlPlan",
+      label: "Control Plan",
+      accessor: (row) => getControlPlanLabel(row),
       type: "text",
     },
     {
       key: "validationReason",
       label: "Validation Reason",
-      accessor: (row) => row.header?.validationReason,
+      accessor: (row) => row?.validationReason || "",
       type: "text",
     },
     {
       key: "recommendedForProduction",
       label: "Recommended For Production",
-      accessor: (row) => row.processVadSummary?.recommendedForProduction,
+      accessor: (row) => row?.recommendedForProduction || "",
       type: "badge",
     },
     {
       key: "active",
       label: "Status",
-      accessor: "active",
+      accessor: (row) =>
+        row?.active === true || row?.active === "Active"
+          ? "Active"
+          : "Inactive",
       type: "status",
+      statusVariants: {
+        Active: {
+          label: "Active",
+          className:
+            "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+        },
+        Inactive: {
+          label: "Inactive",
+          className:
+            "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+        },
+      },
     },
     {
       key: "actions",
@@ -98,7 +169,12 @@ const ProcessValidationEntryList = ({
     },
   ];
 
-  const searchFields = ["header.docNo", "header.itemCode", "header.partyName"];
+  const searchFields = [
+    "docId",
+    "item.itemCode",
+    "customer.customerName",
+    "validationReason",
+  ];
 
   return (
     <div className="h-full flex flex-col">

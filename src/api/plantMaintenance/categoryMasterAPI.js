@@ -1,44 +1,45 @@
 import apiClient from "../apiClient";
 
-export const APPLICABLE_FOR_OPTIONS = [
-  "MACHINE",
-  "TOOL",
-  "EQUIPMENT",
-  "VEHICLE",
-  "INSTRUMENT",
-  "OTHER",
-];
+/* ------------------------------------------------------------------ */
+/* Applicable For — loaded from list-of-values                        */
+
+export const APPLICABLE_FOR_LIST_NAME = "BMCATEGORY";
+
+/* ------------------------------------------------------------------ */
 
 export const categoryMasterAPI = {
-  getCategories: async (orgId) => {
+  /* ---------------- List by Org ---------------- */
+  getByOrgId: async (orgId) => {
     try {
       const res = await apiClient.get(
-        `/api/plantMaintenance/category?orgid=${orgId}`
+        `/api/vendorComplaintEntry/getCategoryMasterByOrgId?orgId=${orgId}`,
       );
-      return res?.paramObjectsMap?.categoryVOList || res?.data || [];
+      return res?.paramObjectsMap?.categoryMasterVO || [];
     } catch (error) {
       console.error("Error fetching categories:", error);
       throw error;
     }
   },
 
-  getCategoryById: async (categoryId) => {
+  /* ---------------- Get by Id ---------------- */
+  getById: async (id) => {
     try {
       const res = await apiClient.get(
-        `/api/plantMaintenance/category/${categoryId}`
+        `/api/vendorComplaintEntry/getCategoryMasterById?id=${id}`,
       );
-      return res?.paramObjectsMap?.categoryVO || null;
+      return res?.paramObjectsMap?.categoryMasterVO || null;
     } catch (error) {
-      console.error("Error fetching category by ID:", error);
+      console.error("Error fetching category by id:", error);
       throw error;
     }
   },
 
+  /* ---------------- Save (create / update) ---------------- */
   createUpdateCategory: async (categoryDTO) => {
     try {
-      const res = await apiClient.post(
-        "/api/plantMaintenance/createUpdateCategory",
-        categoryDTO
+      const res = await apiClient.put(
+        "/api/vendorComplaintEntry/updateCreateCategoryMaster",
+        categoryDTO,
       );
       return res;
     } catch (error) {
@@ -47,16 +48,12 @@ export const categoryMasterAPI = {
     }
   },
 
-  getCategoryHistory: async (categoryId) => {
-    try {
-      const res = await apiClient.get(
-        `/api/plantMaintenance/category/${categoryId}/history`
-      );
-      return res?.paramObjectsMap?.categoryHistoryVOList || [];
-    } catch (error) {
-      console.error("Error fetching category history:", error);
-      throw error;
-    }
+  /* ---------------- Kept for back-compat ---------------- */
+  getCategories: async (orgId) => {
+    return categoryMasterAPI.getByOrgId(orgId);
+  },
+  getCategoryById: async (categoryId) => {
+    return categoryMasterAPI.getById(categoryId);
   },
 };
 

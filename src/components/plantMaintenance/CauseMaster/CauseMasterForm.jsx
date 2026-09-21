@@ -1,7 +1,7 @@
 import { ArrowLeft, FilePlus2, Save, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import causeMasterAPI, {
-  MAINTENANCE_TYPES,
+  MAINTENANCE_TYPE_LIST_NAME,
 } from "../../../api/plantMaintenance/causeMasterAPI";
 import { departmentAPI } from "../../../api/departmentAPI";
 import { useToast } from "../../Toast/ToastContext";
@@ -30,6 +30,7 @@ const CauseMasterForm = ({ onBack, onSave, editData, editId }) => {
   const [loading, setLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [departmentOptions, setDepartmentOptions] = useState([]);
+  const [maintenanceTypeOptions, setMaintenanceTypeOptions] = useState([]);
   const saveCounter = useRef(0);
 
   const fieldLabels = {
@@ -49,37 +50,25 @@ const CauseMasterForm = ({ onBack, onSave, editData, editId }) => {
     createdBy: CREATED_BY,
   });
 
+  /* ---------------- Load Departments ---------------- */
   const loadDepartments = useCallback(async () => {
     try {
       const res = await departmentAPI.getAllDepartments(ORG_ID);
       const departments = res?.paramObjectsMap?.departmentVO || [];
+
       if (departments.length) {
         setDepartmentOptions(
           departments.map((d) => ({
-            value: d.departmentName,
-            label: d.departmentName,
+            value: d.id ?? d.departmentName,
+            label: d.departmentName || String(d.id),
           })),
         );
       } else {
-        setDepartmentOptions([
-          { value: "Design", label: "Design" },
-          { value: "Purchase", label: "Purchase" },
-          { value: "Stores", label: "Stores" },
-          { value: "Quality", label: "Quality" },
-          { value: "Production", label: "Production" },
-          { value: "Maintenance", label: "Maintenance" },
-        ]);
+        setDepartmentOptions([]);
       }
     } catch (error) {
       console.error("Failed to load department options:", error);
-      setDepartmentOptions([
-        { value: "Design", label: "Design" },
-        { value: "Purchase", label: "Purchase" },
-        { value: "Stores", label: "Stores" },
-        { value: "Quality", label: "Quality" },
-        { value: "Production", label: "Production" },
-        { value: "Maintenance", label: "Maintenance" },
-      ]);
+      setDepartmentOptions([]);
     }
   }, [ORG_ID, BRANCH]);
 
@@ -87,6 +76,50 @@ const CauseMasterForm = ({ onBack, onSave, editData, editId }) => {
     loadDepartments();
   }, [loadDepartments]);
 
+  /* ---------------- Load Maintenance Type from list-of-values only ---------------- */
+  useEffect(() => {
+    if (!ORG_ID) return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const list = await causeMasterAPI.getListValuesGroup(
+          MAINTENANCE_TYPE_LIST_NAME,
+          ORG_ID,
+        );
+
+        const opts = (list || [])
+          .map((item) => {
+            if (item == null) return null;
+            if (typeof item === "object") {
+              const value = item.id ?? item.value ?? item.valuesCode ?? "";
+              const label =
+                item.valuesDescription ??
+                item.valueDescription ??
+                item.description ??
+                item.value ??
+                item.label ??
+                String(value);
+              return value !== "" ? { value, label } : null;
+            }
+            return { value: item, label: String(item) };
+          })
+          .filter(Boolean);
+
+        if (!cancelled) setMaintenanceTypeOptions(opts);
+      } catch (error) {
+        console.error("Failed to load Maintenance Type list:", error);
+        if (!cancelled) setMaintenanceTypeOptions([]);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [ORG_ID]);
+
+  /* ---------------- Initialize for edit / add ---------------- */
   useEffect(() => {
     const initializeForm = async () => {
       if (editId && editId > 0) {
@@ -102,8 +135,9 @@ const CauseMasterForm = ({ onBack, onSave, editData, editId }) => {
   const populateFormFromEditData = (data) => {
     setForm({
       id: data.id || 0,
-      department: data.department || "",
-      maintenanceType: data.maintenanceType || "",
+      department: data.department?.id ?? data.department ?? "",
+      maintenanceType:
+        data.maintenanceType?.id ?? data.maintenanceType ?? "",
       causeCode: data.causeCode || "",
       cause: data.cause || "",
       orgId: data.orgId || ORG_ID,
@@ -119,8 +153,11 @@ const CauseMasterForm = ({ onBack, onSave, editData, editId }) => {
       if (causeData) {
         setForm({
           id: causeData.id || 0,
-          department: causeData.department || "",
-          maintenanceType: causeData.maintenanceType || "",
+          department: causeData.department?.id ?? causeData.department ?? "",
+          maintenanceType:
+            causeData.maintenanceType?.id ??
+            causeData.maintenanceType ??
+            "",
           causeCode: causeData.causeCode || "",
           cause: causeData.cause || "",
           orgId: causeData.orgId || ORG_ID,
@@ -161,11 +198,11 @@ const CauseMasterForm = ({ onBack, onSave, editData, editId }) => {
   const validate = () => {
     const errors = {};
 
-    if (!form.department.trim()) {
+    if (!form.department) {
       errors.department = "Department is required";
     }
 
-    if (!form.maintenanceType.trim()) {
+    if (!form.maintenanceType) {
       errors.maintenanceType = "Maintenance Type is required";
     }
 
@@ -195,15 +232,24 @@ const CauseMasterForm = ({ onBack, onSave, editData, editId }) => {
     setIsSubmitting(true);
     saveCounter.current += 1;
 
+    const financialYear = String(new Date().getFullYear());
+
+    /* ---- Payload matches the backend contract exactly ---- */
     const payload = {
-      ...(form.id && form.id > 0 && { id: form.id }),
-      department: form.department.trim(),
-      maintenanceType: form.maintenanceType.trim(),
+      ...(form.id && form.id > 0 ? { id: form.id } : {}),
+
+      active: true,
+      orgId: Number(ORG_ID) || 0,
+      financialYear,
+
+      department: Number(form.department) || 0,
+      maintenanceType: Number(form.maintenanceType) || 0,
+
       causeCode: form.causeCode.trim().toUpperCase(),
       cause: form.cause.trim(),
-      orgId: form.orgId,
-      createdBy: form.createdBy,
-      requestNo: `REQ-${Date.now()}-${saveCounter.current}`,
+
+      cancelRemarks: "",
+      createdBy: form.createdBy || CREATED_BY,
     };
 
     console.log("Submitting Cause Payload:", payload);
@@ -211,7 +257,8 @@ const CauseMasterForm = ({ onBack, onSave, editData, editId }) => {
     try {
       const response = await causeMasterAPI.createUpdateCause(payload);
 
-      const status = response?.status === true || response?.statusFlag === "Ok";
+      const status =
+        response?.status === true || response?.statusFlag === "Ok";
 
       if (status) {
         const successMessage =
@@ -233,6 +280,8 @@ const CauseMasterForm = ({ onBack, onSave, editData, editId }) => {
         }
       } else {
         const errorMessage =
+          response?.errors?.[0]?.shortMessage ||
+          response?.errors?.[0]?.longMessage ||
           response?.paramObjectsMap?.message ||
           response?.paramObjectsMap?.errorMessage ||
           response?.message ||
@@ -291,9 +340,8 @@ const CauseMasterForm = ({ onBack, onSave, editData, editId }) => {
               name="department"
               value={form.department}
               onChange={handleChange}
-              className={`${controlClasses} ${
-                fieldErrors.department ? "border-red-500" : ""
-              }`}
+              className={`${controlClasses} ${fieldErrors.department ? "border-red-500" : ""
+                }`}
             >
               <option value="">-- Select Department --</option>
               {departmentOptions.map((opt) => (
@@ -310,7 +358,7 @@ const CauseMasterForm = ({ onBack, onSave, editData, editId }) => {
             )}
           </div>
 
-          {/* Maintenance Type (dropdown, mandatory) */}
+          {/* Maintenance Type (dropdown from list-of-values, mandatory) */}
           <div>
             <label className={labelClasses}>
               Maintenance Type <span className="text-red-500">*</span>
@@ -320,14 +368,13 @@ const CauseMasterForm = ({ onBack, onSave, editData, editId }) => {
               name="maintenanceType"
               value={form.maintenanceType}
               onChange={handleChange}
-              className={`${controlClasses} ${
-                fieldErrors.maintenanceType ? "border-red-500" : ""
-              }`}
+              className={`${controlClasses} ${fieldErrors.maintenanceType ? "border-red-500" : ""
+                }`}
             >
               <option value="">-- Select Maintenance Type --</option>
-              {MAINTENANCE_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {type}
+              {maintenanceTypeOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
                 </option>
               ))}
             </select>
@@ -350,9 +397,8 @@ const CauseMasterForm = ({ onBack, onSave, editData, editId }) => {
               value={form.causeCode}
               onChange={handleChange}
               placeholder="Enter cause code"
-              className={`${controlClasses} ${
-                fieldErrors.causeCode ? "border-red-500" : ""
-              }`}
+              className={`${controlClasses} ${fieldErrors.causeCode ? "border-red-500" : ""
+                }`}
             />
 
             {fieldErrors.causeCode && (
@@ -363,7 +409,7 @@ const CauseMasterForm = ({ onBack, onSave, editData, editId }) => {
           </div>
         </div>
 
-        {/* Cause (text field, mandatory — full width on next row) */}
+        {/* Cause (full-width on next row) */}
         <div className="grid grid-cols-1 gap-x-6 gap-y-4 mt-4">
           <div>
             <label className={labelClasses}>
@@ -375,9 +421,8 @@ const CauseMasterForm = ({ onBack, onSave, editData, editId }) => {
               value={form.cause}
               onChange={handleChange}
               placeholder="Enter cause description"
-              className={`${controlClasses} ${
-                fieldErrors.cause ? "border-red-500" : ""
-              }`}
+              className={`${controlClasses} ${fieldErrors.cause ? "border-red-500" : ""
+                }`}
             />
 
             {fieldErrors.cause && (
@@ -397,15 +442,6 @@ const CauseMasterForm = ({ onBack, onSave, editData, editId }) => {
           >
             <X className="h-3 w-3" />
             Cancel
-          </button>
-
-          <button
-            onClick={handleNew}
-            disabled={isSubmitting}
-            className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-blue-300 dark:border-blue-600 text-blue-600 dark:text-blue-400 bg-white dark:bg-gray-800 hover:bg-blue-50 dark:hover:bg-blue-700 disabled:opacity-60"
-          >
-            <FilePlus2 className="h-3 w-3" />
-            New
           </button>
 
           <button

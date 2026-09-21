@@ -12,13 +12,18 @@ const CategoryMasterList = ({
   const [categoryData, setCategoryData] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const ORG_ID = parseInt(localStorage.getItem("orgId"));
+  const ORG_ID = Number(localStorage.getItem("orgId")) || 0;
 
   const loadCategories = useCallback(async () => {
+    if (!ORG_ID) {
+      setCategoryData([]);
+      return;
+    }
+
     try {
       setLoading(true);
 
-      const response = await categoryMasterAPI.getCategories(ORG_ID);
+      const response = await categoryMasterAPI.getByOrgId(ORG_ID);
 
       const sortedCategories = (response || []).sort(
         (a, b) => (b.id || 0) - (a.id || 0),
@@ -42,19 +47,50 @@ const CategoryMasterList = ({
     onEdit(category);
   };
 
+  /* ---------------- Accessors ---------------- */
+
+  const getApplicableForLabel = (row) =>
+    row?.applicableFor?.description ||
+    row?.applicableFor?.code ||
+    (typeof row?.applicableFor === "string" ? row.applicableFor : "") ||
+    "";
+
+  /* ---------------- Columns ---------------- */
+
   const columns = [
     {
       key: "applicableFor",
       label: "Applicable For",
-      accessor: "applicableFor",
+      accessor: (row) => getApplicableForLabel(row),
       type: "text",
       noWrap: true,
     },
     {
       key: "category",
       label: "Category",
-      accessor: "category",
+      accessor: (row) => row?.category || "",
       type: "text",
+    },
+    {
+      key: "active",
+      label: "Status",
+      accessor: (row) =>
+        row?.active === true || row?.active === "Active"
+          ? "Active"
+          : "Inactive",
+      type: "status",
+      statusVariants: {
+        Active: {
+          label: "Active",
+          className:
+            "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+        },
+        Inactive: {
+          label: "Inactive",
+          className:
+            "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+        },
+      },
     },
     {
       key: "actions",
@@ -65,7 +101,7 @@ const CategoryMasterList = ({
     },
   ];
 
-  const searchFields = ["applicableFor", "category"];
+  const searchFields = ["applicableFor.description", "category"];
 
   return (
     <CommonListViewTable

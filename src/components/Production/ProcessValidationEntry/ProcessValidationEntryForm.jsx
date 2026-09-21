@@ -1,8 +1,11 @@
 import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useToast } from "../../Toast/ToastContext";
+import processValidationEntryAPI from "../../../api/Production/processValidationEntryAPI";
+import branchAPI from "../../../api/branchAPI";
 
 /* ---------------------------------------------------------------------------- */
-/* Shared design tokens - identical to ConsumptionEntryForm / other screens    */
+/* Shared design tokens                                                        */
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -45,6 +48,12 @@ const Field = ({
   className = "",
 }) => {
   if (type === "select") {
+    const safeValue = value === null || value === undefined ? "" : value;
+    const inOptions = (options || []).some(
+      (opt) => String(opt.value ?? opt) === String(safeValue),
+    );
+    const showGhost = safeValue !== "" && !inOptions;
+
     return (
       <div className={`w-full ${className}`}>
         <label className={labelClasses}>
@@ -54,15 +63,18 @@ const Field = ({
 
         <select
           name={name}
-          value={value}
+          value={safeValue}
           onChange={onChange}
           disabled={disabled}
           className={controlClasses}
         >
           <option value="">-- Select --</option>
+          {showGhost && (
+            <option value={safeValue}>{String(safeValue)}</option>
+          )}
           {(options || []).map((opt) => (
-            <option key={opt} value={opt}>
-              {opt}
+            <option key={opt.value ?? opt} value={opt.value ?? opt}>
+              {opt.label ?? opt}
             </option>
           ))}
         </select>
@@ -134,8 +146,6 @@ const Field = ({
   );
 };
 
-/* Config-driven field grid - array of {name,label,type,options,...} descriptors
-   rendered against a values/onChange pair. */
 const FieldsGrid = ({
   fields,
   values,
@@ -205,13 +215,12 @@ const TableHead = ({ headers }) => (
       {headers.map((h, i) => (
         <th
           key={i}
-          className={`p-1 whitespace-nowrap ${
-            i === 0
+          className={`p-1 whitespace-nowrap ${i === 0
               ? "w-8 text-center"
               : i === headers.length - 1
                 ? "w-20 text-left"
                 : "text-left"
-          } dark:text-white`}
+            } dark:text-white`}
         >
           {h}
         </th>
@@ -229,11 +238,10 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
         type="button"
         onClick={onRemove}
         disabled={disabled}
-        className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-          disabled
+        className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
             ? "bg-gray-400 cursor-not-allowed"
             : "bg-red-600 hover:bg-red-700"
-        }`}
+          }`}
       >
         <Trash2 size={10} />
       </button>
@@ -247,7 +255,8 @@ const InputCell = ({ value, onChange, type = "text" }) => (
       type={type}
       value={value}
       onChange={onChange}
-      className={`${cellInputClasses} ${type === "number" ? "min-w-[90px]" : "min-w-[110px]"}`}
+      className={`${cellInputClasses} ${type === "number" ? "min-w-[90px]" : "min-w-[110px]"
+        }`}
     />
   </td>
 );
@@ -284,11 +293,8 @@ const blankFromFields = (fields) =>
   fields.reduce((acc, f) => ({ ...acc, [f.name]: f.default ?? "" }), {});
 
 /* ---------------------------------------------------------------------------- */
-/* Options (swap for real API-driven lists)                                    */
+/* Options                                                                      */
 
-const PLANT_IDS = ["BANGALORE", "CHENNAI", "PUNE", "DELHI"];
-const ITEM_CODES = ["FG-001", "FG-002", "SFG-001", "RM-001"];
-const PARTY_IDS = ["PARTY-001", "PARTY-002", "PARTY-003"];
 const YES_NO = ["NO", "YES"];
 
 const VALIDATION_REASONS = [
@@ -302,60 +308,92 @@ const VALIDATION_REASONS = [
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
 /* ---------------------------------------------------------------------------- */
-/* Header fields                                                               */
+/* Header fields — options injected at render time                             */
 
-const HEADER_FIELDS = [
-  {
-    name: "plant",
-    label: "Plant Id",
-    type: "select",
-    options: PLANT_IDS,
-    required: true,
-  },
-  { name: "docNo", label: "Doc No." },
-  { name: "itemCode", label: "Item Code", type: "select", options: ITEM_CODES },
-  {
-    name: "date",
-    label: "Date",
-    type: "date",
-    default: todayISO(),
-    required: true,
-  },
-  { name: "itemDescription", label: "Item Description" },
-  { name: "partyId", label: "Party Id", type: "select", options: PARTY_IDS },
-  { name: "partyName", label: "Party Name" },
-  { name: "processSheetNo", label: "Process Sheet No" },
-  { name: "operationNo", label: "Operation No." },
-  { name: "operationName", label: "Operation Name" },
-  { name: "controlPlan", label: "Control Plan" },
-  {
-    name: "validationReason",
-    label: "Validation Reason",
-    type: "select",
-    options: VALIDATION_REASONS,
-  },
-  {
-    name: "detailsOfChanges",
-    label: "Details Of Changes",
-    type: "textarea",
-    className: "col-span-2 md:col-span-4 xl:col-span-3",
-  },
-  {
-    name: "characteristicsToBeMeasured",
-    label: "Characteristics To Be Measured",
-    type: "textarea",
-    className: "col-span-2 md:col-span-4 xl:col-span-3",
-  },
-  {
-    name: "specification",
-    label: "Specification",
-    type: "textarea",
-    className: "col-span-2 md:col-span-4 xl:col-span-6",
-  },
-];
+const buildHeaderFields = ({
+  plantOptions,
+  itemOptions,
+  partyOptions,
+  processSheetOptions,
+  operationOptions,
+  controlPlanOptions,
+}) => [
+    {
+      name: "plant",
+      label: "Plant Id",
+      type: "select",
+      options: plantOptions,
+      required: true,
+    },
+    { name: "docNo", label: "Doc No.", auto: true },
+    {
+      name: "itemCode",
+      label: "Item Code",
+      type: "select",
+      options: itemOptions,
+    },
+    {
+      name: "date",
+      label: "Date",
+      type: "date",
+      default: todayISO(),
+      required: true,
+    },
+    { name: "itemDescription", label: "Item Description", disabled: true },
+    {
+      name: "partyId",
+      label: "Party Id",
+      type: "select",
+      options: partyOptions,
+    },
+    { name: "partyName", label: "Party Name", disabled: true },
+    {
+      name: "processSheetNo",
+      label: "Process Sheet No",
+      type: "select",
+      options: processSheetOptions,
+    },
+    {
+      name: "operationNo",
+      label: "Operation No.",
+      type: "select",
+      options: operationOptions,
+    },
+    { name: "operationName", label: "Operation Name", disabled: true },
+    {
+      name: "controlPlan",
+      label: "Control Plan",
+      type: "select",
+      options: controlPlanOptions,
+    },
+    {
+      name: "validationReason",
+      label: "Validation Reason",
+      type: "select",
+      options: VALIDATION_REASONS,
+    },
+    {
+      name: "detailsOfChanges",
+      label: "Details Of Changes",
+      type: "textarea",
+      className: "col-span-2 md:col-span-4 xl:col-span-3",
+    },
+    {
+      name: "characteristicsToBeMeasured",
+      label: "Characteristics To Be Measured",
+      type: "textarea",
+      className: "col-span-2 md:col-span-4 xl:col-span-3",
+    },
+    {
+      name: "specification",
+      label: "Specification",
+      type: "textarea",
+      className: "col-span-2 md:col-span-4 xl:col-span-6",
+    },
+  ];
 
 /* ---------------------------------------------------------------------------- */
-/* Child 1 - Process Vad Detail (table)                                        */
+/* Child 1 - Process Vad Detail                                                */
 
 const PROCESS_VAD_DETAIL_COLUMNS = [
   { key: "parameter1", label: "Parameter 1" },
@@ -368,7 +406,7 @@ const PROCESS_VAD_DETAIL_COLUMNS = [
 ];
 
 /* ---------------------------------------------------------------------------- */
-/* Child 2 - Process Vad Summary (fields)                                      */
+/* Child 2 - Process Vad Summary                                               */
 
 const PROCESS_VAD_SUMMARY_FIELDS = [
   { name: "dateImplemented", label: "Date Implemented", type: "date" },
@@ -392,22 +430,43 @@ const PROCESS_VAD_SUMMARY_FIELDS = [
 ];
 
 const CHILD_TABS = [
-  { key: "processVadDetail", label: "1-Process Vad Detail", type: "table" },
-  { key: "processVadSummary", label: "2-Process Vad Summary", type: "fields" },
+  { key: "processVadDetail", label: "Process Vad Detail", type: "table" },
+  { key: "processVadSummary", label: "Process Vad Summary", type: "fields" },
 ];
 
 /* ---------------------------------------------------------------------------- */
 
 const ProcessValidationEntryForm = ({ onBack, onSave, editData }) => {
-  const ORG_ID = parseInt(localStorage.getItem("orgId"));
+  const { addToast } = useToast();
+  const ORG_ID = Number(localStorage.getItem("orgId")) || 0;
+  const BRANCH_ID = Number(localStorage.getItem("branchId")) || 0;
+  const CREATED_BY = localStorage.getItem("userName") || "SYSTEM";
+
+  const isEditMode = Boolean(editData?.id);
+  const docIdLoadedRef = useRef(false);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [activeChildTab, setActiveChildTab] = useState("processVadDetail");
 
-  const [header, setHeader] = useState({
-    ...blankFromFields(HEADER_FIELDS),
-    ...editData?.header,
-  });
+  /* ---------------- Lookup options ---------------- */
+  const [plantOptions, setPlantOptions] = useState([]);
+  const [itemOptions, setItemOptions] = useState([]);
+  const [partyOptions, setPartyOptions] = useState([]);
+  const [processSheetOptions, setProcessSheetOptions] = useState([]);
+  const [operationOptions, setOperationOptions] = useState([]);
+  const [controlPlanOptions, setControlPlanOptions] = useState([]);
+
+  /* ---------------- Lookup maps for auto-fill ---------------- */
+  const itemMapRef = useRef({});       // itemId -> item object
+  const partyMapRef = useRef({});      // customerId -> customer object
+  const operationMapRef = useRef({});  // operationId -> operation object
+
+  /* ---------------- Form state ---------------- */
+  const [header, setHeader] = useState(() => ({
+    ...blankFromFields(buildHeaderFields({})),
+    ...(editData?.header || {}),
+  }));
 
   const [processVadDetailRows, setProcessVadDetailRows] = useState(
     editData?.processVadDetails?.length
@@ -417,13 +476,227 @@ const ProcessValidationEntryForm = ({ onBack, onSave, editData }) => {
 
   const [processVadSummary, setProcessVadSummary] = useState({
     ...blankFromFields(PROCESS_VAD_SUMMARY_FIELDS),
-    ...editData?.processVadSummary,
+    ...(editData?.processVadSummary || {}),
   });
+
+  /* ---------------- Re-sync when editData prop changes ---------------- */
+  useEffect(() => {
+    if (!editData) return;
+
+    setHeader({
+      ...blankFromFields(buildHeaderFields({})),
+      ...(editData.header || {}),
+    });
+
+    setProcessVadDetailRows(
+      editData.processVadDetails?.length
+        ? editData.processVadDetails
+        : [blankRowFromColumns(PROCESS_VAD_DETAIL_COLUMNS)],
+    );
+
+    setProcessVadSummary({
+      ...blankFromFields(PROCESS_VAD_SUMMARY_FIELDS),
+      ...(editData.processVadSummary || {}),
+    });
+  }, [editData]);
+
+  /* ---------------- Load master data ---------------- */
+
+  useEffect(() => {
+    if (!ORG_ID) return;
+
+    // Plants
+    (async () => {
+      try {
+        const list = await branchAPI.getBranchByOrgId(ORG_ID);
+        setPlantOptions(
+          (list || []).map((b) => ({
+            value: b.id,
+            label: b.branchName || b.branchCode || String(b.id),
+          })),
+        );
+      } catch (err) {
+        console.error("Failed to load plants:", err);
+        setPlantOptions([]);
+      }
+    })();
+
+    // Items — option value = itemId (numeric), label = itemCode
+    (async () => {
+      try {
+        const list = await processValidationEntryAPI.getItemDetails({
+          branch: BRANCH_ID,
+          orgId: ORG_ID,
+        });
+
+        const map = {};
+        setItemOptions(
+          (list || []).map((it) => {
+            const value = it.itemId;
+            map[value] = it;
+            return {
+              value,
+              label: it.itemCode || String(it.itemId),
+            };
+          }),
+        );
+        itemMapRef.current = map;
+      } catch (err) {
+        console.error("Failed to load items:", err);
+        setItemOptions([]);
+      }
+    })();
+
+    // Parties (customers)
+    (async () => {
+      try {
+        const list = await processValidationEntryAPI.getCustomerDetails({
+          branch: BRANCH_ID,
+          orgId: ORG_ID,
+        });
+        const map = {};
+        setPartyOptions(
+          (list || []).map((c) => {
+            const value = c.customerId ?? c.customerCode;
+            map[value] = c;
+            return {
+              value,
+              label: c.customerName || c.customerCode || String(c.customerId),
+            };
+          }),
+        );
+        partyMapRef.current = map;
+      } catch (err) {
+        console.error("Failed to load parties:", err);
+        setPartyOptions([]);
+      }
+    })();
+
+    // Process Sheet Routing — process sheet options + flattened operations
+    (async () => {
+      try {
+        const list = await processValidationEntryAPI.getProcessSheetRouting({
+          branch: BRANCH_ID,
+          orgId: ORG_ID,
+        });
+
+        setProcessSheetOptions(
+          (list || []).map((r) => ({
+            value: r.id,
+            label:
+              r.processSheetNo ||
+              r.docId ||
+              r.bomId ||
+              String(r.id),
+          })),
+        );
+
+        const opMap = {};
+        const opOpts = [];
+        (list || []).forEach((r) => {
+          (r?.processSheetCompRoutingDetailResponseDTO || []).forEach((d) => {
+            const opId = d?.operation?.id ?? d?.operation?.operationId;
+            if (!opId) return;
+            const opLabel =
+              d?.operation?.operationId ||
+              d?.operation?.description ||
+              String(opId);
+            if (!opMap[opId]) {
+              opMap[opId] = d.operation;
+              opOpts.push({ value: opId, label: opLabel });
+            }
+          });
+        });
+        operationMapRef.current = opMap;
+        setOperationOptions(opOpts);
+      } catch (err) {
+        console.error("Failed to load process sheet routing:", err);
+        setProcessSheetOptions([]);
+        setOperationOptions([]);
+      }
+    })();
+
+    // Control Plans
+    (async () => {
+      try {
+        const list = await processValidationEntryAPI.getControlPlans({
+          branch: BRANCH_ID,
+          orgId: ORG_ID,
+        });
+        setControlPlanOptions(
+          (list || []).map((cp) => ({
+            value: cp.id,
+            label: cp.planNo || String(cp.id),
+          })),
+        );
+      } catch (err) {
+        console.error("Failed to load control plans:", err);
+        setControlPlanOptions([]);
+      }
+    })();
+  }, [ORG_ID, BRANCH_ID]);
+
+  /* ---------------- Doc No auto-generation (Add mode) ---------------- */
+
+  useEffect(() => {
+    if (isEditMode || docIdLoadedRef.current) return;
+    if (!ORG_ID) return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const financialYear = String(new Date().getFullYear());
+        const docId = await processValidationEntryAPI.getDocId({
+          financialYear,
+          orgId: ORG_ID,
+        });
+        if (!cancelled && docId) {
+          setHeader((prev) => ({ ...prev, docNo: docId }));
+          docIdLoadedRef.current = true;
+        }
+      } catch (err) {
+        console.error("Failed to generate Doc No:", err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isEditMode, ORG_ID]);
+
+  /* ---------------- Handlers ---------------- */
 
   const handleHeaderChange = (e) => {
     const { name, value } = e.target;
     if (fieldErrors[name]) setFieldErrors((prev) => ({ ...prev, [name]: "" }));
-    setHeader((prev) => ({ ...prev, [name]: value }));
+
+    setHeader((prev) => {
+      const next = { ...prev, [name]: value };
+
+      if (name === "itemCode") {
+        const it = itemMapRef.current[value];
+        if (it) {
+          next.itemDescription = it.itemDescription || "";
+        }
+      }
+
+      if (name === "partyId") {
+        const c = partyMapRef.current[value];
+        if (c) {
+          next.partyName = c.customerName || "";
+        }
+      }
+
+      if (name === "operationNo") {
+        const op = operationMapRef.current[value];
+        if (op) {
+          next.operationName = op.description || op.operationId || "";
+        }
+      }
+
+      return next;
+    });
   };
 
   const handleSummaryChange = (e) => {
@@ -463,6 +736,8 @@ const ProcessValidationEntryForm = ({ onBack, onSave, editData }) => {
     }
   };
 
+  /* ---------------- Validation ---------------- */
+
   const validate = () => {
     const errors = {};
 
@@ -473,49 +748,120 @@ const ProcessValidationEntryForm = ({ onBack, onSave, editData }) => {
     return Object.keys(errors).length === 0;
   };
 
+  /* ---------------- Save ---------------- */
+
   const handleSave = async () => {
     if (!validate()) return;
 
     setIsSubmitting(true);
 
+    const isUpdate = Boolean(editData?.id);
+    const financialYear = String(new Date().getFullYear());
+
     const payload = {
-      ...(editData?.id && { id: editData.id }),
-      header,
-      processVadDetails: processVadDetailRows,
-      processVadSummary,
+      ...(isUpdate ? { id: editData.id } : {}),
+
       active: editData?.active ?? true,
       orgId: ORG_ID,
-      createdBy: localStorage.getItem("userName") || "SYSTEM",
+      branch: Number(header.plant) || BRANCH_ID || 0,
+      financialYear,
+
+      cancelRemarks: "",
+      createdBy: isUpdate ? editData?.createdBy ?? CREATED_BY : CREATED_BY,
+
+      date: header.date || todayISO(),
+      item: Number(header.itemCode) || 0,
+      customer: Number(header.partyId) || 0,
+      processSheetNo: Number(header.processSheetNo) || 0,
+      controlPlan: Number(header.controlPlan) || 0,
+
+      validationReason: header.validationReason || "",
+      detailsOfChanges: header.detailsOfChanges || "",
+      characteristicsToBeMeasured: header.characteristicsToBeMeasured || "",
+      specification: header.specification || "",
+
+      dateImplemented: processVadSummary.dateImplemented || "",
+      dateOfNextValidation: processVadSummary.dateOfNextValidation || "",
+      recommendedForProduction:
+        processVadSummary.recommendedForProduction || "",
+      resultsRemarks: processVadSummary.resultsRemarks || "",
+
+      details: (processVadDetailRows || []).map((r) => ({
+        parameter1: r.parameter1 || "",
+        parameter2: r.parameter2 || "",
+        parameter3: r.parameter3 || "",
+        parameter4: r.parameter4 || "",
+        parameter5: r.parameter5 || "",
+        parameter6: r.parameter6 || "",
+        parameter7: r.parameter7 || "",
+      })),
     };
 
     console.log("📤 Saving Process Validation Entry Payload:", payload);
 
     try {
       const response =
-        await processValidationEntryAPI.updateCreateProcessValidationEntry(
-          payload,
+        await processValidationEntryAPI.createUpdate(payload);
+
+      const isSuccess =
+        response?.status === true ||
+        response?.statusFlag === "Ok" ||
+        response?.status === 200 ||
+        response?.statusCode === 200;
+
+      if (isSuccess) {
+        addToast(
+          response?.paramObjectsMap?.message ||
+          (isUpdate
+            ? "Process Validation Entry updated successfully!"
+            : "Process Validation Entry created successfully!"),
+          "success",
         );
-      console.log("📥 Response:", response);
 
-      const status = response?.status === true || response?.statusFlag === "Ok";
-
-      if (status) {
-        if (onSave) onSave(payload);
+        if (onSave) {
+          onSave({
+            ...payload,
+            id:
+              response?.paramObjectsMap?.processValidationEntry?.id ||
+              payload.id,
+          });
+        } else {
+          onBack();
+        }
       } else {
-        const errorMessage =
+        addToast(
+          response?.errors?.[0]?.shortMessage ||
+          response?.errors?.[0]?.longMessage ||
           response?.paramObjectsMap?.message ||
           response?.paramObjectsMap?.errorMessage ||
           response?.message ||
-          "Failed to save process validation entry";
-        alert(errorMessage);
+          "Failed to save Process Validation Entry",
+          "error",
+        );
       }
     } catch (error) {
       console.error("❌ Save Error:", error);
-      alert("Failed to save Process Validation Entry.");
+      const errorMessage =
+        error.response?.data?.paramObjectsMap?.message ||
+        error.response?.data?.paramObjectsMap?.errorMessage ||
+        error.response?.data?.message ||
+        "Failed to save Process Validation Entry.";
+      addToast(errorMessage, "error");
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  /* ---------------- Header fields (built with live options) ---------------- */
+
+  const headerFields = buildHeaderFields({
+    plantOptions,
+    itemOptions,
+    partyOptions,
+    processSheetOptions,
+    operationOptions,
+    controlPlanOptions,
+  });
 
   return (
     <div className="p-2 max-w-7xl">
@@ -541,7 +887,7 @@ const ProcessValidationEntryForm = ({ onBack, onSave, editData }) => {
         <div>
           <SectionHeader>Process Validation Details</SectionHeader>
           <FieldsGrid
-            fields={HEADER_FIELDS}
+            fields={headerFields}
             values={header}
             onChange={handleHeaderChange}
             errors={fieldErrors}
@@ -557,11 +903,10 @@ const ProcessValidationEntryForm = ({ onBack, onSave, editData }) => {
                   key={tab.key}
                   type="button"
                   onClick={() => setActiveChildTab(tab.key)}
-                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${
-                    activeChildTab === tab.key
+                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${activeChildTab === tab.key
                       ? "bg-blue-600 text-white"
                       : "text-gray-600 dark:text-gray-300"
-                  }`}
+                    }`}
                 >
                   {tab.label}
                 </button>

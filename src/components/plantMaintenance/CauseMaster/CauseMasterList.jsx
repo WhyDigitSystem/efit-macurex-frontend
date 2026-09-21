@@ -7,13 +7,18 @@ const CauseMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   const [causeData, setCauseData] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const ORG_ID = parseInt(localStorage.getItem("orgId"));
+  const ORG_ID = Number(localStorage.getItem("orgId")) || 0;
 
   const loadCauses = useCallback(async () => {
+    if (!ORG_ID) {
+      setCauseData([]);
+      return;
+    }
+
     try {
       setLoading(true);
 
-      const response = await causeMasterAPI.getCauses(ORG_ID);
+      const response = await causeMasterAPI.getByOrgId(ORG_ID);
 
       const sortedCauses = (response || []).sort(
         (a, b) => (b.id || 0) - (a.id || 0),
@@ -37,33 +42,70 @@ const CauseMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     onEdit(cause);
   };
 
+  /* ---------------- Accessors ---------------- */
+
+  const getDepartmentLabel = (row) =>
+    row?.department?.departmentName ||
+    row?.department?.departmentCode ||
+    (typeof row?.department === "string" ? row.department : "") ||
+    "";
+
+  const getMaintenanceTypeLabel = (row) =>
+    row?.maintenanceType?.description ||
+    row?.maintenanceType?.code ||
+    (typeof row?.maintenanceType === "string" ? row.maintenanceType : "") ||
+    "";
+
+  /* ---------------- Columns ---------------- */
+
   const columns = [
     {
       key: "department",
       label: "Department",
-      accessor: "department",
+      accessor: (row) => getDepartmentLabel(row),
       type: "text",
       noWrap: true,
     },
     {
       key: "maintenanceType",
       label: "Maintenance Type",
-      accessor: "maintenanceType",
+      accessor: (row) => getMaintenanceTypeLabel(row),
       type: "text",
       noWrap: true,
     },
     {
       key: "causeCode",
       label: "Cause Code",
-      accessor: "causeCode",
+      accessor: (row) => row?.causeCode || "",
       type: "text",
       noWrap: true,
     },
     {
       key: "cause",
       label: "Cause",
-      accessor: "cause",
+      accessor: (row) => row?.cause || "",
       type: "text",
+    },
+    {
+      key: "active",
+      label: "Status",
+      accessor: (row) =>
+        row?.active === true || row?.active === "Active"
+          ? "Active"
+          : "Inactive",
+      type: "status",
+      statusVariants: {
+        Active: {
+          label: "Active",
+          className:
+            "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+        },
+        Inactive: {
+          label: "Inactive",
+          className:
+            "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+        },
+      },
     },
     {
       key: "actions",
@@ -75,8 +117,8 @@ const CauseMasterList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   ];
 
   const searchFields = [
-    "department",
-    "maintenanceType",
+    "department.departmentName",
+    "maintenanceType.description",
     "causeCode",
     "cause",
   ];

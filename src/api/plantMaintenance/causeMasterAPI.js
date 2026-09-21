@@ -1,44 +1,61 @@
 import apiClient from "../apiClient";
 
-export const MAINTENANCE_TYPES = [
-  "PREVENTIVE",
-  "CORRECTIVE",
-  "PREDICTIVE",
-  "BREAKDOWN",
-  "ROUTINE",
-  "EMERGENCY",
-];
+/* ------------------------------------------------------------------ */
+/* Maintenance Type — loaded from list-of-values                      */
+
+export const MAINTENANCE_TYPE_LIST_NAME = "MAINTENANCE TYPE FOR CAUSE";
+
+/* ------------------------------------------------------------------ */
 
 export const causeMasterAPI = {
-  getCauses: async (orgId) => {
+  /* ---------------- List-of-values (for Maintenance Type) ---------------- */
+  getListValuesGroup: async (listDescription, orgId) => {
+    try {
+      const res = await apiClient.get("/api/commonmaster/getListValuesGroup", {
+        params: { listDescription, orgId },
+      });
+      return res?.paramObjectsMap?.listValues || [];
+    } catch (error) {
+      console.error(
+        `Error fetching list values group "${listDescription}":`,
+        error,
+      );
+      throw error;
+    }
+  },
+
+  /* ---------------- List causes by org ---------------- */
+  getByOrgId: async (orgId) => {
     try {
       const res = await apiClient.get(
-        `/api/plantMaintenance/cause?orgid=${orgId}`
+        `/api/vendorComplaintEntry/getCauseMasterByOrgId?orgId=${orgId}`,
       );
-      return res?.paramObjectsMap?.causeVOList || res?.data || [];
+      return res?.paramObjectsMap?.causeMasterVO || [];
     } catch (error) {
       console.error("Error fetching causes:", error);
       throw error;
     }
   },
 
-  getCauseById: async (causeId) => {
+  /* ---------------- Get by id ---------------- */
+  getById: async (id) => {
     try {
       const res = await apiClient.get(
-        `/api/plantMaintenance/cause/${causeId}`
+        `/api/vendorComplaintEntry/getCauseMasterById?id=${id}`,
       );
-      return res?.paramObjectsMap?.causeVO || null;
+      return res?.paramObjectsMap?.causeMasterVO || null;
     } catch (error) {
       console.error("Error fetching cause by ID:", error);
       throw error;
     }
   },
 
+  /* ---------------- Save (create / update) ---------------- */
   createUpdateCause: async (causeDTO) => {
     try {
-      const res = await apiClient.post(
-        "/api/plantMaintenance/createUpdateCause",
-        causeDTO
+      const res = await apiClient.put(
+        "/api/vendorComplaintEntry/updateCreateCauseMaster",
+        causeDTO,
       );
       return res;
     } catch (error) {
@@ -47,16 +64,12 @@ export const causeMasterAPI = {
     }
   },
 
-  getCauseHistory: async (causeId) => {
-    try {
-      const res = await apiClient.get(
-        `/api/plantMaintenance/cause/${causeId}/history`
-      );
-      return res?.paramObjectsMap?.causeHistoryVOList || [];
-    } catch (error) {
-      console.error("Error fetching cause history:", error);
-      throw error;
-    }
+  /* ---------------- Back-compat aliases ---------------- */
+  getCauses: async (orgId) => {
+    return causeMasterAPI.getByOrgId(orgId);
+  },
+  getCauseById: async (id) => {
+    return causeMasterAPI.getById(id);
   },
 };
 
