@@ -19,7 +19,9 @@ const InspectionRequisitionNoteMaster = () => {
     setView("form");
   };
 
-  // Pencil icon click -> fetch fresh data by orgId, find the matching record, open form
+  // Pencil icon click -> fetch fresh data by orgId/branch, find the matching
+  // record, open form. (Falls back to getIrnById if the list endpoint ever
+  // stops returning full rows.)
   const handleEdit = useCallback(
     async (row) => {
       try {
@@ -27,8 +29,11 @@ const InspectionRequisitionNoteMaster = () => {
           ORG_ID,
           BRANCH_ID,
         );
-        const fresh = records.find((r) => r.id === row.id) || row;
-        setEditData(fresh);
+        let fresh = records.find((r) => r.id === row.id);
+        if (!fresh) {
+          fresh = await inspectionRequisitionNoteAPI.getIrnById(row.id);
+        }
+        setEditData(fresh || row);
         setView("form");
       } catch (error) {
         console.error("Failed to fetch IRN for edit:", error);
@@ -51,7 +56,9 @@ const InspectionRequisitionNoteMaster = () => {
   };
 
   if (view === "form") {
-    return <InspectionRequisitionNoteForm data={editData} onBack={handleBack} />;
+    return (
+      <InspectionRequisitionNoteForm data={editData} onBack={handleBack} />
+    );
   }
 
   return (
@@ -62,6 +69,6 @@ const InspectionRequisitionNoteMaster = () => {
       refreshTrigger={refreshTrigger}
     />
   );
-};
+};                                                                                        
 
 export default InspectionRequisitionNoteMaster;

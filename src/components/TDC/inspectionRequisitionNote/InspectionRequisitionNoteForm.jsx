@@ -21,7 +21,8 @@ const controlClasses =
 const controlErrClasses =
   "border-red-500 dark:border-red-500 focus:ring-red-500 focus:border-red-500";
 
-const labelClasses = "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
+const labelClasses =
+  "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
 const fieldGrid =
   "grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-x-4 gap-y-3 items-start";
@@ -164,116 +165,198 @@ const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
 );
 
 /* ---------------------------------------------------------------------------- */
-/* Options                                                                      */
+/* Static config                                                               */
 
-const PRODUCT_CATEGORIES = [
-  "Raw Material",
-  "Semi-Finished",
-  "Finished Goods",
-  "Component",
-  "Spare Parts",
+// Each manager tab maps 1:1 to a department used by
+// getEmployeesByDepartmentforBOMCorrectionRequestNote, and to the flat
+// sign/date field names actually present on inspectionRequisitionNoteDTO.
+const MANAGER_TABS = [
+  {
+    key: "managerPurchase",
+    label: "Manager-Purchase",
+    department: "Purchase",
+    signField: "purchaseManager",
+    dateField: "purchaseManagerDate",
+  },
+  {
+    key: "managerTdc",
+    label: "Manager-TDC",
+    department: "TDC",
+    signField: "tdcManager",
+    dateField: "tdcManagerDate",
+  },
+  {
+    key: "managerQuality",
+    label: "Manager-Quality",
+    department: "Quality",
+    signField: "qualityManager",
+    dateField: "qualityManagerDate",
+  },
+  {
+    key: "managerProduction",
+    label: "Manager-Production",
+    department: "Production",
+    signField: "productionManager",
+    dateField: "productionManagerDate",
+  },
 ];
 
 const CHILD_TABS = [
-  { key: "managerPurchase", label: "Manager-Purchase", kind: "fields" },
-  { key: "managerTdc", label: "Manager-TDC", kind: "fields" },
-  { key: "managerQuality", label: "Manager-Quality", kind: "fields" },
-  { key: "managerProduction", label: "Manager-Production", kind: "fields" },
-  { key: "requestApprove", label: "Request and Approve", kind: "fields" },
+  ...MANAGER_TABS.map((t) => ({ key: t.key, label: t.label })),
+  { key: "requestApprove", label: "Request and Approve" },
 ];
 
 const fmtDate = (value) => (value ? dayjs(value).format("YYYY-MM-DD") : "");
 
-const generateIrnNo = () =>
-  `IRN-${dayjs().format("YYYYMMDD")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
+// inspectionRequisitionNoteDTO requires a financialYear string but there is
+// no dedicated doc-type-mapping endpoint confirmed for this screen yet, so
+// this derives it from the header date using the standard Apr-Mar cycle
+// (matches the "26-27" style used elsewhere in the app).
+const getFinancialYear = (dateStr) => {
+  if (!dateStr) return "";
+  const d = dayjs(dateStr);
+  const year = d.year();
+  const month = d.month() + 1; // dayjs months are 0-indexed
+  const startYear = month >= 4 ? year : year - 1;
+  return `${startYear}-${String(startYear + 1).slice(-2)}`;
+};
 
 /* ---------------------------------------------------------------------------- */
 
 const InspectionRequisitionNoteForm = ({ data, onBack }) => {
   const { addToast } = useToast();
   const orgId = Number(localStorage.getItem("orgId")) || 0;
+  const branchId = Number(localStorage.getItem("branchId")) || 0;
   const usersId = localStorage.getItem("usersId");
 
-  const [activeChildTab, setActiveChildTab] = useState("managerPurchase");
+  const [activeChildTab, setActiveChildTab] = useState(MANAGER_TABS[0].key);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
 
-  const [employeeOptions, setEmployeeOptions] = useState([]);
-
-  const [header, setHeader] = useState(() => {
-    const base = {
-      irnNo: data?.irnNo || (data ? "" : generateIrnNo()),
-      requestedBy: data?.requestedBy?.id ?? data?.requestedBy ?? "",
-      productCategory: data?.productCategory || "",
-      date: data?.date || dayjs().format("YYYY-MM-DD"),
-      samplesSubmittedTo: data?.samplesSubmittedTo || "",
-      partName: data?.partName || "",
-      partNumber: data?.partNumber || "",
-      sampleQuantity: data?.sampleQuantity ?? "",
-      product: data?.product || "",
-      customer: data?.customer || "",
-      supplier: data?.supplier || "",
-      reasonForInspectionRequest: data?.reasonForInspectionRequest || "",
-      requestComments: data?.requestComments || "",
-      active: data?.active !== false,
-    };
-    base.date = fmtDate(base.date);
-    return base;
+  // Dropdown sources
+  const [requestedByOptions, setRequestedByOptions] = useState([]); // header - list-values (PURCHASE/TDC)
+  const [productCategoryOptions, setProductCategoryOptions] = useState([]); // header - list-values
+  const [employeeMasterOptions, setEmployeeMasterOptions] = useState([]); // Request & Approve tab
+  const [departmentEmployees, setDepartmentEmployees] = useState({
+    Purchase: [],
+    TDC: [],
+    Quality: [],
+    Production: [],
   });
 
-  const [managerPurchase, setManagerPurchase] = useState({
-    sign: data?.managerPurchase?.sign?.id ?? data?.managerPurchase?.sign ?? "",
-    date: fmtDate(data?.managerPurchase?.date) || "",
-  });
+  const [header, setHeader] = useState(() => ({
+    requestedBy: data?.requestedBy || "",
+    productCategory: data?.productCategory || "",
+    date: fmtDate(data?.date) || dayjs().format("YYYY-MM-DD"),
+    samplesSubmittedTo: data?.samplesSubmittedTo || "",
+    partName: data?.partName || "",
+    partNumber: data?.partNumber || "",
+    sampleQuantity: data?.sampleQuantity ?? "",
+    product: data?.product || "",
+    customer: data?.customer || "",
+    supplier: data?.supplier || "",
+    reasonForInspectionRequest: data?.reasonForInspectionRequest || "",
+    requestComments: data?.requestComments || "",
+    active: data?.active !== false,
+  }));
 
-  const [managerTdc, setManagerTdc] = useState({
-    sign: data?.managerTdc?.sign?.id ?? data?.managerTdc?.sign ?? "",
-    date: fmtDate(data?.managerTdc?.date) || "",
-  });
-
-  const [managerQuality, setManagerQuality] = useState({
-    sign: data?.managerQuality?.sign?.id ?? data?.managerQuality?.sign ?? "",
-    date: fmtDate(data?.managerQuality?.date) || "",
-  });
-
-  const [managerProduction, setManagerProduction] = useState({
-    sign:
-      data?.managerProduction?.sign?.id ?? data?.managerProduction?.sign ?? "",
-    date: fmtDate(data?.managerProduction?.date) || "",
-  });
+  // One { sign, date } pair per manager tab, keyed by tab key.
+  const [managerValues, setManagerValues] = useState(() =>
+    MANAGER_TABS.reduce((acc, tab) => {
+      acc[tab.key] = {
+        sign: data?.[tab.signField] ?? "",
+        date: fmtDate(data?.[tab.dateField]) || "",
+      };
+      return acc;
+    }, {}),
+  );
 
   const [requestApprove, setRequestApprove] = useState({
-    requestedBy:
-      data?.requestApprove?.requestedBy?.id ??
-      data?.requestApprove?.requestedBy ??
-      "",
-    approvedBy:
-      data?.requestApprove?.approvedBy?.id ??
-      data?.requestApprove?.approvedBy ??
-      "",
-    approvalDate: fmtDate(data?.requestApprove?.approvalDate) || "",
+    requestedBy: data?.approvalRequestedBy ?? "",
+    approvedBy: data?.approvedBy ?? "",
   });
 
   /* ---------------- Lookup loading ---------------- */
 
-  const loadEmployees = useCallback(async () => {
+  const loadHeaderLookups = useCallback(async () => {
+    try {
+      const [requestedBy, productCategory] = await Promise.all([
+        inspectionRequisitionNoteAPI.getRequestedByList(orgId),
+        inspectionRequisitionNoteAPI.getProductCategoryList(orgId),
+      ]);
+      setRequestedByOptions(
+        (requestedBy || []).map((v) => ({
+          value: v.valuesDescription,
+          label: v.valuesDescription,
+        })),
+      );
+      setProductCategoryOptions(
+        (productCategory || []).map((v) => ({
+          value: v.valuesDescription,
+          label: v.valuesDescription,
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to load header dropdown lists:", error);
+      setRequestedByOptions([]);
+      setProductCategoryOptions([]);
+    }
+  }, [orgId]);
+
+  const loadEmployeeMaster = useCallback(async () => {
     try {
       const res = await employeeAPI.getEmployeeByOrgId(orgId);
-      setEmployeeOptions(
+      setEmployeeMasterOptions(
         (res || []).map((e) => ({
           value: e.id,
           label: e.employeeName || e.name || e.id,
         })),
       );
     } catch (error) {
-      console.error("Failed to load employee options:", error);
-      setEmployeeOptions([]);
+      console.error("Failed to load employee master options:", error);
+      setEmployeeMasterOptions([]);
     }
   }, [orgId]);
 
+  const loadDepartmentEmployees = useCallback(async () => {
+    try {
+      const results = await Promise.all(
+        MANAGER_TABS.map((tab) =>
+          inspectionRequisitionNoteAPI.getEmployeesByDepartment(
+            branchId,
+            tab.department,
+            orgId,
+          ),
+        ),
+      );
+      const next = {};
+      MANAGER_TABS.forEach((tab, idx) => {
+        next[tab.department] = (results[idx] || []).map((e) => ({
+          value: e.employeeId,
+          label: e.employeeName || e.employeeCode || e.employeeId,
+        }));
+      });
+      setDepartmentEmployees(next);
+    } catch (error) {
+      console.error("Failed to load department employees:", error);
+    }
+  }, [branchId, orgId]);
+
   useEffect(() => {
-    if (orgId) loadEmployees();
-  }, [orgId, loadEmployees]);
+    if (orgId) {
+      loadHeaderLookups();
+      loadEmployeeMaster();
+    }
+    if (orgId && branchId) {
+      loadDepartmentEmployees();
+    }
+  }, [
+    orgId,
+    branchId,
+    loadHeaderLookups,
+    loadEmployeeMaster,
+    loadDepartmentEmployees,
+  ]);
 
   /* ---------------- Handlers ---------------- */
 
@@ -283,47 +366,22 @@ const InspectionRequisitionNoteForm = ({ data, onBack }) => {
     setHeader((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleManagerPurchaseChange = (e) => {
+  const handleManagerChange = (tabKey) => (e) => {
     const { name, value } = e.target;
-    if (fieldErrors[`managerPurchase.${name}`])
-      setFieldErrors((prev) => ({
-        ...prev,
-        [`managerPurchase.${name}`]: "",
-      }));
-    setManagerPurchase((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleManagerTdcChange = (e) => {
-    const { name, value } = e.target;
-    if (fieldErrors[`managerTdc.${name}`])
-      setFieldErrors((prev) => ({ ...prev, [`managerTdc.${name}`]: "" }));
-    setManagerTdc((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleManagerQualityChange = (e) => {
-    const { name, value } = e.target;
-    if (fieldErrors[`managerQuality.${name}`])
-      setFieldErrors((prev) => ({ ...prev, [`managerQuality.${name}`]: "" }));
-    setManagerQuality((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleManagerProductionChange = (e) => {
-    const { name, value } = e.target;
-    if (fieldErrors[`managerProduction.${name}`])
-      setFieldErrors((prev) => ({
-        ...prev,
-        [`managerProduction.${name}`]: "",
-      }));
-    setManagerProduction((prev) => ({ ...prev, [name]: value }));
+    const errKey = `${tabKey}.${name}`;
+    if (fieldErrors[errKey])
+      setFieldErrors((prev) => ({ ...prev, [errKey]: "" }));
+    setManagerValues((prev) => ({
+      ...prev,
+      [tabKey]: { ...prev[tabKey], [name]: value },
+    }));
   };
 
   const handleRequestApproveChange = (e) => {
     const { name, value } = e.target;
-    if (fieldErrors[`requestApprove.${name}`])
-      setFieldErrors((prev) => ({
-        ...prev,
-        [`requestApprove.${name}`]: "",
-      }));
+    const errKey = `requestApprove.${name}`;
+    if (fieldErrors[errKey])
+      setFieldErrors((prev) => ({ ...prev, [errKey]: "" }));
     setRequestApprove((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -345,20 +403,12 @@ const InspectionRequisitionNoteForm = ({ data, onBack }) => {
       errors.reasonForInspectionRequest =
         "Reason for Inspection Request is required";
 
-    if (!managerPurchase.sign)
-      errors["managerPurchase.sign"] = "Sign is required";
-    if (!managerPurchase.date)
-      errors["managerPurchase.date"] = "Date is required";
-    if (!managerTdc.sign) errors["managerTdc.sign"] = "Sign is required";
-    if (!managerTdc.date) errors["managerTdc.date"] = "Date is required";
-    if (!managerQuality.sign)
-      errors["managerQuality.sign"] = "Sign is required";
-    if (!managerQuality.date)
-      errors["managerQuality.date"] = "Date is required";
-    if (!managerProduction.sign)
-      errors["managerProduction.sign"] = "Sign is required";
-    if (!managerProduction.date)
-      errors["managerProduction.date"] = "Date is required";
+    MANAGER_TABS.forEach((tab) => {
+      const v = managerValues[tab.key];
+      if (!v?.sign) errors[`${tab.key}.sign`] = "Sign is required";
+      if (!v?.date) errors[`${tab.key}.date`] = "Date is required";
+    });
+
     if (!requestApprove.requestedBy)
       errors["requestApprove.requestedBy"] = "Requested By is required";
     if (!requestApprove.approvedBy)
@@ -375,18 +425,37 @@ const InspectionRequisitionNoteForm = ({ data, onBack }) => {
 
     const isUpdate = Boolean(data?.id);
 
-    // Single-transaction payload: header + manager approvals + request &
-    // approve. The backend keeps the complete inspection request history
-    // with approval tracking (server-side validation).
+    // Flat payload matching the actual inspectionRequisitionNoteDTO - no
+    // irnNo (not part of the DTO) and no nested manager/approval objects.
     const payload = {
       ...(isUpdate ? { id: data.id } : {}),
       orgId,
-      ...header,
-      managerPurchase,
-      managerTdc,
-      managerQuality,
-      managerProduction,
-      requestApprove,
+      branch: branchId,
+      requestedBy: header.requestedBy,
+      productCategory: header.productCategory,
+      date: header.date,
+      docDate: header.date,
+      financialYear: getFinancialYear(header.date),
+      samplesSubmittedTo: header.samplesSubmittedTo,
+      partName: header.partName,
+      partNumber: header.partNumber,
+      sampleQuantity: Number(header.sampleQuantity) || 0,
+      product: header.product,
+      customer: header.customer,
+      supplier: header.supplier,
+      reasonForInspectionRequest: header.reasonForInspectionRequest,
+      requestComments: header.requestComments,
+      active: header.active,
+      purchaseManager: Number(managerValues.managerPurchase.sign) || null,
+      purchaseManagerDate: managerValues.managerPurchase.date,
+      tdcManager: Number(managerValues.managerTdc.sign) || null,
+      tdcManagerDate: managerValues.managerTdc.date,
+      qualityManager: Number(managerValues.managerQuality.sign) || null,
+      qualityManagerDate: managerValues.managerQuality.date,
+      productionManager: Number(managerValues.managerProduction.sign) || null,
+      productionManagerDate: managerValues.managerProduction.date,
+      approvalRequestedBy: Number(requestApprove.requestedBy) || null,
+      approvedBy: Number(requestApprove.approvedBy) || null,
       createdBy: isUpdate ? data?.createdBy || usersId : usersId,
       ...(isUpdate ? { updatedBy: usersId } : {}),
     };
@@ -429,8 +498,6 @@ const InspectionRequisitionNoteForm = ({ data, onBack }) => {
     }
   };
 
-  const activeTabMeta = CHILD_TABS.find((t) => t.key === activeChildTab);
-
   return (
     <div className="w-full p-2">
       {/* Header */}
@@ -456,21 +523,13 @@ const InspectionRequisitionNoteForm = ({ data, onBack }) => {
           <SectionHeader>Inspection Requisition Note</SectionHeader>
           <div className={fieldGrid}>
             <Field
-              label="IRN No"
-              name="irnNo"
-              value={header.irnNo}
-              onChange={handleHeaderChange}
-              required
-              disabled={!data}
-            />
-            <Field
               type="select"
               label="Requested By"
               name="requestedBy"
               value={header.requestedBy}
               onChange={handleHeaderChange}
               error={fieldErrors.requestedBy}
-              options={employeeOptions}
+              options={requestedByOptions}
               required
             />
             <Field
@@ -480,7 +539,7 @@ const InspectionRequisitionNoteForm = ({ data, onBack }) => {
               value={header.productCategory}
               onChange={handleHeaderChange}
               error={fieldErrors.productCategory}
-              options={PRODUCT_CATEGORIES}
+              options={productCategoryOptions}
               required
             />
             <Field
@@ -583,115 +642,38 @@ const InspectionRequisitionNoteForm = ({ data, onBack }) => {
             </div>
           </div>
 
-          {/* Tab 1: Manager-Purchase */}
-          {activeChildTab === "managerPurchase" && (
-            <div className="pt-3">
-              <div className={subTabFieldGrid}>
-                <Field
-                  type="select"
-                  label="Sign"
-                  name="sign"
-                  value={managerPurchase.sign}
-                  onChange={handleManagerPurchaseChange}
-                  error={fieldErrors["managerPurchase.sign"]}
-                  options={employeeOptions}
-                  required
-                />
-                <Field
-                  type="date"
-                  label="Date"
-                  name="date"
-                  value={managerPurchase.date}
-                  onChange={handleManagerPurchaseChange}
-                  error={fieldErrors["managerPurchase.date"]}
-                  required
-                />
-              </div>
-            </div>
+          {/* Manager tabs - each Sign dropdown is scoped to its own department */}
+          {MANAGER_TABS.map(
+            (tab) =>
+              activeChildTab === tab.key && (
+                <div key={tab.key} className="pt-3">
+                  <div className={subTabFieldGrid}>
+                    <Field
+                      type="select"
+                      label="Sign"
+                      name="sign"
+                      value={managerValues[tab.key].sign}
+                      onChange={handleManagerChange(tab.key)}
+                      error={fieldErrors[`${tab.key}.sign`]}
+                      options={departmentEmployees[tab.department]}
+                      required
+                    />
+                    <Field
+                      type="date"
+                      label="Date"
+                      name="date"
+                      value={managerValues[tab.key].date}
+                      onChange={handleManagerChange(tab.key)}
+                      error={fieldErrors[`${tab.key}.date`]}
+                      required
+                    />
+                  </div>
+                </div>
+              ),
           )}
 
-          {/* Tab 2: Manager-TDC */}
-          {activeChildTab === "managerTdc" && (
-            <div className="pt-3">
-              <div className={subTabFieldGrid}>
-                <Field
-                  type="select"
-                  label="Sign"
-                  name="sign"
-                  value={managerTdc.sign}
-                  onChange={handleManagerTdcChange}
-                  error={fieldErrors["managerTdc.sign"]}
-                  options={employeeOptions}
-                  required
-                />
-                <Field
-                  type="date"
-                  label="Date"
-                  name="date"
-                  value={managerTdc.date}
-                  onChange={handleManagerTdcChange}
-                  error={fieldErrors["managerTdc.date"]}
-                  required
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Tab 3: Manager-Quality */}
-          {activeChildTab === "managerQuality" && (
-            <div className="pt-3">
-              <div className={subTabFieldGrid}>
-                <Field
-                  type="select"
-                  label="Sign"
-                  name="sign"
-                  value={managerQuality.sign}
-                  onChange={handleManagerQualityChange}
-                  error={fieldErrors["managerQuality.sign"]}
-                  options={employeeOptions}
-                  required
-                />
-                <Field
-                  type="date"
-                  label="Date"
-                  name="date"
-                  value={managerQuality.date}
-                  onChange={handleManagerQualityChange}
-                  error={fieldErrors["managerQuality.date"]}
-                  required
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Tab 4: Manager-Production */}
-          {activeChildTab === "managerProduction" && (
-            <div className="pt-3">
-              <div className={subTabFieldGrid}>
-                <Field
-                  type="select"
-                  label="Sign"
-                  name="sign"
-                  value={managerProduction.sign}
-                  onChange={handleManagerProductionChange}
-                  error={fieldErrors["managerProduction.sign"]}
-                  options={employeeOptions}
-                  required
-                />
-                <Field
-                  type="date"
-                  label="Date"
-                  name="date"
-                  value={managerProduction.date}
-                  onChange={handleManagerProductionChange}
-                  error={fieldErrors["managerProduction.date"]}
-                  required
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Tab 5: Request and Approve */}
+          {/* Request and Approve - unfiltered employee master, no approval-date
+              field (not part of inspectionRequisitionNoteDTO) */}
           {activeChildTab === "requestApprove" && (
             <div className="pt-3">
               <div className={subTabFieldGrid}>
@@ -702,7 +684,7 @@ const InspectionRequisitionNoteForm = ({ data, onBack }) => {
                   value={requestApprove.requestedBy}
                   onChange={handleRequestApproveChange}
                   error={fieldErrors["requestApprove.requestedBy"]}
-                  options={employeeOptions}
+                  options={employeeMasterOptions}
                   required
                 />
                 <Field
@@ -712,15 +694,8 @@ const InspectionRequisitionNoteForm = ({ data, onBack }) => {
                   value={requestApprove.approvedBy}
                   onChange={handleRequestApproveChange}
                   error={fieldErrors["requestApprove.approvedBy"]}
-                  options={employeeOptions}
+                  options={employeeMasterOptions}
                   required
-                />
-                <Field
-                  type="date"
-                  label="Approval Date"
-                  name="approvalDate"
-                  value={requestApprove.approvalDate}
-                  onChange={handleRequestApproveChange}
                 />
               </div>
             </div>

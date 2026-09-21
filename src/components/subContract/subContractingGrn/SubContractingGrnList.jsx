@@ -3,6 +3,42 @@ import CommonListViewTable from "../../../utils/CommonListViewTable";
 import { subContractingGrnAPI } from "../../../api/Inventory/subContractingGrnAPI";
 import { toast } from "../../../utils/toast";
 
+// Branch must be the numeric branch id (e.g. 15183000000001), not the code.
+// The form reads "branchId" from localStorage too, so this key is tried first.
+const getBranchId = () => {
+  const keys = [
+    "branchId",
+    "branch_id",
+    "branch",
+    "selectedBranch",
+    "branchCode",
+  ];
+  for (const k of keys) {
+    const v = localStorage.getItem(k);
+    if (v && /^\d+$/.test(v)) return v;
+  }
+  return "";
+};
+
+const normalizeStatus = (active) =>
+  active === true || active === "true" || active === "Active"
+    ? "Active"
+    : "Inactive";
+
+// Flatten the nested API objects into plain values for the table.
+// `raw` keeps the untouched API record so it can be used as an edit fallback.
+const mapGrnRow = (g) => ({
+  ...g,
+  raw: g,
+  scGrnNo: g.docId || g.scGrnNo || "",
+  date: g.docDate || "",
+  plantId: g.branch?.branchCode || "",
+  department: g.department?.departmentName || "",
+  vendorId: g.vendor?.customerCode || "",
+  vendorName: g.vendor?.customerName || "",
+  active: normalizeStatus(g.active),
+});
+
 const SubContractingGrnList = ({
   onAddNew,
   onEdit,
@@ -13,16 +49,29 @@ const SubContractingGrnList = ({
   const [loading, setLoading] = useState(false);
 
   const ORG_ID = localStorage.getItem("orgId");
+  const BRANCH = getBranchId();
 
   const loadGrns = useCallback(async () => {
+    if (!ORG_ID || !BRANCH) {
+      console.warn("Missing orgId/branch id in localStorage:", {
+        ORG_ID,
+        BRANCH,
+      });
+      setGrnData([]);
+      toast.error("Branch not found. Please log in again.");
+      return;
+    }
+
     try {
       setLoading(true);
 
-      const grns = await subContractingGrnAPI.getGrnByOrgId(ORG_ID);
+      const grns = await subContractingGrnAPI.getGrnByOrgId(ORG_ID, BRANCH);
 
-      grns.sort((a, b) => (b.id || 0) - (a.id || 0));
+      const rows = (Array.isArray(grns) ? grns : [])
+        .map(mapGrnRow)
+        .sort((a, b) => (b.id || 0) - (a.id || 0));
 
-      setGrnData(grns);
+      setGrnData(rows);
     } catch (error) {
       console.error("Failed to load sub contracting GRNs:", error);
       setGrnData([]);
@@ -30,31 +79,16 @@ const SubContractingGrnList = ({
     } finally {
       setLoading(false);
     }
-  }, [ORG_ID]);
+  }, [ORG_ID, BRANCH]);
 
   useEffect(() => {
     loadGrns();
   }, [loadGrns, refreshTrigger]);
 
   const columns = [
-    {
-      key: "scGrnNo",
-      label: "S.C GRN No.",
-      accessor: "scGrnNo",
-      type: "text",
-    },
-    {
-      key: "date",
-      label: "Date",
-      accessor: "date",
-      type: "text",
-    },
-    {
-      key: "plantId",
-      label: "Plant ID",
-      accessor: "plantId",
-      type: "text",
-    },
+    { key: "scGrnNo", label: "S.C GRN No.", accessor: "scGrnNo", type: "text" },
+    { key: "date", label: "Date", accessor: "date", type: "text" },
+    { key: "plantId", label: "Plant ID", accessor: "plantId", type: "text" },
     {
       key: "belongsTo",
       label: "Belongs To",
@@ -67,12 +101,7 @@ const SubContractingGrnList = ({
       accessor: "department",
       type: "text",
     },
-    {
-      key: "vendorId",
-      label: "Vendor Id",
-      accessor: "vendorId",
-      type: "text",
-    },
+    { key: "vendorId", label: "Vendor Id", accessor: "vendorId", type: "text" },
     {
       key: "vendorName",
       label: "Vendor Name",
@@ -130,11 +159,7 @@ const SubContractingGrnList = ({
   ];
 
   const filterOptions = [
-    {
-      value: "all",
-      label: "All",
-      field: null,
-    },
+    { value: "all", label: "All", field: null },
     {
       value: "active",
       label: "Active",

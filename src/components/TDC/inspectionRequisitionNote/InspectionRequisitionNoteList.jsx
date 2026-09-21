@@ -39,9 +39,9 @@ const InspectionRequisitionNoteList = ({
 
   const columns = [
     {
-      key: "irnNo",
-      label: "IRN No",
-      accessor: (row) => row.irnNo,
+      key: "id",
+      label: "ID",
+      accessor: (row) => row.id,
       type: "text",
       noWrap: true,
     },
@@ -52,12 +52,11 @@ const InspectionRequisitionNoteList = ({
       type: "text",
     },
     {
+      // requestedBy is a plain string (e.g. "PURCHASE" / "TDC") coming from
+      // the REQUESTED BY list-values dropdown, not an employee object.
       key: "requestedBy",
       label: "Requested By",
-      accessor: (row) =>
-        typeof row.requestedBy === "object"
-          ? row.requestedBy.employeeName || row.requestedBy.id
-          : row.requestedBy,
+      accessor: (row) => row.requestedBy,
       type: "text",
     },
     {
@@ -130,10 +129,9 @@ const InspectionRequisitionNoteList = ({
   ];
 
   const searchFields = [
-    "irnNo",
+    "id",
     "date",
     "requestedBy",
-    "requestedBy.employeeName",
     "productCategory",
     "partName",
     "partNumber",
