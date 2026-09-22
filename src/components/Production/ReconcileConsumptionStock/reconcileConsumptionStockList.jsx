@@ -1,54 +1,148 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useCallback, useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
-import { toast } from "../../../utils/toast";
 import reconcileConsumptionStockAPI from "../../../api/Production/reconcileConsumptionStockAPI";
+import { toast } from "../../../utils/toast";
 
-const ReconcileConsumptionStockList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
+const ReconcileConsumptionStockList = ({
+  onAddNew,
+  onEdit,
+  onBack,
+  refreshTrigger,
+}) => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const ORG_ID = Number(localStorage.getItem("orgId"));
-  const BRANCH_ID = Number(localStorage.getItem("branchId"));
+  const ORG_ID = Number(localStorage.getItem("orgId")) || 0;
+  const BRANCH_ID = Number(localStorage.getItem("branchId")) || 0;
 
-  // Define columns
+  const loadData = useCallback(async () => {
+    if (!ORG_ID || !BRANCH_ID) {
+      setData([]);
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const list = await reconcileConsumptionStockAPI.getByOrgIdAndBranch({
+        orgId: ORG_ID,
+        branch: BRANCH_ID,
+      });
+
+      const sortedData = (list || []).sort(
+        (a, b) => (b.id || 0) - (a.id || 0),
+      );
+
+      setData(sortedData);
+    } catch (error) {
+      console.error("Failed to load reconcile records:", error);
+      setData([]);
+      toast.error("Failed to fetch reconcile records");
+    } finally {
+      setLoading(false);
+    }
+  }, [ORG_ID, BRANCH_ID]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData, refreshTrigger]);
+
+  /* ---------------- Accessors ---------------- */
+
+  const getPlantLabel = (row) =>
+    row?.branch?.branchName ||
+    row?.branch?.branchCode ||
+    row?.branch?.id ||
+    "";
+
+  const getShopFloorLabel = (row) =>
+    row?.shopFloor?.locationName || row?.shopFloor?.id || "";
+
+  const getFgItemLabel = (row) =>
+    row?.fgItem?.itemCode ||
+    row?.fgItem?.itemDescription ||
+    row?.fgItem?.id ||
+    "";
+
+  const getRmLocationLabel = (row) =>
+    row?.rmLocation?.locationName || row?.rmLocation?.id || "";
+
+  const getTotalValue = (row) =>
+    (row?.details || []).reduce((sum, d) => sum + (Number(d.value) || 0), 0);
+
+  /* ---------------- Columns ---------------- */
+
   const columns = [
     {
       key: "docId",
       label: "Doc.ID",
-      accessor: (row) => row.docId,
+      accessor: (row) => row?.docId || "",
+      type: "text",
+      noWrap: true,
+    },
+    {
+      key: "docDate",
+      label: "Doc Date",
+      accessor: (row) => row?.docDate || "",
       type: "text",
     },
     {
       key: "reconcileDate",
       label: "Reconcile Date",
-      accessor: (row) => row.reconcileDate,
-      type: "date",
+      accessor: (row) => row?.reconcileDate || "",
+      type: "text",
     },
     {
-      key: "plant",
+      key: "branch",
       label: "Plant",
-      accessor: (row) => row.plant?.name || row.plantName,
+      accessor: (row) => getPlantLabel(row),
       type: "text",
     },
     {
       key: "shopFloor",
       label: "Shop Floor",
-      accessor: (row) => row.shopFloor?.name || row.shopFloorName,
+      accessor: (row) => getShopFloorLabel(row),
       type: "text",
     },
     {
       key: "fgItem",
       label: "FG Item",
-      accessor: (row) => row.fgItem?.itemCode || row.fgItemCode,
+      accessor: (row) => getFgItemLabel(row),
+      type: "text",
+    },
+    {
+      key: "rmLocation",
+      label: "RM Location",
+      accessor: (row) => getRmLocationLabel(row),
       type: "text",
     },
     {
       key: "totalValue",
       label: "Total Value",
-      accessor: (row) => row.totalValue,
+      accessor: (row) => getTotalValue(row),
       type: "number",
     },
-    { key: "active", label: "Status", accessor: "active", type: "status" },
+    {
+      key: "active",
+      label: "Status",
+      accessor: (row) =>
+        row?.active === true || row?.active === "Active"
+          ? "Active"
+          : "Inactive",
+      type: "status",
+      statusVariants: {
+        Active: {
+          label: "Active",
+          className:
+            "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+        },
+        Inactive: {
+          label: "Inactive",
+          className:
+            "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+        },
+      },
+    },
     {
       key: "actions",
       label: "Actions",
@@ -58,27 +152,13 @@ const ReconcileConsumptionStockList = ({ onAddNew, onEdit, onBack, refreshTrigge
     },
   ];
 
-  const searchFields = ["docId", "plant.plantName", "shopFloor.name", "fgItem.itemCode"];
-
-  const loadData = useCallback(async () => {
-    try {
-      setLoading(true);
-      const response = await reconcileConsumptionStockAPI.getReconcileConsumptionByOrgId(ORG_ID, BRANCH_ID);
-      const list = response?.paramObjectsMap?.reconcileList || [];
-      const sortedData = list.sort((a, b) => (b.id || 0) - (a.id || 0));
-      setData(sortedData);
-    } catch (error) {
-      console.error("Failed to load data:", error);
-      setData([]);
-      toast.error("Failed to fetch records");
-    } finally {
-      setLoading(false);
-    }
-  }, [ORG_ID, BRANCH_ID]);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData, refreshTrigger]);
+  const searchFields = [
+    "docId",
+    "branch.branchName",
+    "shopFloor.locationName",
+    "fgItem.itemCode",
+    "rmLocation.locationName",
+  ];
 
   return (
     <div className="h-full flex flex-col">

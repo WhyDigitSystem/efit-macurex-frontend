@@ -1,8 +1,14 @@
 import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useToast } from "../../Toast/ToastContext";
+import bulkIssueIndentAPI from "../../../api/Production/bulkIssueIndentAPI";
+import branchAPI from "../../../api/branchAPI";
+import { departmentAPI } from "../../../api/departmentAPI";
+import locationMasterAPI from "../../../api/locationMasterAPI";
+import employeeAPI from "../../../api/employeeAPI";
 
 /* ---------------------------------------------------------------------------- */
-/* Shared design tokens - identical to other Inventory forms                   */
+/* Shared design tokens                                                        */
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -45,6 +51,12 @@ const Field = ({
   className = "",
 }) => {
   if (type === "select") {
+    const safeValue = value === null || value === undefined ? "" : value;
+    const inOptions = (options || []).some(
+      (opt) => String(opt.value ?? opt) === String(safeValue),
+    );
+    const showGhost = safeValue !== "" && !inOptions;
+
     return (
       <div className={`w-full ${className}`}>
         <label className={labelClasses}>
@@ -54,15 +66,18 @@ const Field = ({
 
         <select
           name={name}
-          value={value}
+          value={safeValue}
           onChange={onChange}
           disabled={disabled}
           className={controlClasses}
         >
           <option value="">-- Select --</option>
+          {showGhost && (
+            <option value={safeValue}>{String(safeValue)}</option>
+          )}
           {(options || []).map((opt) => (
-            <option key={opt} value={opt}>
-              {opt}
+            <option key={opt.value ?? opt} value={opt.value ?? opt}>
+              {opt.label ?? opt}
             </option>
           ))}
         </select>
@@ -134,14 +149,13 @@ const Field = ({
   );
 };
 
-/* Config-driven field grid - array of {name,label,type,options,...} descriptors
-   rendered against a values/onChange pair. */
 const FieldsGrid = ({
   fields,
   values,
   onChange,
   errors,
   gridClassName = fieldGrid,
+  onFieldChangeOverride = {},
 }) => (
   <div className={gridClassName}>
     {fields.map((f) => (
@@ -151,7 +165,7 @@ const FieldsGrid = ({
         label={f.label}
         name={f.name}
         value={f.auto ? values[f.name] || "Auto" : values[f.name]}
-        onChange={onChange}
+        onChange={onFieldChangeOverride[f.name] || onChange}
         options={f.options}
         disabled={f.disabled || f.auto}
         required={f.required}
@@ -205,13 +219,12 @@ const TableHead = ({ headers }) => (
       {headers.map((h, i) => (
         <th
           key={i}
-          className={`p-1 whitespace-nowrap ${
-            i === 0
+          className={`p-1 whitespace-nowrap ${i === 0
               ? "w-8 text-center"
               : i === headers.length - 1
                 ? "w-20 text-left"
                 : "text-left"
-          } dark:text-white`}
+            } dark:text-white`}
         >
           {h}
         </th>
@@ -229,11 +242,10 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
         type="button"
         onClick={onRemove}
         disabled={disabled}
-        className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-          disabled
+        className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
             ? "bg-gray-400 cursor-not-allowed"
             : "bg-red-600 hover:bg-red-700"
-        }`}
+          }`}
       >
         <Trash2 size={10} />
       </button>
@@ -241,26 +253,37 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
   </tr>
 );
 
-const SelectCell = ({ value, onChange, options }) => (
-  <td className="p-1 align-top">
-    <select value={value} onChange={onChange} className={cellInputClasses}>
-      <option value="">-- Select --</option>
-      {(options || []).map((opt) => (
-        <option key={opt} value={opt}>
-          {opt}
-        </option>
-      ))}
-    </select>
-  </td>
-);
+const SelectCell = ({ value, onChange, options }) => {
+  const safeValue = value === null || value === undefined ? "" : value;
+  const inOptions = (options || []).some(
+    (opt) => String(opt.value ?? opt) === String(safeValue),
+  );
+  const showGhost = safeValue !== "" && !inOptions;
 
-const InputCell = ({ value, onChange, type = "text" }) => (
+  return (
+    <td className="p-1 align-top min-w-[220px]">
+      <select value={safeValue} onChange={onChange} className={cellInputClasses}>
+        <option value="">-- Select --</option>
+        {showGhost && <option value={safeValue}>{String(safeValue)}</option>}
+        {(options || []).map((opt) => (
+          <option key={opt.value ?? opt} value={opt.value ?? opt}>
+            {opt.label ?? opt}
+          </option>
+        ))}
+      </select>
+    </td>
+  );
+};
+
+const InputCell = ({ value, onChange, type = "text", readOnly }) => (
   <td className="p-1 align-top">
     <input
       type={type}
       value={value}
       onChange={onChange}
-      className={`${cellInputClasses} ${type === "number" ? "min-w-[90px]" : "min-w-[110px]"}`}
+      readOnly={readOnly}
+      className={`${cellInputClasses} ${readOnly ? "bg-gray-100 dark:bg-gray-800 text-gray-500" : ""
+        } ${type === "number" ? "min-w-[90px]" : "min-w-[110px]"}`}
     />
   </td>
 );
@@ -288,6 +311,7 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
               <InputCell
                 key={col.key}
                 value={row[col.key]}
+                readOnly={col.readOnly}
                 type={
                   col.type === "number"
                     ? "number"
@@ -311,88 +335,99 @@ const blankRowFromColumns = (columns) =>
 const blankFromFields = (fields) =>
   fields.reduce((acc, f) => ({ ...acc, [f.name]: f.default ?? "" }), {});
 
-/* ---------------------------------------------------------------------------- */
-/* Options (swap for real API-driven lists)                                    */
-
-const PLANT_IDS = ["BANGALORE", "CHENNAI", "PUNE", "DELHI"];
-const DEPARTMENTS = ["PURCHASE", "PRODUCTION", "QUALITY", "STORES", "ADMIN"];
-const BELONGS_TO = ["APPLIANCES", "BOSCH"];
-const ITEM_CODES = ["FG-001", "FG-002", "SFG-001", "RM-001"];
-const UNITS = ["NOS", "KG", "LTR", "BOX", "MTR"];
-const LOCATIONS = ["MAIN STORE", "WIP LOCATION", "FG STORE", "WAREHOUSE 1"];
-const YES_NO = ["No", "Yes"];
-
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const nowTime = () => new Date().toTimeString().slice(0, 8);
 
 /* ---------------------------------------------------------------------------- */
-/* Header fields                                                               */
+/* Static option lists                                                         */
 
-const HEADER_FIELDS = [
-  {
-    name: "plant",
-    label: "Plant",
-    type: "select",
-    options: PLANT_IDS,
-    required: true,
-  },
-  { name: "docId", label: "DocId", auto: true },
-  {
-    name: "department",
-    label: "Department",
-    type: "select",
-    options: DEPARTMENTS,
-  },
-  {
-    name: "docDate",
-    label: "DocDate",
-    type: "date",
-    default: todayISO(),
-    required: true,
-  },
-  {
-    name: "belongsTo",
-    label: "Belongs To",
-    type: "select",
-    options: BELONGS_TO,
-  },
-  { name: "fgDescription", label: "FG Description" },
-  {
-    name: "fgSfgItemId",
-    label: "FG/SFG Itemid",
-    type: "select",
-    options: ITEM_CODES,
-  },
-  { name: "bomId", label: "Bom Id" },
-  {
-    name: "timeOfIndent",
-    label: "Time Of Indent",
-    type: "time",
-    default: nowTime(),
-  },
-  {
-    name: "fromLocation",
-    label: "From Location",
-    type: "select",
-    options: LOCATIONS,
-  },
-];
+const BELONGS_TO = ["APPLIANCES", "BOSCH"];
+const YES_NO = ["No", "Yes"];
 
 /* ---------------------------------------------------------------------------- */
-/* Child 1 - Indent Detail (table)                                             */
+/* Header fields — options injected at render time                             */
 
-const INDENT_DETAIL_COLUMNS = [
-  { key: "itemCodeDescription", label: "Item Code / Description" },
+const buildHeaderFields = ({
+  plantOptions,
+  departmentOptions,
+  fgItemOptions,
+  bomOptions,
+  locationOptions,
+}) => [
+    {
+      name: "plant",
+      label: "Plant",
+      type: "select",
+      options: plantOptions,
+      required: true,
+    },
+    { name: "docId", label: "DocId", auto: true },
+    {
+      name: "department",
+      label: "Department",
+      type: "select",
+      options: departmentOptions,
+    },
+    {
+      name: "docDate",
+      label: "DocDate",
+      type: "date",
+      default: todayISO(),
+      required: true,
+    },
+    {
+      name: "belongsTo",
+      label: "Belongs To",
+      type: "select",
+      options: BELONGS_TO,
+    },
+    { name: "fgDescription", label: "FG Description", disabled: true },
+    {
+      name: "fgSfgItemId",
+      label: "FG/SFG Itemid",
+      type: "select",
+      options: fgItemOptions,
+    },
+    {
+      name: "bomId",
+      label: "Bom Id",
+      type: "select",
+      options: bomOptions,
+    },
+    {
+      name: "timeOfIndent",
+      label: "Time Of Indent",
+      type: "time",
+      default: nowTime(),
+    },
+    {
+      name: "fromLocation",
+      label: "From Location",
+      type: "select",
+      options: locationOptions,
+    },
+  ];
+
+/* ---------------------------------------------------------------------------- */
+/* Child 1 - Indent Detail                                                     */
+
+const buildIndentDetailColumns = ({ unitOptions, bomItemOptions }) => [
+  {
+    key: "item",
+    label: "Item Code / Description",
+    type: "select",
+    options: bomItemOptions,
+  },
   { key: "reqQty", label: "Req Qty", type: "number" },
-  { key: "unit", label: "Unit", type: "select", options: UNITS },
+  { key: "unitDisplay", label: "Unit", readOnly: true },
   { key: "requiredDate", label: "Required Date", type: "date" },
   { key: "purpose", label: "Purpose" },
 ];
 
 /* ---------------------------------------------------------------------------- */
-/* Child 2 - Indent Summary (fields)                                           */
+/* Child 2 - Indent Summary                                                    */
 
-const INDENT_SUMMARY_FIELDS = [
+const buildIndentSummaryFields = ({ employeeOptions }) => [
   {
     name: "approvedByPM",
     label: "Approved By PM",
@@ -400,8 +435,18 @@ const INDENT_SUMMARY_FIELDS = [
     options: YES_NO,
     default: "No",
   },
-  { name: "preparedBy", label: "Prepared By" },
-  { name: "authorisedBy", label: "Authorised By" },
+  {
+    name: "preparedBy",
+    label: "Prepared By",
+    type: "select",
+    options: employeeOptions,
+  },
+  {
+    name: "authorisedBy",
+    label: "Authorised By",
+    type: "select",
+    options: employeeOptions,
+  },
   {
     name: "remarks",
     label: "Remarks",
@@ -411,38 +456,387 @@ const INDENT_SUMMARY_FIELDS = [
 ];
 
 const CHILD_TABS = [
-  { key: "indentDetail", label: "1-Indent Detail", type: "table" },
-  { key: "indentSummary", label: "2-Indent Summary", type: "fields" },
+  { key: "indentDetail", label: "Indent Detail", type: "table" },
+  { key: "indentSummary", label: "Indent Summary", type: "fields" },
 ];
 
 /* ---------------------------------------------------------------------------- */
 
 const BulkIssueIndentForm = ({ onBack, onSave, editData }) => {
-  const ORG_ID = parseInt(localStorage.getItem("orgId"));
+  const { addToast } = useToast();
+  const ORG_ID = Number(localStorage.getItem("orgId")) || 0;
+  const BRANCH_ID = Number(localStorage.getItem("branchId")) || 0;
+  const CREATED_BY = localStorage.getItem("userName") || "SYSTEM";
+
+  const isEditMode = Boolean(editData?.id);
+  const docIdLoadedRef = useRef(false);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [activeChildTab, setActiveChildTab] = useState("indentDetail");
 
-  const [header, setHeader] = useState({
-    ...blankFromFields(HEADER_FIELDS),
-    ...editData?.header,
-  });
+  /* ---------------- Lookup options ---------------- */
+  const [plantOptions, setPlantOptions] = useState([]);
+  const [departmentOptions, setDepartmentOptions] = useState([]);
+  const [fgItemOptions, setFgItemOptions] = useState([]);
+  const [bomOptions, setBomOptions] = useState([]);
+  const [locationOptions, setLocationOptions] = useState([]);
+  const [employeeOptions, setEmployeeOptions] = useState([]);
+
+  /* BOM line items fetched on BOM select, used as the row dropdown */
+  const [bomItemOptions, setBomItemOptions] = useState([]);
+  const bomItemMapRef = useRef({}); // itemId -> BOM line object
+
+  /* ---------------- Lookup maps ---------------- */
+  const fgItemMapRef = useRef({});       // itemId -> item object
+  const locationMapRef = useRef({});     // locationId -> location object
+
+  /* ---------------- Form state ---------------- */
+  const [header, setHeader] = useState(() => ({
+    ...blankFromFields(
+      buildHeaderFields({
+        plantOptions: [],
+        departmentOptions: [],
+        fgItemOptions: [],
+        bomOptions: [],
+        locationOptions: [],
+      }),
+    ),
+    ...(editData?.header || {}),
+  }));
 
   const [indentDetailRows, setIndentDetailRows] = useState(
     editData?.indentDetails?.length
       ? editData.indentDetails
-      : [blankRowFromColumns(INDENT_DETAIL_COLUMNS)],
+      : [
+        blankRowFromColumns(
+          buildIndentDetailColumns({ unitOptions: [], bomItemOptions: [] }),
+        ),
+      ],
   );
 
   const [indentSummary, setIndentSummary] = useState({
-    ...blankFromFields(INDENT_SUMMARY_FIELDS),
-    ...editData?.indentSummary,
+    ...blankFromFields(buildIndentSummaryFields({ employeeOptions: [] })),
+    ...(editData?.indentSummary || {}),
   });
+
+  /* ---------------- Re-sync when editData prop changes ---------------- */
+  useEffect(() => {
+    if (!editData) return;
+
+    setHeader({
+      ...blankFromFields(
+        buildHeaderFields({
+          plantOptions: [],
+          departmentOptions: [],
+          fgItemOptions: [],
+          bomOptions: [],
+          locationOptions: [],
+        }),
+      ),
+      ...(editData.header || {}),
+    });
+
+    setIndentDetailRows(
+      editData.indentDetails?.length
+        ? editData.indentDetails
+        : [
+          blankRowFromColumns(
+            buildIndentDetailColumns({ unitOptions: [], bomItemOptions: [] }),
+          ),
+        ],
+    );
+
+    setIndentSummary({
+      ...blankFromFields(buildIndentSummaryFields({ employeeOptions: [] })),
+      ...(editData.indentSummary || {}),
+    });
+  }, [editData]);
+
+  /* ---------------- Load master data ---------------- */
+
+  useEffect(() => {
+    if (!ORG_ID) return;
+
+    // Plants
+    (async () => {
+      try {
+        const list = await branchAPI.getBranchByOrgId(ORG_ID);
+        setPlantOptions(
+          (list || []).map((b) => ({
+            value: b.id,
+            label: b.branchName || b.branchCode || String(b.id),
+          })),
+        );
+      } catch (err) {
+        console.error("Failed to load plants:", err);
+        setPlantOptions([]);
+      }
+    })();
+
+    // Departments
+    (async () => {
+      try {
+        const res = await departmentAPI.getAllDepartments(ORG_ID);
+        const list = res?.paramObjectsMap?.departmentVO || [];
+        setDepartmentOptions(
+          (list || []).map((d) => ({
+            value: d.id ?? d.departmentName,
+            label: d.departmentName || String(d.id),
+          })),
+        );
+      } catch (err) {
+        console.error("Failed to load departments:", err);
+        setDepartmentOptions([]);
+      }
+    })();
+
+    // FG / SFG items
+    (async () => {
+      try {
+        const list = await bulkIssueIndentAPI.getFGAndSFGItems({
+          branch: BRANCH_ID,
+          orgId: ORG_ID,
+        });
+        const map = {};
+        setFgItemOptions(
+          (list || []).map((it) => {
+            const value = it.itemId;
+            map[value] = it;
+            return {
+              value,
+              label: it.itemCode || String(it.itemId),
+            };
+          }),
+        );
+        fgItemMapRef.current = map;
+      } catch (err) {
+        console.error("Failed to load FG/SFG items:", err);
+        setFgItemOptions([]);
+      }
+    })();
+
+    // Locations
+    (async () => {
+      try {
+        const list = await locationMasterAPI.getLocationMasterByOrgId(
+          ORG_ID,
+          BRANCH_ID,
+        );
+        const map = {};
+        setLocationOptions(
+          (list || []).map((loc) => {
+            const value = loc.id;
+            map[value] = loc;
+            return {
+              value,
+              label: loc.locationName || loc.locationId || String(loc.id),
+            };
+          }),
+        );
+        locationMapRef.current = map;
+      } catch (err) {
+        console.error("Failed to load locations:", err);
+        setLocationOptions([]);
+      }
+    })();
+
+    // Employees
+    (async () => {
+      try {
+        const list = await employeeAPI.getEmployeeByOrgId(ORG_ID);
+        setEmployeeOptions(
+          (list || []).map((e) => ({
+            value: e.id,
+            label: e.employeeName || e.employeeId || String(e.id),
+          })),
+        );
+      } catch (err) {
+        console.error("Failed to load employees:", err);
+        setEmployeeOptions([]);
+      }
+    })();
+  }, [ORG_ID, BRANCH_ID]);
+
+  /* ---------------- Load BOM dropdown options when FG/SFG item changes ---------------- */
+
+  useEffect(() => {
+    const itemId = header.fgSfgItemId;
+    if (!itemId) {
+      setBomOptions([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const list = await bulkIssueIndentAPI.getBomItemDetails({
+          branch: BRANCH_ID,
+          itemId,
+          orgId: ORG_ID,
+        });
+
+        const opts = (list || []).map((b) => ({
+          value: b.bomId,
+          label: b.BomDocId || String(b.bomId),
+          bom: b,
+        }));
+
+        if (!cancelled) setBomOptions(opts);
+      } catch (err) {
+        console.error("Failed to load BOM items:", err);
+        if (!cancelled) setBomOptions([]);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [header.fgSfgItemId, ORG_ID, BRANCH_ID]);
+
+  /* ---------------- Preload BOM line items in edit mode ---------------- */
+
+  useEffect(() => {
+    if (!isEditMode) return;
+    if (!header.fgSfgItemId || !header.bomId) return;
+    if (bomItemOptions.length) return; // already loaded
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const list = await bulkIssueIndentAPI.getBomItemDetails({
+          branch: BRANCH_ID,
+          itemId: header.fgSfgItemId,
+          orgId: ORG_ID,
+        });
+
+        const map = {};
+        const options = (list || []).map((b) => {
+          map[b.itemId] = b;
+          return {
+            value: b.itemId,
+            label: `${b.itemCode} — ${b.itemDescription}`,
+          };
+        });
+
+        if (!cancelled) {
+          bomItemMapRef.current = map;
+          setBomItemOptions(options);
+        }
+      } catch (err) {
+        console.error("Failed to preload BOM item details:", err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditMode, header.fgSfgItemId, header.bomId]);
+
+  /* ---------------- Doc Id auto-generation (Add mode) ---------------- */
+
+  useEffect(() => {
+    if (isEditMode || docIdLoadedRef.current) return;
+    if (!ORG_ID) return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const financialYear = String(new Date().getFullYear());
+        const docId = await bulkIssueIndentAPI.getDocId({
+          financialYear,
+          orgId: ORG_ID,
+        });
+        if (!cancelled && docId) {
+          setHeader((prev) => ({ ...prev, docId }));
+          docIdLoadedRef.current = true;
+        }
+      } catch (err) {
+        console.error("Failed to generate Doc Id:", err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isEditMode, ORG_ID]);
+
+  /* ---------------- Handlers ---------------- */
 
   const handleHeaderChange = (e) => {
     const { name, value } = e.target;
     if (fieldErrors[name]) setFieldErrors((prev) => ({ ...prev, [name]: "" }));
-    setHeader((prev) => ({ ...prev, [name]: value }));
+
+    setHeader((prev) => {
+      const next = { ...prev, [name]: value };
+
+      if (name === "fgSfgItemId") {
+        const it = fgItemMapRef.current[value];
+        next.fgDescription = it?.itemDescription || "";
+        next.bomId = "";
+        setBomItemOptions([]);
+      }
+
+      return next;
+    });
+  };
+
+  /* BOM selection → fetch BOM line items and populate the row dropdown */
+  const handleBomChange = async (e) => {
+    const value = e.target.value;
+    setHeader((prev) => ({ ...prev, bomId: value }));
+
+    if (!value) {
+      setBomItemOptions([]);
+      setIndentDetailRows([
+        blankRowFromColumns(
+          buildIndentDetailColumns({ unitOptions: [], bomItemOptions: [] }),
+        ),
+      ]);
+      return;
+    }
+
+    try {
+      const list = await bulkIssueIndentAPI.getBomItemDetails({
+        branch: BRANCH_ID,
+        itemId: header.fgSfgItemId,
+        orgId: ORG_ID,
+      });
+
+      const map = {};
+      const options = (list || []).map((b) => {
+        map[b.itemId] = b;
+        return {
+          value: b.itemId,
+          label: `${b.itemCode} — ${b.itemDescription}`,
+        };
+      });
+
+      bomItemMapRef.current = map;
+      setBomItemOptions(options);
+
+      if (options.length) {
+        const first = map[options[0].value];
+        setIndentDetailRows([
+          {
+            item: first.itemId,
+            reqQty: first.bomQty ?? "",
+            unit: first.unitId ?? "",
+            unitDisplay: first.unitCode ?? "",
+            requiredDate: todayISO(),
+            purpose: "",
+          },
+        ]);
+      }
+    } catch (err) {
+      console.error("Failed to load BOM item details:", err);
+      setBomItemOptions([]);
+    }
   };
 
   const handleSummaryChange = (e) => {
@@ -459,17 +853,46 @@ const BulkIssueIndentForm = ({ onBack, onSave, editData }) => {
     onRemoveRow: (idx) => setter((prev) => prev.filter((_, i) => i !== idx)),
   });
 
+  /* Row change handler — auto-fills reqQty and unit when an item is chosen */
+  const handleIndentCellChange = (idx, key, value) => {
+    setIndentDetailRows((prev) =>
+      prev.map((row, i) => {
+        if (i !== idx) return row;
+
+        const next = { ...row, [key]: value };
+
+        if (key === "item") {
+          const b = bomItemMapRef.current[value];
+          if (b) {
+            next.reqQty = b.bomQty ?? "";
+            next.unit = b.unitId ?? "";
+            next.unitDisplay = b.unitCode ?? "";
+          }
+        }
+
+        return next;
+      }),
+    );
+  };
+
+  const indentDetailColumns = buildIndentDetailColumns({
+    unitOptions: [],
+    bomItemOptions,
+  });
+
   const indentDetailHandlers = makeTableHandlers(
     setIndentDetailRows,
-    INDENT_DETAIL_COLUMNS,
+    indentDetailColumns,
   );
+
+  const indentSummaryFields = buildIndentSummaryFields({ employeeOptions });
 
   const childTabConfig = {
     indentDetail: {
       type: "table",
       rows: indentDetailRows,
       handlers: indentDetailHandlers,
-      columns: INDENT_DETAIL_COLUMNS,
+      columns: indentDetailColumns,
     },
     indentSummary: { type: "fields" },
   };
@@ -478,9 +901,14 @@ const BulkIssueIndentForm = ({ onBack, onSave, editData }) => {
 
   const handleAddChildRow = () => {
     if (activeTabConfig.type === "table") {
-      activeTabConfig.handlers.onAddRow();
+      setIndentDetailRows((prev) => [
+        ...prev,
+        blankRowFromColumns(indentDetailColumns),
+      ]);
     }
   };
+
+  /* ---------------- Validation ---------------- */
 
   const validate = () => {
     const errors = {};
@@ -492,47 +920,113 @@ const BulkIssueIndentForm = ({ onBack, onSave, editData }) => {
     return Object.keys(errors).length === 0;
   };
 
+  /* ---------------- Save ---------------- */
+
   const handleSave = async () => {
     if (!validate()) return;
 
     setIsSubmitting(true);
 
+    const isUpdate = Boolean(editData?.id);
+    const financialYear = String(new Date().getFullYear());
+
     const payload = {
-      ...(editData?.id && { id: editData.id }),
-      header,
-      indentDetails: indentDetailRows,
-      indentSummary,
+      ...(isUpdate ? { id: editData.id } : {}),
+
       active: editData?.active ?? true,
       orgId: ORG_ID,
-      createdBy: localStorage.getItem("userName") || "SYSTEM",
+      branch: Number(header.plant) || BRANCH_ID || 0,
+      financialYear,
+
+      cancelRemarks: "",
+      createdBy: isUpdate ? editData?.createdBy ?? CREATED_BY : CREATED_BY,
+
+      belongsTo: header.belongsTo || "",
+      department: Number(header.department) || 0,
+
+      fgSfgItem: Number(header.fgSfgItemId) || 0,
+      bom: Number(header.bomId) || 0,
+
+      fromLocation: Number(header.fromLocation) || 0,
+      timeOfIndent: header.timeOfIndent || nowTime(),
+
+      approvedByPM: indentSummary.approvedByPM || "",
+      preparedBy: Number(indentSummary.preparedBy) || 0,
+      authorisedBy: Number(indentSummary.authorisedBy) || 0,
+      remarks: indentSummary.remarks || "",
+
+      details: (indentDetailRows || [])
+        .filter((r) => r.item)
+        .map((r) => ({
+          item: Number(r.item) || 0,
+          reqQty: Number(r.reqQty || 0),
+          unit: Number(r.unit) || 0,
+          requiredDate: r.requiredDate || "",
+          purpose: r.purpose || "",
+        })),
     };
 
     console.log("📤 Saving Bulk Issue Indent Payload:", payload);
 
     try {
-      const response =
-        await bulkIssueIndentAPI.updateCreateBulkIssueIndent(payload);
-      console.log("📥 Response:", response);
+      const response = await bulkIssueIndentAPI.createUpdate(payload);
 
-      const status = response?.status === true || response?.statusFlag === "Ok";
+      const isSuccess =
+        response?.status === true ||
+        response?.statusFlag === "Ok" ||
+        response?.status === 200 ||
+        response?.statusCode === 200;
 
-      if (status) {
-        if (onSave) onSave(payload);
+      if (isSuccess) {
+        addToast(
+          response?.paramObjectsMap?.message ||
+          (isUpdate
+            ? "Bulk Issue Indent updated successfully!"
+            : "Bulk Issue Indent created successfully!"),
+          "success",
+        );
+
+        if (onSave) {
+          onSave({
+            ...payload,
+            id: response?.paramObjectsMap?.bulkIssueIndent?.id || payload.id,
+          });
+        } else {
+          onBack();
+        }
       } else {
-        const errorMessage =
+        addToast(
+          response?.errors?.[0]?.shortMessage ||
+          response?.errors?.[0]?.longMessage ||
           response?.paramObjectsMap?.message ||
           response?.paramObjectsMap?.errorMessage ||
           response?.message ||
-          "Failed to save bulk issue indent";
-        alert(errorMessage);
+          "Failed to save Bulk Issue Indent",
+          "error",
+        );
       }
     } catch (error) {
       console.error("❌ Save Error:", error);
-      alert("Failed to save Bulk Issue Indent.");
+      const errorMessage =
+        error.response?.data?.paramObjectsMap?.message ||
+        error.response?.data?.paramObjectsMap?.errorMessage ||
+        error.response?.data?.message ||
+        "Failed to save Bulk Issue Indent.";
+      addToast(errorMessage, "error");
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  /* ---------------- Header fields (built with live options) ---------------- */
+
+  const headerFields = buildHeaderFields({
+    plantOptions,
+    departmentOptions,
+    fgItemOptions,
+    bomOptions,
+    locationOptions,
+  });
 
   return (
     <div className="p-2 max-w-7xl">
@@ -556,10 +1050,11 @@ const BulkIssueIndentForm = ({ onBack, onSave, editData }) => {
         <div>
           <SectionHeader>Bulk Issue Indent Details</SectionHeader>
           <FieldsGrid
-            fields={HEADER_FIELDS}
+            fields={headerFields}
             values={header}
             onChange={handleHeaderChange}
             errors={fieldErrors}
+            onFieldChangeOverride={{ bomId: handleBomChange }}
           />
         </div>
 
@@ -572,11 +1067,10 @@ const BulkIssueIndentForm = ({ onBack, onSave, editData }) => {
                   key={tab.key}
                   type="button"
                   onClick={() => setActiveChildTab(tab.key)}
-                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${
-                    activeChildTab === tab.key
+                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${activeChildTab === tab.key
                       ? "bg-blue-600 text-white"
                       : "text-gray-600 dark:text-gray-300"
-                  }`}
+                    }`}
                 >
                   {tab.label}
                 </button>
@@ -598,13 +1092,13 @@ const BulkIssueIndentForm = ({ onBack, onSave, editData }) => {
             <DynamicTable
               columns={activeTabConfig.columns}
               rows={activeTabConfig.rows}
-              onCellChange={activeTabConfig.handlers.onCellChange}
+              onCellChange={handleIndentCellChange}
               onRemoveRow={activeTabConfig.handlers.onRemoveRow}
             />
           ) : (
             <div className="pt-3">
               <FieldsGrid
-                fields={INDENT_SUMMARY_FIELDS}
+                fields={indentSummaryFields}
                 values={indentSummary}
                 onChange={handleSummaryChange}
               />

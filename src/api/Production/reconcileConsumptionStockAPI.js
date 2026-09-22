@@ -1,67 +1,107 @@
 import apiClient from "../apiClient";
 
 const reconcileConsumptionStockAPI = {
-
-    getReconcileConsumptionByOrgId: async (orgId, branchId) => {
+    /* ---------------- List by Org + Branch ---------------- */
+    getByOrgIdAndBranch: async ({ orgId, branch }) => {
         try {
-            const response = await apiClient.get(
-                `/api/reconcile/getReconcileConsumptionByOrgId?orgId=${orgId}&branch=${branchId}`
+            const res = await apiClient.get(
+                `/api/subContract/getReconcileConsumptionStockByOrgIdAndBranch?branch=${branch}&orgId=${orgId}`,
             );
-            return response;
+            return res?.paramObjectsMap?.reconcileConsumptionStockList || [];
         } catch (error) {
             console.error("Error fetching reconcile records:", error);
             throw error;
         }
     },
 
-    getReconcileConsumptionById: async (id) => {
+    /* ---------------- Get by Id ---------------- */
+    getById: async (id) => {
         try {
-            const response = await apiClient.get(
-                `/api/reconcile/getReconcileConsumptionById?id=${id}`
+            const res = await apiClient.get(
+                `/api/subContract/getReconcileConsumptionStockById?id=${id}`,
             );
-            return response;
+            return res?.paramObjectsMap?.reconcileConsumptionStock || null;
         } catch (error) {
             console.error("Error fetching reconcile record:", error);
             throw error;
         }
     },
 
-    // Create or Update Reconcile Consumption Stock
-    createUpdateReconcileConsumption: async (payload) => {
+    /* ---------------- Doc Id ---------------- */
+    getDocId: async ({ financialYear, orgId }) => {
         try {
-            const response = await apiClient.put(
-                `/api/reconcile/createUpdateReconcileConsumption`,
-                payload
+            const res = await apiClient.get(
+                `/api/subContract/getReconcileConsumptionStockDocId?financialYear=${financialYear}&orgId=${orgId}`,
             );
-            return response;
+            return res?.paramObjectsMap?.reconcileConsumptionStockDocId || "";
         } catch (error) {
-            console.error("Error saving reconcile record:", error);
+            console.error("Error fetching Reconcile Doc Id:", error);
             throw error;
         }
     },
 
-    // Get Shop Floors
-    getShopFloors: async (orgId, branchId) => {
+    /* ---------------- Shop Floors (locations) ---------------- */
+    getShopFloors: async ({ orgId, branch }) => {
         try {
-            const response = await apiClient.get(
-                `/api/shopFloor/getShopFloors?orgId=${orgId}&branch=${branchId}`
+            const res = await apiClient.get(
+                `/api/commonmaster/getLocationByOrgId?orgId=${orgId}&branch=${branch}`,
             );
-            return response;
+            return res?.paramObjectsMap?.transportList || [];
         } catch (error) {
             console.error("Error fetching shop floors:", error);
             throw error;
         }
     },
 
-    // Get FG Items
-    getFGItems: async (orgId, branchId) => {
+    /* ---------------- RM Locations (same source) ---------------- */
+    getRMLocations: async ({ orgId, branch }) => {
         try {
-            const response = await apiClient.get(
-                `/api/fgItem/getFGItems?orgId=${orgId}&branch=${branchId}`
+            const res = await apiClient.get(
+                `/api/commonmaster/getLocationByOrgId?orgId=${orgId}&branch=${branch}`,
             );
-            return response;
+            return res?.paramObjectsMap?.transportList || [];
+        } catch (error) {
+            console.error("Error fetching RM locations:", error);
+            throw error;
+        }
+    },
+
+    /* ---------------- FG Items ---------------- */
+    getFGItems: async ({ branch, orgId }) => {
+        try {
+            const res = await apiClient.get(
+                `/api/subContract/getFGItemsforBOMCorrectionRequestNote?branch=${branch}&orgId=${orgId}`,
+            );
+            return res?.paramObjectsMap?.itemDetails || [];
         } catch (error) {
             console.error("Error fetching FG items:", error);
+            throw error;
+        }
+    },
+
+    /* ---------------- BOM Item Details ---------------- */
+    getBomItemDetails: async ({ branch, itemId, orgId }) => {
+        try {
+            const res = await apiClient.get(
+                `/api/subContract/getBomItemDetailsforSubContractingGRN?branch=${branch}&itemId=${itemId}&orgId=${orgId}`,
+            );
+            return res?.paramObjectsMap?.BomItemDetailsVO || [];
+        } catch (error) {
+            console.error("Error fetching BOM item details:", error);
+            throw error;
+        }
+    },
+
+    /* ---------------- Save (create / update) ---------------- */
+    createUpdate: async (payload) => {
+        try {
+            const res = await apiClient.post(
+                "/api/subContract/createUpdateReconcileConsumptionStock",
+                payload,
+            );
+            return res;
+        } catch (error) {
+            console.error("Error saving reconcile record:", error);
             throw error;
         }
     },

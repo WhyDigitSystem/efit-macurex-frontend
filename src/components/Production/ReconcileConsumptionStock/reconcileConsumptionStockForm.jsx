@@ -1,9 +1,12 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useForm, Controller, useFieldArray } from "react-hook-form";
 import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
 import { useToast } from "../../Toast/ToastContext";
 import branchAPI from "../../../api/branchAPI";
 import reconcileConsumptionStockAPI from "../../../api/Production/reconcileConsumptionStockAPI";
+
+/* ---------------------------------------------------------------------------- */
+/* Shared design tokens                                                        */
 
 const controlClasses =
     "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -17,6 +20,9 @@ const controlClasses =
 
 const labelClasses =
     "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
+
+/* ---------------------------------------------------------------------------- */
+/* Reusable fields                                                              */
 
 const SelectField = ({
     control,
@@ -33,16 +39,16 @@ const SelectField = ({
         const parts = name.split(".");
         let error = errors;
         for (const part of parts) {
-            if (error && error[part]) {
-                error = error[part];
-            } else {
-                return null;
-            }
+            if (error && error[part]) error = error[part];
+            else return null;
         }
         return error?.message;
     };
-
     const errorMessage = getError();
+
+    const safeOptions = (options || []).map((opt) =>
+        typeof opt === "object" ? opt : { value: opt, label: opt },
+    );
 
     return (
         <div>
@@ -53,29 +59,40 @@ const SelectField = ({
                 name={name}
                 control={control}
                 rules={required ? { required: `${label} is required` } : undefined}
-                render={({ field }) => (
-                    <select
-                        {...field}
-                        className={`${controlClasses} ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
-                        onChange={(e) => {
-                            field.onChange(e);
-                            if (onChange) {
-                                onChange(e.target.value);
-                            }
-                        }}
-                        disabled={disabled}
-                    >
-                        <option value="">{placeholder}</option>
-                        {options.map((opt) => (
-                            <option
-                                key={typeof opt === "object" ? opt.value : opt}
-                                value={typeof opt === "object" ? opt.value : opt}
-                            >
-                                {typeof opt === "object" ? opt.label : opt}
-                            </option>
-                        ))}
-                    </select>
-                )}
+                render={({ field }) => {
+                    const safeValue =
+                        field.value === null || field.value === undefined
+                            ? ""
+                            : field.value;
+                    const inOptions = safeOptions.some(
+                        (o) => String(o.value) === String(safeValue),
+                    );
+                    const showGhost = safeValue !== "" && !inOptions;
+
+                    return (
+                        <select
+                            {...field}
+                            value={safeValue}
+                            className={`${controlClasses} ${errorMessage ? "border-red-500 focus:border-red-500" : ""
+                                }`}
+                            onChange={(e) => {
+                                field.onChange(e);
+                                if (onChange) onChange(e.target.value);
+                            }}
+                            disabled={disabled}
+                        >
+                            <option value="">{placeholder}</option>
+                            {showGhost && (
+                                <option value={safeValue}>{String(safeValue)}</option>
+                            )}
+                            {safeOptions.map((opt) => (
+                                <option key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                </option>
+                            ))}
+                        </select>
+                    );
+                }}
             />
             {errorMessage && (
                 <p className="text-red-500 text-[11px] mt-0.5">{errorMessage}</p>
@@ -100,15 +117,11 @@ const InputField = ({
         const parts = name.split(".");
         let error = errors;
         for (const part of parts) {
-            if (error && error[part]) {
-                error = error[part];
-            } else {
-                return null;
-            }
+            if (error && error[part]) error = error[part];
+            else return null;
         }
         return error?.message;
     };
-
     const errorMessage = getError();
 
     return (
@@ -120,16 +133,16 @@ const InputField = ({
                 name={name}
                 control={control}
                 rules={{
-                    ...(required && {
-                        required: `${label} is required`,
-                    }),
+                    ...(required && { required: `${label} is required` }),
                 }}
                 render={({ field }) => (
                     <input
                         {...field}
+                        value={field.value ?? ""}
                         type={type}
                         step={step}
-                        className={`${controlClasses} ${errorMessage ? "border-red-500 focus:border-red-500" : ""} ${readOnly ? "bg-gray-50 dark:bg-gray-800" : ""}`}
+                        className={`${controlClasses} ${errorMessage ? "border-red-500 focus:border-red-500" : ""
+                            } ${readOnly ? "bg-gray-50 dark:bg-gray-800" : ""}`}
                         placeholder={placeholder}
                         disabled={disabled}
                         readOnly={readOnly}
@@ -143,7 +156,8 @@ const InputField = ({
     );
 };
 
-// ===================== Table Components (Styled like ProductionEntryForm) =====================
+/* ---------------------------------------------------------------------------- */
+/* Table helpers                                                                */
 
 const TableWrapper = ({ children }) => (
     <div className="w-full overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
@@ -157,7 +171,12 @@ const TableHead = ({ headers }) => (
             {headers.map((h, i) => (
                 <th
                     key={i}
-                    className={`p-2 whitespace-nowrap ${i === 0 ? "w-8 text-center" : i === headers.length - 1 ? "w-20 text-left" : "text-left"} text-gray-700 dark:text-gray-200 text-[10px] font-medium`}
+                    className={`p-2 whitespace-nowrap ${i === 0
+                            ? "w-8 text-center"
+                            : i === headers.length - 1
+                                ? "w-20 text-left"
+                                : "text-left"
+                        } text-gray-700 dark:text-gray-200 text-[10px] font-medium`}
                 >
                     {h}
                 </th>
@@ -168,7 +187,9 @@ const TableHead = ({ headers }) => (
 
 const TableRow = ({ children, index, onRemove, disabled, showDelete = true }) => (
     <tr className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="p-2 text-center font-medium dark:text-white text-[10px]">{index + 1}</td>
+        <td className="p-2 text-center font-medium dark:text-white text-[10px]">
+            {index + 1}
+        </td>
         {children}
         {showDelete && (
             <td className="p-2 text-center">
@@ -177,8 +198,8 @@ const TableRow = ({ children, index, onRemove, disabled, showDelete = true }) =>
                     onClick={onRemove}
                     disabled={disabled}
                     className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
-                        ? "bg-gray-400 cursor-not-allowed"
-                        : "bg-red-600 hover:bg-red-700"
+                            ? "bg-gray-400 cursor-not-allowed"
+                            : "bg-red-600 hover:bg-red-700"
                         }`}
                 >
                     <Trash2 size={10} />
@@ -201,46 +222,57 @@ const SelectCell = ({
         const parts = name.split(".");
         let error = errors;
         for (const part of parts) {
-            if (error && error[part]) {
-                error = error[part];
-            } else {
-                return null;
-            }
+            if (error && error[part]) error = error[part];
+            else return null;
         }
         return error?.message;
     };
-
     const errorMessage = getError();
 
+    const safeOptions = (options || []).map((opt) =>
+        typeof opt === "object" ? opt : { value: opt, label: opt },
+    );
+
     return (
-        <td className="p-2 align-top min-w-[120px]">
+        <td className="p-2 align-top min-w-[160px]">
             <Controller
                 name={name}
                 control={control}
                 rules={required ? { required: "This field is required" } : undefined}
-                render={({ field }) => (
-                    <select
-                        {...field}
-                        className={`${controlClasses} ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
-                        onChange={(e) => {
-                            field.onChange(e);
-                            if (onChange) {
-                                onChange(e.target.value);
-                            }
-                        }}
-                        disabled={disabled}
-                    >
-                        <option value="">-- Select --</option>
-                        {options.map((opt) => (
-                            <option
-                                key={typeof opt === "object" ? opt.value : opt}
-                                value={typeof opt === "object" ? opt.value : opt}
-                            >
-                                {typeof opt === "object" ? opt.label : opt}
-                            </option>
-                        ))}
-                    </select>
-                )}
+                render={({ field }) => {
+                    const safeValue =
+                        field.value === null || field.value === undefined
+                            ? ""
+                            : field.value;
+                    const inOptions = safeOptions.some(
+                        (o) => String(o.value) === String(safeValue),
+                    );
+                    const showGhost = safeValue !== "" && !inOptions;
+
+                    return (
+                        <select
+                            {...field}
+                            value={safeValue}
+                            className={`${controlClasses} ${errorMessage ? "border-red-500 focus:border-red-500" : ""
+                                }`}
+                            onChange={(e) => {
+                                field.onChange(e);
+                                if (onChange) onChange(e.target.value);
+                            }}
+                            disabled={disabled}
+                        >
+                            <option value="">-- Select --</option>
+                            {showGhost && (
+                                <option value={safeValue}>{String(safeValue)}</option>
+                            )}
+                            {safeOptions.map((opt) => (
+                                <option key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                </option>
+                            ))}
+                        </select>
+                    );
+                }}
             />
             {errorMessage && (
                 <p className="text-red-500 text-[9px] mt-0.5">{errorMessage}</p>
@@ -259,16 +291,14 @@ const InputCell = ({
     errors,
     disabled,
     readOnly = false,
+    onChange,
 }) => {
     const getError = () => {
         const parts = name.split(".");
         let error = errors;
         for (const part of parts) {
-            if (error && error[part]) {
-                error = error[part];
-            } else {
-                return null;
-            }
+            if (error && error[part]) error = error[part];
+            else return null;
         }
         return error?.message;
     };
@@ -284,12 +314,18 @@ const InputCell = ({
                 render={({ field }) => (
                     <input
                         {...field}
+                        value={field.value ?? ""}
                         type={type}
                         step={step}
-                        className={`${controlClasses} ${errorMessage ? "border-red-500 focus:border-red-500" : ""} ${readOnly ? "bg-gray-50 dark:bg-gray-800" : ""}`}
+                        className={`${controlClasses} ${errorMessage ? "border-red-500 focus:border-red-500" : ""
+                            } ${readOnly ? "bg-gray-50 dark:bg-gray-800" : ""}`}
                         placeholder={placeholder}
                         disabled={disabled}
                         readOnly={readOnly}
+                        onChange={(e) => {
+                            field.onChange(e);
+                            if (onChange) onChange(e.target.value);
+                        }}
                     />
                 )}
             />
@@ -300,11 +336,14 @@ const InputCell = ({
     );
 };
 
+/* ---------------------------------------------------------------------------- */
+
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
 const getDefaultValues = () => ({
     plantId: "",
     docId: "",
+    docDate: todayISO(),
     reconcileDate: todayISO(),
     shopFloor: "",
     fgItem: "",
@@ -314,6 +353,7 @@ const getDefaultValues = () => ({
             itemId: "",
             itemDescription: "",
             unit: "",
+            unitId: "",
             availableQty: 0,
             consumptionQty: 0,
             postedQty: 0,
@@ -325,16 +365,23 @@ const getDefaultValues = () => ({
 });
 
 const ReconcileConsumptionStockForm = ({ onBack, onSave, editData, editId }) => {
-    const ORG_ID = parseInt(localStorage.getItem("orgId"));
-    const BRANCH_ID = parseInt(localStorage.getItem("branchId"));
+    const ORG_ID = Number(localStorage.getItem("orgId")) || 0;
+    const BRANCH_ID = Number(localStorage.getItem("branchId")) || 0;
+    const CREATED_BY = localStorage.getItem("userName") || "SYSTEM";
+
     const { addToast } = useToast();
     const [saving, setSaving] = useState(false);
     const [loading, setLoading] = useState(false);
     const [plantOptions, setPlantOptions] = useState([]);
     const [loadingPlants, setLoadingPlants] = useState(false);
     const [shopFloorOptions, setShopFloorOptions] = useState([]);
+    const [rmLocationOptions, setRmLocationOptions] = useState([]);
     const [fgItemOptions, setFgItemOptions] = useState([]);
-    const [isDataLoadedRef, setIsDataLoadedRef] = useState(false);
+    const [bomItemOptions, setBomItemOptions] = useState([]);
+
+    const bomItemMapRef = useRef({});
+    const fgItemMapRef = useRef({});
+    const docIdLoadedRef = useRef(false);
 
     const {
         control,
@@ -346,7 +393,7 @@ const ReconcileConsumptionStockForm = ({ onBack, onSave, editData, editId }) => 
         formState: { errors, isSubmitting },
     } = useForm({
         mode: "onTouched",
-        defaultValues: editData || getDefaultValues(),
+        defaultValues: getDefaultValues(),
     });
 
     const itemsArray = useFieldArray({
@@ -354,232 +401,401 @@ const ReconcileConsumptionStockForm = ({ onBack, onSave, editData, editId }) => 
         name: "items",
     });
 
-    // Watch values for calculations
     const watchItems = watch("items");
+    const watchFgItem = watch("fgItem");
 
-    // Load Plants
+    /* ---------------- Load master data ---------------- */
+
     const loadPlants = useCallback(async () => {
         setLoadingPlants(true);
         try {
             const response = await branchAPI.getBranchByOrgId(ORG_ID);
-            const options = (response || []).map((branch) => ({
-                value: branch.id,
-                label: branch.branchName,
-            }));
-            setPlantOptions(options);
+            setPlantOptions(
+                (response || []).map((b) => ({
+                    value: b.id,
+                    label: b.branchName || b.branchCode || String(b.id),
+                })),
+            );
         } catch (error) {
             console.error("Failed to load plants:", error);
             setPlantOptions([]);
-            addToast("Failed to load plant data", "error");
         } finally {
             setLoadingPlants(false);
         }
-    }, [ORG_ID, addToast]);
+    }, [ORG_ID]);
 
-    // Load Shop Floor Options
     const loadShopFloors = useCallback(async () => {
         try {
-            const response = await reconcileConsumptionStockAPI.getShopFloors(ORG_ID, BRANCH_ID);
-            const options = (response || []).map((item) => ({
-                value: item.id,
-                label: item.name,
-            }));
-            setShopFloorOptions(options);
+            const list = await reconcileConsumptionStockAPI.getShopFloors({
+                orgId: ORG_ID,
+                branch: BRANCH_ID,
+            });
+            setShopFloorOptions(
+                (list || []).map((loc) => ({
+                    value: loc.id,
+                    label: loc.locationName || loc.locationId || String(loc.id),
+                })),
+            );
         } catch (error) {
             console.error("Failed to load shop floors:", error);
             setShopFloorOptions([]);
         }
     }, [ORG_ID, BRANCH_ID]);
 
-    // Load FG Item Options
+    const loadRmLocations = useCallback(async () => {
+        try {
+            const list = await reconcileConsumptionStockAPI.getRMLocations({
+                orgId: ORG_ID,
+                branch: BRANCH_ID,
+            });
+            setRmLocationOptions(
+                (list || []).map((loc) => ({
+                    value: loc.id,
+                    label: loc.locationName || loc.locationId || String(loc.id),
+                })),
+            );
+        } catch (error) {
+            console.error("Failed to load RM locations:", error);
+            setRmLocationOptions([]);
+        }
+    }, [ORG_ID, BRANCH_ID]);
+
     const loadFGItems = useCallback(async () => {
         try {
-            const response = await reconcileConsumptionStockAPI.getFGItems(ORG_ID, BRANCH_ID);
-            const options = (response || []).map((item) => ({
-                value: item.id,
-                label: item.itemCode + " - " + item.itemDescription,
-                description: item.itemDescription,
-                unit: item.unit,
-                rate: item.rate,
-            }));
-            setFgItemOptions(options);
+            const list = await reconcileConsumptionStockAPI.getFGItems({
+                branch: BRANCH_ID,
+                orgId: ORG_ID,
+            });
+            const map = {};
+            setFgItemOptions(
+                (list || []).map((item) => {
+                    const value = item.itemId;
+                    map[value] = item;
+                    return {
+                        value,
+                        label: `${item.itemCode} — ${item.itemDescription}`,
+                    };
+                }),
+            );
+            fgItemMapRef.current = map;
         } catch (error) {
             console.error("Failed to load FG items:", error);
             setFgItemOptions([]);
         }
     }, [ORG_ID, BRANCH_ID]);
 
-    // Load Edit Data
-    const loadEditData = useCallback(async () => {
-        if (!editId) return;
-        if (isDataLoadedRef) return;
+    /* ---------------- Doc Id auto-generation (Add mode) ---------------- */
 
-        setLoading(true);
-        try {
-            const response = await reconcileConsumptionStockAPI.getReconcileConsumptionById(editId);
-
-            if (response?.status && response?.paramObjectsMap?.reconcileData) {
-                const data = response.paramObjectsMap.reconcileData;
-                const mappedData = mapApiDataToForm(data);
-                reset(mappedData);
-                setIsDataLoadedRef(true);
-                addToast("Data loaded successfully", "success");
-            } else {
-                const errorMsg = response?.paramObjectsMap?.message || "Failed to load data";
-                addToast(errorMsg, "error");
-            }
-        } catch (error) {
-            console.error("Error loading edit data:", error);
-            addToast("Failed to load data", "error");
-        } finally {
-            setLoading(false);
-        }
-    }, [editId, reset, addToast]);
-
-    // Map API data to form
-    const mapApiDataToForm = (data) => {
-        const baseForm = getDefaultValues();
-        baseForm.plantId = data.plantId || "";
-        baseForm.docId = data.docId || "";
-        baseForm.reconcileDate = data.reconcileDate || todayISO();
-        baseForm.shopFloor = data.shopFloor || "";
-        baseForm.fgItem = data.fgItem || "";
-        baseForm.rmLocation = data.rmLocation || "";
-        baseForm.items = (data.items || []).map((item) => ({
-            itemId: item.itemId || "",
-            itemDescription: item.itemDescription || "",
-            unit: item.unit || "",
-            availableQty: item.availableQty || 0,
-            consumptionQty: item.consumptionQty || 0,
-            postedQty: item.postedQty || 0,
-            differenceQty: item.differenceQty || 0,
-            rate: item.rate || 0,
-            value: item.value || 0,
-        }));
-        return baseForm;
-    };
-
-    // Handle FG Item Selection
-    const handleFGItemChange = useCallback((selectedValue) => {
-        if (!selectedValue) return;
-
-        const selected = fgItemOptions.find(opt => String(opt.value) === String(selectedValue));
-        if (selected) {
-            setValue("items.0.itemDescription", selected.description || "");
-            setValue("items.0.unit", selected.unit || "");
-            setValue("items.0.rate", selected.rate || 0);
-        }
-    }, [fgItemOptions, setValue]);
-
-    // Calculate difference and value
     useEffect(() => {
-        if (watchItems && watchItems.length > 0) {
-            watchItems.forEach((item, index) => {
-                const availableQty = parseFloat(item.availableQty) || 0;
-                const consumptionQty = parseFloat(item.consumptionQty) || 0;
-                const postedQty = parseFloat(item.postedQty) || 0;
-                const rate = parseFloat(item.rate) || 0;
+        if (editId || docIdLoadedRef.current) return;
+        if (!ORG_ID) return;
 
-                const differenceQty = postedQty - consumptionQty;
-                setValue(`items.${index}.differenceQty`, differenceQty);
+        (async () => {
+            try {
+                const financialYear = String(new Date().getFullYear());
+                const docId = await reconcileConsumptionStockAPI.getDocId({
+                    financialYear,
+                    orgId: ORG_ID,
+                });
+                if (docId) {
+                    setValue("docId", docId);
+                    docIdLoadedRef.current = true;
+                }
+            } catch (err) {
+                console.error("Failed to generate DocId:", err);
+            }
+        })();
+    }, [editId, ORG_ID, setValue]);
 
-                const value = differenceQty * rate;
-                setValue(`items.${index}.value`, value);
-            });
+    /* ---------------- Load BOM line items when FG Item changes ---------------- */
+
+    useEffect(() => {
+        const itemId = watchFgItem;
+        if (!itemId) {
+            setBomItemOptions([]);
+            return;
         }
+
+        let cancelled = false;
+
+        (async () => {
+            try {
+                const list = await reconcileConsumptionStockAPI.getBomItemDetails({
+                    branch: BRANCH_ID,
+                    itemId,
+                    orgId: ORG_ID,
+                });
+
+                const map = {};
+                const options = (list || []).map((b) => {
+                    map[b.itemId] = b;
+                    return {
+                        value: b.itemId,
+                        label: `${b.itemCode} — ${b.itemDescription}`,
+                    };
+                });
+
+                if (!cancelled) {
+                    bomItemMapRef.current = map;
+                    setBomItemOptions(options);
+                }
+            } catch (err) {
+                console.error("Failed to load BOM items:", err);
+                if (!cancelled) setBomItemOptions([]);
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [watchFgItem, ORG_ID, BRANCH_ID]);
+
+    /* ---------------- Re-sync when editData prop changes ---------------- */
+
+    useEffect(() => {
+        if (!editData) return;
+
+        reset({
+            ...getDefaultValues(),
+            ...editData,
+            items: editData.items?.length
+                ? editData.items
+                : [getDefaultValues().items[0]],
+        });
+
+        if (editData.docId) docIdLoadedRef.current = true;
+    }, [editData, reset]);
+
+    /* ---------------- Load edit data (fallback if only editId given) ---------------- */
+
+    useEffect(() => {
+        if (editData || !editId) return;
+        let cancelled = false;
+
+        (async () => {
+            setLoading(true);
+            try {
+                const data = await reconcileConsumptionStockAPI.getById(editId);
+                if (cancelled || !data) return;
+
+                reset({
+                    ...getDefaultValues(),
+                    plantId: data.branch?.id ?? "",
+                    docId: data.docId ?? "",
+                    docDate: data.docDate ?? todayISO(),
+                    reconcileDate: data.reconcileDate ?? todayISO(),
+                    shopFloor: data.shopFloor?.id ?? "",
+                    fgItem: data.fgItem?.id ?? "",
+                    rmLocation: data.rmLocation?.id ?? "",
+                    items: (data.details || []).map((d) => ({
+                        itemId: d.item?.id ?? "",
+                        itemDescription: d.item?.itemDescription ?? "",
+                        unit: d.unit?.unitId ?? "",
+                        unitId: d.unit?.id ?? "",
+                        availableQty: d.availableQty ?? 0,
+                        consumptionQty: d.consumptionQty ?? 0,
+                        postedQty: d.postedQty ?? 0,
+                        differenceQty: d.differenceQty ?? 0,
+                        rate: d.rate ?? 0,
+                        value: d.value ?? 0,
+                    })),
+                });
+                docIdLoadedRef.current = true;
+            } catch (error) {
+                console.error("Error loading edit data:", error);
+                addToast("Failed to load data", "error");
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [editData, editId, reset, addToast]);
+
+    /* ---------------- Recalculate value = differenceQty × rate ---------------- */
+
+    useEffect(() => {
+        if (!watchItems?.length) return;
+
+        watchItems.forEach((item, index) => {
+            const differenceQty = parseFloat(item.differenceQty) || 0;
+            const rate = parseFloat(item.rate) || 0;
+            const value = differenceQty * rate;
+
+            if (Number(item.value) !== value) {
+                setValue(`items.${index}.value`, value, {
+                    shouldDirty: false,
+                    shouldValidate: false,
+                });
+            }
+        });
     }, [watchItems, setValue]);
 
-    // Handle Add Row
+    const calculateValue = useCallback(
+        (index, differenceQty, rate) => {
+            const difference = parseFloat(differenceQty) || 0;
+            const rateValue = parseFloat(rate) || 0;
+            const value = difference * rateValue;
+
+            setValue(`items.${index}.value`, value, {
+                shouldDirty: true,
+                shouldValidate: false,
+            });
+        },
+        [setValue],
+    );
+
+    /* ---------------- Handlers ---------------- */
+
+    const handleFGItemChange = useCallback(
+        (selectedValue) => {
+            if (!selectedValue) return;
+            // Reset the first row's item when the FG item changes.
+            setValue("items.0.itemId", "");
+            setValue("items.0.itemDescription", "");
+            setValue("items.0.unit", "");
+            setValue("items.0.unitId", "");
+            setValue("items.0.rate", 0);
+            setValue("items.0.consumptionQty", 0);
+        },
+        [setValue],
+    );
+
+    const handleItemChange = useCallback(
+        (index, value) => {
+            const b = bomItemMapRef.current[value];
+            if (!b) return;
+
+            setValue(`items.${index}.itemDescription`, b.itemDescription || "");
+            setValue(`items.${index}.unit`, b.unitCode || "");
+            setValue(`items.${index}.unitId`, b.unitId ?? "");
+            setValue(`items.${index}.rate`, b.rate ?? 0);
+            setValue(`items.${index}.consumptionQty`, b.bomQty ?? 0);
+        },
+        [setValue],
+    );
+
     const handleAddRow = () => {
-        const newItem = {
+        itemsArray.append({
             itemId: "",
             itemDescription: "",
             unit: "",
+            unitId: "",
             availableQty: 0,
             consumptionQty: 0,
             postedQty: 0,
             differenceQty: 0,
             rate: 0,
             value: 0,
-        };
-        itemsArray.append(newItem);
+        });
     };
 
-    // Handle Remove Row
     const handleRemoveRow = (index) => {
-        if (itemsArray.fields.length > 1) {
-            itemsArray.remove(index);
-        }
+        if (itemsArray.fields.length > 1) itemsArray.remove(index);
     };
 
-    // Handle Submit
+    /* ---------------- Submit ---------------- */
+
     const onSubmit = async (formData) => {
         setSaving(true);
         try {
+            const financialYear = String(new Date().getFullYear());
+
             const payload = {
-                plantId: formData.plantId,
-                docId: formData.docId,
-                reconcileDate: formData.reconcileDate,
-                shopFloor: formData.shopFloor,
-                fgItem: formData.fgItem,
-                rmLocation: formData.rmLocation,
-                items: formData.items.map((item) => ({
-                    itemId: item.itemId,
-                    itemDescription: item.itemDescription,
-                    unit: item.unit,
-                    availableQty: parseFloat(item.availableQty) || 0,
-                    consumptionQty: parseFloat(item.consumptionQty) || 0,
-                    postedQty: parseFloat(item.postedQty) || 0,
-                    differenceQty: parseFloat(item.differenceQty) || 0,
-                    rate: parseFloat(item.rate) || 0,
-                    value: parseFloat(item.value) || 0,
-                })),
+                ...(editId ? { id: Number(editId) } : {}),
+
+                active: true,
+                orgId: ORG_ID,
+                branch: Number(formData.plantId) || BRANCH_ID || 0,
+                financialYear,
+
+                cancelRemarks: "",
+                createdBy: editData?.createdBy ?? CREATED_BY,
+
+                reconcileDate: formData.reconcileDate || todayISO(),
+                shopFloor: Number(formData.shopFloor) || 0,
+                fgItem: Number(formData.fgItem) || 0,
+                rmLocation: Number(formData.rmLocation) || 0,
+
+                details: (formData.items || [])
+                    .filter((i) => i.itemId)
+                    .map((i) => ({
+                        item: Number(i.itemId) || 0,
+                        unit: Number(i.unitId) || 0,
+                        availableQty: Number(i.availableQty) || 0,
+                        consumptionQty: Number(i.consumptionQty) || 0,
+                        postedQty: Number(i.postedQty) || 0,
+                        differenceQty: Number(i.differenceQty) || 0,
+                        rate: Number(i.rate) || 0,
+                    })),
             };
 
-            if (editId) {
-                payload.id = parseInt(editId);
-            }
+            console.log("📤 Saving Reconcile Consumption Stock:", payload);
 
-            const response = await reconcileConsumptionStockAPI.createUpdateReconcileConsumption(payload);
+            const response = await reconcileConsumptionStockAPI.createUpdate(payload);
 
-            if (response?.status || response?.statusFlag === "Ok") {
+            const isSuccess =
+                response?.status === true ||
+                response?.statusFlag === "Ok" ||
+                response?.status === 200 ||
+                response?.statusCode === 200;
+
+            if (isSuccess) {
                 addToast(
-                    editId ? "Reconcile updated successfully" : "Reconcile created successfully",
-                    "success"
+                    response?.paramObjectsMap?.message ||
+                    (editId
+                        ? "Reconcile updated successfully"
+                        : "Reconcile created successfully"),
+                    "success",
                 );
                 if (onSave) onSave(payload);
                 onBack();
             } else {
-                const errorMsg = response?.paramObjectsMap?.message || "Failed to save";
-                addToast(errorMsg, "error");
+                addToast(
+                    response?.errors?.[0]?.shortMessage ||
+                    response?.errors?.[0]?.longMessage ||
+                    response?.paramObjectsMap?.message ||
+                    response?.paramObjectsMap?.errorMessage ||
+                    response?.message ||
+                    "Failed to save",
+                    "error",
+                );
             }
         } catch (error) {
             console.error("Save Error:", error);
-            addToast("Failed to save", "error");
+            const errorMessage =
+                error.response?.data?.paramObjectsMap?.message ||
+                error.response?.data?.paramObjectsMap?.errorMessage ||
+                error.response?.data?.message ||
+                "Failed to save";
+            addToast(errorMessage, "error");
         } finally {
             setSaving(false);
         }
     };
 
-    // Effects
-    useEffect(() => {
-        loadPlants();
-        loadShopFloors();
-        loadFGItems();
-    }, []);
+    /* ---------------- Initial load ---------------- */
 
     useEffect(() => {
-        if (editId) {
-            loadEditData();
-        }
-    }, [editId, loadEditData]);
+        if (!ORG_ID) return;
+        loadPlants();
+        loadShopFloors();
+        loadRmLocations();
+        loadFGItems();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [ORG_ID, BRANCH_ID]);
 
     if (loading) {
         return (
             <div className="flex items-center justify-center py-12">
                 <div className="text-center">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                    <p className="mt-4 text-gray-500 dark:text-gray-400">Loading data...</p>
+                    <p className="mt-4 text-gray-500 dark:text-gray-400">
+                        Loading data...
+                    </p>
                 </div>
             </div>
         );
@@ -596,7 +812,7 @@ const ReconcileConsumptionStockForm = ({ onBack, onSave, editData, editId }) => 
         "Difference Qty",
         "Rate",
         "Value",
-        "Action"
+        "Action",
     ];
 
     return (
@@ -610,14 +826,16 @@ const ReconcileConsumptionStockForm = ({ onBack, onSave, editData, editId }) => 
                     <ArrowLeft className="h-4 w-4" />
                 </button>
                 <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-                    {editId ? "Edit Reconcile Consumption Stock" : "Reconcile Consumption Stock"}
+                    {editId
+                        ? "Edit Reconcile Consumption Stock"
+                        : "Reconcile Consumption Stock"}
                 </h2>
             </div>
 
             {/* Main Card */}
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
                 <form onSubmit={handleSubmit(onSubmit)}>
-                    {/* Header Fields - Grid Layout */}
+                    {/* Header Fields */}
                     <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-3 mb-6">
                         <SelectField
                             control={control}
@@ -657,7 +875,6 @@ const ReconcileConsumptionStockForm = ({ onBack, onSave, editData, editId }) => 
                             required
                             errors={errors}
                             readOnly
-                            value={todayISO()}
                         />
 
                         <SelectField
@@ -681,17 +898,18 @@ const ReconcileConsumptionStockForm = ({ onBack, onSave, editData, editId }) => 
                             placeholder="Select an option"
                         />
 
-                        <InputField
+                        <SelectField
                             control={control}
                             name="rmLocation"
                             label="RM Location *"
+                            options={rmLocationOptions}
                             required
                             errors={errors}
-                            placeholder="Enter RM Location"
+                            placeholder="Select an option"
                         />
                     </div>
 
-                    {/* Items Table - Styled like ProductionEntryForm */}
+                    {/* Items Table */}
                     <div className="mt-4">
                         <div className="flex items-center justify-between mb-2">
                             <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
@@ -719,17 +937,10 @@ const ReconcileConsumptionStockForm = ({ onBack, onSave, editData, editId }) => 
                                         <SelectCell
                                             control={control}
                                             name={`items.${index}.itemId`}
-                                            options={fgItemOptions}
+                                            options={bomItemOptions}
                                             required
                                             errors={errors}
-                                            onChange={(value) => {
-                                                const selected = fgItemOptions.find(opt => String(opt.value) === String(value));
-                                                if (selected) {
-                                                    setValue(`items.${index}.itemDescription`, selected.description || "");
-                                                    setValue(`items.${index}.unit`, selected.unit || "");
-                                                    setValue(`items.${index}.rate`, selected.rate || 0);
-                                                }
-                                            }}
+                                            onChange={(value) => handleItemChange(index, value)}
                                         />
 
                                         <InputCell
@@ -751,7 +962,6 @@ const ReconcileConsumptionStockForm = ({ onBack, onSave, editData, editId }) => 
                                             name={`items.${index}.availableQty`}
                                             type="number"
                                             step="0.01"
-                                            readOnly
                                         />
 
                                         <InputCell
@@ -773,7 +983,11 @@ const ReconcileConsumptionStockForm = ({ onBack, onSave, editData, editId }) => 
                                             name={`items.${index}.differenceQty`}
                                             type="number"
                                             step="0.01"
-                                            readOnly
+                                            onChange={(value) => {
+                                                const rate =
+                                                    getValues(`items.${index}.rate`) || 0;
+                                                calculateValue(index, value, rate);
+                                            }}
                                         />
 
                                         <InputCell
@@ -781,6 +995,11 @@ const ReconcileConsumptionStockForm = ({ onBack, onSave, editData, editId }) => 
                                             name={`items.${index}.rate`}
                                             type="number"
                                             step="0.01"
+                                            onChange={(value) => {
+                                                const differenceQty =
+                                                    getValues(`items.${index}.differenceQty`) || 0;
+                                                calculateValue(index, differenceQty, value);
+                                            }}
                                         />
 
                                         <InputCell
@@ -813,7 +1032,11 @@ const ReconcileConsumptionStockForm = ({ onBack, onSave, editData, editId }) => 
                             className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
                         >
                             <Save className="h-3 w-3" />
-                            {isSubmitting || saving ? "Saving..." : editId ? "Update" : "Save"}
+                            {isSubmitting || saving
+                                ? "Saving..."
+                                : editId
+                                    ? "Update"
+                                    : "Save"}
                         </button>
                     </div>
                 </form>

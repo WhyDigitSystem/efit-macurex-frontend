@@ -1,9 +1,12 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useForm, Controller, useFieldArray } from "react-hook-form";
 import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
 import { useToast } from "../../Toast/ToastContext";
 import branchAPI from "../../../api/branchAPI";
 import machineSettingPlanAPI from "../../../api/Production/machineSettingPlanAPI";
+
+/* ---------------------------------------------------------------------------- */
+/* Design tokens                                                                */
 
 const controlClasses =
     "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -18,7 +21,8 @@ const controlClasses =
 const labelClasses =
     "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
-// ===================== Reusable Components =====================
+/* ---------------------------------------------------------------------------- */
+/* Reusable fields                                                              */
 
 const SelectField = ({
     control,
@@ -35,16 +39,16 @@ const SelectField = ({
         const parts = name.split(".");
         let error = errors;
         for (const part of parts) {
-            if (error && error[part]) {
-                error = error[part];
-            } else {
-                return null;
-            }
+            if (error && error[part]) error = error[part];
+            else return null;
         }
         return error?.message;
     };
-
     const errorMessage = getError();
+
+    const safeOptions = (options || []).map((opt) =>
+        typeof opt === "object" ? opt : { value: opt, label: opt },
+    );
 
     return (
         <div>
@@ -55,29 +59,38 @@ const SelectField = ({
                 name={name}
                 control={control}
                 rules={required ? { required: `${label} is required` } : undefined}
-                render={({ field }) => (
-                    <select
-                        {...field}
-                        className={`${controlClasses} ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
-                        onChange={(e) => {
-                            field.onChange(e);
-                            if (onChange) {
-                                onChange(e.target.value);
-                            }
-                        }}
-                        disabled={disabled}
-                    >
-                        <option value="">{placeholder}</option>
-                        {options.map((opt) => (
-                            <option
-                                key={typeof opt === "object" ? opt.value : opt}
-                                value={typeof opt === "object" ? opt.value : opt}
-                            >
-                                {typeof opt === "object" ? opt.label : opt}
-                            </option>
-                        ))}
-                    </select>
-                )}
+                render={({ field }) => {
+                    const safeValue =
+                        field.value === null || field.value === undefined ? "" : field.value;
+                    const inOptions = safeOptions.some(
+                        (o) => String(o.value) === String(safeValue),
+                    );
+                    const showGhost = safeValue !== "" && !inOptions;
+
+                    return (
+                        <select
+                            {...field}
+                            value={safeValue}
+                            className={`${controlClasses} ${errorMessage ? "border-red-500 focus:border-red-500" : ""
+                                }`}
+                            onChange={(e) => {
+                                field.onChange(e);
+                                if (onChange) onChange(e.target.value);
+                            }}
+                            disabled={disabled}
+                        >
+                            <option value="">{placeholder}</option>
+                            {showGhost && (
+                                <option value={safeValue}>{String(safeValue)}</option>
+                            )}
+                            {safeOptions.map((opt) => (
+                                <option key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                </option>
+                            ))}
+                        </select>
+                    );
+                }}
             />
             {errorMessage && (
                 <p className="text-red-500 text-[11px] mt-0.5">{errorMessage}</p>
@@ -102,15 +115,11 @@ const InputField = ({
         const parts = name.split(".");
         let error = errors;
         for (const part of parts) {
-            if (error && error[part]) {
-                error = error[part];
-            } else {
-                return null;
-            }
+            if (error && error[part]) error = error[part];
+            else return null;
         }
         return error?.message;
     };
-
     const errorMessage = getError();
 
     return (
@@ -122,16 +131,16 @@ const InputField = ({
                 name={name}
                 control={control}
                 rules={{
-                    ...(required && {
-                        required: `${label} is required`,
-                    }),
+                    ...(required && { required: `${label} is required` }),
                 }}
                 render={({ field }) => (
                     <input
                         {...field}
+                        value={field.value ?? ""}
                         type={type}
                         step={step}
-                        className={`${controlClasses} ${errorMessage ? "border-red-500 focus:border-red-500" : ""} ${readOnly ? "bg-gray-50 dark:bg-gray-800" : ""}`}
+                        className={`${controlClasses} ${errorMessage ? "border-red-500 focus:border-red-500" : ""
+                            } ${readOnly ? "bg-gray-50 dark:bg-gray-800" : ""}`}
                         placeholder={placeholder}
                         disabled={disabled}
                         readOnly={readOnly}
@@ -145,63 +154,8 @@ const InputField = ({
     );
 };
 
-const TextareaField = ({
-    control,
-    name,
-    label,
-    required,
-    placeholder,
-    errors,
-    disabled,
-    rows = 3,
-    className = "",
-}) => {
-    const getError = () => {
-        const parts = name.split(".");
-        let error = errors;
-        for (const part of parts) {
-            if (error && error[part]) {
-                error = error[part];
-            } else {
-                return null;
-            }
-        }
-        return error?.message;
-    };
-
-    const errorMessage = getError();
-
-    return (
-        <div className={className}>
-            <label className={labelClasses}>
-                {label} {required && <span className="text-red-500">*</span>}
-            </label>
-            <Controller
-                name={name}
-                control={control}
-                rules={{
-                    ...(required && {
-                        required: `${label} is required`,
-                    }),
-                }}
-                render={({ field }) => (
-                    <textarea
-                        {...field}
-                        rows={rows}
-                        className={`w-full px-2 py-1.5 rounded border text-xs leading-snug transition-colors resize-none bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:focus:ring-blue-400 dark:focus:border-blue-400 ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
-                        placeholder={placeholder}
-                        disabled={disabled}
-                    />
-                )}
-            />
-            {errorMessage && (
-                <p className="text-red-500 text-[11px] mt-0.5">{errorMessage}</p>
-            )}
-        </div>
-    );
-};
-
-// ===================== Table Components =====================
+/* ---------------------------------------------------------------------------- */
+/* Table helpers                                                                */
 
 const TableWrapper = ({ children }) => (
     <div className="w-full overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
@@ -215,7 +169,12 @@ const TableHead = ({ headers }) => (
             {headers.map((h, i) => (
                 <th
                     key={i}
-                    className={`p-2 whitespace-nowrap ${i === 0 ? "w-8 text-center" : i === headers.length - 1 ? "w-20 text-left" : "text-left"} text-gray-700 dark:text-gray-200 text-[10px] font-medium`}
+                    className={`p-2 whitespace-nowrap ${i === 0
+                        ? "w-8 text-center"
+                        : i === headers.length - 1
+                            ? "w-20 text-left"
+                            : "text-left"
+                        } text-gray-700 dark:text-gray-200 text-[10px] font-medium`}
                 >
                     {h}
                 </th>
@@ -226,7 +185,9 @@ const TableHead = ({ headers }) => (
 
 const TableRow = ({ children, index, onRemove, disabled, showDelete = true }) => (
     <tr className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="p-2 text-center font-medium dark:text-white text-[10px]">{index + 1}</td>
+        <td className="p-2 text-center font-medium dark:text-white text-[10px]">
+            {index + 1}
+        </td>
         {children}
         {showDelete && (
             <td className="p-2 text-center">
@@ -261,19 +222,15 @@ const InputCell = ({
         const parts = name.split(".");
         let error = errors;
         for (const part of parts) {
-            if (error && error[part]) {
-                error = error[part];
-            } else {
-                return null;
-            }
+            if (error && error[part]) error = error[part];
+            else return null;
         }
         return error?.message;
     };
-
     const errorMessage = getError();
 
     return (
-        <td className="p-2 align-top min-w-[100px]">
+        <td className="p-2 align-top min-w-[120px]">
             <Controller
                 name={name}
                 control={control}
@@ -281,9 +238,11 @@ const InputCell = ({
                 render={({ field }) => (
                     <input
                         {...field}
+                        value={field.value ?? ""}
                         type={type}
                         step={step}
-                        className={`${controlClasses} ${errorMessage ? "border-red-500 focus:border-red-500" : ""} ${readOnly ? "bg-gray-50 dark:bg-gray-800" : ""}`}
+                        className={`${controlClasses} ${errorMessage ? "border-red-500 focus:border-red-500" : ""
+                            } ${readOnly ? "bg-gray-50 dark:bg-gray-800" : ""}`}
                         placeholder={placeholder}
                         disabled={disabled}
                         readOnly={readOnly}
@@ -296,6 +255,8 @@ const InputCell = ({
         </td>
     );
 };
+
+/* ---------------------------------------------------------------------------- */
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
@@ -311,22 +272,21 @@ const getDefaultValues = () => ({
     machineName: "",
     processSheetNo: "",
     make: "",
-    msetDetails: [
-        {
-            parameter: "",
-            value: "",
-        },
-    ],
+    toolReplacementPlan: "",
+    msetDetails: [{ parameter: "", value: "" }],
     preparedBy: "",
     approvedBy: "",
 });
 
 const MachineSettingPlanForm = ({ onBack, onSave, editData, editId }) => {
-    const ORG_ID = parseInt(localStorage.getItem("orgId"));
-    const BRANCH_ID = parseInt(localStorage.getItem("branchId"));
+    const ORG_ID = Number(localStorage.getItem("orgId")) || 0;
+    const BRANCH_ID = Number(localStorage.getItem("branchId")) || 0;
+    const CREATED_BY = localStorage.getItem("userName") || "SYSTEM";
+
     const { addToast } = useToast();
     const [saving, setSaving] = useState(false);
     const [loading, setLoading] = useState(false);
+
     const [plantOptions, setPlantOptions] = useState([]);
     const [loadingPlants, setLoadingPlants] = useState(false);
     const [itemOptions, setItemOptions] = useState([]);
@@ -334,8 +294,13 @@ const MachineSettingPlanForm = ({ onBack, onSave, editData, editId }) => {
     const [machineOptions, setMachineOptions] = useState([]);
     const [processSheetOptions, setProcessSheetOptions] = useState([]);
     const [employeeOptions, setEmployeeOptions] = useState([]);
-    const [isDataLoadedRef, setIsDataLoadedRef] = useState(false);
+
     const [activeTab, setActiveTab] = useState("msetDetail");
+
+    const itemMapRef = useRef({});
+    const operationMapRef = useRef({});
+
+    const docIdLoadedRef = useRef(false);
 
     const {
         control,
@@ -346,7 +311,7 @@ const MachineSettingPlanForm = ({ onBack, onSave, editData, editId }) => {
         formState: { errors, isSubmitting },
     } = useForm({
         mode: "onTouched",
-        defaultValues: editData || getDefaultValues(),
+        defaultValues: getDefaultValues(),
     });
 
     const msetDetailsArray = useFieldArray({
@@ -354,275 +319,326 @@ const MachineSettingPlanForm = ({ onBack, onSave, editData, editId }) => {
         name: "msetDetails",
     });
 
-    // Watch values for auto-fill
     const watchItemCode = watch("itemCode");
     const watchOperationNo = watch("operationNo");
     const watchMachineNo = watch("machineNo");
 
-    // Load Plants
-    const loadPlants = useCallback(async () => {
-        setLoadingPlants(true);
-        try {
-            const response = await branchAPI.getBranchByOrgId(ORG_ID);
-            const options = (response || []).map((branch) => ({
-                value: branch.id,
-                label: branch.branchName,
-            }));
-            setPlantOptions(options);
-        } catch (error) {
-            console.error("Failed to load plants:", error);
-            setPlantOptions([]);
-            addToast("Failed to load plant data", "error");
-        } finally {
-            setLoadingPlants(false);
-        }
-    }, [ORG_ID, addToast]);
+    /* ---------------- Load master data ---------------- */
 
-    // Load Items
-    const loadItems = useCallback(async () => {
-        try {
-            const response = await machineSettingPlanAPI.getItems(ORG_ID, BRANCH_ID);
-            const options = (response || []).map((item) => ({
-                value: item.id,
-                label: item.itemCode + " - " + item.itemDescription,
-                description: item.itemDescription,
-            }));
-            setItemOptions(options);
-        } catch (error) {
-            console.error("Failed to load items:", error);
-            setItemOptions([]);
-        }
-    }, [ORG_ID, BRANCH_ID]);
-
-    // Load Operations
-    const loadOperations = useCallback(async () => {
-        try {
-            const response = await machineSettingPlanAPI.getOperations(ORG_ID, BRANCH_ID);
-            const options = (response || []).map((op) => ({
-                value: op.id,
-                label: op.operationCode + " - " + op.operationName,
-                name: op.operationName,
-            }));
-            setOperationOptions(options);
-        } catch (error) {
-            console.error("Failed to load operations:", error);
-            setOperationOptions([]);
-        }
-    }, [ORG_ID, BRANCH_ID]);
-
-    // Load Machines
-    const loadMachines = useCallback(async () => {
-        try {
-            const response = await machineSettingPlanAPI.getMachines(ORG_ID, BRANCH_ID);
-            const options = (response || []).map((machine) => ({
-                value: machine.id,
-                label: machine.machineCode + " - " + machine.machineName,
-                name: machine.machineName,
-            }));
-            setMachineOptions(options);
-        } catch (error) {
-            console.error("Failed to load machines:", error);
-            setMachineOptions([]);
-        }
-    }, [ORG_ID, BRANCH_ID]);
-
-    // Load Process Sheets
-    const loadProcessSheets = useCallback(async () => {
-        try {
-            const response = await machineSettingPlanAPI.getProcessSheets(ORG_ID, BRANCH_ID);
-            const options = (response || []).map((ps) => ({
-                value: ps.id,
-                label: ps.processSheetNo + " - " + ps.name,
-            }));
-            setProcessSheetOptions(options);
-        } catch (error) {
-            console.error("Failed to load process sheets:", error);
-            setProcessSheetOptions([]);
-        }
-    }, [ORG_ID, BRANCH_ID]);
-
-    // Load Employees
-    const loadEmployees = useCallback(async () => {
-        try {
-            const response = await machineSettingPlanAPI.getEmployees(ORG_ID, BRANCH_ID);
-            const options = (response || []).map((emp) => ({
-                value: emp.id,
-                label: emp.employeeName || emp.name,
-            }));
-            setEmployeeOptions(options);
-        } catch (error) {
-            console.error("Failed to load employees:", error);
-            setEmployeeOptions([]);
-        }
-    }, [ORG_ID, BRANCH_ID]);
-
-    // Load Edit Data
-    const loadEditData = useCallback(async () => {
-        if (!editId) return;
-        if (isDataLoadedRef) return;
-
-        setLoading(true);
-        try {
-            const response = await machineSettingPlanAPI.getMachineSettingPlanById(editId);
-
-            if (response?.status && response?.paramObjectsMap?.machineSettingPlan) {
-                const data = response.paramObjectsMap.machineSettingPlan;
-                const mappedData = mapApiDataToForm(data);
-                reset(mappedData);
-                setIsDataLoadedRef(true);
-                addToast("Data loaded successfully", "success");
-            } else {
-                const errorMsg = response?.paramObjectsMap?.message || "Failed to load data";
-                addToast(errorMsg, "error");
-            }
-        } catch (error) {
-            console.error("Error loading edit data:", error);
-            addToast("Failed to load data", "error");
-        } finally {
-            setLoading(false);
-        }
-    }, [editId, reset, addToast]);
-
-    // Map API data to form
-    const mapApiDataToForm = (data) => {
-        const baseForm = getDefaultValues();
-        baseForm.plantId = data.plantId || "";
-        baseForm.docNo = data.docNo || "";
-        baseForm.date = data.date || todayISO();
-        baseForm.itemCode = data.itemCode || "";
-        baseForm.itemDescription = data.itemDescription || "";
-        baseForm.operationNo = data.operationNo || "";
-        baseForm.operationName = data.operationName || "";
-        baseForm.machineNo = data.machineNo || "";
-        baseForm.machineName = data.machineName || "";
-        baseForm.processSheetNo = data.processSheetNo || "";
-        baseForm.make = data.make || "";
-        baseForm.msetDetails = (data.msetDetails || []).map((item) => ({
-            parameter: item.parameter || "",
-            value: item.value || "",
-        }));
-        baseForm.preparedBy = data.preparedBy || "";
-        baseForm.approvedBy = data.approvedBy || "";
-        return baseForm;
-    };
-
-    // Handle Item Code Change
     useEffect(() => {
-        if (watchItemCode) {
-            const selected = itemOptions.find(opt => String(opt.value) === String(watchItemCode));
-            if (selected) {
-                setValue("itemDescription", selected.description || "");
-            }
-        }
-    }, [watchItemCode, itemOptions, setValue]);
+        if (!ORG_ID) return;
 
-    // Handle Operation No Change
+        // Plants
+        (async () => {
+            setLoadingPlants(true);
+            try {
+                const res = await branchAPI.getBranchByOrgId(ORG_ID);
+                setPlantOptions(
+                    (res || []).map((b) => ({
+                        value: b.id,
+                        label: b.branchName || b.branchCode || String(b.id),
+                    })),
+                );
+            } catch (err) {
+                console.error("Failed to load plants:", err);
+            } finally {
+                setLoadingPlants(false);
+            }
+        })();
+
+        // Items — getFGAndSFGItems
+        (async () => {
+            try {
+                const list = await machineSettingPlanAPI.getFGAndSFGItems({
+                    branch: BRANCH_ID,
+                    orgId: ORG_ID,
+                });
+                const map = {};
+                setItemOptions(
+                    (list || []).map((it) => {
+                        const value = it.itemId;
+                        map[value] = it;
+                        return { value, label: it.itemCode || String(it.itemId) };
+                    }),
+                );
+                itemMapRef.current = map;
+            } catch (err) {
+                console.error("Failed to load items:", err);
+            }
+        })();
+
+        // Operations + machines — getOperationMaster
+        (async () => {
+            try {
+                const list = await machineSettingPlanAPI.getOperationMaster(ORG_ID);
+                const map = {};
+                setOperationOptions(
+                    (list || []).map((op) => {
+                        const value = op.operationId || String(op.id);
+                        map[value] = op;
+                        return {
+                            value,
+                            label: op.operationId || op.description || String(op.id),
+                        };
+                    }),
+                );
+                operationMapRef.current = map;
+            } catch (err) {
+                console.error("Failed to load operations:", err);
+            }
+        })();
+
+        // Process Sheets — getProcessSheets
+        (async () => {
+            try {
+                const list = await machineSettingPlanAPI.getProcessSheets({
+                    branch: BRANCH_ID,
+                    orgId: ORG_ID,
+                });
+                setProcessSheetOptions(
+                    (list || []).map((ps) => ({
+                        value: ps.bomId || String(ps.id),
+                        label:
+                            ps.bomId ||
+                            ps.itemDescription ||
+                            ps.fgSfgItemCode?.itemCode ||
+                            String(ps.id),
+                    })),
+                );
+            } catch (err) {
+                console.error("Failed to load process sheets:", err);
+            }
+        })();
+
+        // Employees — getEmployees
+        (async () => {
+            try {
+                const list = await machineSettingPlanAPI.getEmployees(ORG_ID);
+                setEmployeeOptions(
+                    (list || []).map((e) => ({
+                        value: e.id,
+                        label: e.employeeName || e.employeeId || String(e.id),
+                    })),
+                );
+            } catch (err) {
+                console.error("Failed to load employees:", err);
+            }
+        })();
+    }, [ORG_ID, BRANCH_ID]);
+
+    /* ---------------- Doc Id auto-generation (Add mode) ---------------- */
+
     useEffect(() => {
-        if (watchOperationNo) {
-            const selected = operationOptions.find(opt => String(opt.value) === String(watchOperationNo));
-            if (selected) {
-                setValue("operationName", selected.name || "");
-            }
-        }
-    }, [watchOperationNo, operationOptions, setValue]);
+        if (editId || docIdLoadedRef.current) return;
+        if (!ORG_ID) return;
 
-    // Handle Machine No Change
+        (async () => {
+            try {
+                const financialYear = String(new Date().getFullYear());
+                const docId = await machineSettingPlanAPI.getDocId({
+                    financialYear,
+                    orgId: ORG_ID,
+                });
+                if (docId) {
+                    setValue("docNo", docId);
+                    docIdLoadedRef.current = true;
+                }
+            } catch (err) {
+                console.error("Failed to generate Doc Id:", err);
+            }
+        })();
+    }, [editId, ORG_ID, setValue]);
+
+    /* ---------------- Item → auto-fill description ---------------- */
+
     useEffect(() => {
-        if (watchMachineNo) {
-            const selected = machineOptions.find(opt => String(opt.value) === String(watchMachineNo));
-            if (selected) {
-                setValue("machineName", selected.name || "");
-            }
-        }
-    }, [watchMachineNo, machineOptions, setValue]);
+        if (!watchItemCode) return;
+        const it = itemMapRef.current[watchItemCode];
+        if (it) setValue("itemDescription", it.itemDescription || "");
+    }, [watchItemCode, setValue]);
 
-    // Handle Add Row
+    /* ---------------- Operation → auto-fill name + populate machines ---------------- */
+
+    useEffect(() => {
+        if (!watchOperationNo) return;
+        const op = operationMapRef.current[watchOperationNo];
+        if (!op) return;
+
+        setValue("operationName", op.description || "");
+
+        const machines = op.operationMasterMachineDetailsResponseDTO || [];
+        setMachineOptions(
+            machines
+                .map((m) => m.machine)
+                .filter(Boolean)
+                .map((m) => ({
+                    value: m.machineNo || String(m.id),
+                    label: m.machineNo || m.machineName || String(m.id),
+                })),
+        );
+
+        setValue("machineNo", "");
+        setValue("machineName", "");
+    }, [watchOperationNo, setValue]);
+
+    /* ---------------- Machine → auto-fill name ---------------- */
+
+    useEffect(() => {
+        if (!watchMachineNo) return;
+        const op = operationMapRef.current[watchOperationNo];
+        if (!op) return;
+
+        const match = (op.operationMasterMachineDetailsResponseDTO || [])
+            .map((m) => m.machine)
+            .find((m) => String(m.machineNo) === String(watchMachineNo));
+
+        if (match) setValue("machineName", match.machineName || "");
+    }, [watchMachineNo, watchOperationNo, setValue]);
+
+    /* ---------------- Re-sync on editData ---------------- */
+
+    useEffect(() => {
+        if (!editData) return;
+
+        reset({
+            ...getDefaultValues(),
+            plantId: editData.plantId ?? editData.branch?.id ?? "",
+            docNo: editData.docNo ?? editData.docId ?? "",
+            date: editData.date ?? editData.docDate ?? todayISO(),
+            itemCode:
+                editData.itemCode ?? editData.item?.itemId ?? editData.item?.id ?? "",
+            itemDescription:
+                editData.itemDescription ?? editData.item?.itemDescription ?? "",
+            operationNo: editData.operationNo ?? "",
+            operationName: editData.operationName ?? "",
+            machineNo: editData.machineNo ?? "",
+            machineName: editData.machineName ?? "",
+            processSheetNo: editData.processSheetNo ?? "",
+            make: editData.make ?? "",
+            toolReplacementPlan: editData.toolReplacementPlan ?? "",
+            msetDetails: editData.msetDetails?.length
+                ? editData.msetDetails
+                : editData.details?.length
+                    ? editData.details.map((d) => ({
+                        parameter: d.parameter ?? "",
+                        value: d.value ?? "",
+                    }))
+                    : [{ parameter: "", value: "" }],
+            preparedBy:
+                editData.preparedBy?.employeeId ??
+                editData.preparedBy?.id ??
+                editData.preparedBy ??
+                "",
+            approvedBy:
+                editData.approvedBy?.employeeId ??
+                editData.approvedBy?.id ??
+                editData.approvedBy ??
+                "",
+        });
+
+        if (editData.docNo || editData.docId) docIdLoadedRef.current = true;
+    }, [editData, reset]);
+
+    /* ---------------- Handlers ---------------- */
+
     const handleAddRow = () => {
-        const newItem = {
-            parameter: "",
-            value: "",
-        };
-        msetDetailsArray.append(newItem);
+        msetDetailsArray.append({ parameter: "", value: "" });
     };
 
-    // Handle Remove Row
     const handleRemoveRow = (index) => {
-        if (msetDetailsArray.fields.length > 1) {
-            msetDetailsArray.remove(index);
-        }
+        if (msetDetailsArray.fields.length > 1) msetDetailsArray.remove(index);
     };
 
-    // Handle Submit
+    /* ---------------- Submit ---------------- */
+
     const onSubmit = async (formData) => {
         setSaving(true);
         try {
+            const financialYear = String(new Date().getFullYear());
+
             const payload = {
-                plantId: formData.plantId,
-                docNo: formData.docNo,
-                date: formData.date,
-                itemCode: formData.itemCode,
-                itemDescription: formData.itemDescription,
-                operationNo: formData.operationNo,
-                operationName: formData.operationName,
-                machineNo: formData.machineNo,
-                machineName: formData.machineName,
-                processSheetNo: formData.processSheetNo,
-                make: formData.make,
-                msetDetails: formData.msetDetails.map((item) => ({
-                    parameter: item.parameter,
-                    value: item.value,
-                })),
-                preparedBy: formData.preparedBy,
-                approvedBy: formData.approvedBy,
+                ...(editId ? { id: Number(editId) } : {}),
+
+                active: true,
+                orgId: ORG_ID,
+                branch: Number(formData.plantId) || BRANCH_ID || 0,
+                financialYear,
+
+                cancelRemarks: "",
+                createdBy: editData?.createdBy ?? CREATED_BY,
+
+                item: Number(formData.itemCode) || 0,
+                operationNo: formData.operationNo || "",
+                operationName: formData.operationName || "",
+                machineNo: formData.machineNo || "",
+                machineName: formData.machineName || "",
+                processSheetNo: formData.processSheetNo || "",
+                make: formData.make || "",
+                toolReplacementPlan: formData.toolReplacementPlan || "",
+
+                preparedBy: Number(formData.preparedBy) || 0,
+                approvedBy: Number(formData.approvedBy) || 0,
+
+                details: (formData.msetDetails || [])
+                    .filter((d) => d.parameter || d.value)
+                    .map((d) => ({
+                        parameter: d.parameter || "",
+                        value: d.value || "",
+                    })),
             };
 
-            if (editId) {
-                payload.id = parseInt(editId);
-            }
+            console.log("📤 Saving Machine Setting Plan:", payload);
 
-            const response = await machineSettingPlanAPI.createUpdateMachineSettingPlan(payload);
+            const response = await machineSettingPlanAPI.createUpdate(payload);
 
-            if (response?.status || response?.statusFlag === "Ok") {
+            const isSuccess =
+                response?.status === true ||
+                response?.statusFlag === "Ok" ||
+                response?.status === 200 ||
+                response?.statusCode === 200;
+
+            if (isSuccess) {
                 addToast(
-                    editId ? "Machine Setting Plan updated successfully" : "Machine Setting Plan created successfully",
-                    "success"
+                    response?.paramObjectsMap?.message ||
+                    (editId
+                        ? "Machine Setting Plan updated successfully"
+                        : "Machine Setting Plan created successfully"),
+                    "success",
                 );
                 if (onSave) onSave(payload);
                 onBack();
             } else {
-                const errorMsg = response?.paramObjectsMap?.message || "Failed to save";
-                addToast(errorMsg, "error");
+                addToast(
+                    response?.errors?.[0]?.shortMessage ||
+                    response?.errors?.[0]?.longMessage ||
+                    response?.paramObjectsMap?.message ||
+                    response?.paramObjectsMap?.errorMessage ||
+                    response?.message ||
+                    "Failed to save",
+                    "error",
+                );
             }
         } catch (error) {
             console.error("Save Error:", error);
-            addToast("Failed to save", "error");
+            const errorMessage =
+                error.response?.data?.paramObjectsMap?.message ||
+                error.response?.data?.paramObjectsMap?.errorMessage ||
+                error.response?.data?.message ||
+                "Failed to save";
+            addToast(errorMessage, "error");
         } finally {
             setSaving(false);
         }
     };
-
-    // Effects
-    useEffect(() => {
-        loadPlants();
-        loadItems();
-        loadOperations();
-        loadMachines();
-        loadProcessSheets();
-        loadEmployees();
-    }, []);
-
-    useEffect(() => {
-        if (editId) {
-            loadEditData();
-        }
-    }, [editId, loadEditData]);
 
     if (loading) {
         return (
             <div className="flex items-center justify-center py-12">
                 <div className="text-center">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                    <p className="mt-4 text-gray-500 dark:text-gray-400">Loading data...</p>
+                    <p className="mt-4 text-gray-500 dark:text-gray-400">
+                        Loading data...
+                    </p>
                 </div>
             </div>
         );
@@ -632,7 +648,6 @@ const MachineSettingPlanForm = ({ onBack, onSave, editData, editId }) => {
 
     return (
         <div className="p-2 max-w-7xl">
-            {/* Header */}
             <div className="flex items-center gap-2 mb-3">
                 <button
                     onClick={onBack}
@@ -645,12 +660,9 @@ const MachineSettingPlanForm = ({ onBack, onSave, editData, editId }) => {
                 </h2>
             </div>
 
-            {/* Main Card */}
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
                 <form onSubmit={handleSubmit(onSubmit)}>
-                    {/* Header Fields - Grid Layout */}
                     <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-3 mb-6">
-                        {/* Plant Id */}
                         <SelectField
                             control={control}
                             name="plantId"
@@ -662,7 +674,6 @@ const MachineSettingPlanForm = ({ onBack, onSave, editData, editId }) => {
                             placeholder="Select an option"
                         />
 
-                        {/* Doc No. */}
                         <InputField
                             control={control}
                             name="docNo"
@@ -673,7 +684,6 @@ const MachineSettingPlanForm = ({ onBack, onSave, editData, editId }) => {
                             placeholder="Auto"
                         />
 
-                        {/* Date */}
                         <InputField
                             control={control}
                             name="date"
@@ -683,7 +693,6 @@ const MachineSettingPlanForm = ({ onBack, onSave, editData, editId }) => {
                             errors={errors}
                         />
 
-                        {/* Item Code */}
                         <SelectField
                             control={control}
                             name="itemCode"
@@ -694,7 +703,6 @@ const MachineSettingPlanForm = ({ onBack, onSave, editData, editId }) => {
                             placeholder="Select an option"
                         />
 
-                        {/* Item Description */}
                         <InputField
                             control={control}
                             name="itemDescription"
@@ -703,7 +711,6 @@ const MachineSettingPlanForm = ({ onBack, onSave, editData, editId }) => {
                             errors={errors}
                         />
 
-                        {/* Operation No. */}
                         <SelectField
                             control={control}
                             name="operationNo"
@@ -714,7 +721,6 @@ const MachineSettingPlanForm = ({ onBack, onSave, editData, editId }) => {
                             placeholder="Select an option"
                         />
 
-                        {/* Operation Name */}
                         <InputField
                             control={control}
                             name="operationName"
@@ -723,7 +729,6 @@ const MachineSettingPlanForm = ({ onBack, onSave, editData, editId }) => {
                             errors={errors}
                         />
 
-                        {/* Machine No. */}
                         <SelectField
                             control={control}
                             name="machineNo"
@@ -734,7 +739,6 @@ const MachineSettingPlanForm = ({ onBack, onSave, editData, editId }) => {
                             placeholder="Select an option"
                         />
 
-                        {/* Machine Name */}
                         <InputField
                             control={control}
                             name="machineName"
@@ -743,7 +747,6 @@ const MachineSettingPlanForm = ({ onBack, onSave, editData, editId }) => {
                             errors={errors}
                         />
 
-                        {/* Process Sheet No */}
                         <SelectField
                             control={control}
                             name="processSheetNo"
@@ -754,7 +757,6 @@ const MachineSettingPlanForm = ({ onBack, onSave, editData, editId }) => {
                             placeholder="Select an option"
                         />
 
-                        {/* Make */}
                         <InputField
                             control={control}
                             name="make"
@@ -764,7 +766,6 @@ const MachineSettingPlanForm = ({ onBack, onSave, editData, editId }) => {
                         />
                     </div>
 
-                    {/* Tabs */}
                     <section className="mt-0 bg-white dark:bg-gray-800">
                         <div className="flex items-center border-b border-gray-200 dark:border-gray-700 mb-3 overflow-x-auto">
                             <button
@@ -789,7 +790,6 @@ const MachineSettingPlanForm = ({ onBack, onSave, editData, editId }) => {
                             </button>
                         </div>
 
-                        {/* Mset Detail Tab */}
                         {activeTab === "msetDetail" && (
                             <div className="pt-2 space-y-2">
                                 <div className="flex items-center gap-2 text-[11px] text-gray-500 dark:text-gray-400">
@@ -832,11 +832,9 @@ const MachineSettingPlanForm = ({ onBack, onSave, editData, editId }) => {
                             </div>
                         )}
 
-                        {/* Mset Summary Tab */}
                         {activeTab === "msetSummary" && (
                             <div className="pt-4 space-y-4">
                                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                    {/* Prepared By */}
                                     <SelectField
                                         control={control}
                                         name="preparedBy"
@@ -846,7 +844,6 @@ const MachineSettingPlanForm = ({ onBack, onSave, editData, editId }) => {
                                         placeholder="Select an option"
                                     />
 
-                                    {/* Approved By */}
                                     <SelectField
                                         control={control}
                                         name="approvedBy"
@@ -855,25 +852,19 @@ const MachineSettingPlanForm = ({ onBack, onSave, editData, editId }) => {
                                         errors={errors}
                                         placeholder="Select an option"
                                     />
-                                </div>
 
-                                {/* Tool Replacement Plan Section */}
-                                <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-                                    <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-3">
-                                        Tool Replacement Plan
-                                    </h3>
-                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                        {/* Additional fields can be added here as needed */}
-                                        <div className="col-span-2 md:col-span-3 text-xs text-gray-400 dark:text-gray-500 italic">
-                                            Tool replacement plan details will be displayed here
-                                        </div>
-                                    </div>
+                                    <InputField
+                                        control={control}
+                                        name="toolReplacementPlan"
+                                        label="Tool Replacement Plan"
+                                        errors={errors}
+                                        placeholder="Enter tool replacement plan"
+                                    />
                                 </div>
                             </div>
                         )}
                     </section>
 
-                    {/* Buttons */}
                     <div className="flex justify-end gap-2 pt-4 mt-4 border-t border-gray-200 dark:border-gray-700">
                         <button
                             type="button"
@@ -890,7 +881,11 @@ const MachineSettingPlanForm = ({ onBack, onSave, editData, editId }) => {
                             className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
                         >
                             <Save className="h-3 w-3" />
-                            {isSubmitting || saving ? "Saving..." : editId ? "Update" : "Save"}
+                            {isSubmitting || saving
+                                ? "Saving..."
+                                : editId
+                                    ? "Update"
+                                    : "Save"}
                         </button>
                     </div>
                 </form>
