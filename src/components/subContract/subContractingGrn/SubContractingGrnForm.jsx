@@ -7,6 +7,8 @@ import {
   ChevronDown,
   ChevronRight,
   UploadCloud,
+  Eye,
+  File as FileIcon,
 } from "lucide-react";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 
@@ -354,23 +356,50 @@ const UploadCell = ({ file, onFileChange }) => {
 };
 
 /* Attachment table (upload-only columns) */
-const AttachmentTable = ({ rows, onCellChange, onRemoveRow }) => (
+const AttachmentTable = ({ rows, onFileSelect, onRemoveRow, onView }) => (
   <TableWrapper>
-    <TableHead headers={["#", "Invoice Copy", "Action"]} />
+    <TableHead headers={["#", "File Name", "Attachment", "View", "Action"]} />
     <tbody>
       {rows.map((row, idx) => (
         <tr
           key={idx}
           className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"
         >
-          <td className="p-3 text-center font-medium dark:text-white">
+          <td className="p-2 text-center font-medium dark:text-white">
             {idx + 1}
           </td>
-          <UploadCell
-            file={row.invoiceCopy}
-            onFileChange={(f) => onCellChange(idx, "invoiceCopy", f)}
-          />
-          <td className="p-3 text-center">
+          <td className="p-2 align-top">
+            <input
+              type="text"
+              value={row.name}
+              readOnly
+              placeholder="No file selected"
+              className={cellInputClasses}
+            />
+          </td>
+          <td className="p-2 align-top">
+            <label className="flex items-center justify-center gap-1 h-[30px] px-2 rounded border border-dashed border-gray-300 dark:border-gray-600 text-[11px] text-gray-500 dark:text-gray-400 cursor-pointer hover:border-blue-500 hover:text-blue-600 transition-colors">
+              <UploadCloud size={12} />
+              {row.name ? "Replace file" : "Click to upload"}
+              <input
+                type="file"
+                className="hidden"
+                onChange={(e) => onFileSelect(idx, e.target.files?.[0])}
+              />
+            </label>
+          </td>
+          <td className="p-2 text-center">
+            {(row.isExisting || row.file) && (
+              <button
+                type="button"
+                onClick={() => onView(row)}
+                className="p-1 rounded text-blue-600 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-blue-900/30"
+              >
+                {row.isExisting ? <Eye size={14} /> : <FileIcon size={14} />}
+              </button>
+            )}
+          </td>
+          <td className="p-2 text-center">
             <button
               type="button"
               onClick={() => onRemoveRow(idx)}
@@ -451,7 +480,13 @@ const emptyDetailRow = () => ({
 
 const emptyTaxRow = () => ({ particulars: "", taxAmount: "" });
 
-const emptyAttachmentRow = () => ({ invoiceCopy: null });
+const emptyAttachmentRow = () => ({
+  id: 0,
+  name: "",
+  file: null,
+  filePath: "",
+  isExisting: false,
+});
 
 const todayStr = () => {
   const d = new Date();
@@ -668,7 +703,15 @@ const SubContractingGrnForm = ({ data, onBack }) => {
   );
 
   const [attachmentRows, setAttachmentRows] = useState(
-    data?.invoiceCopy?.length ? data.invoiceCopy : [emptyAttachmentRow()],
+    data?.attachments?.length
+      ? data.attachments.map((a) => ({
+          id: a.id,
+          name: a.name || a.fileName || "",
+          file: null,
+          filePath: a.filePath || "",
+          isExisting: true,
+        }))
+      : [emptyAttachmentRow()],
   );
 
   /* ---------------- Lookup loading ---------------- */
@@ -1123,14 +1166,34 @@ const SubContractingGrnForm = ({ data, onBack }) => {
 
   /* ---------------- Attachments ---------------- */
 
-  const handleAttachmentCellChange = (idx, key, file) =>
+  const handleFileSelect = (idx, file) => {
+    if (!file) return;
     setAttachmentRows((prev) =>
-      prev.map((row, i) => (i === idx ? { ...row, [key]: file } : row)),
+      prev.map((row, i) =>
+        i === idx
+          ? { ...row, file, name: file.name, filePath: "", isExisting: false }
+          : row,
+      ),
     );
+  };
+
   const handleAddAttachmentRow = () =>
     setAttachmentRows((prev) => [...prev, emptyAttachmentRow()]);
+
   const handleRemoveAttachmentRow = (idx) =>
     setAttachmentRows((prev) => prev.filter((_, i) => i !== idx));
+
+  const handleViewFile = (row) => {
+    if (row.isExisting && row.filePath) {
+      window.open(row.filePath, "_blank", "noopener,noreferrer");
+      return;
+    }
+    if (row.file) {
+      const url = URL.createObjectURL(row.file);
+      window.open(url, "_blank", "noopener,noreferrer");
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    }
+  };
 
   /* ---------------- Totals ---------------- */
 
@@ -1177,8 +1240,6 @@ const SubContractingGrnForm = ({ data, onBack }) => {
 
     const isUpdate = Boolean(data?.id);
 
-    // Matches PUT /api/subContract/createUpdateSubContractingGRN exactly.
-    // id is included only when editing an existing record — never sent on create.
     const payload = {
       ...(isUpdate ? { id: data.id } : {}),
       active: header.active,
@@ -1259,13 +1320,18 @@ const SubContractingGrnForm = ({ data, onBack }) => {
       totalTax: round2(totalTax),
       vendor: toInt(header.vendorId),
       vendorLocation: toInt(header.vendorLocation),
-      invoiceCopy: attachmentRows
-        .filter((row) => row.invoiceCopy)
-        .map((row) => ({ fileName: row.invoiceCopy?.name })),
     };
 
+    const filesToUpload = attachmentRows
+      .filter((row) => row.file)
+      .map((row) => row.file);
+
     try {
-      const response = await subContractingGrnAPI.createUpdateGrn(payload);
+      const response = await subContractingGrnAPI.createUpdateGrn(
+        payload,
+        filesToUpload,
+      );
+
       if (response?.status) {
         addToast(
           response?.paramObjectsMap?.message ||
@@ -1286,8 +1352,6 @@ const SubContractingGrnForm = ({ data, onBack }) => {
       }
     } catch (err) {
       console.error("Save Sub Contracting GRN Error:", err);
-      // apiClient's interceptor throws error.response.data directly, so the
-      // error itself may be the backend body (not an axios error object).
       const body = err?.response?.data || err;
       addToast(
         body?.errors?.[0]?.shortMessage ||
@@ -1302,7 +1366,6 @@ const SubContractingGrnForm = ({ data, onBack }) => {
       setIsSubmitting(false);
     }
   };
-
   /* ---------------- Column definitions ---------------- */
 
   const detailColumns = [
@@ -2029,8 +2092,9 @@ const SubContractingGrnForm = ({ data, onBack }) => {
             <div className="pt-4">
               <AttachmentTable
                 rows={attachmentRows}
-                onCellChange={handleAttachmentCellChange}
+                onFileSelect={handleFileSelect}
                 onRemoveRow={handleRemoveAttachmentRow}
+                onView={handleViewFile}
               />
             </div>
           )}

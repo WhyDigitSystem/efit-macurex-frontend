@@ -1,12 +1,6 @@
-// subContractingGrnAPI.js
 import apiClient from "../apiClient";
 
 const subContractingGrnAPI = {
-  /* ==========================================================================
-     CRUD — Sub Contracting GRN record itself
-  ========================================================================== */
-
-  // Response: paramObjectsMap.subContractingGRN[]
   getGrnByOrgId: async (orgId, branch) => {
     try {
       const res = await apiClient.get(
@@ -20,8 +14,6 @@ const subContractingGrnAPI = {
     }
   },
 
-  // Response: paramObjectsMap.subContractingGRN (single object, or an array
-  // with one item — both are handled)
   getGrnById: async (id) => {
     try {
       const res = await apiClient.get(
@@ -36,19 +28,32 @@ const subContractingGrnAPI = {
     }
   },
 
-  // Body must match the backend DTO exactly — see the Model in Swagger for
-  // createUpdateSubContractingGRN: { active, basicAmount, belongsTo, branch,
-  // cancelRemarks, contractNo, createdBy, department, details[], financialYear,
-  // gatePassNo, grnClearTime, gstState, gstType, gstnNo, id, isIGSTAppl, orgId,
-  // remarks, revsChrg, rework, sacCode, schEndDate, schStartDate, scheduleNo,
-  // serviceName, supplierDcDate, supplierDcNo, taxDetails[], taxPercentage,
-  // taxType, totalAmount, totalTax, vendor, vendorLocation }
-  createUpdateGrn: async (payload) => {
+  createUpdateGrn: async (payload, files = []) => {
     try {
+      const formData = new FormData();
+
+      const grnBlob = new Blob([JSON.stringify(payload)], {
+        type: "application/json",
+      });
+
+      formData.append(
+        "subContractingGRNDTO",
+        grnBlob,
+        "subContractingGRNDTO.json",
+      );
+
+      files.forEach((file) => {
+        if (file) {
+          formData.append("files", file, file.name);
+        }
+      });
+
       const res = await apiClient.put(
         "/api/subContract/createUpdateSubContractingGRN",
-        payload,
+        formData,
+        { headers: { "Content-Type": "multipart/form-data" } },
       );
+
       return res;
     } catch (error) {
       console.error("Error saving sub contracting GRN:", error);
@@ -56,8 +61,6 @@ const subContractingGrnAPI = {
     }
   },
 
-  // Auto-generated S.C GRN No for a new record.
-  // Response: paramObjectsMap.subContractingGRNDocId
   getGrnDocId: async (financialYear, orgId) => {
     try {
       const res = await apiClient.get(
@@ -71,16 +74,6 @@ const subContractingGrnAPI = {
     }
   },
 
-  /* ==========================================================================
-     Vendor lookup — Vendor Id (customerCode), Vendor Name (customerName),
-     GST State (gstState), GSTN No (gstNo), GST Type (gstType), and
-     IsIGSTAppl (igstApplicable). NOTE: "address" is a free-text string here,
-     but the DTO's vendorLocation wants a numeric location-master id — see
-     loadLocations in the form. Vendor's address is only used as a best-effort
-     hint, not the submitted value.
-  ========================================================================== */
-
-  // Response: paramObjectsMap.customerList[]
   getCustomerForSupplierRateContract: async (branch, orgId) => {
     try {
       const res = await apiClient.get(
@@ -94,13 +87,6 @@ const subContractingGrnAPI = {
     }
   },
 
-  /* ==========================================================================
-     Gate Pass lookup — Gate Pass No, Supplier DC No, Supplier DC Date
-     Scoped to the selected vendor.
-  ========================================================================== */
-
-  // Response: paramObjectsMap.GateInwardEntryVO[]
-  //   { GatePassNo, GatePassDate, supplierDCNumber, supplierDcDate }
   getGateInwardEntry: async (branch, customer, orgId) => {
     try {
       const res = await apiClient.get(
@@ -114,15 +100,6 @@ const subContractingGrnAPI = {
     }
   },
 
-  /* ==========================================================================
-     Supply Schedule lookup — Schedule No, Contract No, Sch Start/End Date,
-     Service Name, SAC Code, Tax %. Scoped to the selected vendor.
-  ========================================================================== */
-
-  // Response: paramObjectsMap.SubcontractSupplyScheduleVO[]
-  //   { scheduleNo, contractNo, schStartDate, schEndDate, serviceId,
-  //     serviceName, hsnId, hsnCode, hsnDescription, gstRate, cgstRate,
-  //     sgstRate, igstRate }
   getSubcontractSupplySchedule: async (branch, customer, orgId) => {
     try {
       const res = await apiClient.get(
@@ -136,14 +113,6 @@ const subContractingGrnAPI = {
     }
   },
 
-  /* ==========================================================================
-     Item lookup — Incoming Item Code/Desc, Primary Unit, Job Order No/Qty/Rate
-     Scoped to the selected vendor + schedule no.
-  ========================================================================== */
-
-  // Response: paramObjectsMap.SubcontractSupplyScheduleItemVO[]
-  //   { itemId, itemCode, itemDescription, unitId, unitCode, unitDescription,
-  //     jobOrderNo, jobOrderQty, jobOrderRate }
   getItemDetailsForGrn: async (branch, customer, orgId, scheduleNo) => {
     try {
       const res = await apiClient.get(
@@ -157,16 +126,6 @@ const subContractingGrnAPI = {
     }
   },
 
-  /* ==========================================================================
-     BOM lookup — feeds the Consumption/Scrap sub-table nested under each
-     GRN Detail row. Scoped to the selected incoming item.
-  ========================================================================== */
-
-  // Response: paramObjectsMap.BomItemDetailsVO[]
-  //   { itemId, bomId, itemCode, itemDescription, unitId, unitCode,
-  //     unitDescription, bomQty, scrapQty, scrapItem }
-  // NOTE: the sample response has no "itemType", "availableStock" or "rate" —
-  // those stay manual-entry fields in the form.
   getBomItemDetails: async (branch, itemId, orgId) => {
     try {
       const res = await apiClient.get(
@@ -178,6 +137,11 @@ const subContractingGrnAPI = {
       console.error("Error fetching BOM item details:", error);
       throw error;
     }
+  },
+
+  getViewFileUrl: (filePath) => {
+    if (!filePath) return "";
+    return filePath;
   },
 };
 
