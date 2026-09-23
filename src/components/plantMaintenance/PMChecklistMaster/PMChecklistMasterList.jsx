@@ -12,17 +12,23 @@ const PMChecklistMasterList = ({
   const [checklistData, setChecklistData] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const ORG_ID = parseInt(localStorage.getItem("orgId"));
+  const ORG_ID = Number(localStorage.getItem("orgId"));
+  const BRANCH_ID = Number(localStorage.getItem("branchId"));
 
+  /* getPMCheckListMasterByOrgId requires BOTH branch and orgId (same
+     requirement confirmed on the other vendorComplaintEntry screens). */
   const loadChecklists = useCallback(async () => {
+    if (!ORG_ID || !BRANCH_ID) return;
+
     try {
       setLoading(true);
 
-      const response = await pmChecklistMasterAPI.getChecklists(ORG_ID);
-
-      const sorted = (response || []).sort(
-        (a, b) => (b.id || 0) - (a.id || 0),
+      const response = await pmChecklistMasterAPI.getChecklists(
+        BRANCH_ID,
+        ORG_ID,
       );
+
+      const sorted = (response || []).sort((a, b) => (b.id || 0) - (a.id || 0));
 
       setChecklistData(sorted);
     } catch (error) {
@@ -32,7 +38,7 @@ const PMChecklistMasterList = ({
     } finally {
       setLoading(false);
     }
-  }, [ORG_ID]);
+  }, [ORG_ID, BRANCH_ID]);
 
   useEffect(() => {
     loadChecklists();
@@ -42,40 +48,63 @@ const PMChecklistMasterList = ({
     onEdit(checklist);
   };
 
+  /* Columns read the confirmed nested response shape:
+     branch.branchName, department.departmentName, toolCategory.category,
+     preparedBy.employeeName/approvedBy.employeeName. There is no
+     documentNo or date field anywhere in the confirmed response, so
+     pmCheckListNo is used as the row identifier instead. */
   const columns = [
     {
-      key: "documentNo",
-      label: "Document No",
-      accessor: "documentNo",
+      key: "pmCheckListNo",
+      label: "PM Check List No",
+      accessor: "pmCheckListNo",
       type: "text",
       noWrap: true,
     },
     {
-      key: "plantName",
+      key: "plant",
       label: "Plant",
-      accessor: "plantName",
+      accessor: (row) => row.branch?.branchName,
       type: "text",
       noWrap: true,
     },
     {
       key: "department",
       label: "Department",
-      accessor: "department",
+      accessor: (row) => row.department?.departmentName,
       type: "text",
     },
     {
-      key: "pmChecklistFor",
-      label: "PM Checklist For",
-      accessor: "pmChecklistFor",
+      key: "pmCheckListFor",
+      label: "PM Check List For",
+      accessor: "pmCheckListFor",
       type: "text",
       noWrap: true,
     },
     {
-      key: "date",
-      label: "Date",
-      accessor: "date",
+      key: "toolCategory",
+      label: "Machine/Tool Category",
+      accessor: (row) => row.toolCategory?.category,
       type: "text",
       noWrap: true,
+    },
+    {
+      key: "active",
+      label: "Status",
+      accessor: "active",
+      type: "status",
+      statusVariants: {
+        true: {
+          label: "Active",
+          className:
+            "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+        },
+        false: {
+          label: "Inactive",
+          className:
+            "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+        },
+      },
     },
     {
       key: "actions",
@@ -87,11 +116,11 @@ const PMChecklistMasterList = ({
   ];
 
   const searchFields = [
-    "documentNo",
-    "plantName",
-    "department",
-    "pmChecklistFor",
-    "pmChecklistNo",
+    "pmCheckListNo",
+    "branch.branchName",
+    "department.departmentName",
+    "pmCheckListFor",
+    "toolCategory.category",
   ];
 
   return (
