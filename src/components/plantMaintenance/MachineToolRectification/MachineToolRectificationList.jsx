@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import { toast } from "../../../utils/toast";
 
+import machineToolRectificationAPI from "../../../api/machineToolRectificationAPI";
 import generateMachineToolRectificationPDF from "../../../utils/generateMachineToolRectificationPDF";
 import PDFPreviewModal from "../../../utils/PDFPreviewModal";
 
@@ -18,19 +19,25 @@ const MachineToolRectificationList = ({
   const [pdfPreview, setPdfPreview] = useState(null);
 
   const ORG_ID = Number(localStorage.getItem("orgId"));
+  const BRANCH_ID = Number(localStorage.getItem("branchId"));
 
   /* ================================================================ */
   /* LOAD DATA                                                         */
+  /* getMachineToolRectificationByOrgId requires BOTH branch and orgId  */
+  /* (same requirement confirmed on Internal Indent) - branch is read   */
+  /* from localStorage the same way orgId is.                          */
   /* ================================================================ */
 
   const loadRectifications = useCallback(async () => {
+    if (!ORG_ID || !BRANCH_ID) return;
+
     try {
       setLoading(true);
 
-      const response =
-        await machineToolRectificationAPI.getMachineToolRectificationByOrgId(
-          ORG_ID,
-        );
+      const response = await machineToolRectificationAPI.getByOrgId(
+        BRANCH_ID,
+        ORG_ID,
+      );
 
       const sortedData = (response || []).sort(
         (a, b) => (b?.id || 0) - (a?.id || 0),
@@ -46,7 +53,7 @@ const MachineToolRectificationList = ({
     } finally {
       setLoading(false);
     }
-  }, [ORG_ID]);
+  }, [ORG_ID, BRANCH_ID]);
 
   useEffect(() => {
     loadRectifications();
@@ -54,14 +61,12 @@ const MachineToolRectificationList = ({
 
   /* ================================================================ */
   /* DOWNLOAD / PREVIEW PDF                                           */
+  /* Response rows are flat (branch/department/attendBy/etc. as        */
+  /* nested objects) - NOT wrapped under a "header" key.                */
   /* ================================================================ */
 
   const handleDownloadPDF = (row) => {
     try {
-      console.log("Machine/Tool Rectification PDF Row:", row);
-
-      const header = row?.header || {};
-
       const result = generateMachineToolRectificationPDF({
         company: {
           name: row?.companyName || row?.organizationName || "Company Name",
@@ -71,60 +76,30 @@ const MachineToolRectificationList = ({
           id: row?.id,
 
           header: {
-            plant: header?.plant || row?.plant || "",
-
-            docNo: header?.docNo || row?.docNo || "",
-
-            department: header?.department || row?.department || "",
-
-            date: header?.date || row?.date || "",
-
-            breakdownNo: header?.breakdownNo || row?.breakdownNo || "",
-
-            breakdownDate: header?.breakdownDate || row?.breakdownDate || "",
-
-            attendBy: header?.attendBy || row?.attendBy || "",
-
-            time: header?.time || row?.time || "",
-
-            rectifiedOn: header?.rectifiedOn || row?.rectifiedOn || "",
-
-            machineToolNo: header?.machineToolNo || row?.machineToolNo || "",
-
-            rectificationTime:
-              header?.rectificationTime || row?.rectificationTime || "",
-
-            description: header?.description || row?.description || "",
-
-            cause: header?.cause || row?.cause || "",
-
-            maintenanceType:
-              header?.maintenanceType || row?.maintenanceType || "",
-
-            actionTaken: header?.actionTaken || row?.actionTaken || "",
-
-            natureOfProblem:
-              header?.natureOfProblem || row?.natureOfProblem || "",
-
-            carriedOutBy: header?.carriedOutBy || row?.carriedOutBy || "",
-
-            timeTakenForRectification:
-              header?.timeTakenForRectification ||
-              row?.timeTakenForRectification ||
-              "",
-
-            sparesUsed: header?.sparesUsed || row?.sparesUsed || "",
-
-            location: header?.location || row?.location || "",
-
-            preparedBy: header?.preparedBy || row?.preparedBy || "",
-
-            remarks: header?.remarks || row?.remarks || "",
-
-            approvedBy: header?.approvedBy || row?.approvedBy || "",
+            plant: row?.branch?.branchName || "",
+            department: row?.department?.departmentName || "",
+            date: row?.commonDate?.createdon || "",
+            breakdownNo: row?.breakdownNo || "",
+            breakdownDate: row?.breakdownDate || "",
+            attendBy: row?.attendBy?.employeeName || "",
+            time: row?.time || "",
+            rectificationTime: row?.rectificationTime || "",
+            machineToolNo: row?.machineToolNo || "",
+            description: row?.description || "",
+            cause: row?.cause || "",
+            maintenanceType: row?.maintenanceType || "",
+            actionTaken: row?.actionTaken || "",
+            natureOfProblem: row?.natureOfProblem || "",
+            carriedOutBy: row?.carriedOutBy?.employeeName || "",
+            timeTakenForRectification: row?.timeTakenForRectification || "",
+            sparesUsed: row?.sparesUsed || "",
+            location: row?.location || "",
+            preparedBy: row?.preparedBy?.employeeName || "",
+            remarks: row?.remarks || "",
+            approvedBy: row?.approvedBy?.employeeName || "",
           },
 
-          active: row?.active !== false,
+          active: row?.active === "Active" || row?.active === true,
         },
       });
 
@@ -144,48 +119,50 @@ const MachineToolRectificationList = ({
 
   /* ================================================================ */
   /* COLUMNS                                                           */
+  /* No doc-number field exists in the confirmed API response, so the  */
+  /* Breakdown No. is used as the row identifier instead.               */
   /* ================================================================ */
 
   const columns = [
     {
-      key: "docNo",
-      label: "Doc No.",
-      accessor: (row) => row.header?.docNo,
+      key: "breakdownNo",
+      label: "Breakdown No.",
+      accessor: "breakdownNo",
       type: "text",
     },
 
     {
-      key: "date",
-      label: "Date",
-      accessor: (row) => row.header?.date,
+      key: "breakdownDate",
+      label: "Breakdown Date",
+      accessor: "breakdownDate",
       type: "date",
     },
 
     {
       key: "plant",
       label: "Plant ID",
-      accessor: (row) => row.header?.plant,
+      accessor: (row) => row.branch?.branchName,
       type: "text",
     },
 
     {
       key: "department",
       label: "Department",
-      accessor: (row) => row.header?.department,
+      accessor: (row) => row.department?.departmentName,
       type: "text",
     },
 
     {
       key: "machineToolNo",
       label: "Machine No. / Tool No.",
-      accessor: (row) => row.header?.machineToolNo,
+      accessor: "machineToolNo",
       type: "text",
     },
 
     {
       key: "maintenanceType",
       label: "Maintenance Type",
-      accessor: (row) => row.header?.maintenanceType,
+      accessor: "maintenanceType",
       type: "badge",
     },
 
@@ -201,19 +178,16 @@ const MachineToolRectificationList = ({
           className:
             "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
         },
-
         false: {
           label: "Inactive",
           className:
             "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
         },
-
         Active: {
           label: "Active",
           className:
             "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
         },
-
         Inactive: {
           label: "Inactive",
           className:
@@ -236,12 +210,11 @@ const MachineToolRectificationList = ({
   /* ================================================================ */
 
   const searchFields = [
-    "header.docNo",
-    "header.machineToolNo",
-    "header.breakdownNo",
-    "header.department",
-    "header.plant",
-    "header.maintenanceType",
+    "breakdownNo",
+    "machineToolNo",
+    "department.departmentName",
+    "branch.branchName",
+    "maintenanceType",
   ];
 
   /* ================================================================ */
@@ -249,12 +222,7 @@ const MachineToolRectificationList = ({
   /* ================================================================ */
 
   const filterOptions = [
-    {
-      value: "all",
-      label: "All",
-      field: null,
-    },
-
+    { value: "all", label: "All", field: null },
     {
       value: "active",
       label: "Active",
@@ -262,7 +230,6 @@ const MachineToolRectificationList = ({
       filterValue: "active",
       activeValue: true,
     },
-
     {
       value: "inactive",
       label: "Inactive",
@@ -290,7 +257,6 @@ const MachineToolRectificationList = ({
           onBack={onBack}
           onAddNew={onAddNew}
           onEdit={onEdit}
-          /* PDF DOWNLOAD */
           onDownload={handleDownloadPDF}
           onView={false}
           showSerialNumber={true}
@@ -305,10 +271,6 @@ const MachineToolRectificationList = ({
         />
       </div>
 
-      {/* ============================================================ */}
-      {/* PDF PREVIEW MODAL                                             */}
-      {/* ============================================================ */}
-
       {pdfPreview && (
         <PDFPreviewModal
           blobUrl={pdfPreview.blobUrl}
@@ -317,7 +279,6 @@ const MachineToolRectificationList = ({
             if (pdfPreview.blobUrl) {
               URL.revokeObjectURL(pdfPreview.blobUrl);
             }
-
             setPdfPreview(null);
           }}
         />
