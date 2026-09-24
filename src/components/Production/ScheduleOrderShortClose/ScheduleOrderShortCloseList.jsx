@@ -12,16 +12,18 @@ const ScheduleOrderShortCloseList = ({
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const ORG_ID = localStorage.getItem("orgId");
-  const BRANCH_ID = localStorage.getItem("branchId");
+  const ORG_ID = Number(localStorage.getItem("orgId")) || 0;
+  const BRANCH_ID = Number(localStorage.getItem("branchId")) || 0;
 
   const loadRecords = useCallback(async () => {
+    if (!ORG_ID || !BRANCH_ID) return;
     try {
       setLoading(true);
-      const data = await productionScheduleOrderShortCloseAPI.getByOrgId(
-        ORG_ID,
-        BRANCH_ID,
-      );
+      const data =
+        await productionScheduleOrderShortCloseAPI.getByOrgIdAndBranch({
+          branch: BRANCH_ID,
+          orgId: ORG_ID,
+        });
       data.sort((a, b) => (b.id || 0) - (a.id || 0));
       setRecords(data);
     } catch (error) {
@@ -37,53 +39,82 @@ const ScheduleOrderShortCloseList = ({
     loadRecords();
   }, [loadRecords, refreshTrigger]);
 
+  /* ---------------- Accessors ---------------- */
+
+  const getBranchLabel = (row) =>
+    row?.branch?.branchName ||
+    row?.branch?.branchCode ||
+    row?.branch?.id ||
+    "";
+
+  const getItemCode = (row) => row?.item?.itemCode || row?.item?.id || "";
+
+  const getItemDescription = (row) => row?.item?.itemDescription || "";
+
+  const getUnitLabel = (row) =>
+    row?.unit?.unitId || row?.unit?.id || "";
+
+  /* ---------------- Columns ---------------- */
+
   const columns = [
     {
-      key: "shortCloseNo",
+      key: "docId",
       label: "Short Close No",
-      accessor: (row) => row.shortCloseNo || row.docNo || "",
+      accessor: (row) => row?.docId || "",
       type: "text",
       noWrap: true,
     },
     {
-      key: "date",
+      key: "docDate",
       label: "Date",
-      accessor: (row) => row.date || row.docDate || "",
+      accessor: (row) => row?.docDate || "",
       type: "date",
       noWrap: true,
     },
     {
-      key: "plantId",
+      key: "branch",
       label: "Branch",
-      accessor: (row) =>
-        typeof row.plantId === "object"
-          ? row.plantId.branchName || row.plantId.plantName || row.plantId.id
-          : row.plantName || row.plantId,
+      accessor: (row) => getBranchLabel(row),
       type: "text",
     },
     {
       key: "itemCode",
       label: "Item Code",
-      accessor: (row) =>
-        typeof row.itemCode === "object"
-          ? row.itemCode.itemCode || row.itemCode.id
-          : row.itemCode || "",
+      accessor: (row) => getItemCode(row),
       type: "text",
     },
     {
       key: "itemDescription",
       label: "Item Description",
-      accessor: (row) => row.itemDescription || "",
+      accessor: (row) => getItemDescription(row),
       type: "text",
     },
     {
       key: "unit",
       label: "Unit",
-      accessor: (row) =>
-        typeof row.unit === "object"
-          ? row.unit.unitId || row.unit.id
-          : row.unitName || row.unit || "",
+      accessor: (row) => getUnitLabel(row),
       type: "text",
+    },
+    {
+      key: "active",
+      label: "Status",
+      accessor: (row) =>
+        row?.active === true || row?.active === "Active"
+          ? "Active"
+          : "Inactive",
+      type: "status",
+      statusVariants: {
+        Active: {
+          label: "Active",
+          className:
+            "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+        },
+        Inactive: {
+          label: "Inactive",
+          className:
+            "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+        },
+      },
     },
     {
       key: "actions",
@@ -95,12 +126,30 @@ const ScheduleOrderShortCloseList = ({
   ];
 
   const searchFields = [
-    "shortCloseNo",
-    "date",
-    "plantId",
-    "itemCode",
-    "itemDescription",
-    "unit",
+    "docId",
+    "docDate",
+    "branch.branchName",
+    "item.itemCode",
+    "item.itemDescription",
+    "narration",
+  ];
+
+  const filterOptions = [
+    { value: "all", label: "All", field: null },
+    {
+      value: "active",
+      label: "Active",
+      field: "active",
+      filterValue: "active",
+      activeValue: "Active",
+    },
+    {
+      value: "inactive",
+      label: "Inactive",
+      field: "active",
+      filterValue: "inactive",
+      activeValue: "Active",
+    },
   ];
 
   return (
@@ -110,6 +159,8 @@ const ScheduleOrderShortCloseList = ({
       loading={loading}
       columns={columns}
       searchFields={searchFields}
+      filterOptions={filterOptions}
+      defaultFilter="all"
       onBack={onBack}
       onAddNew={onAddNew}
       onEdit={onEdit}

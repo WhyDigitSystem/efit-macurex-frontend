@@ -1,61 +1,85 @@
 import apiClient from "../apiClient";
 
-/* Production Schedule Order Short Close API
-   Mirrors the commonmaster API convention used across this app.
-   The backend persists the header, production order details and the
-   summary in a single transaction and keeps the complete short-close
-   record history with reasons (server-side validation). */
 const productionScheduleOrderShortCloseAPI = {
-  // Get Short Close records by Organization ID
-  getByOrgId: async (orgId, branchId) => {
+  /* ---------------- List by Org + Branch ---------------- */
+  getByOrgIdAndBranch: async ({ branch, orgId }) => {
     try {
       const res = await apiClient.get(
-        `/api/commonmaster/getProductionScheduleOrderShortCloseByOrgId?orgId=${orgId}&branchId=${branchId}`,
+        `/api/purchaseOrder/getProductionSchOrderShortCloseByOrgId?branch=${branch}&orgId=${orgId}`,
       );
       return (
-        res?.paramObjectsMap?.productionScheduleOrderShortCloseList ||
-        res?.paramObjectsMap?.shortCloseList ||
-        []
+        res?.paramObjectsMap?.productionSchOrderShortCloseResponseVO || []
       );
     } catch (error) {
-      console.error(
-        "Error fetching production schedule order short closes:",
-        error,
-      );
+      console.error("Error fetching Short Close records:", error);
       throw error;
     }
   },
 
-  // Get Short Close record by ID
+  /* ---------------- Get by Id ---------------- */
   getById: async (id) => {
     try {
       const res = await apiClient.get(
-        `/api/commonmaster/getProductionScheduleOrderShortCloseById?id=${id}`,
+        `/api/purchaseOrder/getProductionSchOrderShortCloseById?id=${id}`,
       );
       return (
-        res?.paramObjectsMap?.productionScheduleOrderShortCloseVO ||
-        res?.paramObjectsMap?.shortCloseVO ||
-        null
+        res?.paramObjectsMap?.productionSchOrderShortCloseResponseVO || null
       );
     } catch (error) {
-      console.error(
-        "Error fetching production schedule order short close by id:",
-        error,
-      );
+      console.error("Error fetching Short Close by id:", error);
       throw error;
     }
   },
 
-  // Create / Update Short Close record
+  /* ---------------- Doc Id ---------------- */
+  getDocId: async ({ financialYear, orgId }) => {
+    try {
+      const res = await apiClient.get(
+        `/api/purchaseOrder/getProductionSchOrderShortCloseDocId?financialYear=${financialYear}&orgId=${orgId}`,
+      );
+      return res?.paramObjectsMap?.productionSchOrderShortCloseDocId || "";
+    } catch (error) {
+      console.error("Error fetching Short Close Doc Id:", error);
+      throw error;
+    }
+  },
+
+  /* ---------------- Item Code dropdown ---------------- */
+  getItems: async ({ branch, orgId }) => {
+    try {
+      const res = await apiClient.get(
+        `/api/purchaseOrder/getItemDetailsFromProductionShortClose?branch=${branch}&orgId=${orgId}`,
+      );
+      return res?.paramObjectsMap?.mapp || [];
+    } catch (error) {
+      console.error("Error fetching items:", error);
+      throw error;
+    }
+  },
+
+  /* ---------------- Schedule Order No dropdown ---------------- */
+  getScheduleOrders: async ({ branch, orgId }) => {
+    try {
+      const res = await apiClient.get(
+        `/api/purchaseOrder/getSchOrderNoProductionShortClose?branch=${branch}&orgId=${orgId}`,
+      );
+      return res?.paramObjectsMap?.mapp || [];
+    } catch (error) {
+      console.error("Error fetching schedule orders:", error);
+      throw error;
+    }
+  },
+
+  /* ---------------- Save (create / update) ---------------- */
   createUpdate: async (payload) => {
     try {
-      const res = await apiClient.post(
-        "/api/commonmaster/createUpdateProductionScheduleOrderShortClose",
+      const res = await apiClient.put(
+        "/api/purchaseOrder/createUpdateProductionSchOrderShortClose",
         payload,
       );
       return res;
     } catch (error) {
-      console.error("Error saving production schedule order short close:", error);
+      console.error("Error saving Short Close:", error);
       throw error;
     }
   },

@@ -1,5 +1,5 @@
 import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import dayjs from "dayjs";
 import { useToast } from "../../Toast/ToastContext";
 import scrapNoteAPI from "../../../api/Production/scrapNoteAPI";
@@ -7,9 +7,7 @@ import branchAPI from "../../../api/branchAPI";
 import locationMasterAPI from "../../../api/locationMasterAPI";
 import { departmentAPI } from "../../../api/departmentAPI";
 import { employeeAPI } from "../../../api/employeeAPI";
-import itemAPI from "../../../api/itemAPI";
 import { unitMasterAPI } from "../../../api/unitAPI";
-import productionScheduleOrderAPI from "../../../api/Production/productionScheduleOrderAPI";
 import listOfValuesAPI from "../../../api/listOfValuesAPI";
 
 /* ---------------------------------------------------------------------------- */
@@ -45,6 +43,10 @@ const cellReadOnlyClasses =
   "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 " +
   "border-gray-300 dark:border-gray-600 cursor-default";
 
+const BELONGS_TO_LIST_NAME = "SDS BELONGS TO";
+const SCRAP_ID_LIST_NAME = "SCRAP ID";
+const YES_NO_OPTIONS = ["Yes", "No"];
+
 /* ---------------------------------------------------------------------------- */
 /* Building blocks                                                             */
 
@@ -61,28 +63,36 @@ const Field = ({
   disabled = false,
 }) => {
   if (type === "select") {
+    const safeValue = value === null || value === undefined ? "" : value;
+    const safeOptions = (options || []).map((opt) =>
+      typeof opt === "object" ? opt : { value: opt, label: opt },
+    );
+    const inOptions = safeOptions.some(
+      (o) => String(o.value) === String(safeValue),
+    );
+    const showGhost = safeValue !== "" && !inOptions;
+
     return (
       <div className={`w-full ${className}`}>
         <label className={labelClasses}>
           {label}
           {required && <span className="text-red-500"> *</span>}
         </label>
-
         <select
           name={name}
-          value={value}
+          value={safeValue}
           onChange={onChange}
           disabled={disabled}
           className={`${controlClasses} ${error ? controlErrClasses : ""}`}
         >
           <option value="">-- Select --</option>
-          {(options || []).map((opt) => (
-            <option key={opt.value ?? opt} value={opt.value ?? opt}>
-              {opt.label ?? opt}
+          {showGhost && <option value={safeValue}>{String(safeValue)}</option>}
+          {safeOptions.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
             </option>
           ))}
         </select>
-
         {error && (
           <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
             {error}
@@ -99,7 +109,6 @@ const Field = ({
           {label}
           {required && <span className="text-red-500"> *</span>}
         </label>
-
         <textarea
           name={name}
           value={value}
@@ -109,13 +118,11 @@ const Field = ({
             "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors resize-none pt-1 scrollbar-hide " +
             "bg-white dark:bg-gray-900 " +
             `${error ? controlErrClasses : "border-gray-300 dark:border-gray-600"} ` +
-            "text-gray-900 dark:text-gray-100 " +
-            "placeholder-gray-400 dark:placeholder-gray-500 " +
+            "text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 " +
             "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
             "dark:focus:ring-blue-400 dark:focus:border-blue-400"
           }
         />
-
         {error && (
           <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
             {error}
@@ -131,7 +138,6 @@ const Field = ({
         {label}
         {required && <span className="text-red-500"> *</span>}
       </label>
-
       <input
         type={type}
         name={name}
@@ -140,7 +146,6 @@ const Field = ({
         disabled={disabled}
         className={`${controlClasses} ${error ? controlErrClasses : ""}`}
       />
-
       {error && (
         <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
           {error}
@@ -149,40 +154,6 @@ const Field = ({
     </div>
   );
 };
-
-/* Yes/No toggle matching the Field anatomy: label on top + h-[30px] control.
-   Neutral styling in both states - only the switch indicator changes color. */
-const ToggleField = ({ label, checked, onChange }) => (
-  <div className="w-full">
-    <label className={labelClasses}>{label}</label>
-
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className="w-full h-[30px] px-2 rounded border text-xs leading-none flex items-center justify-between transition-colors bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600"
-    >
-      <span className="text-xs font-medium text-gray-700 dark:text-gray-200">
-        {checked ? "Yes" : "No"}
-      </span>
-
-      <span
-        className={
-          "relative inline-flex h-[16px] w-[30px] shrink-0 items-center rounded-full transition-colors " +
-          (checked ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600")
-        }
-      >
-        <span
-          className={
-            "inline-block h-[12px] w-[12px] transform rounded-full bg-white shadow transition-transform " +
-            (checked ? "translate-x-[15px]" : "translate-x-[2px]")
-          }
-        />
-      </span>
-    </button>
-  </div>
-);
 
 const SectionHeader = ({ children }) => (
   <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">
@@ -199,7 +170,6 @@ const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
     >
       <X className="h-3 w-3" /> Cancel
     </button>
-
     <button
       onClick={onSave}
       disabled={isSubmitting}
@@ -225,13 +195,12 @@ const TableHead = ({ headers }) => (
       {headers.map((h, i) => (
         <th
           key={i}
-          className={`p-2 whitespace-nowrap ${
-            i === 0
-              ? "w-8 text-center"
-              : i === headers.length - 1
-                ? "w-20 text-left"
-                : "text-left"
-          } dark:text-white`}
+          className={`p-2 whitespace-nowrap ${i === 0
+            ? "w-8 text-center"
+            : i === headers.length - 1
+              ? "w-20 text-left"
+              : "text-left"
+            } dark:text-white`}
         >
           {h}
         </th>
@@ -249,11 +218,10 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
         type="button"
         onClick={onRemove}
         disabled={disabled}
-        className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-          disabled
-            ? "bg-gray-400 cursor-not-allowed"
-            : "bg-red-600 hover:bg-red-700"
-        }`}
+        className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
+          ? "bg-gray-400 cursor-not-allowed"
+          : "bg-red-600 hover:bg-red-700"
+          }`}
       >
         <Trash2 size={10} />
       </button>
@@ -261,8 +229,6 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
   </tr>
 );
 
-/* Generic dynamic table. Supports text / number / date / select / textarea /
-   readonly columns. Options may be plain strings or { value, label } objects. */
 const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
   <TableWrapper>
     <TableHead headers={["#", ...columns.map((c) => c.label), "Action"]} />
@@ -276,17 +242,34 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
         >
           {columns.map((col) => {
             if (col.type === "select") {
+              const safeValue =
+                row[col.key] === null || row[col.key] === undefined
+                  ? ""
+                  : row[col.key];
+              const opts = (col.options || []).map((opt) =>
+                typeof opt === "object" ? opt : { value: opt, label: opt },
+              );
+              const inOptions = opts.some(
+                (o) => String(o.value) === String(safeValue),
+              );
+              const showGhost = safeValue !== "" && !inOptions;
+
               return (
                 <td className="p-2 align-top" key={col.key}>
                   <select
-                    value={row[col.key]}
-                    onChange={(e) => onCellChange(idx, col.key, e.target.value)}
+                    value={safeValue}
+                    onChange={(e) =>
+                      onCellChange(idx, col.key, e.target.value)
+                    }
                     className={cellInputClasses}
                   >
                     <option value="">-- Select --</option>
-                    {(col.options || []).map((opt) => (
-                      <option key={opt.value ?? opt} value={opt.value ?? opt}>
-                        {opt.label ?? opt}
+                    {showGhost && (
+                      <option value={safeValue}>{String(safeValue)}</option>
+                    )}
+                    {opts.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
                       </option>
                     ))}
                   </select>
@@ -300,7 +283,9 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
                   <textarea
                     value={row[col.key]}
                     rows={1}
-                    onChange={(e) => onCellChange(idx, col.key, e.target.value)}
+                    onChange={(e) =>
+                      onCellChange(idx, col.key, e.target.value)
+                    }
                     className={cellInputClasses}
                   />
                 </td>
@@ -321,8 +306,12 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
                   }
                   value={row[col.key]}
                   readOnly={col.readOnly}
-                  onChange={(e) => onCellChange(idx, col.key, e.target.value)}
-                  className={col.readOnly ? cellReadOnlyClasses : cellInputClasses}
+                  onChange={(e) =>
+                    onCellChange(idx, col.key, e.target.value)
+                  }
+                  className={
+                    col.readOnly ? cellReadOnlyClasses : cellInputClasses
+                  }
                 />
               </td>
             );
@@ -343,14 +332,10 @@ const CHILD_TABS = [
 ];
 
 const fmtDate = (value) => (value ? dayjs(value).format("YYYY-MM-DD") : "");
-
 const toNum = (v) => Number(v) || 0;
 
-const generateScrapNoteNo = () =>
-  `SN-${dayjs().format("YYYYMMDD")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
-
 const emptyScrapDetailRow = () => ({
-  itemCode: "",
+  item: "",
   itemDescription: "",
   primaryUnit: "",
   stock: "",
@@ -363,13 +348,12 @@ const emptyScrapDetailRow = () => ({
 const emptyReasonDetailRow = () => ({
   reasonCode: "",
   reasonDescription: "",
-  rejectedQty: 0,
+  rejQty: 0,
 });
 
 /* ---------------------------------------------------------------------------- */
-/* Scrap Note Form                                                              */
 
-const ScrapNoteForm = ({ data, onBack }) => {
+const ScrapNoteForm = ({ data, onBack, onSave }) => {
   const { addToast } = useToast();
   const orgId = Number(localStorage.getItem("orgId")) || 0;
   const branch = Number(localStorage.getItem("branchId")) || 0;
@@ -383,57 +367,70 @@ const ScrapNoteForm = ({ data, onBack }) => {
   ).trim();
   const isMacurex = ["mecurex", "macurex"].includes(orgName.toLowerCase());
 
+  const isEditMode = Boolean(data?.id);
+  const docIdLoadedRef = useRef(false);
+
   const [activeChildTab, setActiveChildTab] = useState("scrapDetails");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
 
   /* ---------- Header state ---------- */
-  const [header, setHeader] = useState(() => {
-    const base = {
-      plantId: data?.plantId?.id ?? data?.plantId ?? "",
-      belongsTo: data?.belongsTo?.id ?? data?.belongsTo ?? "",
-      department: data?.department?.id ?? data?.department ?? "",
-      fromLocation: data?.fromLocation?.id ?? data?.fromLocation ?? "",
-      toLocation: data?.toLocation?.id ?? data?.toLocation ?? "",
-      fgPartNo: data?.fgPartNo?.id ?? data?.fgPartNo ?? "",
-      scheduleOrderNo:
-        data?.scheduleOrderNo?.id ?? data?.scheduleOrderNo ?? "",
-      bomId: data?.bomId?.id ?? data?.bomId ?? "",
-      scrapPartNo: data?.scrapPartNo?.id ?? data?.scrapPartNo ?? "",
-      scrapNoteNo: data?.scrapNoteNo || data?.docNo || "",
-      scrapNoteDate: data?.scrapNoteDate
+  const [header, setHeader] = useState(() => ({
+    plantId: data?.branch?.id ?? data?.plantId ?? "",
+    belongsTo: data?.belongsTo ?? "",
+    department: data?.department?.id ?? data?.department ?? "",
+    fromLocation: data?.fromLocation?.id ?? data?.fromLocation ?? "",
+    toLocation: data?.toLocation?.id ?? data?.toLocation ?? "",
+    fgPartNo: data?.fgPart?.id ?? data?.fgPartNo ?? "",
+    scheduleOrderNo: data?.schOrderNo ?? data?.scheduleOrderNo ?? "",
+    bomId: data?.bom?.id ?? data?.bomId ?? "",
+    scrapPartNo: data?.scrapPart?.id ?? data?.scrapPartNo ?? "",
+    scrapNoteNo: data?.docId ?? data?.scrapNoteNo ?? "",
+    scrapNoteDate: data?.docDate
+      ? fmtDate(data.docDate)
+      : data?.scrapNoteDate
         ? fmtDate(data.scrapNoteDate)
         : fmtDate(dayjs()),
-      time: data?.time || dayjs().format("HH:mm:ss"),
-    };
-    if (!base.scrapNoteNo) base.scrapNoteNo = generateScrapNoteNo();
-    return base;
-  });
+    time: data?.time || dayjs().format("HH:mm:ss"),
+  }));
 
   const [scrapDetailRows, setScrapDetailRows] = useState(() => {
-    const raw = data?.scrapDetails;
-    if (raw?.length) {
+    const raw =
+      data?.scrapNoteDetailsDTO ||
+      data?.scrapNoteDetails ||
+      data?.scrapDetails ||
+      data?.details ||
+      [];
+    if (raw.length) {
       return raw.map((item) => ({
-        itemCode: item.itemCode?.id ?? item.itemCode ?? "",
-        itemDescription: item.itemDescription || item.itemName || "",
+        item: item.item?.id ?? item.item ?? "",
+        // ✅ Read flattened field first, fall back to nested
+        itemDescription:
+          item.itemDescription ?? item.item?.itemDescription ?? "",
         primaryUnit: item.primaryUnit?.id ?? item.primaryUnit ?? "",
         stock: item.stock ?? "",
         quantity: item.quantity ?? "",
         weight: item.weight ?? "",
         rate: item.rate ?? "",
-        value: item.value ?? "",
+        value:
+          item.value ??
+          (toNum(item.quantity) * toNum(item.rate)).toFixed(2),
       }));
     }
     return [emptyScrapDetailRow()];
   });
 
   const [reasonDetailRows, setReasonDetailRows] = useState(() => {
-    const raw = data?.reasonDetails;
-    if (raw?.length) {
+    const raw =
+      data?.scrapNoteReasonDetailsDTO ||
+      data?.scrapNoteReasonDetails ||
+      data?.reasonDetails ||
+      [];
+    if (raw.length) {
       return raw.map((item) => ({
-        reasonCode: item.reasonCode?.id ?? item.reasonCode ?? "",
-        reasonDescription: item.reasonDescription || "",
-        rejectedQty: item.rejectedQty ?? 0,
+        reasonCode: item.reasonCode ?? "",
+        reasonDescription: item.reasonDescription ?? "",
+        rejQty: item.rejQty ?? item.rejectedQty ?? 0,
       }));
     }
     return [emptyReasonDetailRow()];
@@ -442,18 +439,11 @@ const ScrapNoteForm = ({ data, onBack }) => {
   const [summary, setSummary] = useState({
     preparedBy: data?.preparedBy?.id ?? data?.preparedBy ?? "",
     authorisedBy: data?.authorisedBy?.id ?? data?.authorisedBy ?? "",
-    scrapId:
-      data?.summary?.scrapId?.id ??
-      data?.summary?.scrapId ??
-      data?.scrapId?.id ??
-      data?.scrapId ??
-      "",
-    pmApproval: data?.pmApproval ?? data?.summary?.pmApproval ?? false,
-    qualityApproval:
-      data?.qualityApproval ?? data?.summary?.qualityApproval ?? false,
-    storeApproval:
-      data?.storeApproval ?? data?.summary?.storeApproval ?? false,
-    narration: data?.narration || data?.summary?.narration || "",
+    scrapId: data?.scrapId?.id ?? data?.scrapId ?? "",
+    pmApproval: data?.pmApproval ?? "",
+    qualityApproval: data?.qualityApproval ?? "",
+    storeApproval: data?.storeApproval ?? "",
+    narration: data?.narration ?? "",
   });
 
   /* ---------- Lookup loading ---------- */
@@ -462,208 +452,394 @@ const ScrapNoteForm = ({ data, onBack }) => {
   const [locationOptions, setLocationOptions] = useState([]);
   const [departmentOptions, setDepartmentOptions] = useState([]);
   const [employeeOptions, setEmployeeOptions] = useState([]);
-  const [itemOptions, setItemOptions] = useState([]);
-  const [unitOptions, setUnitOptions] = useState([]);
-  const [bomOptions, setBomOptions] = useState([]);
-  const [scheduleOrderOptions, setScheduleOrderOptions] = useState([]);
-  const [reasonCodeOptions, setReasonCodeOptions] = useState([]);
+  const [belongsToOptions, setBelongsToOptions] = useState([]);
   const [scrapIdOptions, setScrapIdOptions] = useState([]);
+  const [unitOptions, setUnitOptions] = useState([]);
+  const [fgPartOptions, setFgPartOptions] = useState([]);
+  const [scheduleOrderOptions, setScheduleOrderOptions] = useState([]);
+  const [bomOptions, setBomOptions] = useState([]);
+  const [scrapPartOptions, setScrapPartOptions] = useState([]);
+  const [itemOptions, setItemOptions] = useState([]);
 
-  const loadPlants = useCallback(async () => {
-    try {
-      if (isMacurex) {
-        const res = await locationMasterAPI.getPlants(orgId);
-        setPlantOptions(
-          (res || []).map((p) => ({
-            value: p.id,
-            label: p.plantName || p.plantId || p.id,
-          })),
-        );
-      } else {
-        const res = await branchAPI.getBranchByOrgId(orgId);
-        setPlantOptions(
-          (res || []).map((b) => ({
-            value: b.id,
-            label: b.branchName || b.branchCode || b.id,
-          })),
-        );
+  const fgPartMapRef = useRef({});
+  const scrapPartMapRef = useRef({});
+  const bomMapRef = useRef({});
+  const itemMapRef = useRef({});
+
+  /* Plants */
+  useEffect(() => {
+    if (!orgId) return;
+    (async () => {
+      try {
+        if (isMacurex) {
+          const res = await locationMasterAPI.getPlants(orgId);
+          setPlantOptions(
+            (res || []).map((p) => ({
+              value: p.id,
+              label: p.plantName || p.plantId || p.id,
+            })),
+          );
+        } else {
+          const res = await branchAPI.getBranchByOrgId(orgId);
+          setPlantOptions(
+            (res || []).map((b) => ({
+              value: b.id,
+              label: b.branchName || b.branchCode || b.id,
+            })),
+          );
+        }
+      } catch (err) {
+        console.error("Failed to load plants:", err);
       }
-    } catch (error) {
-      console.error("Failed to load plant options:", error);
-      setPlantOptions([]);
-    }
+    })();
   }, [orgId, isMacurex]);
 
-  const loadLocations = useCallback(async () => {
-    try {
-      const res = await locationMasterAPI.getLocationMasterByOrgId(orgId, branch);
-      setLocationOptions(
-        (res || []).map((l) => ({
-          value: l.id,
-          label: l.locationName || l.locationId || l.id,
-        })),
-      );
-    } catch (error) {
-      console.error("Failed to load location options:", error);
-      setLocationOptions([]);
-    }
-  }, [orgId, branch]);
-
-  const loadDepartments = useCallback(async () => {
-    try {
-      const res = await departmentAPI.getAllDepartments(orgId);
-      const departments = res?.paramObjectsMap?.departmentVO || [];
-      setDepartmentOptions(
-        departments.map((d) => ({
-          value: d.id,
-          label: d.departmentName || d.id,
-        })),
-      );
-    } catch (error) {
-      console.error("Failed to load department options:", error);
-      setDepartmentOptions([]);
-    }
-  }, [orgId, branch]);
-
-  const loadEmployees = useCallback(async () => {
-    try {
-      const res = await employeeAPI.getEmployeeByOrgId(orgId);
-      setEmployeeOptions(
-        (res || []).map((e) => ({
-          value: e.id,
-          label: e.employeeCode || e.employeeName || e.id,
-        })),
-      );
-    } catch (error) {
-      console.error("Failed to load employee options:", error);
-      setEmployeeOptions([]);
-    }
-  }, [orgId]);
-
-  const loadItems = useCallback(async () => {
-    try {
-      const res = await itemAPI.getItems(orgId, branch);
-      setItemOptions(
-        (res || []).map((it) => ({
-          value: it.id,
-          label: it.itemCode || it.id,
-          itemDescription: it.itemDescription || it.itemName || "",
-        })),
-      );
-    } catch (error) {
-      console.error("Failed to load item options:", error);
-      setItemOptions([]);
-    }
-  }, [orgId, branch]);
-
-  const loadUnits = useCallback(async () => {
-    try {
-      const res = await unitMasterAPI.getUnits(branch, orgId);
-      setUnitOptions(
-        (res || []).map((u) => ({
-          value: u.id,
-          label: u.unitId || u.unitName || u.id,
-        })),
-      );
-    } catch (error) {
-      console.error("Failed to load unit options:", error);
-      setUnitOptions([]);
-    }
-  }, [orgId, branch]);
-
-  const loadBOMs = useCallback(async () => {
-    try {
-      const res = await scrapNoteAPI.getBOMs(orgId, branch);
-      setBomOptions(
-        (res || [])
-          .filter((b) => b.id || b.bomId)
-          .map((b) => ({
-            value: b.id || b.bomId,
-            label: b.bomName || b.bomId || String(b.id),
-          })),
-      );
-    } catch (error) {
-      console.error("Failed to load BOM options:", error);
-      setBomOptions([]);
-    }
-  }, [orgId, branch]);
-
-  const loadScheduleOrders = useCallback(async () => {
-    try {
-      const res = await productionScheduleOrderAPI.getByOrgId(orgId, branch);
-      setScheduleOrderOptions(
-        (res || [])
-          .filter((o) => o.docId || o.subOrderNo || o.id)
-          .map((o) => ({
-            value: o.docId || o.subOrderNo || o.id,
-            label: o.docId || o.subOrderNo || String(o.id),
-          })),
-      );
-    } catch (error) {
-      console.error("Failed to load schedule order options:", error);
-      setScheduleOrderOptions([]);
-    }
-  }, [orgId, branch]);
-
-  const loadReasonCodes = useCallback(async () => {
-    try {
-      const res = await listOfValuesAPI.getListValuesGroup("REASON", orgId);
-      setReasonCodeOptions(
-        (res || []).map((r) => ({
-          value: r.id,
-          label: r.valuesDescription || r.id,
-          description: r.valuesDescription || "",
-        })),
-      );
-    } catch (error) {
-      console.error("Failed to load reason code options:", error);
-      setReasonCodeOptions([]);
-    }
-  }, [orgId]);
-
-  const loadScrapIds = useCallback(async () => {
-    try {
-      const res = await scrapNoteAPI.getScrapMasters(orgId, branch);
-      setScrapIdOptions(
-        (res || [])
-          .filter((s) => s.id || s.scrapCode)
-          .map((s) => ({
-            value: s.id || s.scrapCode,
-            label: s.scrapName || s.scrapCode || String(s.id),
-          })),
-      );
-    } catch (error) {
-      console.error("Failed to load scrap id options:", error);
-      setScrapIdOptions([]);
-    }
-  }, [orgId, branch]);
-
+  /* Locations */
   useEffect(() => {
-    if (orgId) {
-      loadPlants();
-      loadLocations();
-      loadDepartments();
-      loadEmployees();
-      loadItems();
-      loadUnits();
-      loadBOMs();
-      loadScheduleOrders();
-      loadReasonCodes();
-      loadScrapIds();
+    if (!orgId || !branch) return;
+    (async () => {
+      try {
+        const res = await locationMasterAPI.getLocationMasterByOrgId(
+          orgId,
+          branch,
+        );
+        setLocationOptions(
+          (res || []).map((l) => ({
+            value: l.id,
+            label: l.locationName || l.locationId || l.id,
+          })),
+        );
+      } catch (err) {
+        console.error("Failed to load locations:", err);
+      }
+    })();
+  }, [orgId, branch]);
+
+  /* Departments */
+  useEffect(() => {
+    if (!orgId) return;
+    (async () => {
+      try {
+        const res = await departmentAPI.getAllDepartments(orgId);
+        const list = res?.paramObjectsMap?.departmentVO || [];
+        setDepartmentOptions(
+          list.map((d) => ({
+            value: d.id,
+            label: d.departmentName || d.id,
+          })),
+        );
+      } catch (err) {
+        console.error("Failed to load departments:", err);
+      }
+    })();
+  }, [orgId]);
+
+  /* Employees */
+  useEffect(() => {
+    if (!orgId) return;
+    (async () => {
+      try {
+        const res = await employeeAPI.getEmployeeByOrgId(orgId);
+        setEmployeeOptions(
+          (res || []).map((e) => ({
+            value: e.id,
+            label: e.employeeCode || e.employeeName || e.id,
+          })),
+        );
+      } catch (err) {
+        console.error("Failed to load employees:", err);
+      }
+    })();
+  }, [orgId]);
+
+  /* Units */
+  useEffect(() => {
+    if (!orgId || !branch) return;
+    (async () => {
+      try {
+        const res = await unitMasterAPI.getUnits(branch, orgId);
+        setUnitOptions(
+          (res || []).map((u) => ({
+            value: u.id,
+            label: u.unitId || u.unitName || u.id,
+          })),
+        );
+      } catch (err) {
+        console.error("Failed to load units:", err);
+      }
+    })();
+  }, [orgId, branch]);
+
+  /* Belongs To + Scrap ID — list of values */
+  useEffect(() => {
+    if (!orgId) return;
+    (async () => {
+      try {
+        const list = await listOfValuesAPI.getListValuesGroup(
+          BELONGS_TO_LIST_NAME,
+          orgId,
+        );
+        setBelongsToOptions(
+          (list || []).map((item) => ({
+            value: item.valuesDescription ?? item.value ?? item.id ?? "",
+            label: item.valuesDescription ?? item.value ?? item.id ?? "",
+          })),
+        );
+      } catch (err) {
+        console.error("Failed to load Belongs To list:", err);
+      }
+    })();
+
+    (async () => {
+      try {
+        const list = await listOfValuesAPI.getListValuesGroup(
+          SCRAP_ID_LIST_NAME,
+          orgId,
+        );
+        setScrapIdOptions(
+          (list || []).map((item) => ({
+            value: item.id ?? item.value ?? "",
+            label: item.valuesDescription ?? item.value ?? item.id ?? "",
+          })),
+        );
+      } catch (err) {
+        console.error("Failed to load Scrap ID list:", err);
+      }
+    })();
+  }, [orgId]);
+
+  /* FG Part No */
+  useEffect(() => {
+    if (!orgId || !branch) return;
+    (async () => {
+      try {
+        const list = await scrapNoteAPI.getFgPartNoOptions({
+          branch,
+          orgId,
+        });
+        const map = {};
+        setFgPartOptions(
+          (list || []).map((it) => {
+            const value = it.itemId;
+            map[value] = it;
+            return { value, label: it.itemCode || String(it.itemId) };
+          }),
+        );
+        fgPartMapRef.current = map;
+      } catch (err) {
+        console.error("Failed to load FG Part No:", err);
+      }
+    })();
+  }, [orgId, branch]);
+
+  /* Schedule Order No */
+  useEffect(() => {
+    if (!orgId || !branch) return;
+    (async () => {
+      try {
+        const list = await scrapNoteAPI.getScheduleOrderOptions({
+          branch,
+          orgId,
+        });
+        setScheduleOrderOptions(
+          (list || []).map((o) => ({
+            value: o.docId,
+            label: o.docId,
+          })),
+        );
+      } catch (err) {
+        console.error("Failed to load schedule orders:", err);
+      }
+    })();
+  }, [orgId, branch]);
+
+  /* BOM Id */
+  useEffect(() => {
+    if (!orgId || !branch) return;
+    (async () => {
+      try {
+        const list = await scrapNoteAPI.getBomOptions({ branch, orgId });
+        const map = {};
+        setBomOptions(
+          (list || []).map((b) => {
+            const value = b.bomId;
+            map[value] = b;
+            return { value, label: b.docId || String(b.bomId) };
+          }),
+        );
+        bomMapRef.current = map;
+      } catch (err) {
+        console.error("Failed to load BOMs:", err);
+      }
+    })();
+  }, [orgId, branch]);
+
+  /* Scrap Part No */
+  useEffect(() => {
+    if (!orgId || !branch) return;
+    (async () => {
+      try {
+        const list = await scrapNoteAPI.getScrapPartNoOptions({
+          branch,
+          orgId,
+        });
+        const map = {};
+        setScrapPartOptions(
+          (list || []).map((it) => {
+            const value = it.itemId;
+            map[value] = it;
+            return { value, label: it.itemCode || String(it.itemId) };
+          }),
+        );
+        scrapPartMapRef.current = map;
+      } catch (err) {
+        console.error("Failed to load scrap parts:", err);
+      }
+    })();
+  }, [orgId, branch]);
+
+  /* Item Code — reload when BOM Id changes */
+  useEffect(() => {
+    const bomId = header.bomId;
+    if (!bomId) {
+      setItemOptions([]);
+      itemMapRef.current = {};
+      return;
     }
-  }, [
-    orgId,
-    loadPlants,
-    loadLocations,
-    loadDepartments,
-    loadEmployees,
-    loadItems,
-    loadUnits,
-    loadBOMs,
-    loadScheduleOrders,
-    loadReasonCodes,
-    loadScrapIds,
-  ]);
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await scrapNoteAPI.getItemsByBom({
+          bom: bomId,
+          branch,
+          orgId,
+        });
+        const map = {};
+        const opts = (list || []).map((it) => {
+          const value = it.itemId;
+          map[value] = it;
+          return {
+            value,
+            label: `${it.itemCode} — ${it.itemDescription}`,
+          };
+        });
+        if (!cancelled) {
+          itemMapRef.current = map;
+          setItemOptions(opts);
+        }
+      } catch (err) {
+        console.error("Failed to load items by BOM:", err);
+        if (!cancelled) {
+          setItemOptions([]);
+          itemMapRef.current = {};
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [header.bomId, branch, orgId]);
+
+  /* ---------------- Doc Id auto-generation (Add mode) ---------------- */
+  useEffect(() => {
+    if (isEditMode || docIdLoadedRef.current) return;
+    if (!orgId) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const financialYear = String(new Date().getFullYear());
+        const docId = await scrapNoteAPI.getDocId({ financialYear, orgId });
+        if (!cancelled && docId) {
+          setHeader((prev) => ({ ...prev, scrapNoteNo: docId }));
+          docIdLoadedRef.current = true;
+        }
+      } catch (err) {
+        console.error("Failed to generate Scrap Note Doc Id:", err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isEditMode, orgId]);
+
+  /* ---------------- Re-sync on edit data ---------------- */
+  useEffect(() => {
+    if (!data) return;
+
+    setHeader({
+      plantId: data.branch?.id ?? data.plantId ?? "",
+      belongsTo: data.belongsTo ?? "",
+      department: data.department?.id ?? data.department ?? "",
+      fromLocation: data.fromLocation?.id ?? data.fromLocation ?? "",
+      toLocation: data.toLocation?.id ?? data.toLocation ?? "",
+      fgPartNo: data.fgPart?.id ?? data.fgPartNo ?? "",
+      scheduleOrderNo: data.schOrderNo ?? data.scheduleOrderNo ?? "",
+      bomId: data.bom?.id ?? data.bomId ?? "",
+      scrapPartNo: data.scrapPart?.id ?? data.scrapPartNo ?? "",
+      scrapNoteNo: data.docId ?? data.scrapNoteNo ?? "",
+      scrapNoteDate: data.docDate
+        ? fmtDate(data.docDate)
+        : data.scrapNoteDate
+          ? fmtDate(data.scrapNoteDate)
+          : fmtDate(dayjs()),
+      time: data.time || dayjs().format("HH:mm:ss"),
+    });
+
+    const rawScrap =
+      data.scrapNoteDetails ||
+      data.scrapNoteDetailsDTO ||
+      data.scrapDetails ||
+      data.details ||
+      [];
+    setScrapDetailRows(
+      rawScrap.length
+        ? rawScrap.map((item) => ({
+          item: item.item?.id ?? item.item ?? "",
+          // ✅ Same fix here
+          itemDescription:
+            item.itemDescription ?? item.item?.itemDescription ?? "",
+          primaryUnit: item.primaryUnit?.id ?? item.primaryUnit ?? "",
+          stock: item.stock ?? "",
+          quantity: item.quantity ?? "",
+          weight: item.weight ?? "",
+          rate: item.rate ?? "",
+          value:
+            item.value ??
+            (toNum(item.quantity) * toNum(item.rate)).toFixed(2),
+        }))
+        : [emptyScrapDetailRow()],
+    );
+
+    const rawReason =
+      data.scrapNoteReasonDetails ||
+      data.scrapNoteReasonDetailsDTO ||
+      data.reasonDetails ||
+      [];
+    setReasonDetailRows(
+      rawReason.length
+        ? rawReason.map((item) => ({
+          reasonCode: item.reasonCode ?? "",
+          reasonDescription: item.reasonDescription ?? "",
+          rejQty: item.rejQty ?? item.rejectedQty ?? 0,
+        }))
+        : [emptyReasonDetailRow()],
+    );
+
+    setSummary({
+      preparedBy: data.preparedBy?.id ?? data.preparedBy ?? "",
+      authorisedBy: data.authorisedBy?.id ?? data.authorisedBy ?? "",
+      scrapId: data.scrapId?.id ?? data.scrapId ?? "",
+      pmApproval: data.pmApproval ?? "",
+      qualityApproval: data.qualityApproval ?? "",
+      storeApproval: data.storeApproval ?? "",
+      narration: data.narration ?? "",
+    });
+
+    if (data.docId) docIdLoadedRef.current = true;
+  }, [data]);
 
   /* ---------------------------------------------------------------------------- */
   /* Handlers                                                                     */
@@ -680,16 +856,14 @@ const ScrapNoteForm = ({ data, onBack }) => {
         if (i !== idx) return row;
         const next = { ...row, [key]: value };
 
-        if (key === "itemCode") {
-          const item = itemOptions.find(
-            (it) => String(it.value) === String(value),
-          );
-          next.itemDescription = item ? item.itemDescription || "" : "";
+        if (key === "item") {
+          const item = itemMapRef.current[value];
+          next.itemDescription = item?.itemDescription || "";
         }
 
-        if (key === "quantity" || key === "rate") {
-          next.value = toNum(next.quantity) * toNum(next.rate);
-        }
+        const q = key === "quantity" ? toNum(value) : toNum(next.quantity);
+        const r = key === "rate" ? toNum(value) : toNum(next.rate);
+        next.value = q && r ? (q * r).toFixed(2) : "";
 
         return next;
       }),
@@ -703,16 +877,7 @@ const ScrapNoteForm = ({ data, onBack }) => {
     setReasonDetailRows((prev) =>
       prev.map((row, i) => {
         if (i !== idx) return row;
-        const next = { ...row, [key]: value };
-
-        if (key === "reasonCode") {
-          const reason = reasonCodeOptions.find(
-            (r) => String(r.value) === String(value),
-          );
-          next.reasonDescription = reason ? reason.description || "" : "";
-        }
-
-        return next;
+        return { ...row, [key]: value };
       }),
     );
 
@@ -743,9 +908,6 @@ const ScrapNoteForm = ({ data, onBack }) => {
     0,
   );
 
-  const handleSummaryToggle = (name) =>
-    setSummary((prev) => ({ ...prev, [name]: !prev[name] }));
-
   const handleSummaryChange = (e) => {
     const { name, value } = e.target;
     if (fieldErrors[name]) setFieldErrors((prev) => ({ ...prev, [name]: "" }));
@@ -760,8 +922,7 @@ const ScrapNoteForm = ({ data, onBack }) => {
 
     if (!header.plantId) errors.plantId = "Plant ID is required";
     if (!header.department) errors.department = "Department is required";
-    if (!header.fromLocation)
-      errors.fromLocation = "From Location is required";
+    if (!header.fromLocation) errors.fromLocation = "From Location is required";
     if (!header.toLocation) errors.toLocation = "To Location is required";
     if (!header.bomId) errors.bomId = "BOM ID is required";
     if (!header.scrapNoteNo?.trim())
@@ -770,21 +931,15 @@ const ScrapNoteForm = ({ data, onBack }) => {
       errors.scrapNoteDate = "Scrap Note Date is required";
 
     const hasValidScrapRow = scrapDetailRows.some(
-      (r) => r.itemCode && r.primaryUnit && toNum(r.quantity) > 0 && toNum(r.rate) > 0,
+      (r) =>
+        r.item &&
+        r.primaryUnit &&
+        toNum(r.quantity) > 0 &&
+        toNum(r.rate) > 0,
     );
     if (!hasValidScrapRow)
       errors.scrapDetails =
-        "Add at least one Scrap Details row with Item Code, Primary Unit, Quantity and Rate";
-    scrapDetailRows.forEach((r, i) => {
-      if (!r.itemCode)
-        errors[`detail.${i}.itemCode`] = "Item Code is required";
-      if (!r.primaryUnit)
-        errors[`detail.${i}.primaryUnit`] = "Primary Unit is required";
-      if (r.quantity === "" || r.quantity === null || r.quantity === undefined)
-        errors[`detail.${i}.quantity`] = "Quantity is required";
-      if (r.rate === "" || r.rate === null || r.rate === undefined)
-        errors[`detail.${i}.rate`] = "Rate is required";
-    });
+        "Add at least one Scrap Details row with Item, Primary Unit, Quantity and Rate";
 
     const hasValidReasonRow = reasonDetailRows.some(
       (r) => r.reasonCode && r.reasonDescription?.trim(),
@@ -792,13 +947,6 @@ const ScrapNoteForm = ({ data, onBack }) => {
     if (!hasValidReasonRow)
       errors.reasonDetails =
         "Add at least one Reason Detail row with Reason Code and Reason Description";
-    reasonDetailRows.forEach((r, i) => {
-      if (!r.reasonCode)
-        errors[`reason.${i}.reasonCode`] = "Reason Code is required";
-      if (!r.reasonDescription?.trim())
-        errors[`reason.${i}.reasonDescription`] =
-          "Reason Description is required";
-    });
 
     if (!summary.preparedBy) errors.preparedBy = "Prepared By is required";
     if (!summary.authorisedBy)
@@ -815,60 +963,100 @@ const ScrapNoteForm = ({ data, onBack }) => {
     setIsSubmitting(true);
 
     const isUpdate = Boolean(data?.id);
+    const financialYear = String(new Date().getFullYear());
 
     const payload = {
-      ...(isUpdate ? { id: data.id } : {}),
+      ...(isUpdate ? { id: Number(data.id) } : {}),
+
+      active: true,
+      cancel: false,
+      cancelRemarks: "",
       orgId,
       branch,
-      ...header,
-      totalScrapValue,
-      scrapDetails: scrapDetailRows.filter((r) => r.itemCode),
-      reasonDetails: reasonDetailRows.filter((r) => r.reasonCode),
-      summary: {
-        preparedBy: summary.preparedBy,
-        authorisedBy: summary.authorisedBy,
-        scrapId: summary.scrapId,
-        pmApproval: summary.pmApproval,
-        qualityApproval: summary.qualityApproval,
-        storeApproval: summary.storeApproval,
-        narration: summary.narration || "",
-      },
-      createdBy: isUpdate ? data?.createdBy || usersId : usersId,
-      ...(isUpdate ? { updatedBy: usersId } : {}),
+      financialYear,
+      docDate: header.scrapNoteDate || fmtDate(dayjs()),
+
+      createdBy: isUpdate ? data?.createdBy ?? usersId : usersId,
+
+      belongsTo: header.belongsTo || "",
+      department: Number(header.department) || 0,
+      fromLocation: Number(header.fromLocation) || 0,
+      toLocation: Number(header.toLocation) || 0,
+      fgPart: Number(header.fgPartNo) || 0,
+      schOrderNo: header.scheduleOrderNo || "",
+      bom: Number(header.bomId) || 0,
+      scrapPart: Number(header.scrapPartNo) || 0,
+
+      scrapId: Number(summary.scrapId) || 0,
+      preparedBy: Number(summary.preparedBy) || 0,
+      authorisedBy: Number(summary.authorisedBy) || 0,
+
+      // ✅ Approvals sent as Yes/No strings
+      pmApproval: summary.pmApproval || "",
+      qualityApproval: summary.qualityApproval || "",
+      storeApproval: summary.storeApproval || "",
+
+      narration: summary.narration || "",
+
+      scrapNoteDetailsDTO: (scrapDetailRows || [])
+        .filter((r) => r.item)
+        .map((r) => ({
+          item: Number(r.item) || 0,
+          primaryUnit: Number(r.primaryUnit) || 0,
+          stock: toNum(r.stock),
+          quantity: toNum(r.quantity),
+          weight: toNum(r.weight),
+          rate: toNum(r.rate),
+        })),
+
+      scrapNoteReasonDetailsDTO: (reasonDetailRows || [])
+        .filter((r) => r.reasonCode)
+        .map((r) => ({
+          reasonCode: r.reasonCode || "",
+          reasonDescription: r.reasonDescription || "",
+          rejQty: toNum(r.rejQty),
+        })),
     };
+
+    console.log("📤 Saving Scrap Note:", payload);
 
     try {
       const response = await scrapNoteAPI.createUpdate(payload);
 
-      if (response?.status) {
+      const isSuccess =
+        response?.status === true ||
+        response?.statusFlag === "Ok" ||
+        response?.status === 200 ||
+        response?.statusCode === 200;
+
+      if (isSuccess) {
         addToast(
           response?.paramObjectsMap?.message ||
-            (isUpdate
-              ? "Scrap Note updated successfully!"
-              : "Scrap Note created successfully!"),
+          (isUpdate
+            ? "Scrap Note updated successfully!"
+            : "Scrap Note created successfully!"),
+          "success",
         );
+        if (onSave) onSave(payload);
         onBack?.();
       } else {
         addToast(
           response?.errors?.[0]?.shortMessage ||
-            response?.errors?.[0]?.longMessage ||
-            response?.message ||
-            response?.paramObjectsMap?.message ||
-            "Failed to save Scrap Note.",
+          response?.errors?.[0]?.longMessage ||
+          response?.message ||
+          response?.paramObjectsMap?.message ||
+          "Failed to save Scrap Note.",
+          "error",
         );
       }
     } catch (err) {
       console.error("Save Scrap Note Error:", err);
-      if (err.response?.data) {
-        addToast(
-          err.response.data.message ||
-            err.response.data.statusMessage ||
-            err.response.data.error ||
-            JSON.stringify(err.response.data),
-        );
-      } else {
-        addToast("Something went wrong.");
-      }
+      const errorMessage =
+        err.response?.data?.message ||
+        err.response?.data?.statusMessage ||
+        err.response?.data?.error ||
+        "Something went wrong.";
+      addToast(errorMessage, "error");
     } finally {
       setIsSubmitting(false);
     }
@@ -916,7 +1104,7 @@ const ScrapNoteForm = ({ data, onBack }) => {
               value={header.belongsTo}
               onChange={handleHeaderChange}
               error={fieldErrors.belongsTo}
-              options={departmentOptions}
+              options={belongsToOptions}
             />
             <Field
               type="select"
@@ -955,7 +1143,7 @@ const ScrapNoteForm = ({ data, onBack }) => {
               value={header.fgPartNo}
               onChange={handleHeaderChange}
               error={fieldErrors.fgPartNo}
-              options={itemOptions}
+              options={fgPartOptions}
             />
             <Field
               type="select"
@@ -983,7 +1171,7 @@ const ScrapNoteForm = ({ data, onBack }) => {
               value={header.scrapPartNo}
               onChange={handleHeaderChange}
               error={fieldErrors.scrapPartNo}
-              options={itemOptions}
+              options={scrapPartOptions}
             />
             <Field
               label="Scrap Note No"
@@ -991,6 +1179,7 @@ const ScrapNoteForm = ({ data, onBack }) => {
               value={header.scrapNoteNo}
               onChange={handleHeaderChange}
               error={fieldErrors.scrapNoteNo}
+              disabled
               required
             />
             <Field
@@ -1000,6 +1189,7 @@ const ScrapNoteForm = ({ data, onBack }) => {
               value={header.scrapNoteDate}
               onChange={handleHeaderChange}
               error={fieldErrors.scrapNoteDate}
+              disabled
               required
             />
             <Field
@@ -1014,7 +1204,6 @@ const ScrapNoteForm = ({ data, onBack }) => {
 
         {/* ---------------- Child Tabs ---------------- */}
         <section className="mt-0 bg-white dark:bg-gray-800">
-          {/* Tabs */}
           <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 mb-0">
             <div className="flex flex-wrap">
               {CHILD_TABS.map((tab) => (
@@ -1022,11 +1211,10 @@ const ScrapNoteForm = ({ data, onBack }) => {
                   key={tab.key}
                   type="button"
                   onClick={() => setActiveChildTab(tab.key)}
-                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap transition-colors ${
-                    activeChildTab === tab.key
-                      ? "bg-blue-600 text-white"
-                      : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                  }`}
+                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap transition-colors ${activeChildTab === tab.key
+                    ? "bg-blue-600 text-white"
+                    : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                    }`}
                 >
                   {tab.label}
                 </button>
@@ -1044,13 +1232,12 @@ const ScrapNoteForm = ({ data, onBack }) => {
             )}
           </div>
 
-          {/* Tab 1: Scrap Details */}
           {activeChildTab === "scrapDetails" && (
             <div className="pt-3">
               <DynamicTable
                 columns={[
                   {
-                    key: "itemCode",
+                    key: "item",
                     label: "Item Code",
                     type: "select",
                     options: itemOptions,
@@ -1071,7 +1258,12 @@ const ScrapNoteForm = ({ data, onBack }) => {
                   { key: "quantity", label: "Quantity", type: "number" },
                   { key: "weight", label: "Weight", type: "number" },
                   { key: "rate", label: "Rate", type: "number" },
-                  { key: "value", label: "Value", type: "number", readOnly: true },
+                  {
+                    key: "value",
+                    label: "Value",
+                    type: "number",
+                    readOnly: true,
+                  },
                 ]}
                 rows={scrapDetailRows}
                 onCellChange={handleScrapDetailCellChange}
@@ -1085,7 +1277,6 @@ const ScrapNoteForm = ({ data, onBack }) => {
             </div>
           )}
 
-          {/* Tab 2: Reason Detail */}
           {activeChildTab === "reasonDetails" && (
             <div className="pt-3">
               <DynamicTable
@@ -1093,19 +1284,14 @@ const ScrapNoteForm = ({ data, onBack }) => {
                   {
                     key: "reasonCode",
                     label: "Reason Code",
-                    type: "select",
-                    options: reasonCodeOptions,
+                    type: "text",
                   },
                   {
                     key: "reasonDescription",
                     label: "Reason Description",
                     type: "textarea",
                   },
-                  {
-                    key: "rejectedQty",
-                    label: "Rejected Qty",
-                    type: "number",
-                  },
+                  { key: "rejQty", label: "Rejected Qty", type: "number" },
                 ]}
                 rows={reasonDetailRows}
                 onCellChange={handleReasonDetailCellChange}
@@ -1119,7 +1305,6 @@ const ScrapNoteForm = ({ data, onBack }) => {
             </div>
           )}
 
-          {/* Tab 3: Scrap Summary */}
           {activeChildTab === "summary" && (
             <div className="pt-3 pb-1">
               <div className={fieldGrid}>
@@ -1158,24 +1343,36 @@ const ScrapNoteForm = ({ data, onBack }) => {
                   label="Total Scrap Value"
                   name="totalScrapValue"
                   value={totalScrapValue}
-                  onChange={() => {}}
+                  onChange={() => { }}
                   disabled
                 />
-                <ToggleField
+
+                {/* ✅ Approvals converted to Yes/No selects */}
+                <Field
+                  type="select"
                   label="PM Approval"
-                  checked={summary.pmApproval}
-                  onChange={() => handleSummaryToggle("pmApproval")}
+                  name="pmApproval"
+                  value={summary.pmApproval}
+                  onChange={handleSummaryChange}
+                  options={YES_NO_OPTIONS}
                 />
-                <ToggleField
+                <Field
+                  type="select"
                   label="Quality Approval"
-                  checked={summary.qualityApproval}
-                  onChange={() => handleSummaryToggle("qualityApproval")}
+                  name="qualityApproval"
+                  value={summary.qualityApproval}
+                  onChange={handleSummaryChange}
+                  options={YES_NO_OPTIONS}
                 />
-                <ToggleField
+                <Field
+                  type="select"
                   label="Store Approval"
-                  checked={summary.storeApproval}
-                  onChange={() => handleSummaryToggle("storeApproval")}
+                  name="storeApproval"
+                  value={summary.storeApproval}
+                  onChange={handleSummaryChange}
+                  options={YES_NO_OPTIONS}
                 />
+
                 <Field
                   type="textarea"
                   label="Narration"

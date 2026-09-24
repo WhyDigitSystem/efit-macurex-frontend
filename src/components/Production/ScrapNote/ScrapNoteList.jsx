@@ -7,13 +7,17 @@ const ScrapNoteList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const ORG_ID = localStorage.getItem("orgId");
-  const BRANCH_ID = localStorage.getItem("branchId");
+  const ORG_ID = Number(localStorage.getItem("orgId")) || 0;
+  const BRANCH_ID = Number(localStorage.getItem("branchId")) || 0;
 
   const loadRecords = useCallback(async () => {
+    if (!ORG_ID || !BRANCH_ID) return;
     try {
       setLoading(true);
-      const data = await scrapNoteAPI.getByOrgId(ORG_ID, BRANCH_ID);
+      const data = await scrapNoteAPI.getByOrgIdAndBranch({
+        branch: BRANCH_ID,
+        orgId: ORG_ID,
+      });
       data.sort((a, b) => (b.id || 0) - (a.id || 0));
       setRecords(data);
     } catch (error) {
@@ -29,92 +33,119 @@ const ScrapNoteList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     loadRecords();
   }, [loadRecords, refreshTrigger]);
 
+  /* ---------------- Accessors ---------------- */
+
+  const getBranchLabel = (row) =>
+    row?.branch?.branchName ||
+    row?.branch?.branchCode ||
+    row?.branch?.id ||
+    "";
+
+  const getDepartmentLabel = (row) =>
+    row?.department?.departmentName ||
+    row?.department?.departmentCode ||
+    row?.department?.id ||
+    "";
+
+  const getFgPartLabel = (row) =>
+    row?.fgPart?.itemCode || row?.fgPart?.id || "";
+
+  const getBomLabel = (row) => row?.bom?.docId || row?.bom?.id || "";
+
+  const getScrapPartLabel = (row) =>
+    row?.scrapPart?.itemCode || row?.scrapPart?.id || "";
+
+  const getFromLocationLabel = (row) =>
+    row?.fromLocation?.locationName || row?.fromLocation?.id || "";
+
+  const getToLocationLabel = (row) =>
+    row?.toLocation?.locationName || row?.toLocation?.id || "";
+
+  /* ---------------- Columns ---------------- */
+
   const columns = [
     {
-      key: "scrapNoteNo",
+      key: "docId",
       label: "Scrap Note No",
-      accessor: (row) => row.scrapNoteNo || row.docNo || "",
+      accessor: (row) => row?.docId || "",
       type: "text",
       noWrap: true,
     },
     {
-      key: "scrapNoteDate",
+      key: "docDate",
       label: "Scrap Note Date",
-      accessor: (row) => row.scrapNoteDate || row.docDate || "",
+      accessor: (row) => row?.docDate || "",
       type: "date",
       noWrap: true,
     },
     {
-      key: "plantId",
+      key: "branch",
       label: "Branch",
-      accessor: (row) =>
-        typeof row.plantId === "object"
-          ? row.plantId.branchName || row.plantId.plantName || row.plantId.id
-          : row.plantName || row.plantId,
+      accessor: (row) => getBranchLabel(row),
       type: "text",
     },
     {
       key: "department",
       label: "Department",
-      accessor: (row) =>
-        typeof row.department === "object"
-          ? row.department.departmentName || row.department.id
-          : row.departmentName || row.department || "",
+      accessor: (row) => getDepartmentLabel(row),
       type: "text",
     },
     {
-      key: "fgPartNo",
+      key: "fgPart",
       label: "FG Part No",
-      accessor: (row) =>
-        typeof row.fgPartNo === "object"
-          ? row.fgPartNo.itemCode || row.fgPartNo.id
-          : row.fgPartNo || "",
+      accessor: (row) => getFgPartLabel(row),
       type: "text",
     },
     {
-      key: "scheduleOrderNo",
+      key: "schOrderNo",
       label: "Schedule Order No",
-      accessor: (row) =>
-        typeof row.scheduleOrderNo === "object"
-          ? row.scheduleOrderNo.docId || row.scheduleOrderNo.id
-          : row.scheduleOrderNo || "",
+      accessor: (row) => row?.schOrderNo || "",
       type: "text",
     },
     {
-      key: "bomId",
+      key: "bom",
       label: "BOM ID",
-      accessor: (row) =>
-        typeof row.bomId === "object"
-          ? row.bomId.bomName || row.bomId.bomId || row.bomId.id
-          : row.bomName || row.bomId || "",
+      accessor: (row) => getBomLabel(row),
       type: "text",
     },
     {
-      key: "scrapPartNo",
+      key: "scrapPart",
       label: "Scrap Part No",
-      accessor: (row) =>
-        typeof row.scrapPartNo === "object"
-          ? row.scrapPartNo.itemCode || row.scrapPartNo.id
-          : row.scrapPartNo || "",
+      accessor: (row) => getScrapPartLabel(row),
       type: "text",
     },
     {
       key: "fromLocation",
       label: "From Location",
-      accessor: (row) =>
-        typeof row.fromLocation === "object"
-          ? row.fromLocation.locationName || row.fromLocation.id
-          : row.fromLocation || "",
+      accessor: (row) => getFromLocationLabel(row),
       type: "text",
     },
     {
       key: "toLocation",
       label: "To Location",
-      accessor: (row) =>
-        typeof row.toLocation === "object"
-          ? row.toLocation.locationName || row.toLocation.id
-          : row.toLocation || "",
+      accessor: (row) => getToLocationLabel(row),
       type: "text",
+    },
+    {
+      key: "active",
+      label: "Status",
+      accessor: (row) =>
+        row?.active === true || row?.active === "Active"
+          ? "Active"
+          : "Inactive",
+      type: "status",
+      statusVariants: {
+        Active: {
+          label: "Active",
+          className:
+            "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+        },
+        Inactive: {
+          label: "Inactive",
+          className:
+            "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+        },
+      },
     },
     {
       key: "actions",
@@ -126,16 +157,33 @@ const ScrapNoteList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   ];
 
   const searchFields = [
-    "scrapNoteNo",
-    "scrapNoteDate",
-    "plantId",
-    "department",
-    "fgPartNo",
-    "scheduleOrderNo",
-    "bomId",
-    "scrapPartNo",
-    "fromLocation",
-    "toLocation",
+    "docId",
+    "docDate",
+    "branch.branchName",
+    "department.departmentName",
+    "fgPart.itemCode",
+    "schOrderNo",
+    "bom.docId",
+    "scrapPart.itemCode",
+    "narration",
+  ];
+
+  const filterOptions = [
+    { value: "all", label: "All", field: null },
+    {
+      value: "active",
+      label: "Active",
+      field: "active",
+      filterValue: "active",
+      activeValue: "Active",
+    },
+    {
+      value: "inactive",
+      label: "Inactive",
+      field: "active",
+      filterValue: "inactive",
+      activeValue: "Active",
+    },
   ];
 
   return (
@@ -145,6 +193,8 @@ const ScrapNoteList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
       loading={loading}
       columns={columns}
       searchFields={searchFields}
+      filterOptions={filterOptions}
+      defaultFilter="all"
       onBack={onBack}
       onAddNew={onAddNew}
       onEdit={onEdit}

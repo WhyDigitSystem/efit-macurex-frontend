@@ -5,9 +5,56 @@ import ScheduleOrderShortCloseForm from "./ScheduleOrderShortCloseForm";
 import productionScheduleOrderShortCloseAPI from "../../../api/Production/productionScheduleOrderShortCloseAPI";
 import { toast } from "../../../utils/toast";
 
+/* ------------------------------------------------------------------ */
+/* Map the flat backend response into the form's expected shape       */
+
+const fmtDate = (value) =>
+  value ? new Date(value).toISOString().slice(0, 10) : "";
+
+const mapApiToFormData = (src) => {
+  if (!src) return null;
+
+  return {
+    id: src.id,
+    active: src.active === true || src.active === "Active",
+
+    plantId: src.branch?.id ?? "",
+    docId: src.docId ?? "",
+    date: src.docDate ?? "",
+    item: src.item
+      ? {
+        id: src.item.id ?? "",
+        itemCode: src.item.itemCode ?? "",
+        itemDescription: src.item.itemDescription ?? "",
+      }
+      : null,
+    unit: src.unit
+      ? {
+        id: src.unit.id ?? "",
+        unitId: src.unit.unitId ?? "",
+      }
+      : null,
+
+    narration: src.narration ?? "",
+
+    productionOrderDetails: (src.productionOrderDetails || []).map((d) => ({
+      id: d.id ?? "",
+      scheduleOrderNo: d.scheduleOrderNo ?? "",
+      scheduleDate: fmtDate(d.scheduleDate),
+      scheduleOrderQty: d.scheduleOrderQty ?? "",
+      balanceQty: d.balanceQty ?? "",
+      newReqQty: d.newReqQty ?? "",
+      shortClosedQty: d.shortClosedQty ?? "",
+      reason: d.reason ?? "",
+    })),
+  };
+};
+
+/* ------------------------------------------------------------------ */
+
 const ScheduleOrderShortCloseMaster = () => {
   const navigate = useNavigate();
-  const [view, setView] = useState("list"); // "list" | "form"
+  const [view, setView] = useState("list");
   const [editData, setEditData] = useState(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
@@ -16,12 +63,16 @@ const ScheduleOrderShortCloseMaster = () => {
     setView("form");
   };
 
-  // Pencil icon click -> fetch the record by id, then open the form
   const handleEdit = useCallback(async (row) => {
+    if (!row?.id) {
+      toast.error("Invalid record");
+      return;
+    }
+
     try {
       const fresh =
-        (await productionScheduleOrderShortCloseAPI.getById(row.id)) || row;
-      setEditData(fresh);
+        await productionScheduleOrderShortCloseAPI.getById(row.id);
+      setEditData(mapApiToFormData(fresh));
       setView("form");
     } catch (error) {
       console.error("Failed to fetch Short Close for edit:", error);
@@ -32,17 +83,17 @@ const ScheduleOrderShortCloseMaster = () => {
   const handleBack = () => {
     setEditData(null);
     setView("list");
-    // bump refreshTrigger so the list re-fetches after add/update
     setRefreshTrigger((prev) => prev + 1);
   };
 
-  // List screen back button -> return to the Production module home.
   const handleNavigateHome = () => {
     navigate("/production");
   };
 
   if (view === "form") {
-    return <ScheduleOrderShortCloseForm data={editData} onBack={handleBack} />;
+    return (
+      <ScheduleOrderShortCloseForm data={editData} onBack={handleBack} />
+    );
   }
 
   return (

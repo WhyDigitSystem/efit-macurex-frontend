@@ -1,12 +1,10 @@
 import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import dayjs from "dayjs";
 import { useToast } from "../../Toast/ToastContext";
 import productionScheduleOrderShortCloseAPI from "../../../api/Production/productionScheduleOrderShortCloseAPI";
 import branchAPI from "../../../api/branchAPI";
 import locationMasterAPI from "../../../api/locationMasterAPI";
-import itemAPI from "../../../api/itemAPI";
-import productionScheduleOrderAPI from "../../../api/Production/productionScheduleOrderAPI";
 
 /* ---------------------------------------------------------------------------- */
 /* Shared design tokens                                                        */
@@ -57,28 +55,36 @@ const Field = ({
   disabled = false,
 }) => {
   if (type === "select") {
+    const safeValue = value === null || value === undefined ? "" : value;
+    const safeOptions = (options || []).map((opt) =>
+      typeof opt === "object" ? opt : { value: opt, label: opt },
+    );
+    const inOptions = safeOptions.some(
+      (o) => String(o.value) === String(safeValue),
+    );
+    const showGhost = safeValue !== "" && !inOptions;
+
     return (
       <div className={`w-full ${className}`}>
         <label className={labelClasses}>
           {label}
           {required && <span className="text-red-500"> *</span>}
         </label>
-
         <select
           name={name}
-          value={value}
+          value={safeValue}
           onChange={onChange}
           disabled={disabled}
           className={`${controlClasses} ${error ? controlErrClasses : ""}`}
         >
           <option value="">-- Select --</option>
-          {(options || []).map((opt) => (
-            <option key={opt.value ?? opt} value={opt.value ?? opt}>
-              {opt.label ?? opt}
+          {showGhost && <option value={safeValue}>{String(safeValue)}</option>}
+          {safeOptions.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
             </option>
           ))}
         </select>
-
         {error && (
           <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
             {error}
@@ -95,7 +101,6 @@ const Field = ({
           {label}
           {required && <span className="text-red-500"> *</span>}
         </label>
-
         <textarea
           name={name}
           value={value}
@@ -105,13 +110,11 @@ const Field = ({
             "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors resize-none pt-1 scrollbar-hide " +
             "bg-white dark:bg-gray-900 " +
             `${error ? controlErrClasses : "border-gray-300 dark:border-gray-600"} ` +
-            "text-gray-900 dark:text-gray-100 " +
-            "placeholder-gray-400 dark:placeholder-gray-500 " +
+            "text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 " +
             "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
             "dark:focus:ring-blue-400 dark:focus:border-blue-400"
           }
         />
-
         {error && (
           <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
             {error}
@@ -127,7 +130,6 @@ const Field = ({
         {label}
         {required && <span className="text-red-500"> *</span>}
       </label>
-
       <input
         type={type}
         name={name}
@@ -136,7 +138,6 @@ const Field = ({
         disabled={disabled}
         className={`${controlClasses} ${error ? controlErrClasses : ""}`}
       />
-
       {error && (
         <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
           {error}
@@ -161,7 +162,6 @@ const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
     >
       <X className="h-3 w-3" /> Cancel
     </button>
-
     <button
       onClick={onSave}
       disabled={isSubmitting}
@@ -187,13 +187,12 @@ const TableHead = ({ headers }) => (
       {headers.map((h, i) => (
         <th
           key={i}
-          className={`p-2 whitespace-nowrap ${
-            i === 0
+          className={`p-2 whitespace-nowrap ${i === 0
               ? "w-8 text-center"
               : i === headers.length - 1
                 ? "w-20 text-left"
                 : "text-left"
-          } dark:text-white`}
+            } dark:text-white`}
         >
           {h}
         </th>
@@ -211,11 +210,10 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
         type="button"
         onClick={onRemove}
         disabled={disabled}
-        className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-          disabled
+        className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
             ? "bg-gray-400 cursor-not-allowed"
             : "bg-red-600 hover:bg-red-700"
-        }`}
+          }`}
       >
         <Trash2 size={10} />
       </button>
@@ -223,8 +221,6 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
   </tr>
 );
 
-/* Generic dynamic table. Supports text / number / date / select / textarea /
-   readonly columns. Options may be plain strings or { value, label } objects. */
 const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
   <TableWrapper>
     <TableHead headers={["#", ...columns.map((c) => c.label), "Action"]} />
@@ -238,17 +234,34 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
         >
           {columns.map((col) => {
             if (col.type === "select") {
+              const safeValue =
+                row[col.key] === null || row[col.key] === undefined
+                  ? ""
+                  : row[col.key];
+              const opts = (col.options || []).map((opt) =>
+                typeof opt === "object" ? opt : { value: opt, label: opt },
+              );
+              const inOptions = opts.some(
+                (o) => String(o.value) === String(safeValue),
+              );
+              const showGhost = safeValue !== "" && !inOptions;
+
               return (
                 <td className="p-2 align-top" key={col.key}>
                   <select
-                    value={row[col.key]}
-                    onChange={(e) => onCellChange(idx, col.key, e.target.value)}
+                    value={safeValue}
+                    onChange={(e) =>
+                      onCellChange(idx, col.key, e.target.value)
+                    }
                     className={cellInputClasses}
                   >
                     <option value="">-- Select --</option>
-                    {(col.options || []).map((opt) => (
-                      <option key={opt.value ?? opt} value={opt.value ?? opt}>
-                        {opt.label ?? opt}
+                    {showGhost && (
+                      <option value={safeValue}>{String(safeValue)}</option>
+                    )}
+                    {opts.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
                       </option>
                     ))}
                   </select>
@@ -262,7 +275,9 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
                   <textarea
                     value={row[col.key]}
                     rows={1}
-                    onChange={(e) => onCellChange(idx, col.key, e.target.value)}
+                    onChange={(e) =>
+                      onCellChange(idx, col.key, e.target.value)
+                    }
                     className={cellInputClasses}
                   />
                 </td>
@@ -283,8 +298,12 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
                   }
                   value={row[col.key]}
                   readOnly={col.readOnly}
-                  onChange={(e) => onCellChange(idx, col.key, e.target.value)}
-                  className={col.readOnly ? cellReadOnlyClasses : cellInputClasses}
+                  onChange={(e) =>
+                    onCellChange(idx, col.key, e.target.value)
+                  }
+                  className={
+                    col.readOnly ? cellReadOnlyClasses : cellInputClasses
+                  }
                 />
               </td>
             );
@@ -299,31 +318,30 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
 /* Options                                                                      */
 
 const CHILD_TABS = [
-  { key: "productionOrderDetails", label: "Production Order Details", kind: "table" },
+  {
+    key: "productionOrderDetails",
+    label: "Production Order Details",
+    kind: "table",
+  },
   { key: "summary", label: "Summary", kind: "fields" },
 ];
 
 const fmtDate = (value) => (value ? dayjs(value).format("YYYY-MM-DD") : "");
-
 const toNum = (v) => Number(v) || 0;
-
-const generateShortCloseNo = () =>
-  `SC-${dayjs().format("YYYYMMDD")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
 
 const emptyDetailRow = () => ({
   scheduleOrderNo: "",
   scheduleDate: "",
   scheduleOrderQty: "",
   balanceQty: "",
-  newRequiredQty: "",
+  newReqQty: "",
   shortClosedQty: "",
   reason: "",
 });
 
 /* ---------------------------------------------------------------------------- */
-/* Production Schedule Order Short Close Form                                   */
 
-const ScheduleOrderShortCloseForm = ({ data, onBack }) => {
+const ScheduleOrderShortCloseForm = ({ data, onBack, onSave }) => {
   const { addToast } = useToast();
   const orgId = Number(localStorage.getItem("orgId")) || 0;
   const branch = Number(localStorage.getItem("branchId")) || 0;
@@ -337,6 +355,9 @@ const ScheduleOrderShortCloseForm = ({ data, onBack }) => {
   ).trim();
   const isMacurex = ["mecurex", "macurex"].includes(orgName.toLowerCase());
 
+  const isEditMode = Boolean(data?.id);
+  const docIdLoadedRef = useRef(false);
+
   const [activeChildTab, setActiveChildTab] = useState(
     "productionOrderDetails",
   );
@@ -344,35 +365,32 @@ const ScheduleOrderShortCloseForm = ({ data, onBack }) => {
   const [fieldErrors, setFieldErrors] = useState({});
 
   /* ---------- Header state ---------- */
-  const [header, setHeader] = useState(() => {
-    const base = {
-      plantId: data?.plantId?.id ?? data?.plantId ?? "",
-      shortCloseNo: data?.shortCloseNo || data?.docNo || "",
-      date: data?.date ? fmtDate(data.date) : fmtDate(dayjs()),
-      itemCode: data?.itemCode?.id ?? data?.itemCode ?? "",
-      itemDescription: data?.itemDescription || "",
-      unit: data?.unit?.id ?? (typeof data?.unit === "object" ? data?.unit?.unitId : data?.unit) ?? "",
-    };
-    if (!base.shortCloseNo) base.shortCloseNo = generateShortCloseNo();
-    return base;
-  });
+  const [header, setHeader] = useState(() => ({
+    plantId: data?.plantId?.id ?? data?.plantId ?? "",
+    shortCloseNo: data?.docId ?? data?.shortCloseNo ?? "",
+    date: data?.date ? fmtDate(data.date) : fmtDate(dayjs()),
+    itemCode: data?.item?.id ?? data?.itemCode ?? "",
+    itemDescription:
+      data?.item?.itemDescription ?? data?.itemDescription ?? "",
+    unit: data?.unit?.unitId ?? "",
+    unitId: data?.unit?.id ?? "",
+  }));
 
   const [detailRows, setDetailRows] = useState(() => {
-    const raw = data?.productionOrderDetails?.length
-      ? data.productionOrderDetails
-      : data?.details?.length
-        ? data.details
-        : [];
+    const raw =
+      data?.productionOrderDetailsDTO ||
+      data?.productionOrderDetails ||
+      data?.details ||
+      [];
     if (raw.length) {
       return raw.map((item) => ({
-        scheduleOrderNo:
-          item.scheduleOrderNo?.id ?? item.scheduleOrderNo ?? "",
+        scheduleOrderNo: item.scheduleOrderNo ?? "",
         scheduleDate: item.scheduleDate ? fmtDate(item.scheduleDate) : "",
         scheduleOrderQty: item.scheduleOrderQty ?? "",
         balanceQty: item.balanceQty ?? "",
-        newRequiredQty: item.newRequiredQty ?? "",
+        newReqQty: item.newReqQty ?? "",
         shortClosedQty: item.shortClosedQty ?? "",
-        reason: item.reason || "",
+        reason: item.reason ?? "",
       }));
     }
     return [emptyDetailRow()];
@@ -388,75 +406,116 @@ const ScheduleOrderShortCloseForm = ({ data, onBack }) => {
   const [itemOptions, setItemOptions] = useState([]);
   const [scheduleOrderOptions, setScheduleOrderOptions] = useState([]);
 
-  const loadPlants = useCallback(async () => {
-    try {
-      if (isMacurex) {
-        const res = await locationMasterAPI.getPlants(orgId);
-        setPlantOptions(
-          (res || []).map((p) => ({
-            value: p.id,
-            label: p.plantName || p.plantId || p.id,
-          })),
-        );
-      } else {
-        const res = await branchAPI.getBranchByOrgId(orgId);
-        setPlantOptions(
-          (res || []).map((b) => ({
-            value: b.id,
-            label: b.branchName || b.branchCode || b.id,
-          })),
-        );
+  const itemMapRef = useRef({});       // itemId -> item object
+  const scheduleMapRef = useRef({});   // docId  -> schedule object
+
+  /* Plants */
+  useEffect(() => {
+    if (!orgId) return;
+    (async () => {
+      try {
+        if (isMacurex) {
+          const res = await locationMasterAPI.getPlants(orgId);
+          setPlantOptions(
+            (res || []).map((p) => ({
+              value: p.id,
+              label: p.plantName || p.plantId || p.id,
+            })),
+          );
+        } else {
+          const res = await branchAPI.getBranchByOrgId(orgId);
+          setPlantOptions(
+            (res || []).map((b) => ({
+              value: b.id,
+              label: b.branchName || b.branchCode || b.id,
+            })),
+          );
+        }
+      } catch (err) {
+        console.error("Failed to load plants:", err);
       }
-    } catch (error) {
-      console.error("Failed to load plant options:", error);
-      setPlantOptions([]);
-    }
+    })();
   }, [orgId, isMacurex]);
 
-  const loadItems = useCallback(async () => {
-    try {
-      const res = await itemAPI.getItems(orgId, branch);
-      setItemOptions(
-        (res || []).map((it) => ({
-          value: it.id,
-          label: it.itemCode || it.id,
-          itemDescription: it.itemDescription || it.itemName || "",
-          unit: it.primaryUnit || it.unit || it.uom || "",
-        })),
-      );
-    } catch (error) {
-      console.error("Failed to load item options:", error);
-      setItemOptions([]);
-    }
-  }, [orgId, branch]);
-
-  const loadScheduleOrders = useCallback(async () => {
-    try {
-      const res = await productionScheduleOrderAPI.getByOrgId(orgId, branch);
-      setScheduleOrderOptions(
-        (res || [])
-          .filter((o) => o.docId || o.subOrderNo || o.id)
-          .map((o) => ({
-            value: o.docId || o.subOrderNo || o.id,
-            label: o.docId || o.subOrderNo || String(o.id),
-            scheduleDate: fmtDate(o.date || o.docDate || ""),
-            scheduleOrderQty: o.qty ?? o.orderQty ?? o.scheduleQty ?? "",
-            balanceQty: o.balanceQty ?? "",
-          })),
-      );
-    } catch (error) {
-      console.error("Failed to load schedule order options:", error);
-      setScheduleOrderOptions([]);
-    }
-  }, [orgId, branch]);
-
+  /* Items */
   useEffect(() => {
-    if (orgId) {
-      loadPlants();
-      loadItems();
-      loadScheduleOrders();
-    }
-  }, [orgId, loadPlants, loadItems, loadScheduleOrders]);
+    if (!orgId || !branch) return;
+    (async () => {
+      try {
+        const list = await productionScheduleOrderShortCloseAPI.getItems({
+          branch,
+          orgId,
+        });
+        const map = {};
+        setItemOptions(
+          (list || []).map((it) => {
+            const value = it.itemId;
+            map[value] = it;
+            return {
+              value,
+              label: it.itemCode || String(it.itemId),
+            };
+          }),
+        );
+        itemMapRef.current = map;
+      } catch (err) {
+        console.error("Failed to load items:", err);
+      }
+    })();
+  }, [orgId, branch]);
+
+  /* Schedule Orders */
+  useEffect(() => {
+    if (!orgId || !branch) return;
+    (async () => {
+      try {
+        const list =
+          await productionScheduleOrderShortCloseAPI.getScheduleOrders({
+            branch,
+            orgId,
+          });
+        const map = {};
+        setScheduleOrderOptions(
+          (list || []).map((o) => {
+            const value = o.docId;
+            map[value] = o;
+            return { value, label: o.docId };
+          }),
+        );
+        scheduleMapRef.current = map;
+      } catch (err) {
+        console.error("Failed to load schedule orders:", err);
+      }
+    })();
+  }, [orgId, branch]);
+
+  /* ---------------- Doc Id auto-generation (Add mode) ---------------- */
+  useEffect(() => {
+    if (isEditMode || docIdLoadedRef.current) return;
+    if (!orgId) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const financialYear = String(new Date().getFullYear());
+        const docId =
+          await productionScheduleOrderShortCloseAPI.getDocId({
+            financialYear,
+            orgId,
+          });
+        if (!cancelled && docId) {
+          setHeader((prev) => ({ ...prev, shortCloseNo: docId }));
+          docIdLoadedRef.current = true;
+        }
+      } catch (err) {
+        console.error("Failed to generate Short Close Doc Id:", err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isEditMode, orgId]);
 
   /* ---------------------------------------------------------------------------- */
   /* Handlers                                                                     */
@@ -467,13 +526,37 @@ const ScheduleOrderShortCloseForm = ({ data, onBack }) => {
 
     setHeader((prev) => {
       const next = { ...prev, [name]: value };
+
       if (name === "itemCode") {
-        const item = itemOptions.find(
-          (it) => String(it.value) === String(value),
-        );
-        next.itemDescription = item ? item.itemDescription || "" : "";
-        next.unit = item ? item.unit || "" : "";
+        const item = itemMapRef.current[value];
+
+        if (item) {
+          next.itemDescription = item.itemDescription || "";
+
+          // Tolerant lookup — the backend may use any of these keys
+          const unitDescription =
+            item.unitMasterDescription ??
+            item.unitMasterDescription ??
+              item.unitDescription ??
+              item.unitId ??
+              item.unit ??
+              "";
+
+          const unitId =
+            item.unitMasterId ??
+            item.unitId ??
+            item.unitMasterID ??
+            "";
+
+          next.unit = String(unitDescription || "");
+          next.unitId = unitId || "";
+        } else {
+          next.itemDescription = "";
+          next.unit = "";
+          next.unitId = "";
+        }
       }
+
       return next;
     });
   };
@@ -485,12 +568,12 @@ const ScheduleOrderShortCloseForm = ({ data, onBack }) => {
         const next = { ...row, [key]: value };
 
         if (key === "scheduleOrderNo") {
-          const order = scheduleOrderOptions.find(
-            (o) => String(o.value) === String(value),
-          );
-          next.scheduleDate = order ? order.scheduleDate || "" : "";
-          next.scheduleOrderQty = order ? order.scheduleOrderQty ?? "" : "";
-          next.balanceQty = order ? order.balanceQty ?? "" : "";
+          const order = scheduleMapRef.current[value];
+          if (order) {
+            next.scheduleDate = fmtDate(order.docDate || "");
+            next.scheduleOrderQty = order.scheduleOrderQty ?? "";
+            next.balanceQty = order.scheduleOrderQty ?? "";
+          }
         }
 
         return next;
@@ -527,24 +610,15 @@ const ScheduleOrderShortCloseForm = ({ data, onBack }) => {
     if (!header.itemCode) errors.itemCode = "Item Code is required";
 
     const validRows = detailRows.some(
-      (r) => r.scheduleOrderNo && r.shortClosedQty !== "" &&
-        r.shortClosedQty !== null && r.reason?.trim(),
+      (r) =>
+        r.scheduleOrderNo &&
+        r.shortClosedQty !== "" &&
+        r.shortClosedQty !== null &&
+        r.reason?.trim(),
     );
     if (!validRows)
       errors.productionOrderDetails =
         "Add at least one Production Order Details row with Schedule Order No, Short Closed Qty and Reason";
-
-    detailRows.forEach((r, i) => {
-      if (!r.scheduleOrderNo)
-        errors[`detail.${i}.scheduleOrderNo`] = "Schedule Order No is required";
-      if (
-        r.shortClosedQty === "" ||
-        r.shortClosedQty === null ||
-        r.shortClosedQty === undefined
-      )
-        errors[`detail.${i}.shortClosedQty`] = "Short Closed Qty is required";
-      if (!r.reason?.trim()) errors[`detail.${i}.reason`] = "Reason is required";
-    });
 
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
@@ -556,53 +630,77 @@ const ScheduleOrderShortCloseForm = ({ data, onBack }) => {
     setIsSubmitting(true);
 
     const isUpdate = Boolean(data?.id);
+    const financialYear = String(new Date().getFullYear());
 
     const payload = {
-      ...(isUpdate ? { id: data.id } : {}),
+      ...(isUpdate ? { id: Number(data.id) } : {}),
+
+      active: true,
+      cancel: false,
+      cancelRemarks: "",
       orgId,
       branch,
-      ...header,
-      productionOrderDetails: detailRows.filter((r) => r.scheduleOrderNo),
-      summary: {
-        narration: summary.narration || "",
-      },
-      createdBy: isUpdate ? data?.createdBy || usersId : usersId,
-      ...(isUpdate ? { updatedBy: usersId } : {}),
+      financialYear,
+
+      createdBy: isUpdate ? data?.createdBy ?? usersId : usersId,
+
+      item: Number(header.itemCode) || 0,
+      unit: Number(header.unitId) || 0,      // ✅ numeric unitMasterId
+      narration: summary.narration || "",
+
+      productionOrderDetailsDTO: (detailRows || [])
+        .filter((r) => r.scheduleOrderNo)
+        .map((r) => ({
+          scheduleOrderNo: r.scheduleOrderNo || "",
+          scheduleDate: r.scheduleDate || "",
+          scheduleOrderQty: toNum(r.scheduleOrderQty),
+          balanceQty: toNum(r.balanceQty),
+          newReqQty: toNum(r.newReqQty),
+          shortClosedQty: toNum(r.shortClosedQty),
+          reason: r.reason || "",
+        })),
     };
+
+    console.log("📤 Saving Production Schedule Order Short Close:", payload);
 
     try {
       const response =
         await productionScheduleOrderShortCloseAPI.createUpdate(payload);
 
-      if (response?.status) {
+      const isSuccess =
+        response?.status === true ||
+        response?.statusFlag === "Ok" ||
+        response?.status === 200 ||
+        response?.statusCode === 200;
+
+      if (isSuccess) {
         addToast(
           response?.paramObjectsMap?.message ||
-            (isUpdate
-              ? "Short Close updated successfully!"
-              : "Short Close created successfully!"),
+          (isUpdate
+            ? "Short Close updated successfully!"
+            : "Short Close created successfully!"),
+          "success",
         );
+        if (onSave) onSave(payload);
         onBack?.();
       } else {
         addToast(
           response?.errors?.[0]?.shortMessage ||
-            response?.errors?.[0]?.longMessage ||
-            response?.message ||
-            response?.paramObjectsMap?.message ||
-            "Failed to save Short Close.",
+          response?.errors?.[0]?.longMessage ||
+          response?.message ||
+          response?.paramObjectsMap?.message ||
+          "Failed to save Short Close.",
+          "error",
         );
       }
     } catch (err) {
       console.error("Save Short Close Error:", err);
-      if (err.response?.data) {
-        addToast(
-          err.response.data.message ||
-            err.response.data.statusMessage ||
-            err.response.data.error ||
-            JSON.stringify(err.response.data),
-        );
-      } else {
-        addToast("Something went wrong.");
-      }
+      const errorMessage =
+        err.response?.data?.message ||
+        err.response?.data?.statusMessage ||
+        err.response?.data?.error ||
+        "Something went wrong.";
+      addToast(errorMessage, "error");
     } finally {
       setIsSubmitting(false);
     }
@@ -651,6 +749,7 @@ const ScheduleOrderShortCloseForm = ({ data, onBack }) => {
               value={header.shortCloseNo}
               onChange={handleHeaderChange}
               error={fieldErrors.shortCloseNo}
+              disabled
               required
             />
             <Field
@@ -660,6 +759,7 @@ const ScheduleOrderShortCloseForm = ({ data, onBack }) => {
               value={header.date}
               onChange={handleHeaderChange}
               error={fieldErrors.date}
+              disabled
               required
             />
             <Field
@@ -691,7 +791,6 @@ const ScheduleOrderShortCloseForm = ({ data, onBack }) => {
 
         {/* ---------------- Child Tabs ---------------- */}
         <section className="mt-0 bg-white dark:bg-gray-800">
-          {/* Tabs */}
           <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 mb-0">
             <div className="flex flex-wrap">
               {CHILD_TABS.map((tab) => (
@@ -699,11 +798,10 @@ const ScheduleOrderShortCloseForm = ({ data, onBack }) => {
                   key={tab.key}
                   type="button"
                   onClick={() => setActiveChildTab(tab.key)}
-                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap transition-colors ${
-                    activeChildTab === tab.key
+                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap transition-colors ${activeChildTab === tab.key
                       ? "bg-blue-600 text-white"
                       : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                  }`}
+                    }`}
                 >
                   {tab.label}
                 </button>
@@ -721,7 +819,6 @@ const ScheduleOrderShortCloseForm = ({ data, onBack }) => {
             )}
           </div>
 
-          {/* Tab 1: Production Order Details */}
           {activeChildTab === "productionOrderDetails" && (
             <div className="pt-3">
               <DynamicTable
@@ -740,7 +837,7 @@ const ScheduleOrderShortCloseForm = ({ data, onBack }) => {
                   },
                   { key: "balanceQty", label: "Balance Qty", type: "number" },
                   {
-                    key: "newRequiredQty",
+                    key: "newReqQty",
                     label: "New Required Qty",
                     type: "number",
                   },
@@ -758,7 +855,6 @@ const ScheduleOrderShortCloseForm = ({ data, onBack }) => {
             </div>
           )}
 
-          {/* Tab 2: Summary */}
           {activeChildTab === "summary" && (
             <div className="pt-3 pb-1">
               <div className={fieldGrid}>

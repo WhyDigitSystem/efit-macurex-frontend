@@ -1,78 +1,121 @@
 import apiClient from "../apiClient";
 
-/* Scrap Note API
-   Mirrors the commonmaster API convention used across this app.
-   The backend persists the header, scrap details, reason details and the
-   scrap summary in a single transaction and keeps the complete scrap record
-   history with approvals (server-side validation). */
 const scrapNoteAPI = {
-  // Get Scrap Notes by Organization ID
-  getByOrgId: async (orgId, branchId) => {
+  /* ---------------- List by Org + Branch ---------------- */
+  getByOrgIdAndBranch: async ({ branch, orgId }) => {
     try {
       const res = await apiClient.get(
-        `/api/commonmaster/getScrapNoteByOrgId?orgId=${orgId}&branchId=${branchId}`,
+        `/api/purchaseOrder/getScrapNoteByOrgId?branch=${branch}&orgId=${orgId}`,
       );
-      return (
-        res?.paramObjectsMap?.scrapNoteList ||
-        res?.paramObjectsMap?.scrapNotes ||
-        []
-      );
+      return res?.paramObjectsMap?.scrapNoteResponseVO || [];
     } catch (error) {
-      console.error("Error fetching scrap notes:", error);
+      console.error("Error fetching Scrap Notes:", error);
       throw error;
     }
   },
 
-  // Get Scrap Note by ID
+  /* ---------------- Get by Id ---------------- */
   getById: async (id) => {
     try {
       const res = await apiClient.get(
-        `/api/commonmaster/getScrapNoteById?id=${id}`,
+        `/api/purchaseOrder/getScrapNoteById?id=${id}`,
       );
-      return res?.paramObjectsMap?.scrapNoteVO || null;
+      return res?.paramObjectsMap?.scrapNoteResponseVO || null;
     } catch (error) {
-      console.error("Error fetching scrap note by id:", error);
+      console.error("Error fetching Scrap Note by id:", error);
       throw error;
     }
   },
 
-  // Create / Update Scrap Note
+  /* ---------------- Doc Id ---------------- */
+  getDocId: async ({ financialYear, orgId }) => {
+    try {
+      const res = await apiClient.get(
+        `/api/purchaseOrder/getScrapNoteDocId?financialYear=${financialYear}&orgId=${orgId}`,
+      );
+      return res?.paramObjectsMap?.scrapNoteDocId || "";
+    } catch (error) {
+      console.error("Error fetching Scrap Note Doc Id:", error);
+      throw error;
+    }
+  },
+
+  /* ---------------- FG Part No dropdown ---------------- */
+  getFgPartNoOptions: async ({ branch, orgId }) => {
+    try {
+      const res = await apiClient.get(
+        `/api/purchaseOrder/getFgPartNoDetails?branch=${branch}&orgId=${orgId}`,
+      );
+      return res?.paramObjectsMap?.mapp || [];
+    } catch (error) {
+      console.error("Error fetching FG Part No options:", error);
+      throw error;
+    }
+  },
+
+  /* ---------------- Schedule Order No dropdown ---------------- */
+  getScheduleOrderOptions: async ({ branch, orgId }) => {
+    try {
+      const res = await apiClient.get(
+        `/api/purchaseOrder/getSchNoFromScrapNote?branch=${branch}&orgId=${orgId}`,
+      );
+      return res?.paramObjectsMap?.mapp || [];
+    } catch (error) {
+      console.error("Error fetching schedule order options:", error);
+      throw error;
+    }
+  },
+
+  /* ---------------- BOM Id dropdown ---------------- */
+  getBomOptions: async ({ branch, orgId }) => {
+    try {
+      const res = await apiClient.get(
+        `/api/purchaseOrder/getBomNoFromScrapNote?branch=${branch}&orgId=${orgId}`,
+      );
+      return res?.paramObjectsMap?.mapp || [];
+    } catch (error) {
+      console.error("Error fetching BOM options:", error);
+      throw error;
+    }
+  },
+
+  /* ---------------- Scrap Part No dropdown ---------------- */
+  getScrapPartNoOptions: async ({ branch, orgId }) => {
+    try {
+      const res = await apiClient.get(
+        `/api/purchaseOrder/getScrapPartNo?branch=${branch}&orgId=${orgId}`,
+      );
+      return res?.paramObjectsMap?.mapp || [];
+    } catch (error) {
+      console.error("Error fetching scrap part numbers:", error);
+      throw error;
+    }
+  },
+
+  /* ---------------- Item Code dropdown (per BOM) ---------------- */
+  getItemsByBom: async ({ bom, branch, orgId }) => {
+    try {
+      const res = await apiClient.get(
+        `/api/purchaseOrder/getScrapNoteItemDetails?bom=${bom}&branch=${branch}&orgId=${orgId}`,
+      );
+      return res?.paramObjectsMap?.mapp || [];
+    } catch (error) {
+      console.error("Error fetching scrap note items:", error);
+      throw error;
+    }
+  },
+
+  /* ---------------- Save (create / update) ---------------- */
   createUpdate: async (payload) => {
     try {
-      const res = await apiClient.post(
-        "/api/commonmaster/createUpdateScrapNote",
+      const res = await apiClient.put(
+        "/api/purchaseOrder/createUpdateScrapNote",
         payload,
       );
       return res;
     } catch (error) {
-      console.error("Error saving scrap note:", error);
+      console.error("Error saving Scrap Note:", error);
       throw error;
-    }
-  },
-
-  // BOM options for the BOM ID dropdown (graceful empty fallback)
-  getBOMs: async (orgId, branchId) => {
-    try {
-      const res = await apiClient.get(
-        `/api/commonmaster/getBomByOrgId?orgId=${orgId}&branchId=${branchId}`,
-      );
-      return res?.paramObjectsMap?.bomList || [];
-    } catch (error) {
-      console.error("Error fetching BOMs:", error);
-      return [];
-    }
-  },
-
-  // Scrap master options for the Scrap ID dropdown (graceful empty fallback)
-  getScrapMasters: async (orgId, branchId) => {
-    try {
-      const res = await apiClient.get(
-        `/api/commonmaster/getScrapMasterByOrgId?orgId=${orgId}&branchId=${branchId}`,
-      );
-      return res?.paramObjectsMap?.scrapMasterList || [];
-    } catch (error) {
-      console.error("Error fetching scrap masters:", error);
-      return [];
     }
   },
 };
