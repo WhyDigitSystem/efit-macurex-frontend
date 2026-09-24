@@ -7,16 +7,14 @@ const DrawingAttachmentList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => 
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const ORG_ID = localStorage.getItem("orgId");
+  const ORG_ID = Number(localStorage.getItem("orgId")) || 0;
 
   const loadRecords = useCallback(async () => {
+    if (!ORG_ID) return;
     try {
       setLoading(true);
-
       const records = await drawingAttachmentAPI.getByOrgId(ORG_ID);
-
       records.sort((a, b) => (b.id || 0) - (a.id || 0));
-
       setData(records);
     } catch (error) {
       console.error("Failed to load drawing attachments:", error);
@@ -31,23 +29,60 @@ const DrawingAttachmentList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => 
     loadRecords();
   }, [loadRecords, refreshTrigger]);
 
+  /* ---------------- Accessors ---------------- */
+
+  const getTypeOfItemLabel = (row) =>
+    row?.typeOfItem?.description ||
+    row?.typeOfItem?.code ||
+    row?.typeOfItem ||
+    "";
+
+  const getFgPartNoLabel = (row) =>
+    row?.fgPartNo?.itemCode ||
+    row?.fgPartNo?.id ||
+    row?.fgPartNo ||
+    "";
+
+  const getFgPartDescription = (row) =>
+    row?.fgPartDescription ||
+    row?.fgPartNo?.itemDescription ||
+    "";
+
+  /* ---------------- Columns ---------------- */
+
   const columns = [
     {
       key: "typeOfItem",
       label: "Type of Item",
-      accessor: (row) => row.typeOfItem,
+      accessor: (row) => getTypeOfItemLabel(row),
       type: "text",
     },
     {
       key: "fgPartNo",
       label: "FG Part No",
-      accessor: (row) => row.fgPartNo,
+      accessor: (row) => getFgPartNoLabel(row),
+      type: "text",
+    },
+    {
+      key: "fgPartDescription",
+      label: "FG Part Description",
+      accessor: (row) => getFgPartDescription(row),
+      type: "text",
+    },
+    {
+      key: "attachmentCount",
+      label: "Attachments",
+      accessor: (row) =>
+        (row?.drawingAttachmentDetailResponseDTO || []).length,
       type: "text",
     },
     {
       key: "active",
       label: "Status",
-      accessor: "active",
+      accessor: (row) =>
+        row?.active === true || row?.active === "Active"
+          ? "Active"
+          : "Inactive",
       type: "status",
       statusVariants: {
         Active: {
@@ -71,14 +106,15 @@ const DrawingAttachmentList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => 
     },
   ];
 
-  const searchFields = ["typeOfItem", "fgPartNo"];
+  const searchFields = [
+    "typeOfItem.description",
+    "typeOfItem.code",
+    "fgPartNo.itemCode",
+    "fgPartDescription",
+  ];
 
   const filterOptions = [
-    {
-      value: "all",
-      label: "All",
-      field: null,
-    },
+    { value: "all", label: "All", field: null },
     {
       value: "active",
       label: "Active",

@@ -1,19 +1,14 @@
 import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import dayjs from "dayjs";
 import { useToast } from "../../Toast/ToastContext";
 import materialTransferReturnNoteAPI from "../../../api/Production/materialTransferReturnNoteAPI";
 import branchAPI from "../../../api/branchAPI";
 import locationMasterAPI from "../../../api/locationMasterAPI";
-import { departmentAPI } from "../../../api/departmentAPI";
-import { employeeAPI } from "../../../api/employeeAPI";
-import itemAPI from "../../../api/itemAPI";
-import partyMasterAPI from "../../../api/partyMasterAPI";
-import { unitMasterAPI } from "../../../api/unitAPI";
-import productionScheduleOrderAPI from "../../../api/Production/productionScheduleOrderAPI";
+import employeeAPI from "../../../api/employeeAPI";
 
 /* ---------------------------------------------------------------------------- */
-/* Shared design tokens                                                        */
+/* Design tokens                                                                */
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -61,28 +56,36 @@ const Field = ({
   disabled = false,
 }) => {
   if (type === "select") {
+    const safeValue = value === null || value === undefined ? "" : value;
+    const safeOptions = (options || []).map((opt) =>
+      typeof opt === "object" ? opt : { value: opt, label: opt },
+    );
+    const inOptions = safeOptions.some(
+      (o) => String(o.value) === String(safeValue),
+    );
+    const showGhost = safeValue !== "" && !inOptions;
+
     return (
       <div className={`w-full ${className}`}>
         <label className={labelClasses}>
           {label}
           {required && <span className="text-red-500"> *</span>}
         </label>
-
         <select
           name={name}
-          value={value}
+          value={safeValue}
           onChange={onChange}
           disabled={disabled}
           className={`${controlClasses} ${error ? controlErrClasses : ""}`}
         >
           <option value="">-- Select --</option>
-          {(options || []).map((opt) => (
-            <option key={opt.value ?? opt} value={opt.value ?? opt}>
-              {opt.label ?? opt}
+          {showGhost && <option value={safeValue}>{String(safeValue)}</option>}
+          {safeOptions.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
             </option>
           ))}
         </select>
-
         {error && (
           <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
             {error}
@@ -99,7 +102,6 @@ const Field = ({
           {label}
           {required && <span className="text-red-500"> *</span>}
         </label>
-
         <textarea
           name={name}
           value={value}
@@ -109,13 +111,11 @@ const Field = ({
             "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors resize-none pt-1 scrollbar-hide " +
             "bg-white dark:bg-gray-900 " +
             `${error ? controlErrClasses : "border-gray-300 dark:border-gray-600"} ` +
-            "text-gray-900 dark:text-gray-100 " +
-            "placeholder-gray-400 dark:placeholder-gray-500 " +
+            "text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 " +
             "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
             "dark:focus:ring-blue-400 dark:focus:border-blue-400"
           }
         />
-
         {error && (
           <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
             {error}
@@ -131,7 +131,6 @@ const Field = ({
         {label}
         {required && <span className="text-red-500"> *</span>}
       </label>
-
       <input
         type={type}
         name={name}
@@ -140,7 +139,6 @@ const Field = ({
         disabled={disabled}
         className={`${controlClasses} ${error ? controlErrClasses : ""}`}
       />
-
       {error && (
         <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
           {error}
@@ -150,12 +148,9 @@ const Field = ({
   );
 };
 
-/* Yes/No toggle matching the Field anatomy: label on top + h-[30px] control,
-   so it aligns perfectly with the neighbouring fields in the grid. */
 const ToggleField = ({ label, checked, onChange }) => (
   <div className="w-full">
     <label className={labelClasses}>{label}</label>
-
     <button
       type="button"
       role="switch"
@@ -166,7 +161,6 @@ const ToggleField = ({ label, checked, onChange }) => (
       <span className="text-xs font-medium text-gray-700 dark:text-gray-200">
         {checked ? "Yes" : "No"}
       </span>
-
       <span
         className={
           "relative inline-flex h-[16px] w-[30px] shrink-0 items-center rounded-full transition-colors " +
@@ -191,7 +185,7 @@ const SectionHeader = ({ children }) => (
 );
 
 const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
-  <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
+  <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700 mt-3">
     <button
       onClick={onCancel}
       disabled={isSubmitting}
@@ -199,7 +193,6 @@ const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
     >
       <X className="h-3 w-3" /> Cancel
     </button>
-
     <button
       onClick={onSave}
       disabled={isSubmitting}
@@ -225,13 +218,12 @@ const TableHead = ({ headers }) => (
       {headers.map((h, i) => (
         <th
           key={i}
-          className={`p-2 whitespace-nowrap ${
-            i === 0
-              ? "w-8 text-center"
-              : i === headers.length - 1
-                ? "w-20 text-left"
-                : "text-left"
-          } dark:text-white`}
+          className={`p-2 whitespace-nowrap ${i === 0
+            ? "w-8 text-center"
+            : i === headers.length - 1
+              ? "w-20 text-left"
+              : "text-left"
+            } dark:text-white`}
         >
           {h}
         </th>
@@ -249,11 +241,10 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
         type="button"
         onClick={onRemove}
         disabled={disabled}
-        className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-          disabled
-            ? "bg-gray-400 cursor-not-allowed"
-            : "bg-red-600 hover:bg-red-700"
-        }`}
+        className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
+          ? "bg-gray-400 cursor-not-allowed"
+          : "bg-red-600 hover:bg-red-700"
+          }`}
       >
         <Trash2 size={10} />
       </button>
@@ -261,8 +252,6 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
   </tr>
 );
 
-/* Generic dynamic table. Supports text / number / date / select / textarea /
-   readonly columns. Options may be plain strings or { value, label } objects. */
 const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
   <TableWrapper>
     <TableHead headers={["#", ...columns.map((c) => c.label), "Action"]} />
@@ -276,17 +265,34 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
         >
           {columns.map((col) => {
             if (col.type === "select") {
+              const safeValue =
+                row[col.key] === null || row[col.key] === undefined
+                  ? ""
+                  : row[col.key];
+              const opts = (col.options || []).map((opt) =>
+                typeof opt === "object" ? opt : { value: opt, label: opt },
+              );
+              const inOptions = opts.some(
+                (o) => String(o.value) === String(safeValue),
+              );
+              const showGhost = safeValue !== "" && !inOptions;
+
               return (
-                <td className="p-2 align-top" key={col.key}>
+                <td className="p-2 align-top min-w-[140px]" key={col.key}>
                   <select
-                    value={row[col.key]}
-                    onChange={(e) => onCellChange(idx, col.key, e.target.value)}
+                    value={safeValue}
+                    onChange={(e) =>
+                      onCellChange(idx, col.key, e.target.value)
+                    }
                     className={cellInputClasses}
                   >
                     <option value="">-- Select --</option>
-                    {(col.options || []).map((opt) => (
-                      <option key={opt.value ?? opt} value={opt.value ?? opt}>
-                        {opt.label ?? opt}
+                    {showGhost && (
+                      <option value={safeValue}>{String(safeValue)}</option>
+                    )}
+                    {opts.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
                       </option>
                     ))}
                   </select>
@@ -296,11 +302,13 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
 
             if (col.type === "textarea") {
               return (
-                <td className="p-2 align-top" key={col.key}>
+                <td className="p-2 align-top min-w-[160px]" key={col.key}>
                   <textarea
                     value={row[col.key]}
                     rows={1}
-                    onChange={(e) => onCellChange(idx, col.key, e.target.value)}
+                    onChange={(e) =>
+                      onCellChange(idx, col.key, e.target.value)
+                    }
                     className={cellInputClasses}
                   />
                 </td>
@@ -308,7 +316,7 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
             }
 
             return (
-              <td className="p-2 align-top" key={col.key}>
+              <td className="p-2 align-top min-w-[110px]" key={col.key}>
                 <input
                   type={
                     col.type === "number"
@@ -321,8 +329,12 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
                   }
                   value={row[col.key]}
                   readOnly={col.readOnly}
-                  onChange={(e) => onCellChange(idx, col.key, e.target.value)}
-                  className={col.readOnly ? cellReadOnlyClasses : cellInputClasses}
+                  onChange={(e) =>
+                    onCellChange(idx, col.key, e.target.value)
+                  }
+                  className={
+                    col.readOnly ? cellReadOnlyClasses : cellInputClasses
+                  }
                 />
               </td>
             );
@@ -334,7 +346,9 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
 );
 
 /* ---------------------------------------------------------------------------- */
-/* Options                                                                      */
+/* Constants                                                                    */
+
+const BELONGS_TO_LIST_NAME = "SDS BELONGS TO";
 
 const CHILD_TABS = [
   { key: "itemTransferDetails", label: "Item Transfer Details", kind: "table" },
@@ -342,269 +356,417 @@ const CHILD_TABS = [
 ];
 
 const TYPE_OPTIONS = [
-  { value: "Transfer", label: "Transfer" },
-  { value: "Return", label: "Return" },
+  { value: "Material Rejection Note", label: "Material Rejection Note" },
+  { value: "Material Transfer Note", label: "Material Transfer Note" },
+];
+
+const YES_NO_OPTIONS = [
+  { value: "Yes", label: "Yes" },
+  { value: "No", label: "No" },
 ];
 
 const fmtDate = (value) => (value ? dayjs(value).format("YYYY-MM-DD") : "");
-
 const toNum = (v) => Number(v) || 0;
 
-const generateMTRNNo = () =>
-  `MTRN-${dayjs().format("YYYYMMDD")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
-
 const emptyDetailRow = () => ({
-  itemCode: "",
+  item: "",
   itemDescription: "",
   unit: "",
+  unitDisplay: "",
   availableQty: "",
   qty: "",
   rate: "",
   value: "",
   reason: "",
-  supplierId: "",
+  supplier: "",
   supplierName: "",
 });
 
 /* ---------------------------------------------------------------------------- */
-/* Material Transfer/Return Note Form                                             */
 
-const MTRNForm = ({ data, onBack }) => {
+const MTRNForm = ({ data, onBack, onSave }) => {
   const { addToast } = useToast();
   const orgId = Number(localStorage.getItem("orgId")) || 0;
   const branch = Number(localStorage.getItem("branchId")) || 0;
   const usersId = localStorage.getItem("usersId");
+  const CREATED_BY = localStorage.getItem("userName") || "SYSTEM";
 
-  const userData = JSON.parse(localStorage.getItem("userData") || "{}");
-  const orgName = (
-    userData?.companyVO?.companyName ||
-    userData?.orgName ||
-    ""
-  ).trim();
-  const isMacurex = ["mecurex", "macurex"].includes(orgName.toLowerCase());
+  const isEditMode = Boolean(data?.id);
+  const docIdLoadedRef = useRef(false);
+  const dataLoadedRef = useRef(false);
 
   const [activeChildTab, setActiveChildTab] = useState("itemTransferDetails");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
 
-  /* ---------- Header state ---------- */
-  const [header, setHeader] = useState(() => {
-    const base = {
-      plantId: data?.plantId?.id ?? data?.plantId ?? "",
-      belongsTo: data?.belongsTo?.id ?? data?.belongsTo ?? "",
-      mtrnNo: data?.mtrnNo || data?.docNo || "",
-      mtrnDate: data?.mtrnDate ? fmtDate(data.mtrnDate) : fmtDate(dayjs()),
-      type: data?.type || "",
-      fromLocation: data?.fromLocation?.id ?? data?.fromLocation ?? "",
-      toLocation: data?.toLocation?.id ?? data?.toLocation ?? "",
-      fgSfgPartNo: data?.fgSfgPartNo?.id ?? data?.fgSfgPartNo ?? "",
-      subOrderNo: data?.subOrderNo?.id ?? data?.subOrderNo ?? "",
-      time: data?.time || dayjs().format("HH:mm:ss"),
-      preparedBy: data?.preparedBy?.id ?? data?.preparedBy ?? "",
-    };
-    if (!base.mtrnNo) base.mtrnNo = generateMTRNNo();
-    return base;
-  });
+  /* ---------------- Lookup state ---------------- */
+  const [plantOptions, setPlantOptions] = useState([]);
+  const [belongsToOptions, setBelongsToOptions] = useState([]);
+  const [locationOptions, setLocationOptions] = useState([]);
+  const [fgItemOptions, setFgItemOptions] = useState([]);
+  const [schOrderOptions, setSchOrderOptions] = useState([]);
+  const [employeeOptions, setEmployeeOptions] = useState([]);
+  const [supplierOptions, setSupplierOptions] = useState([]);
+  const [scheduleItemOptions, setScheduleItemOptions] = useState([]);
+
+  const supplierMapRef = useRef({}); // supplierId -> supplier object
+  const scheduleItemMapRef = useRef({}); // itemId -> schedule item object
+
+  /* ---------------- Header state ---------------- */
+  const [header, setHeader] = useState(() => ({
+    plantId: data?.plantId?.id ?? data?.plantId ?? "",
+    belongsTo: data?.belongsTo?.id ?? data?.belongsTo ?? "",
+    mtrnNo: data?.docId ?? data?.mtrnNo ?? "",
+    mtrnDate: data?.docDate
+      ? fmtDate(data.docDate)
+      : data?.mtrnDate
+        ? fmtDate(data.mtrnDate)
+        : fmtDate(dayjs()),
+    type: data?.type ?? "",
+    fromLocation: data?.fromLocation?.id ?? data?.fromLocation ?? "",
+    toLocation: data?.toLocation?.id ?? data?.toLocation ?? "",
+    fgSfgPartNo: data?.fgItem?.id ?? data?.fgSfgPartNo ?? "",
+    subOrderNo: data?.schOrderNo ?? data?.subOrderNo ?? "",
+    time: data?.time ?? dayjs().format("HH:mm:ss"),
+    preparedBy: data?.preparedBy?.id ?? data?.preparedBy ?? "",
+  }));
 
   const [detailRows, setDetailRows] = useState(() => {
-    const raw = data?.itemTransferDetails?.length
-      ? data.itemTransferDetails
-      : data?.details?.length
-        ? data.details
-        : [];
+    const raw =
+      data?.materialTransferReturnNoteDetailsDTO ||
+      data?.itemDetails ||
+      data?.details ||
+      [];
+
     if (raw.length) {
       return raw.map((item) => ({
-        itemCode: item.itemCode?.id ?? item.itemCode ?? "",
-        itemDescription: item.itemDescription || item.itemName || "",
+        item: item.item?.id ?? item.item ?? "",
+        itemDescription:
+          item.item?.itemDescription ?? item.itemDescription ?? "",
         unit: item.unit?.id ?? item.unit ?? "",
+        unitDisplay:
+          item.unit?.unitId ?? item.unitDisplay ?? item.unit?.unitDescription ?? "",
         availableQty: item.availableQty ?? "",
         qty: item.qty ?? "",
         rate: item.rate ?? "",
-        value: item.value ?? "",
-        reason: item.reason || "",
-        supplierId: item.supplierId?.id ?? item.supplierId ?? "",
-        supplierName: item.supplierName || "",
+        value: toNum(item.qty) * toNum(item.rate),
+        reason: item.reasonForRejectionTransfer ?? "",
+        supplier: item.supplier?.id ?? item.supplier ?? "",
+        supplierName:
+          item.supplier?.supplierName ??
+          item.supplier?.customerName ??
+          item.supplierName ??
+          "",
       }));
     }
     return [emptyDetailRow()];
   });
 
   const [summary, setSummary] = useState({
-    approvedByPM: data?.approvedByPM ?? data?.summary?.approvedByPM ?? false,
-    approvedByQC: data?.approvedByQC ?? data?.summary?.approvedByQC ?? false,
-    approvedByStores:
-      data?.approvedByStores ?? data?.summary?.approvedByStores ?? false,
-    narration: data?.narration || data?.summary?.narration || "",
+    approvedByPm: data?.approvedByPm ?? "",
+    approvedByQc: data?.approvedByQc ?? "",
+    approvedByStores: data?.approvedByStores ?? "",
+    narration: data?.narration ?? "",
   });
 
-  /* ---------- Lookup loading ---------- */
+  /* ---------------- Load master data ---------------- */
 
-  const [plantOptions, setPlantOptions] = useState([]);
-  const [locationOptions, setLocationOptions] = useState([]);
-  const [departmentOptions, setDepartmentOptions] = useState([]);
-  const [employeeOptions, setEmployeeOptions] = useState([]);
-  const [itemOptions, setItemOptions] = useState([]);
-  const [unitOptions, setUnitOptions] = useState([]);
-  const [supplierOptions, setSupplierOptions] = useState([]);
-  const [subOrderOptions, setSubOrderOptions] = useState([]);
+  useEffect(() => {
+    if (!orgId) return;
 
-  const loadPlants = useCallback(async () => {
-    try {
-      if (isMacurex) {
-        const res = await locationMasterAPI.getPlants(orgId);
-        setPlantOptions(
-          (res || []).map((p) => ({
-            value: p.id,
-            label: p.plantName || p.plantId || p.id,
-          })),
-        );
-      } else {
+    // Plants
+    (async () => {
+      try {
         const res = await branchAPI.getBranchByOrgId(orgId);
         setPlantOptions(
           (res || []).map((b) => ({
             value: b.id,
-            label: b.branchName || b.branchCode || b.id,
+            label: b.branchName || b.branchCode || String(b.id),
           })),
         );
+      } catch (err) {
+        console.error("Failed to load plants:", err);
       }
-    } catch (error) {
-      console.error("Failed to load plant options:", error);
-      setPlantOptions([]);
-    }
-  }, [orgId, isMacurex]);
+    })();
 
-  const loadLocations = useCallback(async () => {
-    try {
-      const res = await locationMasterAPI.getLocationMasterByOrgId(orgId, branch);
-      setLocationOptions(
-        (res || []).map((l) => ({
-          value: l.id,
-          label: l.locationName || l.locationId || l.id,
-        })),
-      );
-    } catch (error) {
-      console.error("Failed to load location options:", error);
-      setLocationOptions([]);
-    }
-  }, [orgId, branch]);
-
-  const loadDepartments = useCallback(async () => {
-    try {
-      const res = await departmentAPI.getAllDepartments(orgId);
-      const departments = res?.paramObjectsMap?.departmentVO || [];
-      setDepartmentOptions(
-        departments.map((d) => ({
-          value: d.id,
-          label: d.departmentName || d.id,
-        })),
-      );
-    } catch (error) {
-      console.error("Failed to load department options:", error);
-      setDepartmentOptions([]);
-    }
-  }, [orgId, branch]);
-
-  const loadEmployees = useCallback(async () => {
-    try {
-      const res = await employeeAPI.getEmployeeByOrgId(orgId);
-      setEmployeeOptions(
-        (res || []).map((e) => ({
-          value: e.id,
-          label: e.employeeCode || e.employeeName || e.id,
-        })),
-      );
-    } catch (error) {
-      console.error("Failed to load employee options:", error);
-      setEmployeeOptions([]);
-    }
-  }, [orgId]);
-
-  const loadItems = useCallback(async () => {
-    try {
-      const res = await itemAPI.getItems(orgId, branch);
-      setItemOptions(
-        (res || []).map((it) => ({
-          value: it.id,
-          label: it.itemCode || it.id,
-          itemDescription: it.itemDescription || it.itemName || "",
-        })),
-      );
-    } catch (error) {
-      console.error("Failed to load item options:", error);
-      setItemOptions([]);
-    }
-  }, [orgId, branch]);
-
-  const loadUnits = useCallback(async () => {
-    try {
-      const res = await unitMasterAPI.getUnits(branch, orgId);
-      setUnitOptions(
-        (res || []).map((u) => ({
-          value: u.id,
-          label: u.unitId || u.unitName || u.id,
-        })),
-      );
-    } catch (error) {
-      console.error("Failed to load unit options:", error);
-      setUnitOptions([]);
-    }
-  }, [orgId, branch]);
-
-  const loadSuppliers = useCallback(async () => {
-    try {
-      const res = await partyMasterAPI.getPartyByOrgId(orgId, branch);
-      setSupplierOptions(
-        (res || []).map((c) => ({
-          value: c.id,
-          label: c.customerCode || c.docId || c.id,
-          supplierName: c.customerName || "",
-        })),
-      );
-    } catch (error) {
-      console.error("Failed to load supplier options:", error);
-      setSupplierOptions([]);
-    }
-  }, [orgId, branch]);
-
-  const loadSubOrders = useCallback(async () => {
-    try {
-      const res = await productionScheduleOrderAPI.getByOrgId(orgId, branch);
-      setSubOrderOptions(
-        (res || [])
-          .filter((o) => o.docId || o.subOrderNo || o.id)
-          .map((o) => ({
-            value: o.docId || o.subOrderNo || o.id,
-            label: o.docId || o.subOrderNo || String(o.id),
+    // Belongs To — list-of-values
+    (async () => {
+      try {
+        const list = await materialTransferReturnNoteAPI.getListValuesGroup(
+          BELONGS_TO_LIST_NAME,
+          orgId,
+        );
+        setBelongsToOptions(
+          (list || []).map((item) => ({
+            value: item.valuesDescription ?? item.value ?? item.id ?? "",
+            label:
+              item.valuesDescription ?? item.value ?? item.id ?? "",
           })),
-      );
-    } catch (error) {
-      console.error("Failed to load sub order options:", error);
-      setSubOrderOptions([]);
-    }
+        );
+      } catch (err) {
+        console.error("Failed to load Belongs To list:", err);
+      }
+    })();
+
+    // Locations
+    (async () => {
+      try {
+        const list = await locationMasterAPI.getLocationMasterByOrgId(
+          orgId,
+          branch,
+        );
+        setLocationOptions(
+          (list || []).map((loc) => ({
+            value: loc.id,
+            label: loc.locationName || loc.locationId || String(loc.id),
+          })),
+        );
+      } catch (err) {
+        console.error("Failed to load locations:", err);
+      }
+    })();
+
+    // FG / SFG Items
+    (async () => {
+      try {
+        const list = await materialTransferReturnNoteAPI.getFgAndSfg({
+          branch,
+          orgId,
+        });
+        setFgItemOptions(
+          (list || []).map((it) => ({
+            value: it.itemId,
+            label: it.itemCode || String(it.itemId),
+          })),
+        );
+      } catch (err) {
+        console.error("Failed to load FG/SFG items:", err);
+      }
+    })();
+
+    // Schedule Orders
+    (async () => {
+      try {
+        const list = await materialTransferReturnNoteAPI.getScheduleOrders({
+          branch,
+          orgId,
+        });
+        setSchOrderOptions(
+          (list || []).map((o) => ({
+            value: o.docId,
+            label: o.docId,
+          })),
+        );
+      } catch (err) {
+        console.error("Failed to load schedule orders:", err);
+      }
+    })();
+
+    // Employees
+    (async () => {
+      try {
+        const list = await employeeAPI.getEmployeeByOrgId(orgId);
+        setEmployeeOptions(
+          (list || []).map((e) => ({
+            value: e.id,
+            label: e.employeeName || e.employeeId || String(e.id),
+          })),
+        );
+      } catch (err) {
+        console.error("Failed to load employees:", err);
+      }
+    })();
+
+    // Suppliers
+    (async () => {
+      try {
+        const list = await materialTransferReturnNoteAPI.getSuppliers({
+          branch,
+          orgId,
+        });
+        const map = {};
+        setSupplierOptions(
+          (list || []).map((s) => {
+            const value = s.supplierId;
+            map[value] = s;
+            return {
+              value,
+              label: s.supplierName || s.supplierCode || String(value),
+            };
+          }),
+        );
+        supplierMapRef.current = map;
+      } catch (err) {
+        console.error("Failed to load suppliers:", err);
+      }
+    })();
   }, [orgId, branch]);
+
+  /* ---------------- Doc Id auto-generation (Add mode) ---------------- */
 
   useEffect(() => {
-    if (orgId) {
-      loadPlants();
-      loadLocations();
-      loadDepartments();
-      loadEmployees();
-      loadItems();
-      loadUnits();
-      loadSuppliers();
-      loadSubOrders();
+    if (isEditMode || docIdLoadedRef.current) return;
+    if (!orgId) return;
+
+    (async () => {
+      try {
+        const financialYear = String(new Date().getFullYear());
+        const docId = await materialTransferReturnNoteAPI.getDocId({
+          financialYear,
+          orgId,
+        });
+        if (docId) {
+          setHeader((prev) => ({ ...prev, mtrnNo: docId }));
+          docIdLoadedRef.current = true;
+        }
+      } catch (err) {
+        console.error("Failed to generate Doc Id:", err);
+      }
+    })();
+  }, [isEditMode, orgId]);
+
+  /* ---------------- Load schedule items when Sch Order changes ---------------- */
+
+  useEffect(() => {
+    const schNo = header.subOrderNo;
+    if (!schNo) {
+      setScheduleItemOptions([]);
+      return;
     }
-  }, [
-    orgId,
-    loadPlants,
-    loadLocations,
-    loadDepartments,
-    loadEmployees,
-    loadItems,
-    loadUnits,
-    loadSuppliers,
-    loadSubOrders,
-  ]);
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const list = await materialTransferReturnNoteAPI.getScheduleItems({
+          branch,
+          orgId,
+          schNo,
+        });
+
+        const map = {};
+        const opts = (list || []).map((it) => {
+          const value = it.itemId;
+          map[value] = it;
+          return {
+            value,
+            label: `${it.itemCode} — ${it.itemDescription}`,
+          };
+        });
+
+        if (!cancelled) {
+          scheduleItemMapRef.current = map;
+          setScheduleItemOptions(opts);
+
+          // Only pre-fill the first row when adding a NEW record.
+          if (!isEditMode && opts.length) {
+            const first = map[opts[0].value];
+            setDetailRows([
+              {
+                item: first.itemId,
+                itemDescription: first.itemDescription || "",
+                unit: first.unitMasterId ?? "",
+                unitDisplay: first.unitMasterDescription ?? "",
+                availableQty: "",
+                qty: first.qtyRequired ?? "",
+                rate: "",
+                value: 0,
+                reason: "",
+                supplier: "",
+                supplierName: "",
+              },
+            ]);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load schedule items:", err);
+        if (!cancelled) setScheduleItemOptions([]);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [header.subOrderNo, branch, orgId, isEditMode]);
+
+  /* ---------------- Re-sync when data prop changes (edit mode) ---------------- */
+  useEffect(() => {
+    if (!data) return;
+
+    setHeader({
+      plantId: data.plantId ?? data.branch?.id ?? "",
+      belongsTo: data.belongsTo?.id ?? data.belongsTo ?? "",
+      mtrnNo: data.docId ?? data.mtrnNo ?? "",
+      mtrnDate: data.docDate
+        ? fmtDate(data.docDate)
+        : data.mtrnDate
+          ? fmtDate(data.mtrnDate)
+          : fmtDate(dayjs()),
+      type: data.type ?? "",
+      fromLocation: data.fromLocation?.id ?? data.fromLocation ?? "",
+      toLocation: data.toLocation?.id ?? data.toLocation ?? "",
+      fgSfgPartNo: data.fgItem?.id ?? data.fgItem ?? data.fgSfgPartNo ?? "",
+      subOrderNo: data.schOrderNo ?? data.subOrderNo ?? "",
+      time: data.time ?? dayjs().format("HH:mm:ss"),
+      preparedBy: data.preparedBy?.id ?? data.preparedBy ?? "",
+    });
+
+    const raw =
+      data.materialTransferReturnNoteDetailsDTO ||
+      data.itemDetails ||
+      data.details ||
+      [];
+
+    setDetailRows(
+      raw.length
+        ? raw.map((item) => {
+          // Backend sometimes returns numeric fields as strings.
+          const qty = toNum(item.qty);
+          const rate = toNum(item.rate);
+          const value =
+            item.value !== undefined && item.value !== null
+              ? toNum(item.value)
+              : qty * rate;
+
+          return {
+            item: item.item?.id ?? item.item ?? "",
+            itemDescription:
+              item.item?.itemDescription ?? item.itemDescription ?? "",
+            unit: item.unit?.id ?? item.unit ?? "",
+            unitDisplay:
+              item.unit?.unitId ??
+              item.unitDisplay ??
+              item.unit?.unitDescription ??
+              "",
+            availableQty:
+              item.availableQty !== undefined && item.availableQty !== null
+                ? item.availableQty
+                : "",
+            qty: qty || "",
+            rate: rate || "",
+            value: value || "",
+            reason: item.reasonForRejectionTransfer ?? "",
+            supplier: item.supplier?.id ?? item.supplier ?? "",
+            supplierName:
+              item.supplier?.supplierName ??
+              item.supplier?.customerName ??
+              item.supplierName ??
+              "",
+          };
+        })
+        : [emptyDetailRow()],
+    );
+
+    setSummary({
+      approvedByPm: data.approvedByPm ?? "",
+      approvedByQc: data.approvedByQc ?? "",
+      approvedByStores: data.approvedByStores ?? "",
+      narration: data.narration ?? "",
+    });
+
+    if (data.docId) docIdLoadedRef.current = true;
+    // NOTE: Do NOT set dataLoadedRef.current = true here — allow re-sync.
+  }, [data]);
 
   /* ---------------------------------------------------------------------------- */
   /* Handlers                                                                     */
@@ -621,30 +783,29 @@ const MTRNForm = ({ data, onBack }) => {
         if (i !== idx) return row;
         const next = { ...row, [key]: value };
 
-        if (key === "itemCode") {
-          const item = itemOptions.find(
-            (it) => String(it.value) === String(value),
-          );
-          next.itemDescription = item ? item.itemDescription || "" : "";
+        if (key === "item") {
+          const it = scheduleItemMapRef.current[value];
+          if (it) {
+            next.itemDescription = it.itemDescription || "";
+            next.unit = it.unitMasterId ?? "";
+            next.unitDisplay = it.unitMasterDescription ?? "";
+            next.qty = it.qtyRequired ?? next.qty;
+          }
         }
 
-        if (key === "supplierId") {
-          const supplier = supplierOptions.find(
-            (s) => String(s.value) === String(value),
-          );
-          next.supplierName = supplier ? supplier.supplierName || "" : "";
+        if (key === "supplier") {
+          const s = supplierMapRef.current[value];
+          next.supplierName = s ? s.supplierName || "" : "";
         }
 
-        if (key === "qty" || key === "rate") {
-          next.value = toNum(next.qty) * toNum(next.rate);
-        }
+        // Value = Qty * Rate
+        const q = key === "qty" ? toNum(value) : toNum(next.qty);
+        const r = key === "rate" ? toNum(value) : toNum(next.rate);
+        next.value = q * r;
 
         return next;
       }),
     );
-
-    if (fieldErrors[`detail.${idx}.${key}`])
-      setFieldErrors((prev) => ({ ...prev, [`detail.${idx}.${key}`]: "" }));
   };
 
   const handleAddRow = () =>
@@ -656,9 +817,6 @@ const MTRNForm = ({ data, onBack }) => {
     );
 
   const totalValue = detailRows.reduce((sum, r) => sum + toNum(r.value), 0);
-
-  const handleSummaryToggle = (name) =>
-    setSummary((prev) => ({ ...prev, [name]: !prev[name] }));
 
   const handleSummaryChange = (e) => {
     const { name, value } = e.target;
@@ -676,30 +834,18 @@ const MTRNForm = ({ data, onBack }) => {
     if (!header.mtrnNo?.trim()) errors.mtrnNo = "MTRN No is required";
     if (!header.mtrnDate) errors.mtrnDate = "MTRN Date is required";
     if (!header.type) errors.type = "Type is required";
-    if (!header.fromLocation)
-      errors.fromLocation = "From Location is required";
+    if (!header.fromLocation) errors.fromLocation = "From Location is required";
     if (!header.toLocation) errors.toLocation = "To Location is required";
-    if (!header.fgSfgPartNo)
-      errors.fgSfgPartNo = "FG/SFG Part No is required";
+    if (!header.fgSfgPartNo) errors.fgSfgPartNo = "FG/SFG Part No is required";
     if (!header.subOrderNo) errors.subOrderNo = "Sub Order No is required";
     if (!header.preparedBy) errors.preparedBy = "Prepared By is required";
 
     const validRows = detailRows.some(
-      (r) => r.itemCode && r.unit && toNum(r.qty) > 0 && r.reason?.trim(),
+      (r) => r.item && r.unit && toNum(r.qty) > 0,
     );
     if (!validRows)
       errors.itemTransferDetails =
-        "Add at least one Item Transfer Detail row with Item Code, Unit, Qty and Reason";
-
-    detailRows.forEach((r, i) => {
-      if (!r.itemCode)
-        errors[`detail.${i}.itemCode`] = "Item Code is required";
-      if (!r.unit) errors[`detail.${i}.unit`] = "Unit is required";
-      if (r.qty === "" || r.qty === null || r.qty === undefined)
-        errors[`detail.${i}.qty`] = "Qty is required";
-      if (!r.reason?.trim())
-        errors[`detail.${i}.reason`] = "Reason is required";
-    });
+        "Add at least one Item Transfer Detail row with Item, Unit and Qty";
 
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
@@ -711,57 +857,85 @@ const MTRNForm = ({ data, onBack }) => {
     setIsSubmitting(true);
 
     const isUpdate = Boolean(data?.id);
+    const financialYear = String(new Date().getFullYear());
 
     const payload = {
       ...(isUpdate ? { id: data.id } : {}),
+
+      active: true,
+      cancel: false,
+      cancelRemarks: "",
       orgId,
-      branch,
-      ...header,
-      totalValue,
-      itemTransferDetails: detailRows.filter((r) => r.itemCode),
-      summary: {
-        approvedByPM: summary.approvedByPM,
-        approvedByQC: summary.approvedByQC,
-        approvedByStores: summary.approvedByStores,
-        narration: summary.narration || "",
-      },
-      createdBy: isUpdate ? data?.createdBy || usersId : usersId,
-      ...(isUpdate ? { updatedBy: usersId } : {}),
+      branch: Number(header.plantId) || branch || 0,
+      financialYear,
+
+      createdBy: isUpdate ? data?.createdBy ?? usersId : usersId,
+
+      belongsTo: header.belongsTo || "",
+      type: header.type || "",
+      fromLocation: Number(header.fromLocation) || 0,
+      toLocation: Number(header.toLocation) || 0,
+      fgItem: Number(header.fgSfgPartNo) || 0,
+      schOrderNo: header.subOrderNo || "",
+      preparedBy: Number(header.preparedBy) || 0,
+
+      approvedByPm: summary.approvedByPm || "",
+      approvedByQc: summary.approvedByQc || "",
+      approvedByStores: summary.approvedByStores || "",
+      narration: summary.narration || "",
+
+      materialTransferReturnNoteDetailsDTO: (detailRows || [])
+        .filter((r) => r.item)
+        .map((r) => ({
+          item: Number(r.item) || 0,
+          unit: Number(r.unit) || 0,
+          availableQty: Number(r.availableQty) || 0,
+          qty: Number(r.qty) || 0,
+          rate: Number(r.rate) || 0,
+          reasonForRejectionTransfer: r.reason || "",
+          supplier: Number(r.supplier) || 0,
+        })),
     };
 
-    try {
-      const response =
-        await materialTransferReturnNoteAPI.createUpdate(payload);
+    console.log("📤 Saving Material Transfer/Return Note:", payload);
 
-      if (response?.status) {
+    try {
+      const response = await materialTransferReturnNoteAPI.createUpdate(payload);
+
+      const isSuccess =
+        response?.status === true ||
+        response?.statusFlag === "Ok" ||
+        response?.status === 200 ||
+        response?.statusCode === 200;
+
+      if (isSuccess) {
         addToast(
           response?.paramObjectsMap?.message ||
-            (isUpdate
-              ? "Material Transfer/Return Note updated successfully!"
-              : "Material Transfer/Return Note created successfully!"),
+          (isUpdate
+            ? "Material Transfer/Return Note updated successfully!"
+            : "Material Transfer/Return Note created successfully!"),
+          "success",
         );
+        if (onSave) onSave(payload);
         onBack?.();
       } else {
         addToast(
           response?.errors?.[0]?.shortMessage ||
-            response?.errors?.[0]?.longMessage ||
-            response?.message ||
-            response?.paramObjectsMap?.message ||
-            "Failed to save Material Transfer/Return Note.",
+          response?.errors?.[0]?.longMessage ||
+          response?.message ||
+          response?.paramObjectsMap?.message ||
+          "Failed to save Material Transfer/Return Note.",
+          "error",
         );
       }
     } catch (err) {
       console.error("Save MTRN Error:", err);
-      if (err.response?.data) {
-        addToast(
-          err.response.data.message ||
-            err.response.data.statusMessage ||
-            err.response.data.error ||
-            JSON.stringify(err.response.data),
-        );
-      } else {
-        addToast("Something went wrong.");
-      }
+      const errorMessage =
+        err.response?.data?.message ||
+        err.response?.data?.statusMessage ||
+        err.response?.data?.error ||
+        "Something went wrong.";
+      addToast(errorMessage, "error");
     } finally {
       setIsSubmitting(false);
     }
@@ -811,7 +985,7 @@ const MTRNForm = ({ data, onBack }) => {
               value={header.belongsTo}
               onChange={handleHeaderChange}
               error={fieldErrors.belongsTo}
-              options={departmentOptions}
+              options={belongsToOptions}
               required
             />
             <Field
@@ -820,6 +994,7 @@ const MTRNForm = ({ data, onBack }) => {
               value={header.mtrnNo}
               onChange={handleHeaderChange}
               error={fieldErrors.mtrnNo}
+              disabled
               required
             />
             <Field
@@ -829,6 +1004,7 @@ const MTRNForm = ({ data, onBack }) => {
               value={header.mtrnDate}
               onChange={handleHeaderChange}
               error={fieldErrors.mtrnDate}
+              disabled
               required
             />
             <Field
@@ -868,17 +1044,17 @@ const MTRNForm = ({ data, onBack }) => {
               value={header.fgSfgPartNo}
               onChange={handleHeaderChange}
               error={fieldErrors.fgSfgPartNo}
-              options={itemOptions}
+              options={fgItemOptions}
               required
             />
             <Field
               type="select"
-              label="Sub Order No"
+              label="Sch.Order No"
               name="subOrderNo"
               value={header.subOrderNo}
               onChange={handleHeaderChange}
               error={fieldErrors.subOrderNo}
-              options={subOrderOptions}
+              options={schOrderOptions}
               required
             />
             <Field
@@ -903,7 +1079,6 @@ const MTRNForm = ({ data, onBack }) => {
 
         {/* ---------------- Child Tabs ---------------- */}
         <section className="mt-0 bg-white dark:bg-gray-800">
-          {/* Tabs */}
           <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 mb-0">
             <div className="flex flex-wrap">
               {CHILD_TABS.map((tab) => (
@@ -911,11 +1086,10 @@ const MTRNForm = ({ data, onBack }) => {
                   key={tab.key}
                   type="button"
                   onClick={() => setActiveChildTab(tab.key)}
-                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap transition-colors ${
-                    activeChildTab === tab.key
-                      ? "bg-blue-600 text-white"
-                      : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                  }`}
+                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap transition-colors ${activeChildTab === tab.key
+                    ? "bg-blue-600 text-white"
+                    : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                    }`}
                 >
                   {tab.label}
                 </button>
@@ -933,16 +1107,15 @@ const MTRNForm = ({ data, onBack }) => {
             )}
           </div>
 
-          {/* Tab 1: Item Transfer Details */}
           {activeChildTab === "itemTransferDetails" && (
             <div className="pt-3">
               <DynamicTable
                 columns={[
                   {
-                    key: "itemCode",
+                    key: "item",
                     label: "Item Code",
                     type: "select",
-                    options: itemOptions,
+                    options: scheduleItemOptions,
                   },
                   {
                     key: "itemDescription",
@@ -951,10 +1124,10 @@ const MTRNForm = ({ data, onBack }) => {
                     readOnly: true,
                   },
                   {
-                    key: "unit",
+                    key: "unitDisplay",
                     label: "Unit",
-                    type: "select",
-                    options: unitOptions,
+                    type: "text",
+                    readOnly: true,
                   },
                   { key: "availableQty", label: "Available Qty", type: "number" },
                   { key: "qty", label: "Qty", type: "number" },
@@ -966,7 +1139,7 @@ const MTRNForm = ({ data, onBack }) => {
                     type: "textarea",
                   },
                   {
-                    key: "supplierId",
+                    key: "supplier",
                     label: "Supplier ID",
                     type: "select",
                     options: supplierOptions,
@@ -985,7 +1158,6 @@ const MTRNForm = ({ data, onBack }) => {
             </div>
           )}
 
-          {/* Tab 2: Transfer/Return Summary */}
           {activeChildTab === "summary" && (
             <div className="pt-3 pb-1">
               <div className={fieldGrid}>
@@ -994,23 +1166,32 @@ const MTRNForm = ({ data, onBack }) => {
                   label="Total Value"
                   name="totalValue"
                   value={totalValue}
-                  onChange={() => {}}
+                  onChange={() => { }}
                   disabled
                 />
-                <ToggleField
+                <Field
+                  type="select"
                   label="Approved By PM"
-                  checked={summary.approvedByPM}
-                  onChange={() => handleSummaryToggle("approvedByPM")}
+                  name="approvedByPm"
+                  value={summary.approvedByPm}
+                  onChange={handleSummaryChange}
+                  options={YES_NO_OPTIONS}
                 />
-                <ToggleField
+                <Field
+                  type="select"
                   label="Approved By Q/C"
-                  checked={summary.approvedByQC}
-                  onChange={() => handleSummaryToggle("approvedByQC")}
+                  name="approvedByQc"
+                  value={summary.approvedByQc}
+                  onChange={handleSummaryChange}
+                  options={YES_NO_OPTIONS}
                 />
-                <ToggleField
+                <Field
+                  type="select"
                   label="Approved By Stores"
-                  checked={summary.approvedByStores}
-                  onChange={() => handleSummaryToggle("approvedByStores")}
+                  name="approvedByStores"
+                  value={summary.approvedByStores}
+                  onChange={handleSummaryChange}
+                  options={YES_NO_OPTIONS}
                 />
                 <Field
                   type="textarea"

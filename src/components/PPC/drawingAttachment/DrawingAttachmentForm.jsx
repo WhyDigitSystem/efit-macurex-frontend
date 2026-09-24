@@ -7,6 +7,7 @@ import {
   ChevronRight,
   Trash2,
   Upload,
+  Eye,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import drawingAttachmentAPI from "../../../api/PPC/drawingAttachmentAPI";
@@ -37,10 +38,10 @@ const fieldGrid =
 
 const SUPPORTED_FILE_TYPES = [
   "application/pdf",
-  "application/msword", // DOC
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // DOCX
-  "application/vnd.ms-excel", // XLS
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // XLSX
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   "text/csv",
   "image/png",
   "image/jpeg",
@@ -54,22 +55,9 @@ const SUPPORTED_FILE_TYPES = [
 ];
 
 const SUPPORTED_FILE_EXTENSIONS = [
-  "pdf",
-  "doc",
-  "docx",
-  "xls",
-  "xlsx",
-  "csv",
-  "png",
-  "jpg",
-  "jpeg",
-  "gif",
-  "webp",
-  "bmp",
-  "svg",
-  "zip",
-  "rar",
-  "txt",
+  "pdf", "doc", "docx", "xls", "xlsx", "csv",
+  "png", "jpg", "jpeg", "gif", "webp", "bmp", "svg",
+  "zip", "rar", "txt",
 ];
 
 const isSupportedFile = (file) => {
@@ -79,21 +67,28 @@ const isSupportedFile = (file) => {
   return SUPPORTED_FILE_EXTENSIONS.includes(ext);
 };
 
+const isImageName = (name) =>
+  /\.(png|jpe?g|gif|bmp|webp|svg)$/i.test(String(name || ""));
+
+const isPdfName = (name) => /\.pdf$/i.test(String(name || ""));
+
+/* Build the public URL of an uploaded file from its stored filename. */
+const buildFileUrl = (fileName) => {
+  if (!fileName) return "";
+  const base =
+    import.meta.env.VITE_API_URL ||
+    import.meta.env.VITE_API_BASE_URL ||
+    "";
+  const trimmed = String(base).replace(/\/$/, "");
+  return `${trimmed}/uploads/drawingattachment/${fileName}`;
+};
+
 /* ---------------------------------------------------------------------------- */
 /* Shared building blocks                                                      */
 
 const Field = ({
-  label,
-  name,
-  value,
-  onChange,
-  error,
-  required,
-  type = "text",
-  options,
-  className = "",
-  disabled = false,
-  placeholder,
+  label, name, value, onChange, error, required,
+  type = "text", options, className = "", disabled = false, placeholder,
 }) => {
   if (type === "select") {
     return (
@@ -102,7 +97,6 @@ const Field = ({
           {label}
           {required && <span className="text-red-500"> *</span>}
         </label>
-
         <select
           name={name}
           value={value}
@@ -117,7 +111,6 @@ const Field = ({
             </option>
           ))}
         </select>
-
         {error && (
           <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
             {error}
@@ -133,7 +126,6 @@ const Field = ({
         {label}
         {required && <span className="text-red-500"> *</span>}
       </label>
-
       <input
         type={type}
         name={name}
@@ -143,7 +135,6 @@ const Field = ({
         placeholder={placeholder}
         className={`${controlClasses} ${error ? controlErrClasses : ""}`}
       />
-
       {error && (
         <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
           {error}
@@ -169,7 +160,6 @@ const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
       <X className="h-3 w-3" />
       Cancel
     </button>
-
     <button
       onClick={onSave}
       disabled={isSubmitting}
@@ -182,7 +172,7 @@ const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
 );
 
 /* ---------------------------------------------------------------------------- */
-/* Table helpers + drag-and-drop file cell                                      */
+/* Table helpers + drag-and-drop file cell + preview button                    */
 
 const TableWrapper = ({ children }) => (
   <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
@@ -196,13 +186,12 @@ const TableHead = ({ headers }) => (
       {headers.map((h, i) => (
         <th
           key={i}
-          className={`p-1 whitespace-nowrap ${
-            i === 0
+          className={`p-1 whitespace-nowrap ${i === 0
               ? "w-8 text-center"
               : i === headers.length - 1
                 ? "w-20 text-left"
                 : "text-left"
-          } dark:text-white`}
+            } dark:text-white`}
         >
           {h}
         </th>
@@ -220,11 +209,10 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
         type="button"
         onClick={onRemove}
         disabled={disabled}
-        className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-          disabled
+        className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
             ? "bg-gray-400 cursor-not-allowed"
             : "bg-red-600 hover:bg-red-700"
-        }`}
+          }`}
       >
         <Trash2 size={10} />
       </button>
@@ -245,7 +233,7 @@ const FileUploadCell = ({ file, existingFileName, error, onFileChange }) => {
   };
 
   return (
-    <td className="p-1 align-top min-w-[320px]">
+    <td className="p-1 align-top min-w-[280px]">
       <div
         onDragOver={(e) => {
           e.preventDefault();
@@ -258,11 +246,10 @@ const FileUploadCell = ({ file, existingFileName, error, onFileChange }) => {
           pickFile(e.dataTransfer.files?.[0] || null);
         }}
         onClick={() => document.getElementById("drawing-file-input")?.click()}
-        className={`flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed px-3 py-2 cursor-pointer transition-colors ${
-          dragOver
+        className={`flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed px-3 py-2 cursor-pointer transition-colors ${dragOver
             ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
             : "border-gray-300 dark:border-gray-600 hover:border-blue-400"
-        }`}
+          }`}
       >
         <Upload className="h-4 w-4 text-gray-400 dark:text-gray-500" />
         <span className="text-[11px] text-gray-500 dark:text-gray-400">
@@ -281,7 +268,7 @@ const FileUploadCell = ({ file, existingFileName, error, onFileChange }) => {
       {(file?.name || existingFileName) && (
         <span
           title={file?.name || existingFileName}
-          className="inline-block truncate min-w-0 max-w-[280px] text-xs text-gray-700 dark:text-gray-200 mt-1"
+          className="inline-block truncate min-w-0 max-w-[260px] text-xs text-gray-700 dark:text-gray-200 mt-1"
         >
           {file?.name || existingFileName}
         </span>
@@ -296,6 +283,23 @@ const FileUploadCell = ({ file, existingFileName, error, onFileChange }) => {
   );
 };
 
+const PreviewCell = ({ disabled, onPreview }) => (
+  <td className="p-1 align-top text-center">
+    <button
+      type="button"
+      onClick={onPreview}
+      disabled={disabled}
+      className={`h-6 w-6 rounded text-white flex items-center justify-center mx-auto ${disabled
+          ? "bg-gray-400 cursor-not-allowed"
+          : "bg-sky-600 hover:bg-sky-700"
+        }`}
+      title={disabled ? "No file to preview" : "Preview"}
+    >
+      <Eye size={12} />
+    </button>
+  </td>
+);
+
 /* ---------------------------------------------------------------------------- */
 /* Empty state builders                                                        */
 
@@ -308,6 +312,9 @@ const emptyHeader = () => ({
 const emptyAttachmentRow = () => ({
   file: null,
   existingFileName: "",
+  existingPath: "",
+  existingSize: 0,
+  existingType: "",
 });
 
 /* ---------------------------------------------------------------------------- */
@@ -323,12 +330,20 @@ const DrawingAttachmentForm = ({ data, onBack }) => {
   const [tableError, setTableError] = useState("");
   const [panelOpen, setPanelOpen] = useState(true);
 
-  /* ---------------- Lookup options ---------------- */
   const [typeOfItemOptions, setTypeOfItemOptions] = useState([]);
   const [itemOptions, setItemOptions] = useState([]);
   const [itemMap, setItemMap] = useState({});
 
-  /* ---------------- Form state ---------------- */
+  const [preview, setPreview] = useState({
+    open: false,
+    url: "",
+    name: "",
+    isImage: false,
+    isPdf: false,
+    loading: false,
+    error: "",
+  });
+
   const [header, setHeader] = useState(() => ({
     ...emptyHeader(),
     ...data?.header,
@@ -337,9 +352,12 @@ const DrawingAttachmentForm = ({ data, onBack }) => {
   const [attachmentRows, setAttachmentRows] = useState(() =>
     data?.attachments?.length
       ? data.attachments.map((d) => ({
-          ...emptyAttachmentRow(),
-          existingFileName: d.fileName || d.attachDrawingCopy || "",
-        }))
+        ...emptyAttachmentRow(),
+        existingFileName: d.fileName || d.name || d.attachDrawingCopy || "",
+        existingPath: d.filePath || "",
+        existingSize: d.fileSize || 0,
+        existingType: d.contentType || "",
+      }))
       : [emptyAttachmentRow()],
   );
 
@@ -350,7 +368,10 @@ const DrawingAttachmentForm = ({ data, onBack }) => {
 
     const loadItemTypes = async () => {
       try {
-        const res = await listOfValuesAPI.getListValuesGroup("ITEM TYPE", orgId);
+        const res = await listOfValuesAPI.getListValuesGroup(
+          "ITEM TYPE DRAWING",
+          orgId,
+        );
         if (Array.isArray(res) && res.length) {
           setTypeOfItemOptions(
             res.map((v) => ({
@@ -369,9 +390,12 @@ const DrawingAttachmentForm = ({ data, onBack }) => {
         const res = await itemAPI.getItems(orgId, branch);
         const map = {};
         const opts = (res || []).map((it) => {
-          const code = it.itemCode || it.code || it.id?.toString() || "";
-          map[code] = it;
-          return { value: code, label: code };
+          const value = it.id;
+          map[value] = it;
+          return {
+            value,
+            label: it.itemCode || it.code || String(it.id),
+          };
         });
         setItemOptions(opts);
         setItemMap(map);
@@ -383,6 +407,51 @@ const DrawingAttachmentForm = ({ data, onBack }) => {
 
     Promise.all([loadItemTypes(), loadItems()]);
   }, [orgId, branch]);
+
+  /* ---------------- Re-sync when data prop changes (edit mode) ---------------- */
+
+  useEffect(() => {
+    if (!data) return;
+
+    setHeader({
+      ...emptyHeader(),
+      ...(data.header || {}),
+    });
+
+    setAttachmentRows(
+      data.attachments?.length
+        ? data.attachments.map((d) => ({
+          ...emptyAttachmentRow(),
+          existingFileName:
+            d.fileName || d.name || d.attachDrawingCopy || "",
+          existingPath: d.filePath || "",
+          existingSize: d.fileSize || 0,
+          existingType: d.contentType || "",
+        }))
+        : [emptyAttachmentRow()],
+    );
+  }, [data]);
+
+  /* ---------------- Normalize fgPartNo on edit ---------------- */
+  useEffect(() => {
+    const current = header.fgPartNo;
+    if (!current) return;
+    if (Number.isFinite(Number(current))) return;
+
+    const match = Object.values(itemMap).find(
+      (it) =>
+        String(it.itemCode) === String(current) ||
+        String(it.code) === String(current),
+    );
+    if (match) {
+      setHeader((prev) => ({
+        ...prev,
+        fgPartNo: match.id,
+        fgPartDescription: match.itemDescription || prev.fgPartDescription,
+      }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itemMap]);
 
   /* ---------------- Header handlers ---------------- */
 
@@ -423,6 +492,71 @@ const DrawingAttachmentForm = ({ data, onBack }) => {
   const handleRemoveRow = (idx) =>
     setAttachmentRows((prev) => prev.filter((_, i) => i !== idx));
 
+  /* ---------------- Preview handlers ---------------- */
+
+  const closePreview = () => {
+    setPreview((prev) => {
+      if (prev.url?.startsWith("blob:")) {
+        try {
+          URL.revokeObjectURL(prev.url);
+        } catch {
+          /* ignore */
+        }
+      }
+      return {
+        open: false,
+        url: "",
+        name: "",
+        isImage: false,
+        isPdf: false,
+        loading: false,
+        error: "",
+      };
+    });
+  };
+
+  const handlePreview = (row) => {
+    const displayName =
+      row.file?.name ||
+      row.existingFileName ||
+      row.existingPath ||
+      "Attachment";
+
+    // 1) Newly-chosen local file → object URL
+    if (row.file instanceof File) {
+      const url = URL.createObjectURL(row.file);
+      setPreview({
+        open: true,
+        url,
+        name: displayName,
+        isImage: isImageName(displayName) || row.file.type?.startsWith("image/"),
+        isPdf: isPdfName(displayName) || row.file.type === "application/pdf",
+        loading: false,
+        error: "",
+      });
+      return;
+    }
+
+    // 2) Existing file → direct URL built from fileName (no API call)
+    const storedName = row.existingFileName;
+    if (!storedName) {
+      addToast("No file to preview", "warning");
+      return;
+    }
+
+    const url = buildFileUrl(storedName);
+
+    setPreview({
+      open: true,
+      url,
+      name: displayName,
+      isImage: isImageName(displayName),
+      isPdf: isPdfName(displayName),
+      loading: false,
+      error: "",
+    });
+  };
+
   /* ---------------- Validation ---------------- */
 
   const validate = () => {
@@ -433,9 +567,7 @@ const DrawingAttachmentForm = ({ data, onBack }) => {
 
     setFieldErrors(errors);
 
-    const validRows = attachmentRows.every(
-      (r) => r.file || r.existingFileName,
-    );
+    const validRows = attachmentRows.every((r) => r.file || r.existingFileName);
 
     if (!validRows)
       setTableError(
@@ -455,60 +587,74 @@ const DrawingAttachmentForm = ({ data, onBack }) => {
 
     const isUpdate = Boolean(data?.id);
 
-    // Single-transaction payload: header + attachment records.
-    // The backend stores each drawing copy, links them to the FG part and keeps
-    // the complete attachment history for audit (server-side validation).
-    const attachments = attachmentRows
-      .filter((r) => r.file || r.existingFileName)
-      .map((r, i) => ({
-        sno: i + 1,
-        fileName: r.file?.name || r.existingFileName,
-        fileType: r.file?.type || "",
-        fileSize: r.file?.size || 0,
-      }));
-
     const payload = {
-      ...(isUpdate ? { id: data.id } : {}),
-      orgId,
-      header,
-      attachments,
+      ...(isUpdate ? { id: Number(data.id) } : {}),
+
       active: data?.active ?? true,
-      createdBy: isUpdate ? data?.createdBy || usersId : usersId,
-      ...(isUpdate ? { updatedBy: usersId } : {}),
+      cancel: false,
+      cancelRemarks: "",
+
+      createdBy: isUpdate
+        ? data?.createdBy ?? usersId ?? "admin"
+        : usersId ?? "admin",
+      updatedBy: usersId ?? "admin",
+
+      orgId,
+      financialYear: "2026-2027",
+
+      typeOfItem: Number(header.typeOfItem) || 0,
+      fgPartNo: Number(header.fgPartNo) || 0,
+      fgPartDescription: header.fgPartDescription || "",
     };
 
-    try {
-      const response = await drawingAttachmentAPI.createUpdate(payload);
+    const files = attachmentRows
+      .map((r) => r.file)
+      .filter((f) => f instanceof File);
 
-      if (response?.status) {
+    console.log("📤 Saving Drawing Attachment:", {
+      payload,
+      files: files.map((f) => f.name),
+    });
+
+    try {
+      const response = await drawingAttachmentAPI.createUpdate({
+        payload,
+        files,
+      });
+
+      const isSuccess =
+        response?.status === true ||
+        response?.statusFlag === "Ok" ||
+        response?.status === 200 ||
+        response?.statusCode === 200;
+
+      if (isSuccess) {
         addToast(
           response?.paramObjectsMap?.message ||
-            (isUpdate
-              ? "Drawing Attachment updated successfully!"
-              : "Drawing Attachment created successfully!"),
+          (isUpdate
+            ? "Drawing Attachment updated successfully!"
+            : "Drawing Attachment created successfully!"),
+          "success",
         );
         onBack?.();
       } else {
         addToast(
           response?.errors?.[0]?.shortMessage ||
-            response?.errors?.[0]?.longMessage ||
-            response?.message ||
-            response?.paramObjectsMap?.message ||
-            "Failed to save Drawing Attachment.",
+          response?.errors?.[0]?.longMessage ||
+          response?.message ||
+          response?.paramObjectsMap?.message ||
+          "Failed to save Drawing Attachment.",
+          "error",
         );
       }
     } catch (err) {
       console.error("Save Drawing Attachment Error:", err);
-      if (err.response?.data) {
-        addToast(
-          err.response.data.message ||
-            err.response.data.statusMessage ||
-            err.response.data.error ||
-            JSON.stringify(err.response.data),
-        );
-      } else {
-        addToast("Something went wrong.");
-      }
+      const errorMessage =
+        err.response?.data?.message ||
+        err.response?.data?.statusMessage ||
+        err.response?.data?.error ||
+        "Something went wrong.";
+      addToast(errorMessage, "error");
     } finally {
       setIsSubmitting(false);
     }
@@ -524,7 +670,6 @@ const DrawingAttachmentForm = ({ data, onBack }) => {
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
-
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
           {data ? "Edit Drawing Attachment" : "Add Drawing Attachment"}
         </h2>
@@ -600,7 +745,9 @@ const DrawingAttachmentForm = ({ data, onBack }) => {
               )}
 
               <TableWrapper>
-                <TableHead headers={["#", "Attach Drawing Copy *", "Action"]} />
+                <TableHead
+                  headers={["#", "Attach Drawing Copy *", "Preview", "Action"]}
+                />
                 <tbody>
                   {attachmentRows.map((row, idx) => (
                     <TableRow
@@ -614,6 +761,10 @@ const DrawingAttachmentForm = ({ data, onBack }) => {
                         existingFileName={row.existingFileName}
                         error={row.error}
                         onFileChange={(val) => handleFileChange(idx, val)}
+                      />
+                      <PreviewCell
+                        disabled={!row.file && !row.existingFileName}
+                        onPreview={() => handlePreview(row)}
                       />
                     </TableRow>
                   ))}
@@ -635,6 +786,76 @@ const DrawingAttachmentForm = ({ data, onBack }) => {
           saveLabel={data ? "Update" : "Save"}
         />
       </div>
+
+      {/* ---------------- Preview modal ---------------- */}
+      {preview.open && (
+        <div
+          className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-3 sm:p-6"
+          onClick={closePreview}
+        >
+          <div
+            className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 dark:border-gray-700">
+              <span className="text-xs font-medium truncate dark:text-white">
+                {preview.name}
+              </span>
+              <button
+                type="button"
+                onClick={closePreview}
+                className="flex items-center gap-1 text-xs text-red-600 hover:underline dark:text-red-400"
+              >
+                <X className="h-3 w-3" /> Close
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-auto p-3">
+              {preview.loading ? (
+                <p className="py-10 text-center text-xs text-gray-500 dark:text-gray-400">
+                  Loading preview...
+                </p>
+              ) : preview.error ? (
+                <p className="py-10 text-center text-xs font-medium text-red-600 dark:text-red-400">
+                  {preview.error}
+                </p>
+              ) : preview.isImage ? (
+                <img
+                  src={preview.url}
+                  alt={preview.name}
+                  className="mx-auto max-w-full max-h-[75vh] object-contain"
+                  onError={() =>
+                    setPreview((p) => ({
+                      ...p,
+                      error: "Failed to load image",
+                    }))
+                  }
+                />
+              ) : preview.isPdf ? (
+                <iframe
+                  src={preview.url}
+                  title={preview.name}
+                  className="w-full h-[65vh] sm:h-[72vh] rounded border dark:border-gray-700"
+                />
+              ) : (
+                <div className="py-10 text-center">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                    Preview not supported for this file type.
+                  </p>
+                  <a
+                    href={preview.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs text-blue-600 underline dark:text-blue-400"
+                  >
+                    Open in a new tab
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

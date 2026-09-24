@@ -5,9 +5,60 @@ import MTRNForm from "./MTRNForm";
 import materialTransferReturnNoteAPI from "../../../api/Production/materialTransferReturnNoteAPI";
 import { toast } from "../../../utils/toast";
 
+/* ------------------------------------------------------------------ */
+/* Map the flat backend response into the form's expected shape       */
+
+const mapApiToFormData = (src) => {
+  if (!src) return null;
+
+  return {
+    id: src.id,
+    active: src.active === true || src.active === "Active" || src.active === "Y",
+    createdBy: src.createdBy,
+    updatedBy: src.updatedBy,
+
+    // header fields (form reads via data.xxx)
+    plantId: src.branch?.id ?? "",
+    belongsTo: src.belongsTo ?? "",
+    docId: src.docId ?? "",
+    docDate: src.docDate ?? "",
+    type: src.type ?? "",
+    fromLocation: src.fromLocation?.id ?? "",
+    toLocation: src.toLocation?.id ?? "",
+    fgItem: src.fgItem?.id ?? "",
+    schOrderNo: src.schOrderNo ?? "",
+    time: src.time ?? "",
+    preparedBy: src.preparedBy?.id ?? "",
+
+    // summary
+    approvedByPm: src.approvedByPm ?? "",
+    approvedByQc: src.approvedByQc ?? "",
+    approvedByStores: src.approvedByStores ?? "",
+    narration: src.narration ?? "",
+
+    // details
+    materialTransferReturnNoteDetailsDTO: (src.itemDetails || []).map((d) => ({
+      item: d.item?.id ?? "",
+      itemCode: d.item?.itemCode ?? "",
+      itemDescription: d.item?.itemDescription ?? "",
+      unit: d.unit?.id ?? "",
+      unitDisplay: d.unit?.unitId ?? "",
+      availableQty: d.availableQty ?? "",
+      qty: d.qty ?? "",
+      rate: d.rate ?? "",
+      value: d.value ?? 0,
+      reasonForRejectionTransfer: d.reasonForRejectionTransfer ?? "",
+      supplier: d.supplier?.id ?? "",
+      supplierName: d.supplier?.customerName ?? "",
+    })),
+  };
+};
+
+/* ------------------------------------------------------------------ */
+
 const MTRNMaster = () => {
   const navigate = useNavigate();
-  const [view, setView] = useState("list"); // "list" | "form"
+  const [view, setView] = useState("list");
   const [editData, setEditData] = useState(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
@@ -16,12 +67,15 @@ const MTRNMaster = () => {
     setView("form");
   };
 
-  // Pencil icon click -> fetch the record by id, then open the form
   const handleEdit = useCallback(async (row) => {
+    if (!row?.id) {
+      toast.error("Invalid record");
+      return;
+    }
+
     try {
-      const fresh =
-        (await materialTransferReturnNoteAPI.getById(row.id)) || row;
-      setEditData(fresh);
+      const fresh = await materialTransferReturnNoteAPI.getById(row.id);
+      setEditData(mapApiToFormData(fresh));
       setView("form");
     } catch (error) {
       console.error("Failed to fetch MTRN for edit:", error);
@@ -32,11 +86,9 @@ const MTRNMaster = () => {
   const handleBack = () => {
     setEditData(null);
     setView("list");
-    // bump refreshTrigger so the list re-fetches after add/update
     setRefreshTrigger((prev) => prev + 1);
   };
 
-  // List screen back button -> return to the Production module home.
   const handleNavigateHome = () => {
     navigate("/production");
   };

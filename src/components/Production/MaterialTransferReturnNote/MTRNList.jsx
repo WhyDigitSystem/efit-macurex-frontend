@@ -19,13 +19,15 @@ const MTRNList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   const BRANCH_ID = Number(localStorage.getItem("branchId")) || 0;
 
   const loadRecords = useCallback(async () => {
-    if (!ORG_ID) return;
+    if (!ORG_ID || !BRANCH_ID) return;
     try {
       setLoading(true);
-      const data = await materialTransferReturnNoteAPI.getByOrgId(
-        ORG_ID,
-        BRANCH_ID,
-      );
+
+      const data = await materialTransferReturnNoteAPI.getByOrgIdAndBranch({
+        branch: BRANCH_ID,
+        orgId: ORG_ID,
+      });
+
       data.sort((a, b) => (b.id || 0) - (a.id || 0));
       setRecords(data);
     } catch (error) {
@@ -56,71 +58,101 @@ const MTRNList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     }
   };
 
+  /* ---------------- Accessors ---------------- */
+
+  const getBranchLabel = (row) =>
+    row?.branch?.branchName ||
+    row?.branch?.branchCode ||
+    row?.branch?.id ||
+    "";
+
+  const getFgItemLabel = (row) =>
+    row?.fgItem?.itemCode ||
+    row?.fgItem?.itemDescription ||
+    row?.fgItem?.id ||
+    "";
+
+  const getFromLocationLabel = (row) =>
+    row?.fromLocation?.locationName || row?.fromLocation?.id || "";
+
+  const getToLocationLabel = (row) =>
+    row?.toLocation?.locationName || row?.toLocation?.id || "";
+
+  /* ---------------- Columns ---------------- */
+
   const columns = [
     {
-      key: "mtrnNo",
+      key: "docId",
       label: "MTRN No",
-      accessor: (row) => row.mtrnNo || row.docNo || "",
+      accessor: (row) => row?.docId || "",
       type: "text",
       noWrap: true,
     },
     {
-      key: "mtrnDate",
+      key: "docDate",
       label: "MTRN Date",
-      accessor: (row) => row.mtrnDate || row.docDate || "",
+      accessor: (row) => row?.docDate || "",
       type: "date",
       noWrap: true,
     },
     {
       key: "type",
       label: "Type",
-      accessor: (row) => row.type || "",
+      accessor: (row) => row?.type || "",
       type: "text",
     },
     {
-      key: "plantId",
+      key: "branch",
       label: "Branch",
-      accessor: (row) =>
-        typeof row.plantId === "object"
-          ? row.plantId.branchName || row.plantId.plantName || row.plantId.id
-          : row.plantName || row.plantId,
+      accessor: (row) => getBranchLabel(row),
       type: "text",
     },
     {
-      key: "fgSfgPartNo",
+      key: "fgItem",
       label: "FG/SFG Part No",
-      accessor: (row) =>
-        typeof row.fgSfgPartNo === "object"
-          ? row.fgSfgPartNo.itemCode || row.fgSfgPartNo.id
-          : row.fgSfgPartNo || "",
+      accessor: (row) => getFgItemLabel(row),
       type: "text",
     },
     {
-      key: "subOrderNo",
+      key: "schOrderNo",
       label: "Sub Order No",
-      accessor: (row) =>
-        typeof row.subOrderNo === "object"
-          ? row.subOrderNo.docId || row.subOrderNo.id
-          : row.subOrderNo || "",
+      accessor: (row) => row?.schOrderNo || "",
       type: "text",
     },
     {
       key: "fromLocation",
       label: "From Location",
-      accessor: (row) =>
-        typeof row.fromLocation === "object"
-          ? row.fromLocation.locationName || row.fromLocation.id
-          : row.fromLocation || "",
+      accessor: (row) => getFromLocationLabel(row),
       type: "text",
     },
     {
       key: "toLocation",
       label: "To Location",
-      accessor: (row) =>
-        typeof row.toLocation === "object"
-          ? row.toLocation.locationName || row.toLocation.id
-          : row.toLocation || "",
+      accessor: (row) => getToLocationLabel(row),
       type: "text",
+    },
+    {
+      key: "active",
+      label: "Status",
+      accessor: (row) =>
+        row?.active === true ||
+          row?.active === "Active" ||
+          row?.active === "Y"
+          ? "Active"
+          : "Inactive",
+      type: "status",
+      statusVariants: {
+        Active: {
+          label: "Active",
+          className:
+            "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+        },
+        Inactive: {
+          label: "Inactive",
+          className:
+            "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+        },
+      },
     },
     {
       key: "actions",
@@ -132,14 +164,13 @@ const MTRNList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   ];
 
   const searchFields = [
-    "mtrnNo",
-    "mtrnDate",
+    "docId",
     "type",
-    "plantId",
-    "fgSfgPartNo",
-    "subOrderNo",
-    "fromLocation",
-    "toLocation",
+    "branch.branchName",
+    "fgItem.itemCode",
+    "schOrderNo",
+    "fromLocation.locationName",
+    "toLocation.locationName",
   ];
 
   return (
