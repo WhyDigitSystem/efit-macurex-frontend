@@ -5,20 +5,23 @@ import PurchaseBillForm from "./PurchaseBillForm";
 const PurchaseBill = () => {
   const [screen, setScreen] = useState("list");
   const [editData, setEditData] = useState(null);
+  // Which list is showing; also the default Type when clicking Add
+  const [listType, setListType] = useState("purchaseBill");
 
   const addNew = () => {
-    console.log("Add button clicked");
     setEditData(null);
     setScreen("form");
   };
 
   const edit = (row) => {
-    console.log("Edit clicked:", row);
+    // row.type decides which form layout opens
     setEditData(row);
     setScreen("form");
   };
 
-  const handleBack = () => {
+  // The form passes the saved type so the list returns to the matching tab
+  const handleBack = (savedType) => {
+    if (typeof savedType === "string") setListType(savedType);
     setScreen("list");
   };
 
@@ -26,6 +29,8 @@ const PurchaseBill = () => {
     <>
       {screen === "list" && (
         <PurchaseBillList
+          type={listType}
+          onTypeChange={setListType}
           onAddNew={addNew}
           onEdit={edit}
           onBack={() => window.history.back()}
@@ -35,6 +40,7 @@ const PurchaseBill = () => {
       {screen === "form" && (
         <PurchaseBillForm
           data={editData}
+          defaultType={listType}
           onBack={handleBack}
         />
       )}
