@@ -1,5 +1,13 @@
-import { List, Save, X, ArrowLeft, Search, ChevronLeft } from "lucide-react";
-import { useEffect, useState } from "react";
+import {
+  RefreshCw,
+  Save,
+  X,
+  ArrowLeft,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import branchAPI from "../../../api/branchAPI";
 import financialYearAPI from "../../../api/financialYearAPI";
 import docTypeMappingAPI from "../../../api/docTypeMappingAPI";
@@ -14,6 +22,8 @@ const controlClasses =
 
 const labelClasses =
   "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
+
+const SAVED_PAGE_SIZE = 8;
 
 // onBack -> close / cancel
 const DocTypeMappingPendingList = ({ onBack }) => {
@@ -30,24 +40,69 @@ const DocTypeMappingPendingList = ({ onBack }) => {
   const [selectedFinYearId, setSelectedFinYearId] = useState("");
   const [selectedFinYearRecordId, setSelectedFinYearRecordId] = useState(0);
 
-  const [mappingData, setMappingData] = useState([]);
-  const [loading, setLoading] = useState(false);
+  // ---- Pending mapping (Mapping Details tab) ----
+  const [pendingData, setPendingData] = useState([]);
+  const [pendingLoading, setPendingLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // ---- Saved-mapping (List icon) view state ----
-  // viewingSaved: whether we're in "saved mapping" mode at all (list or detail)
-  const [viewingSaved, setViewingSaved] = useState(false);
-  // savedRecords: the full list of header records returned by getDocumentTypeMappingByOrgId
+  // ---- Saved mapping (Saved Mappings tab) ----
   const [savedRecords, setSavedRecords] = useState([]);
   const [savedListLoading, setSavedListLoading] = useState(false);
   const [savedSearchTerm, setSavedSearchTerm] = useState("");
-  // savedInfo: the currently opened record's header info (null while browsing the list)
-  const [savedInfo, setSavedInfo] = useState(null);
+  const [savedPage, setSavedPage] = useState(1);
+  // savedDetailInfo: the currently opened record's header info (null while browsing the list)
+  const [savedDetailInfo, setSavedDetailInfo] = useState(null);
+  const [savedDetailRows, setSavedDetailRows] = useState([]);
+
+  // "pending" | "saved" - which tab is shown
+  const [activeTab, setActiveTab] = useState("pending");
+  // true while the tab should be picked automatically based on data;
+  // becomes false the moment the user clicks a tab themselves, and is
+  // reset to true whenever the branch/fin year filter changes.
+  const autoTabRef = useRef(true);
+
+  // Ensures the localStorage-based default branch/finYear is only applied once,
+  // so it never overwrites a selection the user has since made.
+  const defaultsAppliedRef = useRef(false);
 
   useEffect(() => {
     fetchBranches();
     fetchFinYears();
   }, []);
+
+  // Default Branch / Fin Year from localStorage once both lookups have
+  // loaded. Runs only once - the user can freely change either dropdown
+  // afterward without it being reset.
+  useEffect(() => {
+    if (defaultsAppliedRef.current) return;
+    if (branches.length === 0 || finYears.length === 0) return;
+
+    const storedBranchId = localStorage.getItem("branchId");
+    const storedFinYear = localStorage.getItem("finYear");
+
+    if (storedBranchId) {
+      const b = branches.find((br) => String(br.id) === String(storedBranchId));
+      if (b) {
+        setSelectedBranchId(String(b.id));
+        setSelectedBranchCode(b.branchCode || "");
+      }
+    }
+
+    if (storedFinYear) {
+      const f = finYears.find(
+        (fy) =>
+          String(fy.finYear) === String(storedFinYear) ||
+          String(fy.finYearId) === String(storedFinYear),
+      );
+      if (f) {
+        setSelectedFinYear(f.finYear ?? storedFinYear);
+        setSelectedFinYearId(f.finYearId || "");
+        setSelectedFinYearRecordId(f.id || 0);
+      }
+    }
+
+    defaultsAppliedRef.current = true;
+  }, [branches, finYears]);
 
   const filtersReady =
     selectedBranchId &&
@@ -55,16 +110,12 @@ const DocTypeMappingPendingList = ({ onBack }) => {
     selectedFinYear &&
     selectedFinYearId;
 
-    console.log("selectedBranchId:", selectedBranchId)
-    console.log("selectedBranchCode:", selectedBranchCode)
-    console.log("selectedFinYear:", selectedFinYear)
-    console.log("selectedFinYearId:", selectedFinYearId)
-
+  // Pending mapping loads whenever the filters are ready/change.
   useEffect(() => {
     if (filtersReady) {
       loadPendingMappings();
     } else {
-      setMappingData([]);
+      setPendingData([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -73,6 +124,13 @@ const DocTypeMappingPendingList = ({ onBack }) => {
     selectedFinYear,
     selectedFinYearId,
   ]);
+
+  // Saved mapping list loads on mount and whenever the branch changes
+  // (independent of pending, so both tabs are always ready to view).
+  useEffect(() => {
+    fetchSavedMappings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedBranchId]);
 
   const fetchBranches = async () => {
     try {
@@ -105,7 +163,8 @@ const DocTypeMappingPendingList = ({ onBack }) => {
     const selected = branches.find((b) => String(b.id) === id);
     setSelectedBranchId(id);
     setSelectedBranchCode(selected?.branchCode || "");
-    exitSavedView();
+    resetSavedDetail();
+    autoTabRef.current = true; // new filter context -> pick tab automatically again
   };
 
   const handleFinYearChange = (e) => {
@@ -114,21 +173,25 @@ const DocTypeMappingPendingList = ({ onBack }) => {
     setSelectedFinYear(selected?.finYear ?? value);
     setSelectedFinYearId(selected?.finYearId || "");
     setSelectedFinYearRecordId(selected?.id || 0);
-    exitSavedView();
+    resetSavedDetail();
+    autoTabRef.current = true;
   };
 
-  // Leaves "saved mapping" mode entirely and goes back to the pending-mapping screen
-  const exitSavedView = () => {
-    setViewingSaved(false);
-    setSavedInfo(null);
-    setSavedRecords([]);
+  const resetSavedDetail = () => {
+    setSavedDetailInfo(null);
+    setSavedDetailRows([]);
     setSavedSearchTerm("");
+    setSavedPage(1);
+  };
+
+  const selectTab = (tab) => {
+    autoTabRef.current = false; // user chose explicitly - stop auto-switching
+    setActiveTab(tab);
   };
 
   const loadPendingMappings = async () => {
     try {
-      setLoading(true);
-      exitSavedView();
+      setPendingLoading(true);
       const res = await docTypeMappingAPI.getPendingDocumentTypeMapping({
         branch: selectedBranchId,
         branchCode: selectedBranchCode,
@@ -136,12 +199,41 @@ const DocTypeMappingPendingList = ({ onBack }) => {
         finYearIdentifier: selectedFinYearId,
         orgId: ORG_ID,
       });
-      setMappingData(res || []);
+      const data = res || [];
+      setPendingData(data);
+      if (autoTabRef.current) {
+        setActiveTab(data.length > 0 ? "pending" : "saved");
+      }
     } catch (error) {
-      setMappingData([]);
+      setPendingData([]);
+      if (autoTabRef.current) setActiveTab("saved");
       toast.error("Failed to fetch pending mappings");
     } finally {
-      setLoading(false);
+      setPendingLoading(false);
+    }
+  };
+
+  // Fetches ALL saved document type mapping records for the org (or just
+  // the selected branch, if one is chosen) so the Saved Mappings tab is
+  // always ready to view without a separate click.
+  const fetchSavedMappings = async () => {
+    try {
+      setSavedListLoading(true);
+      const list = selectedBranchId
+        ? await docTypeMappingAPI.getDocumentTypeMappingByOrgId(
+            ORG_ID,
+            selectedBranchId,
+          )
+        : await docTypeMappingAPI.getDocumentTypeMappingByOrgId(ORG_ID);
+
+      setSavedRecords(list || []);
+      setSavedPage(1);
+    } catch (error) {
+      console.error("Error fetching saved mapping list:", error);
+      toast.error("Failed to load saved mappings");
+      setSavedRecords([]);
+    } finally {
+      setSavedListLoading(false);
     }
   };
 
@@ -151,14 +243,14 @@ const DocTypeMappingPendingList = ({ onBack }) => {
       return;
     }
 
-    if (mappingData.length === 0) {
+    if (pendingData.length === 0) {
       toast.error("No pending mapping rows to save");
       return;
     }
 
     setSaving(true);
 
-    const details = mappingData.map((item) => ({
+    const details = pendingData.map((item) => ({
       id: item.id || 0,
       active: true,
       branch: selectedBranchId,
@@ -196,8 +288,13 @@ const DocTypeMappingPendingList = ({ onBack }) => {
           res?.paramObjectsMap?.message ||
             "Document Type Mapping saved successfully",
         );
-        setMappingData([]);
-        loadPendingMappings();
+        setPendingData([]);
+        resetSavedDetail();
+        // Pending is now empty, so the automatic rule naturally lands on
+        // the Saved Mappings tab once the refreshed list comes back.
+        autoTabRef.current = true;
+        setActiveTab("saved");
+        await fetchSavedMappings();
       } else {
         toast.error(
           res?.paramObjectsMap?.errorMessage ||
@@ -217,43 +314,9 @@ const DocTypeMappingPendingList = ({ onBack }) => {
     }
   };
 
-  // List (three-line) icon: no branch/finYear required.
-  // Fetches ALL saved document type mapping records for the org and shows
-  // them as a searchable list. Clicking a record drills into its details.
-  const handleListClick = async () => {
-    try {
-      setSavedListLoading(true);
-      setViewingSaved(true);
-      setSavedInfo(null);
-      setSavedSearchTerm("");
-      setMappingData([]);
-
-      // Pass branch only if one happens to be selected; otherwise fetch
-      // every record for the org so the user can browse/search freely.
-      const list = selectedBranchId
-        ? await docTypeMappingAPI.getDocumentTypeMappingByOrgId(
-            ORG_ID,
-            selectedBranchId,
-          )
-        : await docTypeMappingAPI.getDocumentTypeMappingByOrgId(ORG_ID);
-
-      setSavedRecords(list || []);
-
-      if (!list || list.length === 0) {
-        toast.error("No saved document type mapping found");
-      }
-    } catch (error) {
-      console.error("Error fetching saved mapping list:", error);
-      toast.error("Failed to load saved mappings");
-      setSavedRecords([]);
-    } finally {
-      setSavedListLoading(false);
-    }
-  };
-
   // Opens one record from the saved list into the detail table
   const openSavedRecord = (record) => {
-    setSavedInfo({
+    setSavedDetailInfo({
       id: record.id,
       description: record.description,
       branchName: record.branch?.branchName,
@@ -262,7 +325,7 @@ const DocTypeMappingPendingList = ({ onBack }) => {
       active: record.active,
     });
 
-    setMappingData(
+    setSavedDetailRows(
       (record.documentTypeMappingDetails || []).map((d) => ({
         id: d.id,
         screenName: d.screenName,
@@ -277,8 +340,8 @@ const DocTypeMappingPendingList = ({ onBack }) => {
 
   // Back from a record's detail view to the searchable saved-list
   const backToSavedList = () => {
-    setSavedInfo(null);
-    setMappingData([]);
+    setSavedDetailInfo(null);
+    setSavedDetailRows([]);
   };
 
   const filteredSavedRecords = savedRecords.filter((r) => {
@@ -294,8 +357,21 @@ const DocTypeMappingPendingList = ({ onBack }) => {
     );
   });
 
-  const showingSavedList = viewingSaved && !savedInfo;
-  const showingSavedDetail = viewingSaved && !!savedInfo;
+  const savedTotalPages = Math.max(
+    1,
+    Math.ceil(filteredSavedRecords.length / SAVED_PAGE_SIZE),
+  );
+  const safeSavedPage = Math.min(savedPage, savedTotalPages);
+  const pagedSavedRecords = filteredSavedRecords.slice(
+    (safeSavedPage - 1) * SAVED_PAGE_SIZE,
+    safeSavedPage * SAVED_PAGE_SIZE,
+  );
+
+  const tabButtonClasses = (tab) =>
+    "px-3 py-1.5 text-xs font-semibold rounded-t border-b-2 transition-colors " +
+    (activeTab === tab
+      ? "text-blue-600 dark:text-blue-400 border-blue-600 dark:border-blue-400"
+      : "text-gray-500 dark:text-gray-400 border-transparent hover:text-gray-700 dark:hover:text-gray-200");
 
   return (
     <div className="p-2 max-w-7xl">
@@ -313,78 +389,84 @@ const DocTypeMappingPendingList = ({ onBack }) => {
         </h2>
 
         <button
-          onClick={handleListClick}
-          title="List saved mapping"
+          onClick={fetchSavedMappings}
+          title="Refresh saved mappings"
           className="p-1 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
         >
-          <List className="h-4 w-4" />
+          <RefreshCw className="h-4 w-4" />
         </button>
 
         <button
           onClick={handleSave}
-          disabled={
-            saving || !filtersReady || mappingData.length === 0 || viewingSaved
-          }
+          disabled={saving || !filtersReady || pendingData.length === 0}
           title="Save"
           className="p-1 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
         >
           <Save className="h-4 w-4" />
         </button>
-
-        {viewingSaved && (
-          <button
-            onClick={exitSavedView}
-            title="Close saved mapping view"
-            className="p-1 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ml-auto"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        )}
       </div>
 
       {/* MAIN CARD */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
-        {/* FILTERS (only relevant to the pending-mapping screen) */}
-        {!viewingSaved && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-            <div>
-              <label className={labelClasses}>Branch Name</label>
-              <select
-                value={selectedBranchId}
-                onChange={handleBranchChange}
-                disabled={branchLoading}
-                className={controlClasses}
-              >
-                <option value="">Select Branch</option>
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.branchName}
-                  </option>
-                ))}
-              </select>
-            </div>
+        {/* FILTERS */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+          <div>
+            <label className={labelClasses}>Branch Name</label>
+            <select
+              value={selectedBranchId}
+              onChange={handleBranchChange}
+              disabled={branchLoading}
+              className={controlClasses}
+            >
+              <option value="">Select Branch</option>
+              {branches.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.branchName}
+                </option>
+              ))}
+            </select>
+          </div>
 
-            <div>
-              <label className={labelClasses}>Fin Year</label>
-              <select
-                value={selectedFinYear}
-                onChange={handleFinYearChange}
-                disabled={finYearLoading}
-                className={controlClasses}
-              >
-                <option value="">Select Fin Year</option>
-                {finYears.map((f) => (
-                  <option key={f.id ?? f.finYear} value={f.finYear}>
-                    {f.finYear}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div>
+            <label className={labelClasses}>Fin Year</label>
+            <select
+              value={selectedFinYear}
+              onChange={handleFinYearChange}
+              disabled={finYearLoading}
+              className={controlClasses}
+            >
+              <option value="">Select Fin Year</option>
+              {finYears.map((f) => (
+                <option key={f.id ?? f.finYear} value={f.finYear}>
+                  {f.finYear}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* TABS - sit next to each other; auto-picked, but always clickable */}
+        {!savedDetailInfo && (
+          <div className="flex items-center gap-1 border-b border-gray-200 dark:border-gray-700 mb-3">
+            <button
+              onClick={() => selectTab("pending")}
+              className={tabButtonClasses("pending")}
+            >
+              Mapping Details
+              {pendingData.length > 0 && ` (${pendingData.length})`}
+            </button>
+            <button
+              onClick={() => selectTab("saved")}
+              className={tabButtonClasses("saved")}
+            >
+              Saved Mappings
+              {savedRecords.length > 0 && ` (${savedRecords.length})`}
+            </button>
           </div>
         )}
 
         {/* ===== SAVED-MAPPING: SEARCHABLE LIST ===== */}
-        {showingSavedList && (
+        {activeTab === "saved" && !savedDetailInfo && (
           <>
             <div className="mb-3">
               <label className={labelClasses}>Search saved mappings</label>
@@ -393,17 +475,14 @@ const DocTypeMappingPendingList = ({ onBack }) => {
                 <input
                   type="text"
                   value={savedSearchTerm}
-                  onChange={(e) => setSavedSearchTerm(e.target.value)}
+                  onChange={(e) => {
+                    setSavedSearchTerm(e.target.value);
+                    setSavedPage(1);
+                  }}
                   placeholder="Search by description, branch or fin year..."
                   className={controlClasses + " pl-7"}
                 />
               </div>
-            </div>
-
-            <div className="mb-2">
-              <span className="inline-block text-xs font-semibold text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 pb-1">
-                Saved Mappings ({filteredSavedRecords.length})
-              </span>
             </div>
 
             <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded">
@@ -437,7 +516,7 @@ const DocTypeMappingPendingList = ({ onBack }) => {
                         Loading...
                       </td>
                     </tr>
-                  ) : filteredSavedRecords.length === 0 ? (
+                  ) : pagedSavedRecords.length === 0 ? (
                     <tr>
                       <td
                         colSpan={5}
@@ -449,14 +528,14 @@ const DocTypeMappingPendingList = ({ onBack }) => {
                       </td>
                     </tr>
                   ) : (
-                    filteredSavedRecords.map((record, idx) => (
+                    pagedSavedRecords.map((record, idx) => (
                       <tr
                         key={record.id ?? idx}
                         onClick={() => openSavedRecord(record)}
                         className="border-t border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50"
                       >
                         <td className="px-3 py-2 text-center text-gray-700 dark:text-gray-200">
-                          {idx + 1}
+                          {(safeSavedPage - 1) * SAVED_PAGE_SIZE + idx + 1}
                         </td>
                         <td className="px-3 py-2 text-gray-700 dark:text-gray-200">
                           {record.description}
@@ -477,11 +556,39 @@ const DocTypeMappingPendingList = ({ onBack }) => {
                 </tbody>
               </table>
             </div>
+
+            {/* PAGINATION */}
+            {filteredSavedRecords.length > SAVED_PAGE_SIZE && (
+              <div className="flex items-center justify-between mt-2 text-xs text-gray-600 dark:text-gray-300">
+                <span>
+                  Page {safeSavedPage} of {savedTotalPages} ·{" "}
+                  {filteredSavedRecords.length} records
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setSavedPage((p) => Math.max(1, p - 1))}
+                    disabled={safeSavedPage <= 1}
+                    className="p-1 rounded border border-gray-300 dark:border-gray-600 disabled:opacity-40 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={() =>
+                      setSavedPage((p) => Math.min(savedTotalPages, p + 1))
+                    }
+                    disabled={safeSavedPage >= savedTotalPages}
+                    className="p-1 rounded border border-gray-300 dark:border-gray-600 disabled:opacity-40 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  >
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
           </>
         )}
 
         {/* ===== SAVED-MAPPING: RECORD DETAIL ===== */}
-        {showingSavedDetail && (
+        {activeTab === "saved" && savedDetailInfo && (
           <>
             <div className="mb-3 flex items-center gap-2">
               <button
@@ -498,23 +605,17 @@ const DocTypeMappingPendingList = ({ onBack }) => {
 
             <div className="mb-3 px-3 py-2 rounded bg-blue-50 dark:bg-blue-900/20 text-xs text-gray-700 dark:text-gray-200 flex flex-wrap gap-x-4 gap-y-1">
               <span>
-                <strong>Description:</strong> {savedInfo.description}
+                <strong>Description:</strong> {savedDetailInfo.description}
               </span>
               <span>
-                <strong>Branch:</strong> {savedInfo.branchName} (
-                {savedInfo.branchCode})
+                <strong>Branch:</strong> {savedDetailInfo.branchName} (
+                {savedDetailInfo.branchCode})
               </span>
               <span>
-                <strong>Fin Year:</strong> {savedInfo.finYear}
+                <strong>Fin Year:</strong> {savedDetailInfo.finYear}
               </span>
               <span>
-                <strong>Status:</strong> {String(savedInfo.active)}
-              </span>
-            </div>
-
-            <div className="mb-2">
-              <span className="inline-block text-xs font-semibold text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 pb-1">
-                Saved Mapping Details
+                <strong>Status:</strong> {String(savedDetailInfo.active)}
               </span>
             </div>
 
@@ -543,7 +644,7 @@ const DocTypeMappingPendingList = ({ onBack }) => {
                   </tr>
                 </thead>
                 <tbody className="bg-white dark:bg-gray-800">
-                  {mappingData.length === 0 ? (
+                  {savedDetailRows.length === 0 ? (
                     <tr>
                       <td
                         colSpan={6}
@@ -553,7 +654,7 @@ const DocTypeMappingPendingList = ({ onBack }) => {
                       </td>
                     </tr>
                   ) : (
-                    mappingData.map((item, idx) => (
+                    savedDetailRows.map((item, idx) => (
                       <tr
                         key={`${item.screenCode}-${idx}`}
                         className="border-t border-gray-200 dark:border-gray-700"
@@ -585,85 +686,77 @@ const DocTypeMappingPendingList = ({ onBack }) => {
           </>
         )}
 
-        {/* ===== PENDING MAPPING (default) ===== */}
-        {!viewingSaved && (
-          <>
-            <div className="mb-2">
-              <span className="inline-block text-xs font-semibold text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 pb-1">
-                Mapping Details
-              </span>
-            </div>
-
-            <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded">
-              <table className="w-full text-xs">
-                <thead className="bg-gray-50 dark:bg-gray-900">
+        {/* ===== PENDING MAPPING ===== */}
+        {activeTab === "pending" && (
+          <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded">
+            <table className="w-full text-xs">
+              <thead className="bg-gray-50 dark:bg-gray-900">
+                <tr>
+                  <th className="px-3 py-2 text-center text-white font-semibold w-14">
+                    S.No
+                  </th>
+                  <th className="px-3 py-2 text-left text-white font-semibold">
+                    Screen Name
+                  </th>
+                  <th className="px-3 py-2 text-left text-white font-semibold">
+                    Screen Code
+                  </th>
+                  <th className="px-3 py-2 text-left text-white font-semibold">
+                    Doc Code
+                  </th>
+                  <th className="px-3 py-2 text-left text-white font-semibold">
+                    Prefix
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white dark:bg-gray-800">
+                {pendingLoading ? (
                   <tr>
-                    <th className="px-3 py-2 text-center text-white font-semibold w-14">
-                      S.No
-                    </th>
-                    <th className="px-3 py-2 text-left text-white font-semibold">
-                      Screen Name
-                    </th>
-                    <th className="px-3 py-2 text-left text-white font-semibold">
-                      Screen Code
-                    </th>
-                    <th className="px-3 py-2 text-left text-white font-semibold">
-                      Doc Code
-                    </th>
-                    <th className="px-3 py-2 text-left text-white font-semibold">
-                      Prefix
-                    </th>
+                    <td
+                      colSpan={5}
+                      className="text-center py-5 text-gray-500 dark:text-gray-400"
+                    >
+                      Loading...
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="bg-white dark:bg-gray-800">
-                  {loading ? (
-                    <tr>
-                      <td
-                        colSpan={5}
-                        className="text-center py-5 text-gray-500 dark:text-gray-400"
-                      >
-                        Loading...
+                ) : pendingData.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={5}
+                      className="text-center py-5 text-gray-500 dark:text-gray-400"
+                    >
+                      {filtersReady
+                        ? "No Pending Document Type Mapping found"
+                        : "Select branch and financial year"}
+                    </td>
+                  </tr>
+                ) : (
+                  pendingData.map((item, idx) => (
+                    <tr
+                      key={`${item.screenCode}-${idx}`}
+                      className="border-t border-gray-200 dark:border-gray-700"
+                    >
+                      <td className="px-3 py-2 text-center text-gray-700 dark:text-gray-200">
+                        {idx + 1}
+                      </td>
+                      <td className="px-3 py-2 text-gray-700 dark:text-gray-200">
+                        {item.screenName}
+                      </td>
+                      <td className="px-3 py-2 text-gray-700 dark:text-gray-200">
+                        {item.screenCode}
+                      </td>
+                      <td className="px-3 py-2 text-gray-700 dark:text-gray-200">
+                        {item.docCode}
+                      </td>
+                      <td className="px-3 py-2 text-gray-700 dark:text-gray-200">
+                        {item.prefixField}
                       </td>
                     </tr>
-                  ) : mappingData.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={5}
-                        className="text-center py-5 text-gray-500 dark:text-gray-400"
-                      >
-                        {filtersReady
-                          ? "No Pending Document Type Mapping found"
-                          : "Select branch and financial year"}
-                      </td>
-                    </tr>
-                  ) : (
-                    mappingData.map((item, idx) => (
-                      <tr
-                        key={`${item.screenCode}-${idx}`}
-                        className="border-t border-gray-200 dark:border-gray-700"
-                      >
-                        <td className="px-3 py-2 text-center text-gray-700 dark:text-gray-200">
-                          {idx + 1}
-                        </td>
-                        <td className="px-3 py-2 text-gray-700 dark:text-gray-200">
-                          {item.screenName}
-                        </td>
-                        <td className="px-3 py-2 text-gray-700 dark:text-gray-200">
-                          {item.screenCode}
-                        </td>
-                        <td className="px-3 py-2 text-gray-700 dark:text-gray-200">
-                          {item.docCode}
-                        </td>
-                        <td className="px-3 py-2 text-gray-700 dark:text-gray-200">
-                          {item.prefixField}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>
