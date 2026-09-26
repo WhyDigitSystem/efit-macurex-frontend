@@ -1,149 +1,117 @@
 import apiClient from "../apiClient";
 
 const productionBulkIssueAPI = {
-    getByOrgId: async (orgId, branchId) => {
-        try {
-            const res = await apiClient.get(
-                `/api/commonmaster/getProductionBulkIssueByOrgId?orgId=${orgId}&branchId=${branchId}`,
-            );
-            return res?.paramObjectsMap?.productionBulkIssueList || [];
-        } catch (error) {
-            console.error("Error fetching production bulk issues:", error);
-            throw error;
-        }
-    },
+  getByOrgId: async (orgId, branch) => {
+    try {
+      const res = await apiClient.get(
+        "/api/subContract/getProductionBulkIssuesByOrgIdAndBranch",
+        { params: { branch, orgId } },
+      );
 
-    getById: async (id) => {
-        try {
-            const res = await apiClient.get(
-                `/api/commonmaster/getProductionBulkIssueById?id=${id}`,
-            );
-            return res?.paramObjectsMap?.productionBulkIssueVO || null;
-        } catch (error) {
-            console.error("Error fetching production bulk issue by id:", error);
-            throw error;
-        }
-    },
+      return res;
+    } catch (error) {
+      console.error("Error fetching production bulk issues:", error);
+      throw error;
+    }
+  },
 
-    // Header, details and summary are saved in a single transaction by the
-    // backend; complete record history with quantities and remarks is kept.
-    createUpdate: async (data) => {
-        try {
-            const res = await apiClient.post(
-                "/api/commonmaster/createUpdateProductionBulkIssue",
-                data,
-            );
-            return res;
-        } catch (error) {
-            console.error("Error saving production bulk issue:", error);
-            throw error;
-        }
-    },
+  getById: async (id) => {
+    try {
+      const res = await apiClient.get(
+        "/api/subContract/getProductionBulkIssuesById",
+        { params: { id } },
+      );
 
-    getDocId: async ({ financialYear, orgId, screenCode, type }) => {
-        try {
-            const res = await apiClient.get(
-                `/api/commonmaster/getProductionBulkIssueDocId`,
-                {
-                    params: {
-                        financialYear,
-                        orgId,
-                        screenCode,
-                        type,
-                    },
-                },
-            );
-            const data = res?.data ?? res;
-            return data?.paramObjectsMap?.invoiceDocId || "";
-        } catch (error) {
-            console.error("Error fetching production bulk issue doc id:", error);
-            throw error;
-        }
-    },
+      return (
+        res?.paramObjectsMap?.productionBulkIssuesVO ||
+        res?.paramObjectsMap ||
+        null
+      );
+    } catch (error) {
+      console.error("Error fetching production bulk issue by id:", error);
+      throw error;
+    }
+  },
 
-    getPlantOptions: async (orgId) => {
-        try {
-            const res = await apiClient.get(
-                `/api/commonmaster/getPlantListByOrgId?orgId=${orgId}`,
-            );
-            return res?.paramObjectsMap?.plantVO || [];
-        } catch (error) {
-            console.error("Error fetching plants:", error);
-            throw error;
-        }
-    },
+  // CREATE / UPDATE
+  // Backend Swagger requires PUT
+  createUpdate: async (data) => {
+    try {
+      const res = await apiClient.put(
+        "/api/subContract/createUpdateProductionBulkIssues",
+        data,
+      );
 
-    getLocationOptions: async (orgId, branchId) => {
-        try {
-            const res = await apiClient.get(
-                `/api/commonmaster/getLocationListByOrgBranch?orgId=${orgId}&branchId=${branchId}`,
-            );
-            return res?.paramObjectsMap?.locationVO || [];
-        } catch (error) {
-            console.error("Error fetching locations:", error);
-            throw error;
-        }
-    },
+      return res;
+    } catch (error) {
+      console.error("Error saving production bulk issue:", error);
+      throw error;
+    }
+  },
 
-    getItemOptions: async (orgId, branchId) => {
-        try {
-            const res = await apiClient.get(
-                `/api/commonmaster/getItemListByOrgBranch?orgId=${orgId}&branchId=${branchId}`,
-            );
-            return res?.paramObjectsMap?.itemVO || [];
-        } catch (error) {
-            console.error("Error fetching items:", error);
-            throw error;
-        }
-    },
+  getDocId: async ({ financialYear, orgId }) => {
+    try {
+      const res = await apiClient.get(
+        "/api/subContract/getProductionBulkIssuesDocId",
+        {
+          params: {
+            financialYear,
+            orgId,
+          },
+        },
+      );
 
-    getIndentOptions: async (orgId, branchId) => {
-        try {
-            const res = await apiClient.get(
-                `/api/commonmaster/getIndentListByOrgBranch?orgId=${orgId}&branchId=${branchId}`,
-            );
-            return res?.paramObjectsMap?.indentVO || [];
-        } catch (error) {
-            console.error("Error fetching indents:", error);
-            throw error;
-        }
-    },
+      return res?.paramObjectsMap?.docId || "";
+    } catch (error) {
+      console.error("Error fetching production bulk issue doc id:", error);
+      throw error;
+    }
+  },
 
-    getUnitOptions: async (orgId, branchId) => {
-        try {
-            const res = await apiClient.get(
-                `/api/commonmaster/getUnitListByOrgBranch?orgId=${orgId}&branchId=${branchId}`,
-            );
-            return res?.paramObjectsMap?.unitVO || [];
-        } catch (error) {
-            console.error("Error fetching units:", error);
-            throw error;
-        }
-    },
+  /** FG/SFG item picker for the header. */
+  getFgItems: async (branch, orgId) => {
+    try {
+      if (!branch || !orgId) return [];
 
-    getBelongsToOptions: async (orgId) => {
-        try {
-            const res = await apiClient.get(
-                `/api/commonmaster/getBelongsToList?orgId=${orgId}`,
-            );
-            return res?.paramObjectsMap?.belongsToVO || [];
-        } catch (error) {
-            console.error("Error fetching belongs to:", error);
-            throw error;
-        }
-    },
+      const res = await apiClient.get(
+        "/api/subContract/getFGItemsforBOMCorrectionRequestNote",
+        {
+          params: {
+            branch,
+            orgId,
+          },
+        },
+      );
 
-    getIssueTypeOptions: async (orgId) => {
-        try {
-            const res = await apiClient.get(
-                `/api/commonmaster/getIssueTypeList?orgId=${orgId}`,
-            );
-            return res?.paramObjectsMap?.issueTypeVO || [];
-        } catch (error) {
-            console.error("Error fetching issue types:", error);
-            throw error;
-        }
-    },
+      return res?.paramObjectsMap?.itemDetails || [];
+    } catch (error) {
+      console.error("Error fetching FG items:", error);
+      return [];
+    }
+  },
+
+  /** Indents with item/unit/qty available for selected FG item. */
+  getIndentsForItem: async (branch, itemId, orgId) => {
+    try {
+      if (!branch || !itemId || !orgId) return [];
+
+      const res = await apiClient.get(
+        "/api/subContract/getIndentByItemForProductionBulkIssues",
+        {
+          params: {
+            branch,
+            itemId,
+            orgId,
+          },
+        },
+      );
+
+      return res?.paramObjectsMap?.indentList || [];
+    } catch (error) {
+      console.error("Error fetching indents for item:", error);
+      return [];
+    }
+  },
 };
 
 export default productionBulkIssueAPI;

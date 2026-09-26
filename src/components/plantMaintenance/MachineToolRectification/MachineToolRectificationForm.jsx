@@ -3,11 +3,11 @@ import { useEffect, useState } from "react";
 
 import branchAPI from "../../../api/branchAPI";
 import { departmentAPI } from "../../../api/departmentAPI";
-import docTypeMappingAPI from "../../../api/docTypeMappingAPI";
 import machineToolRectificationAPI from "../../../api/machineToolRectificationAPI";
 
 /* ---------------------------------------------------------------------------- */
-/* Shared design tokens - identical to other Maintenance/Quality forms         */
+/* Shared design tokens                                                         */
+/* ---------------------------------------------------------------------------- */
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -26,7 +26,8 @@ const fieldGrid =
   "grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-x-3 gap-y-2 items-start";
 
 /* ---------------------------------------------------------------------------- */
-/* Shared building blocks                                                      */
+/* Shared building blocks                                                       */
+/* ---------------------------------------------------------------------------- */
 
 const Field = ({
   label,
@@ -50,12 +51,15 @@ const Field = ({
 
         <select
           name={name}
-          value={value}
+          value={value ?? ""}
           onChange={onChange}
           disabled={disabled}
-          className={controlClasses}
+          className={`${controlClasses} ${
+            error ? "border-red-500 focus:border-red-500" : ""
+          }`}
         >
           <option value="">-- Select --</option>
+
           {(options || []).map((opt) => (
             <option key={opt.value} value={opt.value}>
               {opt.label}
@@ -82,7 +86,7 @@ const Field = ({
 
         <textarea
           name={name}
-          value={value}
+          value={value ?? ""}
           onChange={onChange}
           rows={3}
           className={
@@ -115,10 +119,12 @@ const Field = ({
       <input
         type={type}
         name={name}
-        value={value}
+        value={value ?? ""}
         onChange={onChange}
         disabled={disabled}
-        className={controlClasses}
+        className={`${controlClasses} ${
+          error ? "border-red-500 focus:border-red-500" : ""
+        }`}
       />
 
       {error && (
@@ -139,6 +145,7 @@ const SectionHeader = ({ children }) => (
 const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
   <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
     <button
+      type="button"
       onClick={onCancel}
       disabled={isSubmitting}
       className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
@@ -148,6 +155,7 @@ const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
     </button>
 
     <button
+      type="button"
       onClick={onSave}
       disabled={isSubmitting}
       className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
@@ -160,50 +168,82 @@ const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
-/* Doc-type-mapping screenCode used to find the finYear for doc-id generation.
-   UNCONFIRMED - guessed as "MTR" from the sample docId "BLR/MTR/2026-2027/00003",
-   same way "PTS" was guessed for Production Transfer Slip. Verify against the
-   real documentTypeMappingDetails rows before relying on this in production. */
-const SCREEN_CODE = "MTR";
+/* ---------------------------------------------------------------------------- */
+/* Blank header                                                                */
+/* ---------------------------------------------------------------------------- */
 
-/* Blank header shape mirrors the flat updateCreateMachineToolRectification DTO,
-   plus a few UI-only fields (rectifiedOn, breakdownNo selection) that get
-   mapped into the DTO on submit. */
 const blankHeader = () => ({
   branch: "",
-  docNo: "", // UI-only: NOT present in the confirmed DTO - see note in handleSave
+  docNo: "",
   department: "",
   date: todayISO(),
+
   breakdownNo: "",
   breakdownDate: "",
+
   attendBy: "",
   time: "",
+
   rectifiedOn: "",
   machineToolNo: "",
-  rectificationTimeInput: "", // UI time input, combined with rectifiedOn -> DTO rectificationTime
+
+  rectificationTimeInput: "",
+
   description: "",
   cause: "",
+
   maintenanceType: "",
+
   actionTaken: "",
   natureOfProblem: "",
+
   carriedOutBy: "",
+
   timeTakenForRectification: "",
+
   sparesUsed: "",
   location: "",
+
   preparedBy: "",
   remarks: "",
   approvedBy: "",
 });
 
+/* ---------------------------------------------------------------------------- */
+/* Component                                                                   */
+/* ---------------------------------------------------------------------------- */
+
 const MachineToolRectificationForm = ({ onBack, onSave, editData }) => {
+  /* -------------------------------------------------------------------------- */
+  /* Local storage                                                              */
+  /* -------------------------------------------------------------------------- */
+
   const ORG_ID = parseInt(localStorage.getItem("orgId"), 10);
 
+  /*
+   * Financial year is taken directly from localStorage.
+   *
+   * Doc ID generation DOES NOT depend on branch.
+   */
+  const FIN_YEAR =
+    localStorage.getItem("finYear") || String(new Date().getFullYear());
+
+  /* -------------------------------------------------------------------------- */
+  /* State                                                                      */
+  /* -------------------------------------------------------------------------- */
+
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [generatingDocId, setGeneratingDocId] = useState(false);
+
   const [fieldErrors, setFieldErrors] = useState({});
 
   const [branchOptions, setBranchOptions] = useState([]);
+
   const [departmentOptions, setDepartmentOptions] = useState([]);
+
   const [employeeOptions, setEmployeeOptions] = useState([]);
+
   const [breakdownOptions, setBreakdownOptions] = useState([]);
 
   const [header, setHeader] = useState({
@@ -211,30 +251,47 @@ const MachineToolRectificationForm = ({ onBack, onSave, editData }) => {
     ...editData?.header,
   });
 
-  /* ---------------------------------------------------------------- */
-  /* Load branch + department dropdowns once                          */
-  /* ---------------------------------------------------------------- */
+  /* ========================================================================= */
+  /* LOAD BRANCH + DEPARTMENT                                                  */
+  /* ========================================================================= */
+
   useEffect(() => {
     if (!ORG_ID) return;
 
+    /* ---------------------------------------------------------------------- */
+    /* Branch                                                                  */
+    /* ---------------------------------------------------------------------- */
+
     branchAPI
       .getBranchByOrgId(ORG_ID)
-      .then((list) =>
+      .then((list) => {
+        const branchList = Array.isArray(list)
+          ? list
+          : list?.paramObjectsMap?.branchVO ||
+            list?.paramObjectsMap?.branches ||
+            list?.paramObjectsMap?.branchList ||
+            [];
+
         setBranchOptions(
-          (list || []).map((b) => ({ value: b.id, label: b.branchName })),
-        ),
-      )
+          branchList.map((b) => ({
+            value: b.id,
+            label: b.branchName || b.branchCode || `Branch ${b.id}`,
+          })),
+        );
+      })
       .catch((error) => {
         console.error("Failed to load branch list:", error);
+
         setBranchOptions([]);
       });
+
+    /* ---------------------------------------------------------------------- */
+    /* Department                                                              */
+    /* ---------------------------------------------------------------------- */
 
     departmentAPI
       .getAllDepartments(ORG_ID)
       .then((res) => {
-        // departmentAPI.getAllDepartments returns the raw response envelope
-        // in this project (not a pre-unwrapped array) - pull the list out
-        // ourselves, tolerating either shape just in case.
         const list = Array.isArray(res)
           ? res
           : res?.paramObjectsMap?.departmentVO ||
@@ -252,14 +309,16 @@ const MachineToolRectificationForm = ({ onBack, onSave, editData }) => {
       })
       .catch((error) => {
         console.error("Failed to load department list:", error);
+
         setDepartmentOptions([]);
       });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ORG_ID]);
 
-  /* ---------------------------------------------------------------- */
-  /* Breakdown list depends on branch                                  */
-  /* ---------------------------------------------------------------- */
+  /* ========================================================================= */
+  /* BREAKDOWN LIST                                                           */
+  /* Branch is required here                                                   */
+  /* ========================================================================= */
+
   useEffect(() => {
     if (!ORG_ID || !header.branch) {
       setBreakdownOptions([]);
@@ -268,15 +327,21 @@ const MachineToolRectificationForm = ({ onBack, onSave, editData }) => {
 
     machineToolRectificationAPI
       .getBreakdownDetails(header.branch, ORG_ID)
-      .then((list) => setBreakdownOptions(list || []))
-      .catch(() => setBreakdownOptions([]));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      .then((list) => {
+        setBreakdownOptions(list || []);
+      })
+      .catch((error) => {
+        console.error("Failed to load breakdown details:", error);
+
+        setBreakdownOptions([]);
+      });
   }, [ORG_ID, header.branch]);
 
-  /* ---------------------------------------------------------------- */
-  /* Employee list (Attend by / Carried Out By / Prepared By /         */
-  /* Approved By all share this one branch+department filtered list)   */
-  /* ---------------------------------------------------------------- */
+  /* ========================================================================= */
+  /* EMPLOYEE LIST                                                            */
+  /* Branch + Department required                                             */
+  /* ========================================================================= */
+
   useEffect(() => {
     if (!ORG_ID || !header.branch || !header.department) {
       setEmployeeOptions([]);
@@ -285,136 +350,244 @@ const MachineToolRectificationForm = ({ onBack, onSave, editData }) => {
 
     machineToolRectificationAPI
       .getPrepareBy(header.branch, header.department, ORG_ID)
-      .then((list) =>
+      .then((list) => {
         setEmployeeOptions(
-          (list || []).map((e) => ({ value: e.id, label: e.name })),
-        ),
-      )
-      .catch(() => setEmployeeOptions([]));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+          (list || []).map((e) => ({
+            value: e.id,
+            label: e.name,
+          })),
+        );
+      })
+      .catch((error) => {
+        console.error("Failed to load employee list:", error);
+
+        setEmployeeOptions([]);
+      });
   }, [ORG_ID, header.branch, header.department]);
 
-  /* ---------------------------------------------------------------- */
-  /* Doc No. generation - new records only, needs branch selected      */
-  /* ---------------------------------------------------------------- */
+  /* ========================================================================= */
+  /* DOC NO GENERATION                                                        */
+  /*
+   * IMPORTANT:
+   *
+   * Doc No uses ONLY:
+   *
+   *     financialYear
+   *     orgId
+   *
+   * Branch is NOT used here.
+   *
+   * This is the same pattern as ProductionBulkIssueForm.
+   * ========================================================================= */
+
   useEffect(() => {
-    if (editData?.id) return; // never regenerate on edit
-    if (!ORG_ID || !header.branch) return;
+    if (editData?.id) return;
 
-    (async () => {
+    if (!ORG_ID || !FIN_YEAR) return;
+
+    let cancelled = false;
+
+    const generateDocId = async () => {
+      setGeneratingDocId(true);
+
       try {
-        const mappingList =
-          await docTypeMappingAPI.getDocumentTypeMappingByOrgId(
-            ORG_ID,
-            header.branch,
-          );
-        const mapping = mappingList?.[0];
-        const detail = mapping?.documentTypeMappingDetails?.find(
-          (d) => d.screenCode === SCREEN_CODE,
-        );
-        const finYear = detail?.finYear;
-        if (!finYear) return;
+        const docId = await machineToolRectificationAPI.getDocId({
+          financialYear: FIN_YEAR,
+          orgId: ORG_ID,
+        });
 
-        const docId = await machineToolRectificationAPI.getDocId(
-          finYear,
-          ORG_ID,
-        );
-        setHeader((prev) => ({ ...prev, docNo: docId }));
+        if (!cancelled) {
+          setHeader((prev) => ({
+            ...prev,
+            docNo: docId || "",
+          }));
+        }
       } catch (error) {
-        console.error("Doc No. generation failed:", error);
+        if (!cancelled) {
+          console.error("Doc No. generation failed:", error);
+        }
+      } finally {
+        if (!cancelled) {
+          setGeneratingDocId(false);
+        }
       }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ORG_ID, header.branch, editData?.id]);
+    };
+
+    generateDocId();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [ORG_ID, FIN_YEAR, editData?.id]);
+
+  /* ========================================================================= */
+  /* HEADER CHANGE                                                             */
+  /* ========================================================================= */
 
   const handleHeaderChange = (e) => {
     const { name, value } = e.target;
-    if (fieldErrors[name]) setFieldErrors((prev) => ({ ...prev, [name]: "" }));
-    setHeader((prev) => ({ ...prev, [name]: value }));
+
+    if (fieldErrors[name]) {
+      setFieldErrors((prev) => ({
+        ...prev,
+        [name]: "",
+      }));
+    }
+
+    setHeader((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
   };
 
-  /* Selecting a Breakdown No. auto-fills the related read-back fields  */
+  /* ========================================================================= */
+  /* BREAKDOWN SELECT                                                         */
+  /* ========================================================================= */
+
   const handleBreakdownSelect = (e) => {
     const id = e.target.value;
+
     const found = breakdownOptions.find((b) => String(b.id) === String(id));
 
     setHeader((prev) => ({
       ...prev,
+
       breakdownNo: found?.breakdownNo || "",
+
       machineToolNo: found?.machineToolNo || prev.machineToolNo,
+
       description: found?.description || prev.description,
+
       breakdownDate: found?.breakdownDate || prev.breakdownDate,
+
       time: found?.time || prev.time,
+
       maintenanceType: found?.maintenanceType || prev.maintenanceType,
+
       natureOfProblem: found?.natureOfProblem || prev.natureOfProblem,
+
       timeTakenForRectification:
         found?.timeTakenForRectification || prev.timeTakenForRectification,
+
       location: found?.location || prev.location,
     }));
 
     if (fieldErrors.breakdownNo) {
-      setFieldErrors((prev) => ({ ...prev, breakdownNo: "" }));
+      setFieldErrors((prev) => ({
+        ...prev,
+        breakdownNo: "",
+      }));
     }
   };
+
+  /* ========================================================================= */
+  /* VALIDATION                                                               */
+  /* ========================================================================= */
 
   const validate = () => {
     const errors = {};
 
-    if (!header.branch) errors.branch = "Plant ID is required";
-    if (!header.date) errors.date = "Date is required";
+    if (!header.branch) {
+      errors.branch = "Plant ID is required";
+    }
+
+    if (!header.date) {
+      errors.date = "Date is required";
+    }
 
     setFieldErrors(errors);
+
     return Object.keys(errors).length === 0;
   };
+
+  /* ========================================================================= */
+  /* SAVE                                                                      */
+  /* ========================================================================= */
 
   const handleSave = async () => {
     if (!validate()) return;
 
     setIsSubmitting(true);
 
-    /* Combine Rectified On (date) + Rectification Time (time) into the
-       single ISO rectificationTime datetime the DTO expects. */
+    /* ---------------------------------------------------------------------- */
+    /* Rectification datetime                                                  */
+    /* ---------------------------------------------------------------------- */
+
     let rectificationTimeIso = editData?.rectificationTime || null;
+
     if (header.rectifiedOn) {
       const timePart = header.rectificationTimeInput || "00:00";
+
       rectificationTimeIso = new Date(
         `${header.rectifiedOn}T${timePart}:00`,
       ).toISOString();
     }
 
-    /* NOTE: the confirmed updateCreateMachineToolRectification DTO has no
-       docNo field - only breakdownNo. If the backend does persist a doc
-       number for this screen it needs to be added to the DTO; until then
-       docNo is generated/shown for display only and NOT sent. Flag this
-       with the backend team if the doc number needs to be saved. */
+    /* ---------------------------------------------------------------------- */
+    /* Payload                                                                 */
+    /* ---------------------------------------------------------------------- */
+
     const payload = {
-      ...(editData?.id && { id: editData.id }),
+      ...(editData?.id && {
+        id: editData.id,
+      }),
+
       branch: header.branch ? Number(header.branch) : null,
+
       department: header.department ? Number(header.department) : null,
+
       breakdownNo: header.breakdownNo,
+
       breakdownDate: header.breakdownDate,
+
       attendBy: header.attendBy ? Number(header.attendBy) : null,
+
       time: header.time,
+
       machineToolNo: header.machineToolNo,
+
       rectificationTime: rectificationTimeIso,
+
       description: header.description,
+
       cause: header.cause,
+
       maintenanceType: header.maintenanceType,
+
       actionTaken: header.actionTaken,
+
       natureOfProblem: header.natureOfProblem,
+
       carriedOutBy: header.carriedOutBy ? Number(header.carriedOutBy) : null,
+
       timeTakenForRectification: header.timeTakenForRectification,
+
       sparesUsed: header.sparesUsed,
+
       location: header.location,
+
       preparedBy: header.preparedBy ? Number(header.preparedBy) : null,
+
       remarks: header.remarks,
+
       approvedBy: header.approvedBy ? Number(header.approvedBy) : null,
+
       active: editData?.active ?? true,
+
       orgId: ORG_ID,
-      financialYear:
-        editData?.financialYear || String(new Date().getFullYear()),
+
+      /*
+       * Use the same FIN_YEAR that was used
+       * to generate the Doc No.
+       */
+      financialYear: editData?.financialYear || FIN_YEAR,
+
       createdBy: localStorage.getItem("userName") || "SYSTEM",
     };
+
+    /* ---------------------------------------------------------------------- */
+    /* API                                                                     */
+    /* ---------------------------------------------------------------------- */
 
     try {
       const response =
@@ -425,27 +598,43 @@ const MachineToolRectificationForm = ({ onBack, onSave, editData }) => {
       const status = response?.status === true || response?.statusFlag === "Ok";
 
       if (status) {
-        if (onSave) onSave(payload);
+        if (onSave) {
+          onSave(payload);
+        }
       } else {
         const errorMessage =
           response?.paramObjectsMap?.message ||
           response?.paramObjectsMap?.errorMessage ||
           response?.message ||
           "Failed to save machine/tool rectification";
+
         alert(errorMessage);
       }
     } catch (error) {
       console.error("Save Error:", error);
-      alert("Failed to save Machine/Tool Rectification.");
+
+      alert(
+        error?.response?.data?.message ||
+          "Failed to save Machine/Tool Rectification.",
+      );
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  /* ========================================================================= */
+  /* RENDER                                                                    */
+  /* ========================================================================= */
+
   return (
     <div className="p-2 max-w-7xl">
+      {/* -------------------------------------------------------------------- */}
+      {/* PAGE HEADER                                                           */}
+      {/* -------------------------------------------------------------------- */}
+
       <div className="flex items-center gap-2 mb-3">
         <button
+          type="button"
           onClick={onBack}
           className="p-1 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white transition-colors"
         >
@@ -459,11 +648,19 @@ const MachineToolRectificationForm = ({ onBack, onSave, editData }) => {
         </h2>
       </div>
 
+      {/* -------------------------------------------------------------------- */}
+      {/* FORM                                                                  */}
+      {/* -------------------------------------------------------------------- */}
+
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
         <div>
           <SectionHeader>Rectification Details</SectionHeader>
 
           <div className={fieldGrid}>
+            {/* ============================================================ */}
+            {/* PLANT                                                         */}
+            {/* ============================================================ */}
+
             <Field
               type="select"
               label="Plant ID"
@@ -475,13 +672,21 @@ const MachineToolRectificationForm = ({ onBack, onSave, editData }) => {
               error={fieldErrors.branch}
             />
 
+            {/* ============================================================ */}
+            {/* DOC NO                                                        */}
+            {/* ============================================================ */}
+
             <Field
               label="Doc No."
               name="docNo"
-              value={header.docNo || "Auto"}
+              value={generatingDocId ? "Generating..." : header.docNo || "Auto"}
               onChange={handleHeaderChange}
               disabled
             />
+
+            {/* ============================================================ */}
+            {/* DEPARTMENT                                                    */}
+            {/* ============================================================ */}
 
             <Field
               type="select"
@@ -492,6 +697,10 @@ const MachineToolRectificationForm = ({ onBack, onSave, editData }) => {
               options={departmentOptions}
             />
 
+            {/* ============================================================ */}
+            {/* DATE                                                          */}
+            {/* ============================================================ */}
+
             <Field
               type="date"
               label="Date"
@@ -501,6 +710,10 @@ const MachineToolRectificationForm = ({ onBack, onSave, editData }) => {
               required
               error={fieldErrors.date}
             />
+
+            {/* ============================================================ */}
+            {/* BREAKDOWN NO                                                  */}
+            {/* ============================================================ */}
 
             <Field
               type="select"
@@ -519,6 +732,10 @@ const MachineToolRectificationForm = ({ onBack, onSave, editData }) => {
               error={fieldErrors.breakdownNo}
             />
 
+            {/* ============================================================ */}
+            {/* BREAKDOWN DATE                                                */}
+            {/* ============================================================ */}
+
             <Field
               type="date"
               label="Breakdown Date"
@@ -527,6 +744,10 @@ const MachineToolRectificationForm = ({ onBack, onSave, editData }) => {
               onChange={handleHeaderChange}
               disabled
             />
+
+            {/* ============================================================ */}
+            {/* ATTEND BY                                                     */}
+            {/* ============================================================ */}
 
             <Field
               type="select"
@@ -537,6 +758,10 @@ const MachineToolRectificationForm = ({ onBack, onSave, editData }) => {
               options={employeeOptions}
             />
 
+            {/* ============================================================ */}
+            {/* TIME                                                          */}
+            {/* ============================================================ */}
+
             <Field
               label="Time"
               name="time"
@@ -544,6 +769,10 @@ const MachineToolRectificationForm = ({ onBack, onSave, editData }) => {
               onChange={handleHeaderChange}
               disabled
             />
+
+            {/* ============================================================ */}
+            {/* RECTIFIED ON                                                  */}
+            {/* ============================================================ */}
 
             <Field
               type="date"
@@ -553,6 +782,10 @@ const MachineToolRectificationForm = ({ onBack, onSave, editData }) => {
               onChange={handleHeaderChange}
             />
 
+            {/* ============================================================ */}
+            {/* MACHINE / TOOL NO                                             */}
+            {/* ============================================================ */}
+
             <Field
               label="Machine No. / Tool No."
               name="machineToolNo"
@@ -560,6 +793,10 @@ const MachineToolRectificationForm = ({ onBack, onSave, editData }) => {
               onChange={handleHeaderChange}
               disabled
             />
+
+            {/* ============================================================ */}
+            {/* RECTIFICATION TIME                                            */}
+            {/* ============================================================ */}
 
             <Field
               type="time"
@@ -569,6 +806,10 @@ const MachineToolRectificationForm = ({ onBack, onSave, editData }) => {
               onChange={handleHeaderChange}
             />
 
+            {/* ============================================================ */}
+            {/* DESCRIPTION                                                   */}
+            {/* ============================================================ */}
+
             <Field
               label="Description"
               name="description"
@@ -577,12 +818,20 @@ const MachineToolRectificationForm = ({ onBack, onSave, editData }) => {
               disabled
             />
 
+            {/* ============================================================ */}
+            {/* CAUSE                                                         */}
+            {/* ============================================================ */}
+
             <Field
               label="Cause"
               name="cause"
               value={header.cause}
               onChange={handleHeaderChange}
             />
+
+            {/* ============================================================ */}
+            {/* MAINTENANCE TYPE                                              */}
+            {/* ============================================================ */}
 
             <Field
               label="Maintenance Type"
@@ -592,6 +841,10 @@ const MachineToolRectificationForm = ({ onBack, onSave, editData }) => {
               disabled
             />
 
+            {/* ============================================================ */}
+            {/* ACTION TAKEN                                                  */}
+            {/* ============================================================ */}
+
             <Field
               label="Action Taken"
               name="actionTaken"
@@ -599,12 +852,20 @@ const MachineToolRectificationForm = ({ onBack, onSave, editData }) => {
               onChange={handleHeaderChange}
             />
 
+            {/* ============================================================ */}
+            {/* NATURE OF PROBLEM                                             */}
+            {/* ============================================================ */}
+
             <Field
               label="Nature of Problem"
               name="natureOfProblem"
               value={header.natureOfProblem}
               onChange={handleHeaderChange}
             />
+
+            {/* ============================================================ */}
+            {/* CARRIED OUT BY                                                */}
+            {/* ============================================================ */}
 
             <Field
               type="select"
@@ -615,6 +876,10 @@ const MachineToolRectificationForm = ({ onBack, onSave, editData }) => {
               options={employeeOptions}
             />
 
+            {/* ============================================================ */}
+            {/* TIME TAKEN                                                    */}
+            {/* ============================================================ */}
+
             <Field
               label="Time Taken for Rectification"
               name="timeTakenForRectification"
@@ -623,12 +888,20 @@ const MachineToolRectificationForm = ({ onBack, onSave, editData }) => {
               disabled
             />
 
+            {/* ============================================================ */}
+            {/* SPARES USED                                                   */}
+            {/* ============================================================ */}
+
             <Field
               label="Spares Used"
               name="sparesUsed"
               value={header.sparesUsed}
               onChange={handleHeaderChange}
             />
+
+            {/* ============================================================ */}
+            {/* LOCATION                                                      */}
+            {/* ============================================================ */}
 
             <Field
               label="Location"
@@ -637,6 +910,10 @@ const MachineToolRectificationForm = ({ onBack, onSave, editData }) => {
               onChange={handleHeaderChange}
               disabled
             />
+
+            {/* ============================================================ */}
+            {/* PREPARED BY                                                   */}
+            {/* ============================================================ */}
 
             <Field
               type="select"
@@ -647,6 +924,10 @@ const MachineToolRectificationForm = ({ onBack, onSave, editData }) => {
               options={employeeOptions}
             />
 
+            {/* ============================================================ */}
+            {/* APPROVED BY                                                   */}
+            {/* ============================================================ */}
+
             <Field
               type="select"
               label="Approved By"
@@ -655,6 +936,11 @@ const MachineToolRectificationForm = ({ onBack, onSave, editData }) => {
               onChange={handleHeaderChange}
               options={employeeOptions}
             />
+
+            {/* ============================================================ */}
+            {/* REMARKS                                                       */}
+            {/* ============================================================ */}
+
             <Field
               type="textarea"
               label="Remarks"
@@ -665,6 +951,10 @@ const MachineToolRectificationForm = ({ onBack, onSave, editData }) => {
             />
           </div>
         </div>
+
+        {/* ------------------------------------------------------------------ */}
+        {/* BUTTONS                                                            */}
+        {/* ------------------------------------------------------------------ */}
 
         <FormButtons
           onCancel={onBack}

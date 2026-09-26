@@ -6,22 +6,27 @@ const ProductionBulkIssueList = ({ onAddNew, onEdit, onBack }) => {
   const [itemData, setItemData] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  /* -------------------------------------------------------------------------- */
+  /* Load Production (Bulk) Issues                                              */
+  /* -------------------------------------------------------------------------- */
+
   const loadItems = useCallback(async (orgId, branchId) => {
     setLoading(true);
 
     try {
       if (!orgId || !branchId) {
         console.error("Missing orgId or branchId");
-
         setItemData([]);
-
         return;
       }
 
-      const response = await productionBulkIssueAPI.getByOrgId(
-        orgId,
-        branchId,
-      );
+      const response = await productionBulkIssueAPI.getByOrgId(orgId, branchId);
+
+      console.log("Production Bulk Issues API Response:", response);
+
+      /* ---------------------------------------------------------------------- */
+      /* API Error Check                                                        */
+      /* ---------------------------------------------------------------------- */
 
       if (response?.status === false) {
         const msg =
@@ -30,93 +35,209 @@ const ProductionBulkIssueList = ({ onAddNew, onEdit, onBack }) => {
           "Failed to load production bulk issues";
 
         console.warn(msg);
-
         setItemData([]);
-
         return;
       }
+
+      /* ---------------------------------------------------------------------- */
+      /* Get Production Bulk Issues                                             */
+      /* ---------------------------------------------------------------------- */
 
       const issues = Array.isArray(
-        response?.paramObjectsMap?.productionBulkIssueList
+        response?.paramObjectsMap?.productionBulkIssues,
       )
-        ? response.paramObjectsMap.productionBulkIssueList
+        ? response.paramObjectsMap.productionBulkIssues
         : [];
 
+      console.log("Production Bulk Issues:", issues);
+
       if (issues.length === 0) {
-        console.warn("No Production Bulk Issues found");
-
         setItemData([]);
-
         return;
       }
+
+      /* ---------------------------------------------------------------------- */
+      /* Transform API Response                                                 */
+      /* ---------------------------------------------------------------------- */
 
       const transformedData = issues.map((item) => {
         return {
-          ...item,
+          /* ------------------------------------------------------------------ */
+          /* Main ID                                                            */
+          /* ------------------------------------------------------------------ */
 
           id: item.id,
 
+          /* ------------------------------------------------------------------ */
+          /* Issue / Document Number                                            */
+          /* ------------------------------------------------------------------ */
+
           /*
-           * Backend sends:
-           * docId: "BLR/PBI/26-27/00001"
+           * Backend currently returns:
            *
-           * Frontend table uses:
-           * issueNo
+           * "docId": null
+           *
+           * Therefore use the database ID as a temporary display fallback.
+           *
+           * If backend starts returning docId, it will automatically be used.
            */
-          issueNo: item.docId || "",
+          issueNo:
+            item.docId !== null && item.docId !== undefined
+              ? item.docId
+              : item.id
+                ? `PBI-${item.id}`
+                : "",
 
           docId: item.docId || "",
 
-          issueDate: item.issueDate || item.docDate || "",
+          /* ------------------------------------------------------------------ */
+          /* Date                                                               */
+          /* ------------------------------------------------------------------ */
 
+          date: item.date || item.docDate || "",
           docDate: item.docDate || "",
 
-          plant: item.plant?.plantName || item.plant?.plantId || "",
+          /* ------------------------------------------------------------------ */
+          /* Plant / Branch                                                     */
+          /* ------------------------------------------------------------------ */
 
-          plantId: item.plant?.id || "",
+          plant: item.branch?.branchName || item.branch?.branchCode || "",
+
+          plantCode: item.branch?.branchCode || "",
+
+          plantId: item.branch?.id || null,
+
+          /* ------------------------------------------------------------------ */
+          /* Belongs To                                                         */
+          /* ------------------------------------------------------------------ */
 
           belongsTo: item.belongsTo || "",
 
+          /* ------------------------------------------------------------------ */
+          /* FG Item                                                             */
+          /* ------------------------------------------------------------------ */
+
           fgItemCode: item.fgItem?.itemCode || "",
+
           fgItemDescription: item.fgItem?.itemDescription || "",
+
           fgItemId: item.fgItem?.id || null,
 
-          indentNo: item.indent?.docId || item.indentNo || "",
+          fgItemUnit: item.fgItem?.unit || "",
 
-          issueType: item.issueType || "",
+          /* ------------------------------------------------------------------ */
+          /* Indent                                                              */
+          /* ------------------------------------------------------------------ */
+
+          indentNo: item.indentNo || "",
+
+          /* ------------------------------------------------------------------ */
+          /* Purchase Material Reference                                         */
+          /* ------------------------------------------------------------------ */
+
+          purchaseMaterialRef: item.purchaseMaterialRef || "",
+
+          /* ------------------------------------------------------------------ */
+          /* Reference Number                                                    */
+          /* Backend field is refNo, NOT referenceNo                           */
+          /* ------------------------------------------------------------------ */
+
+          referenceNo: item.refNo || "",
+
+          /* ------------------------------------------------------------------ */
+          /* Type                                                               */
+          /* Backend field is type                                              */
+          /* ------------------------------------------------------------------ */
+
+          issueType: item.type || "",
+
+          /* ------------------------------------------------------------------ */
+          /* From Location                                                       */
+          /* ------------------------------------------------------------------ */
 
           fromLocation:
             item.fromLocation?.locationName ||
             item.fromLocation?.locationCode ||
             "",
+
           fromLocationCode: item.fromLocation?.locationCode || "",
+
           fromLocationId: item.fromLocation?.id || null,
+
+          /* ------------------------------------------------------------------ */
+          /* To Location                                                         */
+          /* ------------------------------------------------------------------ */
 
           toLocation:
             item.toLocation?.locationName ||
             item.toLocation?.locationCode ||
             "",
+
           toLocationCode: item.toLocation?.locationCode || "",
+
           toLocationId: item.toLocation?.id || null,
 
-          remarks: item.remarks || "",
+          /* ------------------------------------------------------------------ */
+          /* Created / Updated By                                                */
+          /* ------------------------------------------------------------------ */
 
-          active:
-            item.active === true ||
-            String(item.active).toLowerCase() === "active",
+          createdBy: item.createdBy || "",
 
-          activeStatus: item.active || "",
+          updatedBy: item.updatedBy || "",
 
-          createdBy: item.createdBy || item.preparedBy || "",
+          /* ------------------------------------------------------------------ */
+          /* Active / Status                                                     */
+          /* ------------------------------------------------------------------ */
 
-          preparedBy: item.preparedBy || "",
+          active: item.active === true,
 
-          productionBulkIssueDetailsDTO:
-            item.productionBulkIssueDetailsResponseDTO || [],
+          activeStatus: item.active,
+
+          /* ------------------------------------------------------------------ */
+          /* Cancel                                                              */
+          /* ------------------------------------------------------------------ */
+
+          cancel: item.cancel === true,
+
+          cancelRemarks: item.cancelRemarks || "",
+
+          /* ------------------------------------------------------------------ */
+          /* Screen Information                                                  */
+          /* ------------------------------------------------------------------ */
+
+          screenName: item.screenName || "",
+
+          screenCode: item.screenCode || "",
+
+          /* ------------------------------------------------------------------ */
+          /* Organization                                                        */
+          /* ------------------------------------------------------------------ */
+
+          orgId: item.orgId || null,
+
+          financialYear: item.financialYear || "",
+
+          /* ------------------------------------------------------------------ */
+          /* Details                                                             */
+          /* ------------------------------------------------------------------ */
+
+          details: Array.isArray(item.details) ? item.details : [],
+
+          productionBulkIssueDetailsResponseDTO: Array.isArray(
+            item.productionBulkIssueDetailsResponseDTO,
+          )
+            ? item.productionBulkIssueDetailsResponseDTO
+            : [],
         };
       });
 
+      /* ---------------------------------------------------------------------- */
+      /* Sort Newest First                                                      */
+      /* ---------------------------------------------------------------------- */
+
       transformedData.sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
+
+      console.log("Production Bulk Issues Transformed:", transformedData);
 
       setItemData(transformedData);
     } catch (error) {
@@ -126,7 +247,11 @@ const ProductionBulkIssueList = ({ onAddNew, onEdit, onBack }) => {
     } finally {
       setLoading(false);
     }
-  }, [productionBulkIssueAPI]);
+  }, []);
+
+  /* -------------------------------------------------------------------------- */
+  /* Initial Load                                                               */
+  /* -------------------------------------------------------------------------- */
 
   useEffect(() => {
     const orgId = localStorage.getItem("orgId");
@@ -135,9 +260,19 @@ const ProductionBulkIssueList = ({ onAddNew, onEdit, onBack }) => {
     loadItems(orgId, branchId);
   }, [loadItems]);
 
+  /* -------------------------------------------------------------------------- */
+  /* Edit                                                                       */
+  /* -------------------------------------------------------------------------- */
+
   const handleEdit = (item) => {
+    console.log("Editing Production Bulk Issue:", item);
+
     onEdit(item);
   };
+
+  /* -------------------------------------------------------------------------- */
+  /* Columns                                                                    */
+  /* -------------------------------------------------------------------------- */
 
   const columns = [
     {
@@ -149,9 +284,9 @@ const ProductionBulkIssueList = ({ onAddNew, onEdit, onBack }) => {
     },
 
     {
-      key: "issueDate",
-      label: "Issue Date",
-      accessor: "issueDate",
+      key: "date",
+      label: "Date",
+      accessor: "date",
       type: "date",
     },
 
@@ -188,12 +323,13 @@ const ProductionBulkIssueList = ({ onAddNew, onEdit, onBack }) => {
       label: "Indent No",
       accessor: "indentNo",
       type: "text",
+      noWrap: true,
     },
 
     {
-      key: "issueType",
-      label: "Type",
-      accessor: "issueType",
+      key: "purchaseMaterialRef",
+      label: "Purchase Material Ref",
+      accessor: "purchaseMaterialRef",
       type: "text",
     },
 
@@ -248,18 +384,27 @@ const ProductionBulkIssueList = ({ onAddNew, onEdit, onBack }) => {
     },
   ];
 
+  /* -------------------------------------------------------------------------- */
+  /* Search Fields                                                              */
+  /* -------------------------------------------------------------------------- */
+
   const searchFields = [
     "issueNo",
+    "date",
     "plant",
     "belongsTo",
     "fgItemCode",
     "fgItemDescription",
     "indentNo",
-    "issueType",
+    "purchaseMaterialRef",
     "fromLocation",
     "toLocation",
     "createdBy",
   ];
+
+  /* -------------------------------------------------------------------------- */
+  /* Filters                                                                    */
+  /* -------------------------------------------------------------------------- */
 
   const filterOptions = [
     {
@@ -285,9 +430,13 @@ const ProductionBulkIssueList = ({ onAddNew, onEdit, onBack }) => {
     },
   ];
 
+  /* -------------------------------------------------------------------------- */
+  /* Render                                                                     */
+  /* -------------------------------------------------------------------------- */
+
   return (
     <CommonListViewTable
-      title="Production (Bulk) Issues"
+      title="Production (Bulk) Issue"
       data={itemData}
       loading={loading}
       columns={columns}
@@ -301,8 +450,8 @@ const ProductionBulkIssueList = ({ onAddNew, onEdit, onBack }) => {
       showSerialNumber={true}
       itemsPerPageOptions={[5, 10, 20, 50, 100]}
       defaultItemsPerPage={10}
-      emptyMessage="No Production Bulk Issues found"
-      loadingMessage="Loading Production Bulk Issues..."
+      emptyMessage="No Production (Bulk) Issues found"
+      loadingMessage="Loading Production (Bulk) Issues..."
       enableRefresh={true}
       onRefresh={loadItems}
       enableExport={true}

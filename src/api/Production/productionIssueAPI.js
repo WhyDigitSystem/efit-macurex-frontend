@@ -1,171 +1,212 @@
 import apiClient from "../apiClient";
 
+/* =========================================================================
+ * Production Issue API
+ * Base path: /api/purchaseOrder
+ * ========================================================================= */
+
 const productionIssueAPI = {
-    getByOrgId: async (orgId, branchId) => {
-        try {
-            const res = await apiClient.get(
-                `/api/commonmaster/getProductionIssueByOrgId?orgId=${orgId}&branchId=${branchId}`,
-            );
-            return res?.paramObjectsMap?.productionIssueList || [];
-        } catch (error) {
-            console.error("Error fetching production issues:", error);
-            throw error;
-        }
-    },
+  /* -----------------------------------------------------------------------
+   * GET PRODUCTION ISSUES BY ORGANIZATION
+   * GET /api/purchaseOrder/getProductionIssueByOrgId
+   * --------------------------------------------------------------------- */
+  getByOrgId: async (orgId, branch) => {
+    try {
+      const res = await apiClient.get(
+        "/api/purchaseOrder/getProductionIssueByOrgId",
+        {
+          params: {
+            branch,
+            orgId,
+          },
+        },
+      );
 
-    getById: async (id) => {
-        try {
-            const res = await apiClient.get(
-                `/api/commonmaster/getProductionIssueById?id=${id}`,
-            );
-            return res?.paramObjectsMap?.productionIssueVO || null;
-        } catch (error) {
-            console.error("Error fetching production issue by id:", error);
-            throw error;
-        }
-    },
+      return res;
+    } catch (error) {
+      console.error("Error fetching production issues:", error);
+      throw error;
+    }
+  },
 
-    createUpdate: async (data) => {
-        try {
-            const res = await apiClient.post(
-                "/api/commonmaster/createUpdateProductionIssue",
-                data,
-            );
-            return res;
-        } catch (error) {
-            console.error("Error saving production issue:", error);
-            throw error;
-        }
-    },
+  /* -----------------------------------------------------------------------
+   * GET PRODUCTION ISSUE BY ID
+   * GET /api/purchaseOrder/getProductionIssueById
+   * --------------------------------------------------------------------- */
+  getById: async (id) => {
+    try {
+      const res = await apiClient.get(
+        "/api/purchaseOrder/getProductionIssueById",
+        {
+          params: {
+            id,
+          },
+        },
+      );
 
-    getDocId: async ({ financialYear, orgId, screenCode, type }) => {
-        try {
-            const res = await apiClient.get(
-                `/api/commonmaster/getProductionIssueDocId`,
-                {
-                    params: {
-                        financialYear,
-                        orgId,
-                        screenCode,
-                        type,
-                    },
-                },
-            );
-            const data = res?.data ?? res;
-            return data?.paramObjectsMap?.invoiceDocId || "";
-        } catch (error) {
-            console.error("Error fetching production issue doc id:", error);
-            throw error;
-        }
-    },
+      return (
+        res?.paramObjectsMap?.productionIssueVO || res?.paramObjectsMap || null
+      );
+    } catch (error) {
+      console.error("Error fetching production issue by id:", error);
+      throw error;
+    }
+  },
 
-    getPlantOptions: async (orgId) => {
-        try {
-            const res = await apiClient.get(
-                `/api/commonmaster/getPlantListByOrgId?orgId=${orgId}`,
-            );
-            return res?.paramObjectsMap?.plantVO || [];
-        } catch (error) {
-            console.error("Error fetching plants:", error);
-            throw error;
-        }
-    },
+  /* -----------------------------------------------------------------------
+   * CREATE / UPDATE PRODUCTION ISSUE
+   *
+   * Swagger:
+   * PUT /api/purchaseOrder/createUpdateProductionIssue
+   *
+   * IMPORTANT:
+   * This was previously POST, which caused:
+   * 405 Method Not Allowed
+   * --------------------------------------------------------------------- */
+  createUpdate: async (data) => {
+    try {
+      const res = await apiClient.put(
+        "/api/purchaseOrder/createUpdateProductionIssue",
+        data,
+      );
 
-    getLocationOptions: async (orgId, branchId) => {
-        try {
-            const res = await apiClient.get(
-                `/api/commonmaster/getLocationListByOrgBranch?orgId=${orgId}&branchId=${branchId}`,
-            );
-            return res?.paramObjectsMap?.locationVO || [];
-        } catch (error) {
-            console.error("Error fetching locations:", error);
-            throw error;
-        }
-    },
+      return res;
+    } catch (error) {
+      console.error("Error saving production issue:", error);
+      throw error;
+    }
+  },
 
-    getItemOptions: async (orgId, branchId) => {
-        try {
-            const res = await apiClient.get(
-                `/api/commonmaster/getItemListByOrgBranch?orgId=${orgId}&branchId=${branchId}`,
-            );
-            return res?.paramObjectsMap?.itemVO || [];
-        } catch (error) {
-            console.error("Error fetching items:", error);
-            throw error;
-        }
-    },
+  /* -----------------------------------------------------------------------
+   * GET PRODUCTION ISSUE DOCUMENT ID
+   * GET /api/purchaseOrder/getProductionIssueDocId
+   * --------------------------------------------------------------------- */
+  getDocId: async ({ financialYear, orgId }) => {
+    try {
+      const res = await apiClient.get(
+        "/api/purchaseOrder/getProductionIssueDocId",
+        {
+          params: {
+            financialYear,
+            orgId,
+          },
+        },
+      );
 
-    getIndentOptions: async (orgId, branchId) => {
-        try {
-            const res = await apiClient.get(
-                `/api/commonmaster/getIndentListByOrgBranch?orgId=${orgId}&branchId=${branchId}`,
-            );
-            return res?.paramObjectsMap?.indentVO || [];
-        } catch (error) {
-            console.error("Error fetching indents:", error);
-            throw error;
-        }
-    },
+      return res?.paramObjectsMap?.productionIssueDocId || "";
+    } catch (error) {
+      console.error("Error fetching production issue doc id:", error);
+      throw error;
+    }
+  },
 
-    getScheduleOrderOptions: async (orgId, branchId) => {
-        try {
-            const res = await apiClient.get(
-                `/api/commonmaster/getScheduleOrderListByOrgBranch?orgId=${orgId}&branchId=${branchId}`,
-            );
-            return res?.paramObjectsMap?.scheduleOrderVO || [];
-        } catch (error) {
-            console.error("Error fetching schedule orders:", error);
-            throw error;
-        }
-    },
+  /* -----------------------------------------------------------------------
+   * GET FG / SFG ITEMS
+   * GET /api/purchaseOrder/getFgPartNoDetails
+   * --------------------------------------------------------------------- */
+  getFgItems: async (branch, orgId) => {
+    try {
+      if (!branch || !orgId) {
+        return [];
+      }
 
-    getUnitOptions: async (orgId, branchId) => {
-        try {
-            const res = await apiClient.get(
-                `/api/commonmaster/getUnitListByOrgBranch?orgId=${orgId}&branchId=${branchId}`,
-            );
-            return res?.paramObjectsMap?.unitVO || [];
-        } catch (error) {
-            console.error("Error fetching units:", error);
-            throw error;
-        }
-    },
+      const res = await apiClient.get("/api/purchaseOrder/getFgPartNoDetails", {
+        params: {
+          branch,
+          orgId,
+        },
+      });
 
-    getGRNOptions: async (orgId, branchId) => {
-        try {
-            const res = await apiClient.get(
-                `/api/commonmaster/getGRNListByOrgBranch?orgId=${orgId}&branchId=${branchId}`,
-            );
-            return res?.paramObjectsMap?.grnVO || [];
-        } catch (error) {
-            console.error("Error fetching GRNs:", error);
-            throw error;
-        }
-    },
+      return res?.paramObjectsMap?.mapp || [];
+    } catch (error) {
+      console.error("Error fetching FG item details:", error);
+      return [];
+    }
+  },
 
-    getBelongsToOptions: async (orgId) => {
-        try {
-            const res = await apiClient.get(
-                `/api/commonmaster/getBelongsToList?orgId=${orgId}`,
-            );
-            return res?.paramObjectsMap?.belongsToVO || [];
-        } catch (error) {
-            console.error("Error fetching belongs to:", error);
-            throw error;
-        }
-    },
+  /* -----------------------------------------------------------------------
+   * GET INDENTS FOR FG ITEM
+   * GET /api/purchaseOrder/getIndentNoForProductionIssue
+   * --------------------------------------------------------------------- */
+  getIndentsForFgItem: async (branch, fgItem, orgId) => {
+    try {
+      if (!branch || !fgItem || !orgId) {
+        return [];
+      }
 
-    getIssueTypeOptions: async (orgId) => {
-        try {
-            const res = await apiClient.get(
-                `/api/commonmaster/getIssueTypeList?orgId=${orgId}`,
-            );
-            return res?.paramObjectsMap?.issueTypeVO || [];
-        } catch (error) {
-            console.error("Error fetching issue types:", error);
-            throw error;
-        }
-    },
+      const res = await apiClient.get(
+        "/api/purchaseOrder/getIndentNoForProductionIssue",
+        {
+          params: {
+            branch,
+            fgItem,
+            orgId,
+          },
+        },
+      );
+
+      return res?.paramObjectsMap?.mapp || [];
+    } catch (error) {
+      console.error("Error fetching indent numbers for FG item:", error);
+      return [];
+    }
+  },
+
+  /* -----------------------------------------------------------------------
+   * GET INDENT DETAILS
+   * GET /api/purchaseOrder/getIndentNoDetailsForProductionIssue
+   * --------------------------------------------------------------------- */
+  getIndentDetails: async (branch, indentNo, orgId) => {
+    try {
+      if (!branch || !indentNo || !orgId) {
+        return [];
+      }
+
+      const res = await apiClient.get(
+        "/api/purchaseOrder/getIndentNoDetailsForProductionIssue",
+        {
+          params: {
+            branch,
+            indentNo,
+            orgId,
+          },
+        },
+      );
+
+      return res?.paramObjectsMap?.mapp || [];
+    } catch (error) {
+      console.error("Error fetching indent details:", error);
+      return [];
+    }
+  },
+
+  /* -----------------------------------------------------------------------
+   * GET GRN DETAILS FOR ITEM
+   * GET /api/purchaseOrder/getGrnNoForProductionIssue
+   * --------------------------------------------------------------------- */
+  getGrnForItem: async (branch, item, orgId) => {
+    try {
+      if (!branch || !item || !orgId) {
+        return [];
+      }
+
+      const res = await apiClient.get(
+        "/api/purchaseOrder/getGrnNoForProductionIssue",
+        {
+          params: {
+            branch,
+            item,
+            orgId,
+          },
+        },
+      );
+
+      return res?.paramObjectsMap?.mapp || [];
+    } catch (error) {
+      console.error("Error fetching GRN numbers for item:", error);
+      return [];
+    }
+  },
 };
 
 export default productionIssueAPI;

@@ -48,12 +48,24 @@ const machineToolRectificationAPI = {
    * NOTE: unlike most other screens this key is just "docId", not
    * "machineToolRectificationDocId" - confirmed from the sample response.
    */
-  getDocId: async (financialYear, orgId) => {
+  /**
+   * GET /api/vendorComplaintEntry/getMachineToolRectificationDocId?financialYear=&orgId=
+   * -> paramObjectsMap.docId
+   */
+  getDocId: async ({ financialYear, orgId }) => {
     try {
       const res = await apiClient.get(
         "/api/vendorComplaintEntry/getMachineToolRectificationDocId",
-        { params: { financialYear, orgId } },
+        {
+          params: {
+            financialYear,
+            orgId,
+          },
+        },
       );
+
+      console.log("Machine Tool Rectification Doc ID response:", res);
+
       return res?.paramObjectsMap?.docId || "";
     } catch (error) {
       console.error("getMachineToolRectificationDocId failed:", error);

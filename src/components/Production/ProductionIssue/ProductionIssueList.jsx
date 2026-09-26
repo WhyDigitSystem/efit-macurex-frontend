@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import productionIssueAPI from "../../../api/Production/productionIssueAPI";
-import { useToast } from "../../Toast/ToastContext";
 
 const ProductionIssueList = ({ onAddNew, onEdit, onBack }) => {
   const [itemData, setItemData] = useState([]);
@@ -15,32 +14,18 @@ const ProductionIssueList = ({ onAddNew, onEdit, onBack }) => {
     setLoading(true);
 
     try {
-      console.log("Production Issue List Params:", {
-        orgId,
-        branchId,
-      });
-
       if (!orgId || !branchId) {
         console.error("Missing orgId or branchId");
-
         setItemData([]);
-
         return;
       }
 
-      /* ---------------------------------------------------------------------- */
-      /* API Call                                                               */
-      /* ---------------------------------------------------------------------- */
+      const response = await productionIssueAPI.getByOrgId(orgId, branchId);
 
-      const response = await productionIssueAPI.getByOrgId(
-        orgId,
-        branchId,
-      );
-
-      console.log("Production Issue List Response:", response);
+      console.log("Production Issues API Response:", response);
 
       /* ---------------------------------------------------------------------- */
-      /* API Error                                                              */
+      /* API Error Check                                                        */
       /* ---------------------------------------------------------------------- */
 
       if (response?.status === false) {
@@ -50,40 +35,24 @@ const ProductionIssueList = ({ onAddNew, onEdit, onBack }) => {
           "Failed to load production issues";
 
         console.warn(msg);
-
         setItemData([]);
-
         return;
       }
 
       /* ---------------------------------------------------------------------- */
-      /* IMPORTANT                                                              */
-      /*                                                                        */
-      /* Actual backend response:                                              */
-      /*                                                                        */
-      /* response                                                              */
-      /*   └── paramObjectsMap                                                 */
-      /*        └── productionIssueList                                        */
-      /*             └── [                                                     */
-      /*                  { ... }                                               */
-      /*                ]                                                       */
+      /* Get Production Issue List                                             */
       /* ---------------------------------------------------------------------- */
 
-      const issues = Array.isArray(response?.paramObjectsMap?.productionIssueList)
-        ? response.paramObjectsMap.productionIssueList
+      const issues = Array.isArray(
+        response?.paramObjectsMap?.productionIssueResponseVO,
+      )
+        ? response.paramObjectsMap.productionIssueResponseVO
         : [];
 
-      console.log("Production Issues Extracted:", issues);
-
-      /* ---------------------------------------------------------------------- */
-      /* No Records                                                             */
-      /* ---------------------------------------------------------------------- */
+      console.log("Production Issues:", issues);
 
       if (issues.length === 0) {
-        console.warn("No Production Issues found");
-
         setItemData([]);
-
         return;
       }
 
@@ -91,146 +60,184 @@ const ProductionIssueList = ({ onAddNew, onEdit, onBack }) => {
       /* Transform API Response                                                 */
       /* ---------------------------------------------------------------------- */
 
-      const transformedData = issues.map((item) => {
-        return {
-          /* ------------------------------------------------------------------ */
-          /* Keep complete backend object                                       */
-          /* ------------------------------------------------------------------ */
+      const transformedData = issues.map((item) => ({
+        /* ------------------------------------------------------------------ */
+        /* Main ID                                                            */
+        /* ------------------------------------------------------------------ */
 
-          ...item,
+        id: item.id,
 
-          /* ------------------------------------------------------------------ */
-          /* Basic Fields                                                       */
-          /* ------------------------------------------------------------------ */
+        /* ------------------------------------------------------------------ */
+        /* Document                                                            */
+        /* ------------------------------------------------------------------ */
 
-          id: item.id,
+        /*
+         * Backend currently returns docId = null.
+         *
+         * Therefore use a temporary display number based on ID.
+         * If docId is returned later, it will automatically be used.
+         */
+        issueNo:
+          item.docId !== null && item.docId !== undefined
+            ? item.docId
+            : item.id
+              ? `PI-${item.id}`
+              : "",
 
-          /*
-           * Backend sends:
-           * docId: "BLR/PI/26-27/00001"
-           *
-           * Frontend table uses:
-           * issueNo
-           */
-          issueNo: item.docId || "",
+        docId: item.docId || "",
 
-          docId: item.docId || "",
+        /* ------------------------------------------------------------------ */
+        /* Dates                                                               */
+        /* ------------------------------------------------------------------ */
 
-          /* ------------------------------------------------------------------ */
-          /* Date                                                               */
-          /* ------------------------------------------------------------------ */
+        issueDate: item.issueDate || item.docDate || "",
 
-          issueDate: item.issueDate || item.docDate || "",
+        docDate: item.docDate || "",
 
-          docDate: item.docDate || "",
+        /* ------------------------------------------------------------------ */
+        /* Branch / Plant                                                      */
+        /* ------------------------------------------------------------------ */
 
-          /* ------------------------------------------------------------------ */
-          /* Plant                                                              */
-          /* ------------------------------------------------------------------ */
+        plant: item.branch?.branchName || item.branch?.branchCode || "",
 
-          plant: item.plant?.plantName || item.plant?.plantId || "",
+        plantCode: item.branch?.branchCode || "",
 
-          plantId: item.plant?.id || "",
+        plantId: item.branch?.id || null,
 
-          /* ------------------------------------------------------------------ */
-          /* Belongs To                                                         */
-          /* ------------------------------------------------------------------ */
+        /* ------------------------------------------------------------------ */
+        /* Basic Information                                                   */
+        /* ------------------------------------------------------------------ */
 
-          belongsTo: item.belongsTo || "",
+        belongsTo: item.belongsTo || "",
 
-          /* ------------------------------------------------------------------ */
-          /* FG Item                                                            */
-          /* ------------------------------------------------------------------ */
+        /* ------------------------------------------------------------------ */
+        /* FG Item                                                              */
+        /* ------------------------------------------------------------------ */
 
-          fgItemCode: item.fgItem?.itemCode || "",
-          fgItemDescription: item.fgItem?.itemDescription || "",
-          fgItemId: item.fgItem?.id || null,
+        fgItemCode: item.fgItem?.itemCode || "",
 
-          /* ------------------------------------------------------------------ */
-          /* Indent                                                             */
-          /* ------------------------------------------------------------------ */
+        fgItemDescription: item.fgItem?.itemDescription || "",
 
-          indentNo: item.indent?.docId || item.indentNo || "",
+        fgItemId: item.fgItem?.id || null,
 
-          /* ------------------------------------------------------------------ */
-          /* Schedule Order                                                     */
-          /* ------------------------------------------------------------------ */
+        /* ------------------------------------------------------------------ */
+        /* Indent                                                               */
+        /* ------------------------------------------------------------------ */
 
-          scheduleOrderNo: item.scheduleOrder?.docId || item.scheduleOrderNo || "",
+        indentNo: item.indentNo || "",
 
-          /* ------------------------------------------------------------------ */
-          /* Type                                                               */
-          /* ------------------------------------------------------------------ */
+        /* ------------------------------------------------------------------ */
+        /* Schedule Order                                                      */
+        /* Backend field = schOrderNo                                         */
+        /* ------------------------------------------------------------------ */
 
-          issueType: item.issueType || "",
+        scheduleOrderNo: item.schOrderNo || "",
 
-          /* ------------------------------------------------------------------ */
-          /* Locations                                                          */
-          /* ------------------------------------------------------------------ */
+        /* ------------------------------------------------------------------ */
+        /* Type                                                                 */
+        /* ------------------------------------------------------------------ */
 
-          fromLocation: item.fromLocation?.locationName || item.fromLocation?.locationCode || "",
-          fromLocationCode: item.fromLocation?.locationCode || "",
-          fromLocationId: item.fromLocation?.id || null,
+        issueType: item.type || "",
 
-          toLocation: item.toLocation?.locationName || item.toLocation?.locationCode || "",
-          toLocationCode: item.toLocation?.locationCode || "",
-          toLocationId: item.toLocation?.id || null,
+        /* ------------------------------------------------------------------ */
+        /* From Location                                                        */
+        /* ------------------------------------------------------------------ */
 
-          /* ------------------------------------------------------------------ */
-          /* Summary                                                            */
-          /* ------------------------------------------------------------------ */
+        fromLocation:
+          item.fromLocation?.locationName ||
+          item.fromLocation?.locationCode ||
+          "",
 
-          totalValue: item.totalValue ?? 0,
+        fromLocationCode: item.fromLocation?.locationCode || "",
 
-          narration: item.narration || "",
+        fromLocationId: item.fromLocation?.id || null,
 
-          /* ------------------------------------------------------------------ */
-          /* Status                                                             */
-          /* ------------------------------------------------------------------ */
+        /* ------------------------------------------------------------------ */
+        /* To Location                                                          */
+        /* ------------------------------------------------------------------ */
 
-          /*
-           * Backend sends:
-           *
-           * active: "Active"
-           *
-           * Convert it into boolean because
-           * CommonListViewTable status expects true/false.
-           */
-          active:
-            item.active === true ||
-            String(item.active).toLowerCase() === "active",
+        toLocation:
+          item.toLocation?.locationName || item.toLocation?.locationCode || "",
 
-          /* Keep original status text */
-          activeStatus: item.active || "",
+        toLocationCode: item.toLocation?.locationCode || "",
 
-          /* ------------------------------------------------------------------ */
-          /* Created By                                                         */
-          /* ------------------------------------------------------------------ */
+        toLocationId: item.toLocation?.id || null,
 
-          createdBy: item.createdBy || item.preparedBy || "",
+        /* ------------------------------------------------------------------ */
+        /* Amount                                                               */
+        /* ------------------------------------------------------------------ */
 
-          preparedBy: item.preparedBy || "",
+        totalValue: item.totalValue ?? 0,
 
-          /* ------------------------------------------------------------------ */
-          /* Details                                                            */
-          /* ------------------------------------------------------------------ */
+        /* ------------------------------------------------------------------ */
+        /* Narration                                                            */
+        /* ------------------------------------------------------------------ */
 
-          productionIssueDetailsDTO:
-            item.productionIssueDetailsResponseDTO || [],
-        };
-      });
+        narration: item.narration || "",
+
+        /* ------------------------------------------------------------------ */
+        /* Created / Updated By                                                 */
+        /* ------------------------------------------------------------------ */
+
+        createdBy: item.createdBy || "",
+
+        updatedBy: item.updatedBy || "",
+
+        /* ------------------------------------------------------------------ */
+        /* Status                                                               */
+        /* ------------------------------------------------------------------ */
+
+        active:
+          item.active === true ||
+          String(item.active).toLowerCase() === "active",
+
+        activeStatus: item.active || "",
+
+        /* ------------------------------------------------------------------ */
+        /* Cancel                                                               */
+        /* ------------------------------------------------------------------ */
+
+        cancel:
+          item.cancel === true || String(item.cancel).toUpperCase() === "T",
+
+        cancelRemarks: item.cancelRemarks || "",
+
+        /* ------------------------------------------------------------------ */
+        /* Screen Information                                                   */
+        /* ------------------------------------------------------------------ */
+
+        screenName: item.screenName || "",
+
+        screenCode: item.screenCode || "",
+
+        /* ------------------------------------------------------------------ */
+        /* Organization                                                         */
+        /* ------------------------------------------------------------------ */
+
+        orgId: item.orgId || null,
+
+        financialYear: item.financialYear || "",
+
+        /* ------------------------------------------------------------------ */
+        /* Item Details                                                         */
+        /* ------------------------------------------------------------------ */
+
+        itemDetails: Array.isArray(item.itemDetails) ? item.itemDetails : [],
+
+        productionIssueDetailsResponseDTO: Array.isArray(
+          item.productionIssueDetailsResponseDTO,
+        )
+          ? item.productionIssueDetailsResponseDTO
+          : [],
+      }));
 
       /* ---------------------------------------------------------------------- */
-      /* Sort Latest First                                                      */
+      /* Sort Newest First                                                      */
       /* ---------------------------------------------------------------------- */
 
       transformedData.sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
 
-      console.log("Final Production Issue Table Data:", transformedData);
-
-      /* ---------------------------------------------------------------------- */
-      /* Set Table Data                                                         */
-      /* ---------------------------------------------------------------------- */
+      console.log("Production Issues Transformed:", transformedData);
 
       setItemData(transformedData);
     } catch (error) {
@@ -240,10 +247,10 @@ const ProductionIssueList = ({ onAddNew, onEdit, onBack }) => {
     } finally {
       setLoading(false);
     }
-  }, [productionIssueAPI]);
+  }, []);
 
   /* -------------------------------------------------------------------------- */
-  /* Initial Load                                                              */
+  /* Initial Load                                                               */
   /* -------------------------------------------------------------------------- */
 
   useEffect(() => {
@@ -254,7 +261,7 @@ const ProductionIssueList = ({ onAddNew, onEdit, onBack }) => {
   }, [loadItems]);
 
   /* -------------------------------------------------------------------------- */
-  /* Edit                                                                      */
+  /* Edit                                                                       */
   /* -------------------------------------------------------------------------- */
 
   const handleEdit = (item) => {
@@ -316,6 +323,7 @@ const ProductionIssueList = ({ onAddNew, onEdit, onBack }) => {
       label: "Indent No",
       accessor: "indentNo",
       type: "text",
+      noWrap: true,
     },
 
     {
@@ -396,6 +404,7 @@ const ProductionIssueList = ({ onAddNew, onEdit, onBack }) => {
 
   const searchFields = [
     "issueNo",
+    "issueDate",
     "plant",
     "belongsTo",
     "fgItemCode",
@@ -405,6 +414,7 @@ const ProductionIssueList = ({ onAddNew, onEdit, onBack }) => {
     "issueType",
     "fromLocation",
     "toLocation",
+    "totalValue",
     "createdBy",
   ];
 
