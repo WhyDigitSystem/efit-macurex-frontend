@@ -1,115 +1,133 @@
 // src/api/machineToolBreakdownAPI.js
-import axios from "axios";
-
-const BASE_URL = "http://192.168.0.9:8013/api";
+import apiClient from "./apiClient";
 
 const machineToolBreakdownAPI = {
   // GET /api/commonmaster/getBranchByOrgId
   getBranchByOrgId: async (orgId) => {
-    const response = await axios.get(
-      `${BASE_URL}/commonmaster/getBranchByOrgId`,
-      {
+    try {
+      const res = await apiClient.get("/api/commonmaster/getBranchByOrgId", {
         params: { orgId },
-      },
-    );
-
-    return response.data?.paramObjectsMap?.branchList || [];
+      });
+      return res?.paramObjectsMap?.branchList || [];
+    } catch (error) {
+      console.error("Error fetching branches:", error);
+      throw error;
+    }
   },
 
   // GET /api/efitmaster/getAllDepartmentByOrgId
   getAllDepartmentByOrgId: async (orgId) => {
-    const response = await axios.get(
-      `${BASE_URL}/efitmaster/getAllDepartmentByOrgId`,
-      {
-        params: { orgId },
-      },
-    );
-
-    return response.data?.paramObjectsMap?.departmentVO || [];
+    try {
+      const res = await apiClient.get(
+        "/api/efitmaster/getAllDepartmentByOrgId",
+        {
+          params: { orgId },
+        }
+      );
+      return res?.paramObjectsMap?.departmentVO || [];
+    } catch (error) {
+      console.error("Error fetching departments:", error);
+      throw error;
+    }
   },
 
   // GET /api/develop/getToolCategoryByOrgId
   getToolCategoryByOrgId: async (orgId) => {
-    const response = await axios.get(
-      `${BASE_URL}/develop/getToolCategoryByOrgId`,
-      {
-        params: { orgId },
-      },
-    );
-
-    return response.data?.paramObjectsMap?.toolCategoryResponseVO || [];
+    try {
+      const res = await apiClient.get(
+        "/api/develop/getToolCategoryByOrgId",
+        {
+          params: { orgId },
+        }
+      );
+      return res?.paramObjectsMap?.toolCategoryResponseVO || [];
+    } catch (error) {
+      console.error("Error fetching tool categories:", error);
+      throw error;
+    }
   },
 
   // GET /api/efitmaster/getEmployeeMasterByOrgId
   getEmployeeMasterByOrgId: async (orgId) => {
-    const response = await axios.get(
-      `${BASE_URL}/efitmaster/getEmployeeMasterByOrgId`,
-      {
-        params: { orgId },
-      },
-    );
-
-    return response.data?.paramObjectsMap?.employeeMasterVO || [];
+    try {
+      const res = await apiClient.get(
+        "/api/efitmaster/getEmployeeMasterByOrgId",
+        {
+          params: { orgId },
+        }
+      );
+      return res?.paramObjectsMap?.employeeMasterVO || [];
+    } catch (error) {
+      console.error("Error fetching employees:", error);
+      throw error;
+    }
   },
 
   // GET /api/vendorComplaintEntry/getMachineToolForBreakdown
   getMachineToolForBreakdown: async (toolCategoryId, orgId, branch) => {
-    const response = await axios.get(
-      `${BASE_URL}/vendorComplaintEntry/getMachineToolForBreakdown`,
-      {
-        params: {
-          toolCategoryId,
-          orgId,
-          branch,
-        },
-      },
-    );
-
-    return response.data?.paramObjectsMap?.machineToolList || [];
+    try {
+      const res = await apiClient.get(
+        "/api/vendorComplaintEntry/getMachineToolForBreakdown",
+        {
+          params: { toolCategoryId, orgId, branch },
+        }
+      );
+      return res?.paramObjectsMap?.machineToolList || [];
+    } catch (error) {
+      console.error("Error fetching machine tools for breakdown:", error);
+      throw error;
+    }
   },
 
   // GET /api/vendorComplaintEntry/getMachineToolBreakdownDocId
   getMachineToolBreakdownDocId: async (orgId, financialYear) => {
-    const response = await axios.get(
-      `${BASE_URL}/vendorComplaintEntry/getMachineToolBreakdownDocId`,
-      {
-        params: {
-          orgId,
-          financialYear,
-        },
-      },
-    );
-
-    return response.data?.paramObjectsMap?.docId || "";
+    try {
+      const res = await apiClient.get(
+        "/api/vendorComplaintEntry/getMachineToolBreakdownDocId",
+        {
+          params: { orgId, financialYear },
+        }
+      );
+      return res?.paramObjectsMap?.docId || "";
+    } catch (error) {
+      console.error("Error fetching machine tool breakdown doc id:", error);
+      throw error;
+    }
   },
 
   // GET /api/vendorComplaintEntry/getMachineToolBreakdownByOrgId
   getMachineToolBreakdownByOrgId: async (orgId, branch) => {
-    const response = await axios.get(
-      `${BASE_URL}/vendorComplaintEntry/getMachineToolBreakdownByOrgId`,
-      {
-        params: {
-          orgId,
-          branch,
-        },
-      },
-    );
-
-    return response.data?.paramObjectsMap?.machineToolBreakdownList || [];
+    try {
+      const res = await apiClient.get(
+        "/api/vendorComplaintEntry/getMachineToolBreakdownByOrgId",
+        {
+          params: { orgId, branch },
+        }
+      );
+      return res?.paramObjectsMap?.machineToolBreakdownList || [];
+    } catch (error) {
+      console.error("Error fetching machine tool breakdown list:", error);
+      throw error;
+    }
   },
 
   // GET /api/vendorComplaintEntry/getMachineToolBreakdownById
   getMachineToolBreakdownById: async (id) => {
-    const response = await axios.get(
-      `${BASE_URL}/vendorComplaintEntry/getMachineToolBreakdownById`,
-      {
-        params: { id },
-      },
-    );
-
-    return response.data?.paramObjectsMap?.machineToolBreakdownVO || null;
+    try {
+      const res = await apiClient.get(
+        "/api/vendorComplaintEntry/getMachineToolBreakdownById",
+        {
+          params: { id },
+        }
+      );
+      return res?.paramObjectsMap?.machineToolBreakdownVO || null;
+    } catch (error) {
+      console.error("Error fetching machine tool breakdown by ID:", error);
+      throw error;
+    }
   },
 
+  // POST /api/vendorComplaintEntry/updateCreateMachineToolBreakdown
   updateCreateMachineToolBreakdown: async (payload, imageFile = null) => {
     try {
       const formData = new FormData();
@@ -121,46 +139,41 @@ const machineToolBreakdownAPI = {
       formData.append(
         "machineToolBreakdownVO",
         jsonBlob,
-        "machineToolBreakdownDTO.json",
+        "machineToolBreakdownDTO.json"
       );
 
       if (imageFile instanceof File) {
         formData.append("images", imageFile);
       }
 
-      const response = await axios.post(
-        `${BASE_URL}/vendorComplaintEntry/updateCreateMachineToolBreakdown`,
+      const res = await apiClient.post(
+        "/api/vendorComplaintEntry/updateCreateMachineToolBreakdown",
         formData,
         {
           headers: {
             Accept: "application/json",
           },
-        },
+        }
       );
 
-      return response.data;
+      return res;
     } catch (error) {
-      console.error(
-        "Machine Tool Breakdown API Error:",
-        error.response?.data || error.message,
-      );
-
+      console.error("Error creating/updating machine tool breakdown:", error);
       throw error;
     }
   },
+
   // GET /api/commonmaster/getListValuesGroup
   getListValuesGroup: async (listDescription, orgId) => {
-    const response = await axios.get(
-      `${BASE_URL}/commonmaster/getListValuesGroup`,
-      {
-        params: {
-          listDescription,
-          orgId,
-        },
-      },
-    );
-
-    return response.data?.paramObjectsMap?.listValues || [];
+    try {
+      const res = await apiClient.get("/api/commonmaster/getListValuesGroup", {
+        params: { listDescription, orgId },
+      });
+      return res?.paramObjectsMap?.listValues || [];
+    } catch (error) {
+      console.error("Error fetching list values group:", error);
+      throw error;
+    }
   },
 };
 
