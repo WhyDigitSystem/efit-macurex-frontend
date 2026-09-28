@@ -5,8 +5,6 @@ import { useToast } from "../../Toast/ToastContext";
 import stockOrderAPI from "../../../api/Production/stockOrderAPI";
 import branchAPI from "../../../api/branchAPI";
 import locationMasterAPI from "../../../api/locationMasterAPI";
-import { departmentAPI } from "../../../api/departmentAPI";
-import { employeeAPI } from "../../../api/employeeAPI";
 import itemAPI from "../../../api/itemAPI";
 import { unitMasterAPI } from "../../../api/unitAPI";
 
@@ -25,7 +23,8 @@ const controlClasses =
 const controlErrClasses =
   "border-red-500 dark:border-red-500 focus:ring-red-500 focus:border-red-500";
 
-const labelClasses = "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
+const labelClasses =
+  "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
 const fieldGrid =
   "grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4 items-start";
@@ -102,6 +101,7 @@ const Field = ({
           name={name}
           value={value}
           onChange={onChange}
+          disabled={disabled}
           rows={1}
           className={
             "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors resize-none pt-1 scrollbar-hide " +
@@ -147,40 +147,6 @@ const Field = ({
     </div>
   );
 };
-
-/* Yes/No toggle matching the Field anatomy: label on top + h-[30px] control,
-   neutral styling in both states - only the switch indicator changes color. */
-const ToggleField = ({ label, checked, onChange }) => (
-  <div className="w-full">
-    <label className={labelClasses}>{label}</label>
-
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className="w-full h-[30px] px-2 rounded border text-xs leading-none flex items-center justify-between transition-colors bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600"
-    >
-      <span className="text-xs font-medium text-gray-700 dark:text-gray-200">
-        {checked ? "Yes" : "No"}
-      </span>
-
-      <span
-        className={
-          "relative inline-flex h-[16px] w-[30px] shrink-0 items-center rounded-full transition-colors " +
-          (checked ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600")
-        }
-      >
-        <span
-          className={
-            "inline-block h-[12px] w-[12px] transform rounded-full bg-white shadow transition-transform " +
-            (checked ? "translate-x-[15px]" : "translate-x-[2px]")
-          }
-        />
-      </span>
-    </button>
-  </div>
-);
 
 const SectionHeader = ({ children }) => (
   <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">
@@ -233,7 +199,7 @@ const TableHead = ({ headers }) => (
         >
           {h}
         </th>
-      )) }
+      ))}
     </tr>
   </thead>
 );
@@ -320,7 +286,9 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
                   value={row[col.key]}
                   readOnly={col.readOnly}
                   onChange={(e) => onCellChange(idx, col.key, e.target.value)}
-                  className={col.readOnly ? cellReadOnlyClasses : cellInputClasses}
+                  className={
+                    col.readOnly ? cellReadOnlyClasses : cellInputClasses
+                  }
                 />
               </td>
             );
@@ -342,9 +310,13 @@ const CHILD_TABS = [
 const fmtDate = (value) => (value ? dayjs(value).format("YYYY-MM-DD") : "");
 
 const toNum = (v) => Number(v) || 0;
+const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
 
-const generateStockOrderNo = () =>
-  `SO-${dayjs().format("YYYYMMDD")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
+// Indian financial year (Apr-Mar): Sep 2026 -> "2026"
+const defaultFinYear = () => {
+  const d = dayjs();
+  return String(d.month() >= 3 ? d.year() : d.year() - 1);
+};
 
 const emptyStockDetailRow = () => ({
   itemCode: "",
@@ -352,7 +324,7 @@ const emptyStockDetailRow = () => ({
   unit: "",
   requiredQty: "",
   rate: "",
-  amount: "",
+  amount: 0,
 });
 
 /* ---------------------------------------------------------------------------- */
@@ -363,6 +335,9 @@ const StockOrderForm = ({ data, onBack }) => {
   const orgId = Number(localStorage.getItem("orgId")) || 0;
   const branch = Number(localStorage.getItem("branchId")) || 0;
   const usersId = localStorage.getItem("usersId");
+  const isUpdate = Boolean(data?.id);
+  const financialYear =
+    data?.financialYear || localStorage.getItem("finYear") || defaultFinYear();
 
   const userData = JSON.parse(localStorage.getItem("userData") || "{}");
   const orgName = (
@@ -377,43 +352,52 @@ const StockOrderForm = ({ data, onBack }) => {
   const [fieldErrors, setFieldErrors] = useState({});
 
   /* ---------- Header state ---------- */
-  const [header, setHeader] = useState(() => {
-    const base = {
-      plantId: data?.plantId?.id ?? data?.plantId ?? "",
-      stockOrderNo: data?.stockOrderNo || data?.docNo || "",
-      date: data?.date ? fmtDate(data.date) : fmtDate(dayjs()),
-    };
-    if (!base.stockOrderNo) base.stockOrderNo = generateStockOrderNo();
-    return base;
+  const [header, setHeader] = useState({
+    plantId: data?.plantId?.id ?? data?.plantId ?? "",
+    branch: data?.branch?.id ?? data?.branch ?? (branch || ""),
+    stockOrderNo: data?.docId || data?.stockOrderNo || "",
+    date:
+      data?.date || data?.docDate
+        ? fmtDate(data.date || data.docDate)
+        : fmtDate(dayjs()),
+    itemCode: "",
   });
 
   const [stockDetailRows, setStockDetailRows] = useState(() => {
-    const raw = data?.stockDetails;
+    const raw = data?.details || data?.stockDetails;
     if (raw?.length) {
-      return raw.map((item) => ({
-        itemCode: item.itemCode?.id ?? item.itemCode ?? "",
-        itemDescription: item.itemDescription || item.itemName || "",
-        unit: item.unit?.id ?? item.unit ?? "",
-        requiredQty: item.requiredQty ?? "",
-        rate: item.rate ?? "",
-        amount: item.amount ?? "",
-      }));
+      return raw.map((d) => {
+        const qty = d.requiredQty ?? "";
+        const rate = d.rate ?? "";
+        return {
+          itemCode: d.item?.id ?? d.item ?? d.itemCode?.id ?? d.itemCode ?? "",
+          itemDescription:
+            d.itemDescription || d.item?.itemDescription || d.itemName || "",
+          unit: d.unit?.id ?? d.unit ?? "",
+          requiredQty: qty,
+          rate,
+          amount: round2(toNum(qty) * toNum(rate)),
+        };
+      });
     }
     return [emptyStockDetailRow()];
   });
 
   const [summary, setSummary] = useState({
-    totalAmount: data?.summary?.totalAmount ?? 0,
     remarks: data?.remarks || data?.summary?.remarks || "",
   });
+
+  // Summary is always derived from the rows
+  const totalAmount = round2(
+    stockDetailRows.reduce((sum, r) => sum + toNum(r.amount), 0),
+  );
 
   /* ---------- Lookup loading ---------- */
 
   const [plantOptions, setPlantOptions] = useState([]);
-  const [locationOptions, setLocationOptions] = useState([]);
+  const [branchOptions, setBranchOptions] = useState([]);
   const [itemOptions, setItemOptions] = useState([]);
   const [unitOptions, setUnitOptions] = useState([]);
-  const [subOrderOptions, setSubOrderOptions] = useState([]);
 
   const loadPlants = useCallback(async () => {
     try {
@@ -440,6 +424,21 @@ const StockOrderForm = ({ data, onBack }) => {
     }
   }, [orgId, isMacurex]);
 
+  const loadBranches = useCallback(async () => {
+    try {
+      const res = await branchAPI.getBranchByOrgId(orgId);
+      setBranchOptions(
+        (res || []).map((b) => ({
+          value: b.id,
+          label: b.branchName || b.branchCode || b.id,
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to load branch options:", error);
+      setBranchOptions([]);
+    }
+  }, [orgId]);
+
   const loadItems = useCallback(async () => {
     try {
       const res = await itemAPI.getItems(orgId, branch);
@@ -448,6 +447,7 @@ const StockOrderForm = ({ data, onBack }) => {
           value: it.id,
           label: it.itemCode || it.id,
           itemDescription: it.itemDescription || it.itemName || "",
+          defaultUnit: it.unit?.id ?? it.unitId ?? "",
         })),
       );
     } catch (error) {
@@ -474,36 +474,74 @@ const StockOrderForm = ({ data, onBack }) => {
   useEffect(() => {
     if (orgId) {
       loadPlants();
+      loadBranches();
       loadItems();
       loadUnits();
     }
-  }, [orgId, loadPlants, loadItems, loadUnits]);
+  }, [orgId, loadPlants, loadBranches, loadItems, loadUnits]);
+
+  /* ---------- Stock Order No from backend (new records only) ---------- */
+  useEffect(() => {
+    if (isUpdate || !orgId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const docId = await stockOrderAPI.getDocId(financialYear, orgId);
+        if (!cancelled && docId)
+          setHeader((prev) => ({ ...prev, stockOrderNo: docId }));
+      } catch (error) {
+        console.error("Failed to fetch Stock Order No:", error);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isUpdate, orgId, financialYear]);
 
   /* ---------------------------------------------------------------------------- */
   /* Handlers                                                                     */
+
+  // Applies an item to a row: description + default unit
+  const applyItemToRow = (row, itemValue) => {
+    const item = itemOptions.find(
+      (it) => String(it.value) === String(itemValue),
+    );
+    const next = {
+      ...row,
+      itemCode: itemValue,
+      itemDescription: item?.itemDescription || "",
+    };
+    const unitMatch = unitOptions.find(
+      (u) => String(u.value) === String(item?.defaultUnit),
+    );
+    if (unitMatch) next.unit = unitMatch.value;
+    return next;
+  };
 
   const handleHeaderChange = (e) => {
     const { name, value } = e.target;
     if (fieldErrors[name]) setFieldErrors((prev) => ({ ...prev, [name]: "" }));
     setHeader((prev) => ({ ...prev, [name]: value }));
+
+    // Header Item Code pre-fills rows that have no item yet
+    if (name === "itemCode" && value) {
+      setStockDetailRows((prev) =>
+        prev.map((row) => (row.itemCode ? row : applyItemToRow(row, value))),
+      );
+    }
   };
 
   const handleStockDetailCellChange = (idx, key, value) => {
     setStockDetailRows((prev) =>
       prev.map((row, i) => {
         if (i !== idx) return row;
-        const next = { ...row, [key]: value };
+        let next = { ...row, [key]: value };
 
-        if (key === "itemCode") {
-          const item = itemOptions.find(
-            (it) => String(it.value) === String(value),
-          );
-          next.itemDescription = item ? item.itemDescription || "" : "";
-          next.unit = item ? item.unitId || "" : "";
-        }
+        if (key === "itemCode") next = applyItemToRow(row, value);
 
+        // Amount = Required Qty * Rate
         if (key === "requiredQty" || key === "rate") {
-          next.amount = toNum(next.requiredQty) * toNum(next.rate);
+          next.amount = round2(toNum(next.requiredQty) * toNum(next.rate));
         }
 
         return next;
@@ -515,50 +553,44 @@ const StockOrderForm = ({ data, onBack }) => {
   };
 
   const handleAddRow = () =>
-    setStockDetailRows((prev) => [...prev, emptyStockDetailRow()]);
+    setStockDetailRows((prev) => [
+      ...prev,
+      header.itemCode
+        ? applyItemToRow(emptyStockDetailRow(), header.itemCode)
+        : emptyStockDetailRow(),
+    ]);
 
   const handleRemoveRow = (idx) =>
     setStockDetailRows((prev) =>
       prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx),
     );
 
-  const totalAmount = stockDetailRows.reduce(
-    (sum, r) => sum + toNum(r.amount),
-    0,
-  );
-
-  const handleSummaryToggle = (name) =>
-    setSummary((prev) => ({ ...prev, [name]: !prev[name] }));
-
   /* ---------------------------------------------------------------------------- */
   /* Validation & Save                                                            */
 
   const validate = () => {
     const errors = {};
+    const isBlank = (v) => v === "" || v === null || v === undefined;
 
-    if (!header.plantId) errors.plantId = "Plant ID is required";
     if (!header.stockOrderNo?.trim())
       errors.stockOrderNo = "Stock Order No is required";
     if (!header.date) errors.date = "Date is required";
-    if (!header.itemCode) errors.itemCode = "Item Code is required";
 
-    const hasValidRow = stockDetailRows.some(
-      (r) => r.itemCode && r.unit && toNum(r.requiredQty) > 0 && toNum(r.rate) > 0,
-    );
-    if (!hasValidRow)
-      errors.stockDetails =
-        "Add at least one Stock Details row with Item Code, Units, Required Qty and Rate";
     stockDetailRows.forEach((r, i) => {
-      if (!r.itemCode)
-        errors[`detail.${i}.itemCode`] = "Item Code is required";
+      if (!r.itemCode) errors[`detail.${i}.itemCode`] = "Item Code is required";
       if (!r.unit) errors[`detail.${i}.unit`] = "Units is required";
-      if (r.requiredQty === "" || r.requiredQty === null || r.requiredQty === undefined)
-        errors[`detail.${i}.requiredQty`] = "Required Qty is required";
-      if (r.rate === "" || r.rate === null || r.rate === undefined)
-        errors[`detail.${i}.rate`] = "Rate is required";
+      if (isBlank(r.requiredQty) || toNum(r.requiredQty) <= 0)
+        errors[`detail.${i}.requiredQty`] = "Required Qty must be > 0";
+      if (isBlank(r.rate) || toNum(r.rate) <= 0)
+        errors[`detail.${i}.rate`] = "Rate must be > 0";
     });
 
+    if (Object.keys(errors).some((k) => k.startsWith("detail.")))
+      errors.stockDetails =
+        "Each Stock Details row needs Item Code, Units, Required Qty and Rate";
+
     setFieldErrors(errors);
+    if (errors.stockDetails) addToast(errors.stockDetails);
     return Object.keys(errors).length === 0;
   };
 
@@ -567,21 +599,23 @@ const StockOrderForm = ({ data, onBack }) => {
 
     setIsSubmitting(true);
 
-    const isUpdate = Boolean(data?.id);
-
+    // Matches stockOrderDTO (PUT /api/subContract/createUpdateStockOrder)
     const payload = {
       ...(isUpdate ? { id: data.id } : {}),
+      active: data?.active ?? true,
+      branch: Number(header.branch) || branch,
       orgId,
-      branch,
-      ...header,
+      financialYear: String(financialYear),
+      remarks: summary.remarks || "",
+      cancelRemarks: data?.cancelRemarks || "",
       totalAmount,
-      stockDetails: stockDetailRows.filter((r) => r.itemCode),
-      summary: {
-        totalAmount: summary.totalAmount,
-        remarks: summary.remarks || "",
-      },
       createdBy: isUpdate ? data?.createdBy || usersId : usersId,
-      ...(isUpdate ? { updatedBy: usersId } : {}),
+      details: stockDetailRows.map((r) => ({
+        item: Number(r.itemCode),
+        unit: Number(r.unit),
+        requiredQty: toNum(r.requiredQty),
+        rate: toNum(r.rate),
+      })),
     };
 
     try {
@@ -599,7 +633,7 @@ const StockOrderForm = ({ data, onBack }) => {
         addToast(
           response?.errors?.[0]?.shortMessage ||
             response?.errors?.[0]?.longMessage ||
-            response?.message ||
+            response?.paramObjectsMap?.errorMessage ||
             response?.paramObjectsMap?.message ||
             "Failed to save Stock Order.",
         );
@@ -636,7 +670,7 @@ const StockOrderForm = ({ data, onBack }) => {
           <ArrowLeft className="h-4 w-4" />
         </button>
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-          {data ? "Edit Stock Order" : "Add Stock Order"}
+          {isUpdate ? "Edit Stock Order" : "Add Stock Order"}
         </h2>
       </div>
 
@@ -654,14 +688,15 @@ const StockOrderForm = ({ data, onBack }) => {
               onChange={handleHeaderChange}
               error={fieldErrors.plantId}
               options={plantOptions}
-              required
             />
+
             <Field
               label="Stock Order No"
               name="stockOrderNo"
               value={header.stockOrderNo}
               onChange={handleHeaderChange}
               error={fieldErrors.stockOrderNo}
+              disabled
               required
             />
             <Field
@@ -677,11 +712,10 @@ const StockOrderForm = ({ data, onBack }) => {
               type="select"
               label="Item Code"
               name="itemCode"
-              value={data?.itemCode ?? ""}
+              value={header.itemCode}
               onChange={handleHeaderChange}
               error={fieldErrors.itemCode}
               options={itemOptions}
-              required
             />
           </div>
         </div>
@@ -743,13 +777,18 @@ const StockOrderForm = ({ data, onBack }) => {
                   },
                   { key: "requiredQty", label: "Required Qty", type: "number" },
                   { key: "rate", label: "Rate", type: "number" },
-                  { key: "amount", label: "Amount", type: "number", readOnly: true },
+                  {
+                    key: "amount",
+                    label: "Amount",
+                    type: "number",
+                    readOnly: true,
+                  },
                 ]}
                 rows={stockDetailRows}
                 onCellChange={handleStockDetailCellChange}
                 onRemoveRow={handleRemoveRow}
               />
-              </div>
+            </div>
           )}
 
           {/* Tab 2: Charges Summary */}
@@ -769,7 +808,9 @@ const StockOrderForm = ({ data, onBack }) => {
                   label="Remarks"
                   name="remarks"
                   value={summary.remarks}
-                  onChange={e => setSummary((s) => ({ ...s, remarks: e.target.value }))}
+                  onChange={(e) =>
+                    setSummary((s) => ({ ...s, remarks: e.target.value }))
+                  }
                 />
               </div>
             </div>
@@ -781,7 +822,7 @@ const StockOrderForm = ({ data, onBack }) => {
         onCancel={onBack}
         onSave={handleSave}
         isSubmitting={isSubmitting}
-        saveLabel={data ? "Update" : "Save"}
+        saveLabel={isUpdate ? "Update" : "Save"}
       />
     </div>
   );

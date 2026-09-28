@@ -19,11 +19,10 @@ const BulkIssueIndentList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     try {
       setLoading(true);
 
-      const response =
-        await bulkIssueIndentAPI.getByOrgIdAndBranch({
-          branch: BRANCH_ID,
-          orgId: ORG_ID,
-        });
+      const response = await bulkIssueIndentAPI.getByOrgIdAndBranch({
+        branch: BRANCH_ID,
+        orgId: ORG_ID,
+      });
 
       const sortedData = (response || []).sort(
         (a, b) => (b.id || 0) - (a.id || 0),
@@ -46,10 +45,7 @@ const BulkIssueIndentList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   /* ---------------- Accessors ---------------- */
 
   const getPlantLabel = (row) =>
-    row?.branch?.branchName ||
-    row?.branch?.branchCode ||
-    row?.branch?.id ||
-    "";
+    row?.branch?.branchName || row?.branch?.branchCode || row?.branch?.id || "";
 
   const getDepartmentLabel = (row) =>
     row?.department?.departmentName ||
@@ -58,9 +54,7 @@ const BulkIssueIndentList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     "";
 
   const getFgDescription = (row) =>
-    row?.fgSfgItem?.itemDescription ||
-    row?.fgSfgItem?.itemCode ||
-    "";
+    row?.fgSfgItem?.itemDescription || row?.fgSfgItem?.itemCode || "";
 
   /* ---------------- Columns ---------------- */
 

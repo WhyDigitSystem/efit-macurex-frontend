@@ -1,53 +1,42 @@
 import apiClient from "../apiClient";
 
-/* Stock Order API
-   Mirrors the commonmaster API convention used across this app.
-   The backend persists the header, stock details and the summary
-   in a single transaction and keeps the complete stock order
-   history for audit purposes (server-side validation). */
 const stockOrderAPI = {
-  // Get Stock Orders by Organization ID
+  // GET /api/subContract/getAllStockOrderByOrgIdAndBranch
   getByOrgId: async (orgId, branchId) => {
-    try {
-      const res = await apiClient.get(
-        `/api/commonmaster/getStockOrderByOrgId?orgId=${orgId}&branchId=${branchId}`,
-      );
-      return (
-        res?.paramObjectsMap?.stockOrderList ||
-        res?.paramObjectsMap?.stockOrders ||
-        []
-      );
-    } catch (error) {
-      console.error("Error fetching stock orders:", error);
-      throw error;
-    }
+    const res = await apiClient.get(
+      `/api/subContract/getAllStockOrderByOrgIdAndBranch?branch=${branchId}&orgId=${orgId}`,
+    );
+    return res?.paramObjectsMap?.stockOrderList || [];
   },
 
-  // Get Stock Order by ID
+  // GET /api/subContract/getStockOrderById
   getById: async (id) => {
-    try {
-      const res = await apiClient.get(
-        `/api/commonmaster/getStockOrderById?id=${id}`,
-      );
-      return res?.paramObjectsMap?.stockOrderVO || null;
-    } catch (error) {
-      console.error("Error fetching stock order by id:", error);
-      throw error;
-    }
+    const res = await apiClient.get(
+      `/api/subContract/getStockOrderById?id=${id}`,
+    );
+    if (!res?.status) return null; // "Stock Order Not Found"
+    return (
+      res?.paramObjectsMap?.stockOrderVO ||
+      res?.paramObjectsMap?.stockOrder ||
+      null
+    );
   },
 
-  // Create / Update Stock Order
+  // GET /api/subContract/getStockOrderDocId
+  getDocId: async (financialYear, orgId) => {
+    const res = await apiClient.get(
+      `/api/subContract/getStockOrderDocId?financialYear=${financialYear}&orgId=${orgId}`,
+    );
+    return res?.paramObjectsMap?.docId || "";
+  },
+
+  // PUT /api/subContract/createUpdateStockOrder
   createUpdate: async (payload) => {
-    try {
-      const res = await apiClient.post(
-        "/api/commonmaster/createUpdateStockOrder",
-        payload,
-      );
-      return res;
-    } catch (error) {
-      console.error("Error saving stock order:", error);
-      throw error;
-    }
+    const res = await apiClient.put(
+      "/api/subContract/createUpdateStockOrder",
+      payload,
+    );
+    return res;
   },
 };
 

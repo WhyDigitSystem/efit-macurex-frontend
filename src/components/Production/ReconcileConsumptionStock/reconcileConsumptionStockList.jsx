@@ -29,9 +29,7 @@ const ReconcileConsumptionStockList = ({
         branch: BRANCH_ID,
       });
 
-      const sortedData = (list || []).sort(
-        (a, b) => (b.id || 0) - (a.id || 0),
-      );
+      const sortedData = (list || []).sort((a, b) => (b.id || 0) - (a.id || 0));
 
       setData(sortedData);
     } catch (error) {
@@ -50,10 +48,7 @@ const ReconcileConsumptionStockList = ({
   /* ---------------- Accessors ---------------- */
 
   const getPlantLabel = (row) =>
-    row?.branch?.branchName ||
-    row?.branch?.branchCode ||
-    row?.branch?.id ||
-    "";
+    row?.branch?.branchName || row?.branch?.branchCode || row?.branch?.id || "";
 
   const getShopFloorLabel = (row) =>
     row?.shopFloor?.locationName || row?.shopFloor?.id || "";

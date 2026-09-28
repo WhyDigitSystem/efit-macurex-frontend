@@ -72,9 +72,7 @@ const Field = ({
           className={controlClasses}
         >
           <option value="">-- Select --</option>
-          {showGhost && (
-            <option value={safeValue}>{String(safeValue)}</option>
-          )}
+          {showGhost && <option value={safeValue}>{String(safeValue)}</option>}
           {(options || []).map((opt) => (
             <option key={opt.value ?? opt} value={opt.value ?? opt}>
               {opt.label ?? opt}
@@ -219,12 +217,13 @@ const TableHead = ({ headers }) => (
       {headers.map((h, i) => (
         <th
           key={i}
-          className={`p-1 whitespace-nowrap ${i === 0
+          className={`p-1 whitespace-nowrap ${
+            i === 0
               ? "w-8 text-center"
               : i === headers.length - 1
                 ? "w-20 text-left"
                 : "text-left"
-            } dark:text-white`}
+          } dark:text-white`}
         >
           {h}
         </th>
@@ -242,10 +241,11 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
         type="button"
         onClick={onRemove}
         disabled={disabled}
-        className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
+        className={`h-5 w-5 rounded text-white flex items-center justify-center ${
+          disabled
             ? "bg-gray-400 cursor-not-allowed"
             : "bg-red-600 hover:bg-red-700"
-          }`}
+        }`}
       >
         <Trash2 size={10} />
       </button>
@@ -262,7 +262,11 @@ const SelectCell = ({ value, onChange, options }) => {
 
   return (
     <td className="p-1 align-top min-w-[220px]">
-      <select value={safeValue} onChange={onChange} className={cellInputClasses}>
+      <select
+        value={safeValue}
+        onChange={onChange}
+        className={cellInputClasses}
+      >
         <option value="">-- Select --</option>
         {showGhost && <option value={safeValue}>{String(safeValue)}</option>}
         {(options || []).map((opt) => (
@@ -282,8 +286,9 @@ const InputCell = ({ value, onChange, type = "text", readOnly }) => (
       value={value}
       onChange={onChange}
       readOnly={readOnly}
-      className={`${cellInputClasses} ${readOnly ? "bg-gray-100 dark:bg-gray-800 text-gray-500" : ""
-        } ${type === "number" ? "min-w-[90px]" : "min-w-[110px]"}`}
+      className={`${cellInputClasses} ${
+        readOnly ? "bg-gray-100 dark:bg-gray-800 text-gray-500" : ""
+      } ${type === "number" ? "min-w-[90px]" : "min-w-[110px]"}`}
     />
   </td>
 );
@@ -354,59 +359,59 @@ const buildHeaderFields = ({
   bomOptions,
   locationOptions,
 }) => [
-    {
-      name: "plant",
-      label: "Plant",
-      type: "select",
-      options: plantOptions,
-      required: true,
-    },
-    { name: "docId", label: "DocId", auto: true },
-    {
-      name: "department",
-      label: "Department",
-      type: "select",
-      options: departmentOptions,
-    },
-    {
-      name: "docDate",
-      label: "DocDate",
-      type: "date",
-      default: todayISO(),
-      required: true,
-    },
-    {
-      name: "belongsTo",
-      label: "Belongs To",
-      type: "select",
-      options: BELONGS_TO,
-    },
-    { name: "fgDescription", label: "FG Description", disabled: true },
-    {
-      name: "fgSfgItemId",
-      label: "FG/SFG Itemid",
-      type: "select",
-      options: fgItemOptions,
-    },
-    {
-      name: "bomId",
-      label: "Bom Id",
-      type: "select",
-      options: bomOptions,
-    },
-    {
-      name: "timeOfIndent",
-      label: "Time Of Indent",
-      type: "time",
-      default: nowTime(),
-    },
-    {
-      name: "fromLocation",
-      label: "From Location",
-      type: "select",
-      options: locationOptions,
-    },
-  ];
+  {
+    name: "plant",
+    label: "Plant",
+    type: "select",
+    options: plantOptions,
+    required: true,
+  },
+  { name: "docId", label: "DocId", auto: true },
+  {
+    name: "department",
+    label: "Department",
+    type: "select",
+    options: departmentOptions,
+  },
+  {
+    name: "docDate",
+    label: "DocDate",
+    type: "date",
+    default: todayISO(),
+    required: true,
+  },
+  {
+    name: "belongsTo",
+    label: "Belongs To",
+    type: "select",
+    options: BELONGS_TO,
+  },
+  { name: "fgDescription", label: "FG Description", disabled: true },
+  {
+    name: "fgSfgItemId",
+    label: "FG/SFG Itemid",
+    type: "select",
+    options: fgItemOptions,
+  },
+  {
+    name: "bomId",
+    label: "Bom Id",
+    type: "select",
+    options: bomOptions,
+  },
+  {
+    name: "timeOfIndent",
+    label: "Time Of Indent",
+    type: "time",
+    default: nowTime(),
+  },
+  {
+    name: "fromLocation",
+    label: "From Location",
+    type: "select",
+    options: locationOptions,
+  },
+];
 
 /* ---------------------------------------------------------------------------- */
 /* Child 1 - Indent Detail                                                     */
@@ -488,8 +493,8 @@ const BulkIssueIndentForm = ({ onBack, onSave, editData }) => {
   const bomItemMapRef = useRef({}); // itemId -> BOM line object
 
   /* ---------------- Lookup maps ---------------- */
-  const fgItemMapRef = useRef({});       // itemId -> item object
-  const locationMapRef = useRef({});     // locationId -> location object
+  const fgItemMapRef = useRef({}); // itemId -> item object
+  const locationMapRef = useRef({}); // locationId -> location object
 
   /* ---------------- Form state ---------------- */
   const [header, setHeader] = useState(() => ({
@@ -509,10 +514,10 @@ const BulkIssueIndentForm = ({ onBack, onSave, editData }) => {
     editData?.indentDetails?.length
       ? editData.indentDetails
       : [
-        blankRowFromColumns(
-          buildIndentDetailColumns({ unitOptions: [], bomItemOptions: [] }),
-        ),
-      ],
+          blankRowFromColumns(
+            buildIndentDetailColumns({ unitOptions: [], bomItemOptions: [] }),
+          ),
+        ],
   );
 
   const [indentSummary, setIndentSummary] = useState({
@@ -541,10 +546,10 @@ const BulkIssueIndentForm = ({ onBack, onSave, editData }) => {
       editData.indentDetails?.length
         ? editData.indentDetails
         : [
-          blankRowFromColumns(
-            buildIndentDetailColumns({ unitOptions: [], bomItemOptions: [] }),
-          ),
-        ],
+            blankRowFromColumns(
+              buildIndentDetailColumns({ unitOptions: [], bomItemOptions: [] }),
+            ),
+          ],
     );
 
     setIndentSummary({
@@ -939,7 +944,7 @@ const BulkIssueIndentForm = ({ onBack, onSave, editData }) => {
       financialYear,
 
       cancelRemarks: "",
-      createdBy: isUpdate ? editData?.createdBy ?? CREATED_BY : CREATED_BY,
+      createdBy: isUpdate ? (editData?.createdBy ?? CREATED_BY) : CREATED_BY,
 
       belongsTo: header.belongsTo || "",
       department: Number(header.department) || 0,
@@ -980,9 +985,9 @@ const BulkIssueIndentForm = ({ onBack, onSave, editData }) => {
       if (isSuccess) {
         addToast(
           response?.paramObjectsMap?.message ||
-          (isUpdate
-            ? "Bulk Issue Indent updated successfully!"
-            : "Bulk Issue Indent created successfully!"),
+            (isUpdate
+              ? "Bulk Issue Indent updated successfully!"
+              : "Bulk Issue Indent created successfully!"),
           "success",
         );
 
@@ -997,11 +1002,11 @@ const BulkIssueIndentForm = ({ onBack, onSave, editData }) => {
       } else {
         addToast(
           response?.errors?.[0]?.shortMessage ||
-          response?.errors?.[0]?.longMessage ||
-          response?.paramObjectsMap?.message ||
-          response?.paramObjectsMap?.errorMessage ||
-          response?.message ||
-          "Failed to save Bulk Issue Indent",
+            response?.errors?.[0]?.longMessage ||
+            response?.paramObjectsMap?.message ||
+            response?.paramObjectsMap?.errorMessage ||
+            response?.message ||
+            "Failed to save Bulk Issue Indent",
           "error",
         );
       }
@@ -1067,10 +1072,11 @@ const BulkIssueIndentForm = ({ onBack, onSave, editData }) => {
                   key={tab.key}
                   type="button"
                   onClick={() => setActiveChildTab(tab.key)}
-                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${activeChildTab === tab.key
+                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${
+                    activeChildTab === tab.key
                       ? "bg-blue-600 text-white"
                       : "text-gray-600 dark:text-gray-300"
-                    }`}
+                  }`}
                 >
                   {tab.label}
                 </button>

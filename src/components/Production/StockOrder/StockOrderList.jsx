@@ -14,8 +14,8 @@ const StockOrderList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     try {
       setLoading(true);
       const data = await stockOrderAPI.getByOrgId(ORG_ID, BRANCH_ID);
-      data.sort((a, b) => (b.id || 0) - (a.id || 0));
-      setRecords(data);
+      const sorted = [...data].sort((a, b) => (b.id || 0) - (a.id || 0));
+      setRecords(sorted);
     } catch (error) {
       console.error("Failed to fetch Stock Order records:", error);
       setRecords([]);
@@ -31,50 +31,28 @@ const StockOrderList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
 
   const columns = [
     {
-      key: "stockOrderNo",
+      key: "docId",
       label: "Stock Order No",
-      accessor: (row) => row.stockOrderNo || row.docNo || "",
+      accessor: (row) => row.docId || row.stockOrderNo || "",
       type: "text",
       noWrap: true,
     },
     {
-      key: "date",
-      label: "Date",
-      accessor: (row) => row.date || row.docDate || "",
-      type: "date",
-      noWrap: true,
-    },
-    {
-      key: "plantId",
-      label: "Branch",
-      accessor: (row) =>
-        typeof row.plantId === "object"
-          ? row.plantId.branchName || row.plantId.plantName || row.plantId.id
-          : row.plantName || row.plantId,
+      key: "financialYear",
+      label: "Financial Year",
+      accessor: (row) => row.financialYear || "",
       type: "text",
     },
     {
-      key: "itemCode",
-      label: "Item Code",
-      accessor: (row) =>
-        typeof row.itemCode === "object"
-          ? row.itemCode.itemCode || row.itemCode.id
-          : row.itemCode || "",
+      key: "totalAmount",
+      label: "Total Amount",
+      accessor: (row) => row.totalAmount ?? 0,
       type: "text",
     },
     {
-      key: "itemDescription",
-      label: "Item Description",
-      accessor: (row) => row.itemDescription || "",
-      type: "text",
-    },
-    {
-      key: "unit",
-      label: "Unit",
-      accessor: (row) =>
-        typeof row.unit === "object"
-          ? row.unit.unitId || row.unit.id
-          : row.unitName || row.unit || "",
+      key: "active",
+      label: "Active",
+      accessor: (row) => (row.active === false ? "No" : "Yes"),
       type: "text",
     },
     {
@@ -86,14 +64,7 @@ const StockOrderList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     },
   ];
 
-  const searchFields = [
-    "stockOrderNo",
-    "date",
-    "plantId",
-    "itemCode",
-    "itemDescription",
-    "unit",
-  ];
+  const searchFields = ["docId", "financialYear", "totalAmount", "active"];
 
   return (
     <CommonListViewTable

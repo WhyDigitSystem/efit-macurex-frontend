@@ -11,7 +11,9 @@ const mapApiToFormData = (src) => {
   if (!src) return null;
 
   const empId = (obj) =>
-    obj && typeof obj === "object" ? obj.employeeId ?? obj.id ?? "" : obj ?? "";
+    obj && typeof obj === "object"
+      ? (obj.employeeId ?? obj.id ?? "")
+      : (obj ?? "");
 
   return {
     id: src.id,
