@@ -5,7 +5,9 @@ export const goodsReceivedNoteAPI = {
     try {
       const res = await apiClient.get(`/api/grn/getGrnById?id=${id}`);
       // API returns { paramObjectsMap: { grnVO: { ...single GRN... } } }
-      return res?.paramObjectsMap?.grnVO || null;
+      // (guard: some backends return a one-item list under the same key)
+      const vo = res?.paramObjectsMap?.grnVO;
+      return Array.isArray(vo) ? vo[0] || null : vo || null;
     } catch (error) {
       console.error("Error fetching GRN by ID:", error);
       throw error;
@@ -15,7 +17,7 @@ export const goodsReceivedNoteAPI = {
   getGrnByOrgId: async (branch, orgId) => {
     try {
       const res = await apiClient.get(
-        `/api/grn/getGrnByOrgId?branch=${branch}&orgId=${orgId}`
+        `/api/grn/getGrnByOrgId?branch=${branch}&orgId=${orgId}`,
       );
       return res?.paramObjectsMap?.grnVO || [];
     } catch (error) {
@@ -27,7 +29,7 @@ export const goodsReceivedNoteAPI = {
   getSupplierDetailsForGrn: async (branch, orgId) => {
     try {
       const res = await apiClient.get(
-        `/api/grn/getSupplierDetailsForGrn?branch=${branch}&orgId=${orgId}`
+        `/api/grn/getSupplierDetailsForGrn?branch=${branch}&orgId=${orgId}`,
       );
       return res;
     } catch (error) {
@@ -39,7 +41,7 @@ export const goodsReceivedNoteAPI = {
   getGatePassDocIdDetails: async (branch, orgId, supplierCode) => {
     try {
       const res = await apiClient.get(
-        `/api/grn/getGatePassDocIdDetails?branch=${branch}&orgId=${orgId}&supplierCode=${supplierCode}`
+        `/api/grn/getGatePassDocIdDetails?branch=${branch}&orgId=${orgId}&supplierCode=${encodeURIComponent(supplierCode)}`,
       );
       return res;
     } catch (error) {
@@ -48,10 +50,15 @@ export const goodsReceivedNoteAPI = {
     }
   },
 
-  getPurchaseOrderNoBasedDocId: async (branch, gatePass, orgId, supplierCode) => {
+  getPurchaseOrderNoBasedDocId: async (
+    branch,
+    gatePass,
+    orgId,
+    supplierCode,
+  ) => {
     try {
       const res = await apiClient.get(
-        `/api/grn/getPurchaseOrderNoBasedDocId?branch=${branch}&gatePass=${gatePass}&orgId=${orgId}&supplierCode=${supplierCode}`
+        `/api/grn/getPurchaseOrderNoBasedDocId?branch=${branch}&gatePass=${encodeURIComponent(gatePass)}&orgId=${orgId}&supplierCode=${encodeURIComponent(supplierCode)}`,
       );
       return res;
     } catch (error) {
@@ -60,10 +67,11 @@ export const goodsReceivedNoteAPI = {
     }
   },
 
+  // NOTE: endpoint spelling "getPoNmberBasedItemDetails" must match the backend controller
   getPoNumberBasedItemDetails: async (branch, orgId, purchaseOrderNo) => {
     try {
       const res = await apiClient.get(
-        `/api/grn/getPoNmberBasedItemDetails?branch=${branch}&orgId=${orgId}&purchaseOrderNo=${encodeURIComponent(purchaseOrderNo)}`
+        `/api/grn/getPoNmberBasedItemDetails?branch=${branch}&orgId=${orgId}&purchaseOrderNo=${encodeURIComponent(purchaseOrderNo)}`,
       );
       return res;
     } catch (error) {
@@ -75,7 +83,7 @@ export const goodsReceivedNoteAPI = {
   getPurchaseOrderNumberImportGrn: async (branch, orgId, supplierCode) => {
     try {
       const res = await apiClient.get(
-        `/api/grn/getPurchaseOrderNumberImportGrn?branch=${branch}&orgId=${orgId}&supplierCode=${supplierCode}`
+        `/api/grn/getPurchaseOrderNumberImportGrn?branch=${branch}&orgId=${orgId}&supplierCode=${encodeURIComponent(supplierCode)}`,
       );
       return res;
     } catch (error) {
@@ -84,10 +92,15 @@ export const goodsReceivedNoteAPI = {
     }
   },
 
-  getItemDetailsForImportGrn: async (branch, orgId, purchaseOrderNo, supplierCode) => {
+  getItemDetailsForImportGrn: async (
+    branch,
+    orgId,
+    purchaseOrderNo,
+    supplierCode,
+  ) => {
     try {
       const res = await apiClient.get(
-        `/api/grn/getItemDetailsForImportGrn?branch=${branch}&orgId=${orgId}&purchaseOrderNo=${encodeURIComponent(purchaseOrderNo)}&supplierCode=${supplierCode}`
+        `/api/grn/getItemDetailsForImportGrn?branch=${branch}&orgId=${orgId}&purchaseOrderNo=${encodeURIComponent(purchaseOrderNo)}&supplierCode=${encodeURIComponent(supplierCode)}`,
       );
       return res;
     } catch (error) {
@@ -99,7 +112,7 @@ export const goodsReceivedNoteAPI = {
   getTaxValue: async (hsn, orgId) => {
     try {
       const res = await apiClient.get(
-        `/api/rejectionInvoice/getTaxValue?hsn=${hsn}&orgId=${orgId}`
+        `/api/rejectionInvoice/getTaxValue?hsn=${encodeURIComponent(hsn)}&orgId=${orgId}`,
       );
       return res;
     } catch (error) {
@@ -111,7 +124,7 @@ export const goodsReceivedNoteAPI = {
   getExchangeRateDetails: async (branch, currency, orgId) => {
     try {
       const res = await apiClient.get(
-        `/api/purchaseOrder/getExchangeRateDetails?branch=${branch}&currency=${currency}&orgId=${orgId}`
+        `/api/purchaseOrder/getExchangeRateDetails?branch=${branch}&currency=${encodeURIComponent(currency)}&orgId=${orgId}`,
       );
       return res;
     } catch (error) {
@@ -123,7 +136,7 @@ export const goodsReceivedNoteAPI = {
   getGrnDocId: async (financialYear, orgId, type = "Local") => {
     try {
       const res = await apiClient.get(
-        `/api/grn/getGrnDocId?financialYear=${financialYear}&orgId=${orgId}&type=${type}`
+        `/api/grn/getGrnDocId?financialYear=${financialYear}&orgId=${orgId}&type=${type}`,
       );
       return res;
     } catch (error) {
@@ -135,7 +148,7 @@ export const goodsReceivedNoteAPI = {
   getScheduleDocIdDetails: async (branch, orgId, supplier) => {
     try {
       const res = await apiClient.get(
-        `/api/grn/getScheduleDocIdDetails?branch=${branch}&orgId=${orgId}&supplier=${supplier}`
+        `/api/grn/getScheduleDocIdDetails?branch=${branch}&orgId=${orgId}&supplier=${encodeURIComponent(supplier)}`,
       );
       return res;
     } catch (error) {
@@ -150,18 +163,16 @@ export const goodsReceivedNoteAPI = {
 
       formData.append(
         "grn",
-        new Blob([JSON.stringify(grnDTO)], { type: "application/json" })
+        new Blob([JSON.stringify(grnDTO)], { type: "application/json" }),
       );
 
       (files || []).forEach((f) => {
         if (f) formData.append("files", f);
       });
 
-      const res = await apiClient.put(
-        "/api/grn/createUpdateGrn",
-        formData,
-        { headers: { "Content-Type": "multipart/form-data" } }
-      );
+      const res = await apiClient.put("/api/grn/createUpdateGrn", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
       return res;
     } catch (error) {
       console.error("Error creating/updating GRN:", error);
@@ -178,7 +189,7 @@ export const goodsReceivedNoteAPI = {
       const res = await apiClient.post(
         "/api/purchasemaster/uploadGrnInvoiceCopy",
         formData,
-        { headers: { "Content-Type": "multipart/form-data" } }
+        { headers: { "Content-Type": "multipart/form-data" } },
       );
       return res;
     } catch (error) {
