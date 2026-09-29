@@ -8,7 +8,6 @@ import {
   FileText,
   Loader2,
 } from "lucide-react";
-
 import { useCallback, useEffect, useState } from "react";
 
 import purchaseIndentAPI from "../../../api/Purchase/purchaseIndentAPI";
@@ -16,7 +15,6 @@ import branchAPI from "../../../api/branchAPI";
 import { departmentAPI } from "../../../api/departmentAPI";
 import { employeeAPI } from "../../../api/employeeAPI";
 import itemAPI from "../../../api/itemAPI";
-import docTypeMappingAPI from "../../../api/docTypeMappingAPI";
 import listOfValuesAPI from "../../../api/listOfValuesAPI";
 
 /* -------------------------------------------------------------------------- */
@@ -525,11 +523,7 @@ const AttachmentTable = ({
 const emptyHeader = () => ({
   active: true,
   approved: false,
-
-  // IMPORTANT:
-  // Belongs To is stored as LOV description/string.
   belongsTo: "",
-
   branch: "",
   indentDate: "",
   department: "",
@@ -574,8 +568,6 @@ const CHILD_TABS = [
     label: "3-Pdf Attachment",
   },
 ];
-
-const PURCHASE_INDENT_SCREEN_CODE = "PIN";
 
 /* -------------------------------------------------------------------------- */
 /* Main Form */
@@ -627,10 +619,6 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
   const [employeeList, setEmployeeList] = useState([]);
 
   const [itemList, setItemList] = useState([]);
-
-  /* ---------------------------------------------------------------------- */
-  /* BELONGS TO - LIST OF VALUES */
-  /* ---------------------------------------------------------------------- */
 
   const [belongsToOptions, setBelongsToOptions] = useState([]);
 
@@ -694,7 +682,7 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
 
       setDepartmentData([]);
     }
-  }, [ORG_ID, BRANCH_ID]);
+  }, [ORG_ID]);
 
   /* ---------------------------------------------------------------------- */
   /* Load Employees */
@@ -744,7 +732,7 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
   }, [ORG_ID, BRANCH_ID]);
 
   /* ---------------------------------------------------------------------- */
-  /* Load Belongs To from List Of Values */
+  /* Load Belongs To */
   /* ---------------------------------------------------------------------- */
 
   const loadBelongsTo = useCallback(async () => {
@@ -754,23 +742,15 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
         return;
       }
 
-      console.log("Loading BELONGS TO LOV for Organization:", ORG_ID);
-
       const response = await listOfValuesAPI.getListValuesGroup(
         "BELONGS TO",
         ORG_ID,
       );
 
-      console.log("BELONGS TO LOV response:", response);
-
       const list = Array.isArray(response) ? response : [];
 
       const options = list
         .map((item) => {
-          /*
-           * Different APIs may return the description using
-           * different property names.
-           */
           const description =
             item.valuesDescription ||
             item.valueDescription ||
@@ -780,22 +760,8 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
             "";
 
           return {
-            /*
-             * IMPORTANT:
-             *
-             * The option id is intentionally the description.
-             *
-             * This means:
-             *
-             * Domestic -> Domestic
-             * Import   -> Import
-             *
-             * We are NOT sending the LOV database ID.
-             */
             id: description,
-
             value: description,
-
             label: description,
           };
         })
@@ -833,19 +799,15 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
   const byWhomOptions = preparedByOptions;
 
   /* ---------------------------------------------------------------------- */
-  /* Generate indent number */
+  /* Generate Purchase Indent Number */
   /* ---------------------------------------------------------------------- */
 
   useEffect(() => {
-    /*
-     * Do not generate a new number during edit.
-     */
     if (isEditMode) {
       return;
     }
 
-    if (!BRANCH_ID) {
-      console.warn("No branchId found in localStorage");
+    if (!ORG_ID) {
       return;
     }
 
@@ -854,46 +816,30 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
       setIndentNo("");
 
       try {
-        const mappingList =
-          await docTypeMappingAPI.getDocumentTypeMappingByOrgId(
-            ORG_ID,
-            BRANCH_ID,
-          );
+        const financialYear = localStorage.getItem("finYear");
 
-        const record = mappingList?.[0];
-
-        const pinDetail = record?.documentTypeMappingDetails?.find(
-          (detail) => detail.screenCode === PURCHASE_INDENT_SCREEN_CODE,
-        );
-
-        if (!pinDetail) {
-          console.warn(
-            `No document mapping found for ${PURCHASE_INDENT_SCREEN_CODE}`,
-          );
-
+        if (!financialYear) {
+          console.error("finYear not found in localStorage");
           return;
         }
 
         const docId = await purchaseIndentAPI.getPurchaseIndentDocId({
-          financialYear: pinDetail.finYear,
-          orgId: pinDetail.orgId,
-          screenCode: pinDetail.screenCode,
+          financialYear,
+          orgId: ORG_ID,
         });
 
         if (docId) {
           setIndentNo(docId);
         }
       } catch (error) {
-        console.error("Failed to generate indent number:", error);
+        console.error("Failed to generate Purchase Indent number:", error);
       } finally {
         setGeneratingDocId(false);
       }
     };
 
     generateIndentNo();
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isEditMode]);
+  }, [isEditMode, ORG_ID]);
 
   /* ---------------------------------------------------------------------- */
   /* Load edit record */
@@ -912,11 +858,7 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
       setLoadError("");
 
       try {
-        console.log("Loading Purchase Indent ID:", data.id);
-
         const response = await purchaseIndentAPI.getPurchaseIndentById(data.id);
-
-        console.log("Purchase Indent edit API response:", response);
 
         if (cancelled) {
           return;
@@ -936,34 +878,17 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
           throw new Error("Purchase Indent record not found");
         }
 
-        console.log("Purchase Indent record used for edit:", purchaseIndent);
-
         setRecordId(purchaseIndent.id ?? data.id);
 
-        /* -------------------------------------------------------------- */
-        /* Keep existing indent number */
-        /* -------------------------------------------------------------- */
-
+        /* Existing Indent No */
         setIndentNo(purchaseIndent.indentNo ?? data.indentNo ?? "");
 
-        /* -------------------------------------------------------------- */
         /* Header */
-        /* -------------------------------------------------------------- */
-
         setHeader({
           active: purchaseIndent.active ?? true,
 
           approved: purchaseIndent.approved ?? false,
 
-          /*
-           * IMPORTANT:
-           * Belongs To remains a STRING.
-           *
-           * Example:
-           * "Domestic"
-           *
-           * Do not use asId() here.
-           */
           belongsTo: purchaseIndent.belongsTo ?? data.belongsTo ?? "",
 
           branch: asId(purchaseIndent.branch ?? data.branch),
@@ -982,10 +907,7 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
           remarks: purchaseIndent.remarks ?? data.remarks ?? "",
         });
 
-        /* -------------------------------------------------------------- */
         /* Details */
-        /* -------------------------------------------------------------- */
-
         const detailsList = pickArray(purchaseIndent, [
           "details",
           "purchaseIndentDetails",
@@ -996,8 +918,6 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
         const finalDetails = detailsList.length
           ? detailsList
           : findDetailRows(purchaseIndent);
-
-        console.log("Purchase Indent detail rows:", finalDetails);
 
         if (finalDetails.length) {
           setDetailRows(
@@ -1036,10 +956,7 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
           setDetailRows([emptyDetailRow()]);
         }
 
-        /* -------------------------------------------------------------- */
         /* Attachments */
-        /* -------------------------------------------------------------- */
-
         const attachments = pickArray(purchaseIndent, [
           "attachments",
           "attachmentVOList",
@@ -1048,8 +965,6 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
         ]);
 
         setExistingAttachments(attachments);
-
-        console.log("Purchase Indent attachments:", attachments);
       } catch (error) {
         if (!cancelled) {
           console.error("Failed to load purchase indent:", error);
@@ -1088,7 +1003,6 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
 
     setHeader((previous) => ({
       ...previous,
-
       [name]: type === "checkbox" ? checked : value,
     }));
   };
@@ -1118,11 +1032,8 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
         rowIndex === index
           ? {
               ...emptyDetailRow(),
-
               item: itemId,
-
               requiredDate: row.requiredDate,
-
               purpose: row.purpose,
             }
           : row,
@@ -1172,7 +1083,6 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
   const handleDetailCellChange = (index, key, value) => {
     if (key === "item") {
       handleItemSelect(index, value);
-
       return;
     }
 
@@ -1292,13 +1202,6 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
         .filter(Boolean);
 
       const payload = {
-        /*
-         * Update:
-         * send existing database ID.
-         *
-         * Create:
-         * don't send ID.
-         */
         ...(isEditMode && recordId
           ? {
               id: recordId,
@@ -1309,17 +1212,6 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
 
         approved: header.approved,
 
-        /*
-         * IMPORTANT:
-         *
-         * Belongs To is sent as STRING.
-         *
-         * Example:
-         * "Domestic"
-         *
-         * NOT:
-         * 1000000001
-         */
         belongsTo: header.belongsTo,
 
         branch: Number(header.branch),
@@ -1363,11 +1255,6 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
         })),
       };
 
-      console.log(
-        isEditMode ? "Updating Purchase Indent:" : "Creating Purchase Indent:",
-        payload,
-      );
-
       const formData = new FormData();
 
       formData.append(
@@ -1383,8 +1270,6 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
 
       const response =
         await purchaseIndentAPI.updateCreatePurchaseIndent(formData);
-
-      console.log("Save/Update response:", response);
 
       const status = response?.status === true || response?.statusFlag === "Ok";
 
@@ -1486,9 +1371,7 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
               disabled
             />
 
-            {/* ====================================================== */}
-            {/* BELONGS TO */}
-            {/* ====================================================== */}
+            {/* Belongs To */}
 
             <Field
               type="select"
@@ -1602,9 +1485,7 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
             )}
           </div>
 
-          {/* ======================================================== */}
           {/* Item Details */}
-          {/* ======================================================== */}
 
           {activeChildTab === "item" && (
             <TableWrapper>
@@ -1767,9 +1648,7 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
             </TableWrapper>
           )}
 
-          {/* ======================================================== */}
           {/* Attachment */}
-          {/* ======================================================== */}
 
           {activeChildTab === "attachment" && (
             <AttachmentTable
@@ -1781,9 +1660,7 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
             />
           )}
 
-          {/* ======================================================== */}
           {/* Summary */}
-          {/* ======================================================== */}
 
           {activeChildTab === "summary" && (
             <div className="pt-3">

@@ -3,12 +3,7 @@ import CommonListViewTable from "../../../utils/CommonListViewTable";
 import qualityScrapNoteAPI from "../../../api/quality/qualityScrapNoteAPI";
 import { toast } from "../../../utils/toast";
 
-const QualityScrapNoteList = ({
-  onAddNew,
-  onEdit,
-  onBack,
-  refreshTrigger,
-}) => {
+const QualityScrapNoteList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -22,8 +17,9 @@ const QualityScrapNoteList = ({
         ORG_ID,
         BRANCH_ID,
       );
-      data.sort((a, b) => (b.id || 0) - (a.id || 0));
-      setRecords(data);
+      // sort a copy, newest first
+      const sorted = [...data].sort((a, b) => (b.id || 0) - (a.id || 0));
+      setRecords(sorted);
     } catch (error) {
       console.error("Failed to load quality scrap notes:", error);
       setRecords([]);
@@ -39,61 +35,40 @@ const QualityScrapNoteList = ({
 
   const columns = [
     {
-      key: "snNo",
-      label: "SN No",
-      accessor: (row) => row.snNo,
-      type: "text",
-      noWrap: true,
-    },
-    {
-      key: "snDate",
-      label: "SN Date",
-      accessor: (row) => row.snDate,
-      type: "text",
-    },
-    {
       key: "plantId",
       label: "Plant",
-      accessor: (row) =>
-        typeof row.plantId === "object"
-          ? row.plantId.branchName || row.plantId.id
-          : row.plantName || row.plantId,
+      accessor: (row) => row.branch?.branchName,
       type: "text",
     },
     {
       key: "belongsTo",
       label: "Belongs To",
-      accessor: (row) => row.belongsTo,
+      accessor: (row) => row.belongsTo?.description,
       type: "text",
     },
     {
       key: "department",
       label: "Department",
       accessor: (row) =>
-        typeof row.department === "object"
-          ? row.department.departmentName || row.department.id
-          : row.department,
+        row.department?.departmentName || row.department?.departmentCode,
       type: "text",
     },
     {
       key: "fromLocation",
       label: "From Location",
-      accessor: (row) => row.fromLocation,
+      accessor: (row) => row.fromLocation?.locationName,
       type: "text",
     },
     {
       key: "toLocation",
       label: "To Location",
-      accessor: (row) => row.toLocation,
+      accessor: (row) => row.toLocation?.locationName,
       type: "text",
     },
     {
       key: "preparedBy",
       label: "Prepared By",
-      accessor: (row) =>
-        typeof row.preparedBy === "object"
-          ? row.preparedBy.employeeName || row.preparedBy.name || row.preparedBy.id
-          : row.preparedBy,
+      accessor: (row) => row.preparedBy?.employeeName,
       type: "text",
     },
     {
@@ -130,19 +105,16 @@ const QualityScrapNoteList = ({
   ];
 
   const searchFields = [
+    "docId",
     "snNo",
     "snDate",
-    "plantId",
-    "plantId.branchName",
-    "plantName",
-    "belongsTo",
-    "department",
+    "branch.branchName",
+    "belongsTo.description",
     "department.departmentName",
-    "fromLocation",
-    "toLocation",
-    "preparedBy",
+    "department.departmentCode",
+    "fromLocation.locationName",
+    "toLocation.locationName",
     "preparedBy.employeeName",
-    "preparedBy.name",
     "totalScrapValue",
   ];
 

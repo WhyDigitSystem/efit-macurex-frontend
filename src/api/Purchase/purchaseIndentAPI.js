@@ -85,19 +85,20 @@ const purchaseIndentAPI = {
 
   // GET /api/develop/getPurchaseIndentDocId (adjust screenCode/path if your
   // backend exposes a different doc-numbering endpoint for indents)
-  getPurchaseIndentDocId: async ({ financialYear, orgId, screenCode }) => {
+  // GET /api/purchaseservice/getPurchaseIndentDocId
+  getPurchaseIndentDocId: async ({ financialYear, orgId }) => {
     try {
-      const params = new URLSearchParams({
-        financialYear,
-        orgId,
-        screenCode,
-      });
-
-      const res = await apiClient.get(
-        `/api/develop/getPurchaseIndentDocId?${params.toString()}`,
+      const response = await apiClient.get(
+        `/api/purchaseservice/getPurchaseIndentDocId`,
+        {
+          params: {
+            financialYear,
+            orgId: Number(orgId),
+          },
+        },
       );
 
-      return res?.paramObjectsMap?.invoiceDocId || "";
+      return response?.paramObjectsMap?.purchaseIndentDocId || "";
     } catch (error) {
       console.error("Error fetching purchase indent doc id:", error);
       throw error;

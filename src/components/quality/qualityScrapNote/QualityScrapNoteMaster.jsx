@@ -19,7 +19,7 @@ const QualityScrapNoteMaster = () => {
     setView("form");
   };
 
-  // Pencil icon click -> fetch fresh data by orgId, find the matching record, open form
+  // Pencil icon click -> fetch fresh data, find the matching record, open form
   const handleEdit = useCallback(
     async (row) => {
       try {
@@ -41,19 +41,15 @@ const QualityScrapNoteMaster = () => {
   const handleBack = () => {
     setEditData(null);
     setView("list");
-    // bump refreshTrigger so the list re-fetches after add/update
     setRefreshTrigger((prev) => prev + 1);
   };
 
-  // List screen back button -> return to the Quality module home.
   const handleNavigateHome = () => {
     navigate("/quality");
   };
 
   if (view === "form") {
-    return (
-      <QualityScrapNoteForm data={editData} onBack={handleBack} />
-    );
+    return <QualityScrapNoteForm data={editData} onBack={handleBack} />;
   }
 
   return (

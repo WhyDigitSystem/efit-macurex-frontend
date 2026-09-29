@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import dailyInspectionCumRejectionDataAPI from "../../../api/quality/dailyInspectionCumRejectionDataAPI";
 import { toast } from "../../../utils/toast";
@@ -13,14 +14,18 @@ const DICRList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   const loadRecords = useCallback(async () => {
     try {
       setLoading(true);
+
       const data = await dailyInspectionCumRejectionDataAPI.getDICRByOrgId(
         ORG_ID,
         BRANCH_ID,
       );
-      data.sort((a, b) => (b.id || 0) - (a.id || 0));
-      setRecords(data);
+
+      const sortedData = Array.isArray(data)
+        ? [...data].sort((a, b) => (b?.id || 0) - (a?.id || 0))
+        : [];
+
+      setRecords(sortedData);
     } catch (error) {
-      console.error("Failed to fetch DICR records:", error);
       setRecords([]);
       toast.error("Failed to fetch Daily Inspection Cum Rejection Data");
     } finally {
@@ -34,73 +39,87 @@ const DICRList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
 
   const columns = [
     {
-      key: "dicrNo",
+      key: "docId",
       label: "DICR No",
-      accessor: (row) => row.dicrNo || row.docNo || "",
+      accessor: (row) => row?.docId || "",
       type: "text",
       noWrap: true,
     },
+
     {
-      key: "date",
+      key: "docDate",
       label: "Date",
-      accessor: (row) => row.date || row.docDate || "",
+      accessor: (row) => row?.docDate || "",
       type: "text",
       noWrap: true,
     },
+
     {
-      key: "plantId",
+      key: "branch",
       label: "Plant",
-      accessor: (row) =>
-        typeof row.plantId === "object"
-          ? row.plantId.branchName || row.plantId.plantName || row.plantId.id
-          : row.plantName || row.plantId,
+      accessor: (row) => row?.branch?.branchName || "",
       type: "text",
+      noWrap: true,
     },
+
     {
       key: "belongsTo",
       label: "Belongs To",
-      accessor: (row) =>
-        typeof row.belongsTo === "object"
-          ? row.belongsTo.departmentName || row.belongsTo.id
-          : row.belongsTo || "",
+      accessor: (row) => row?.belongsTo?.description || "",
       type: "text",
     },
+
     {
-      key: "fromLocation",
-      label: "From Location",
-      accessor: (row) =>
-        typeof row.fromLocation === "object"
-          ? row.fromLocation.locationName || row.fromLocation.id
-          : row.fromLocation || "",
+      key: "preparedBy",
+      label: "Prepared By",
+      accessor: (row) => row?.preparedBy?.employeeName || "",
       type: "text",
     },
+
     {
       key: "reworkLocation",
       label: "Rework Location",
-      accessor: (row) =>
-        typeof row.reworkLocation === "object"
-          ? row.reworkLocation.locationName || row.reworkLocation.id
-          : row.reworkLocation || "",
+      accessor: (row) => row?.reworkLocation?.locationName || "",
       type: "text",
     },
+
     {
       key: "rejectionLocation",
       label: "Rejection Location",
-      accessor: (row) =>
-        typeof row.rejectionLocation === "object"
-          ? row.rejectionLocation.locationName || row.rejectionLocation.id
-          : row.rejectionLocation || "",
+      accessor: (row) => row?.rejectionLocation?.locationName || "",
       type: "text",
     },
+
     {
       key: "scrapLocation",
       label: "Scrap Location",
-      accessor: (row) =>
-        typeof row.scrapLocation === "object"
-          ? row.scrapLocation.locationName || row.scrapLocation.id
-          : row.scrapLocation || "",
+      accessor: (row) => row?.scrapLocation?.locationName || "",
       type: "text",
     },
+
+    {
+      key: "toLocation",
+      label: "To Location",
+      accessor: (row) => row?.toLocation?.locationName || "",
+      type: "text",
+    },
+
+    {
+      key: "active",
+      label: "Status",
+      accessor: (row) => row?.active || "",
+      type: "text",
+      noWrap: true,
+    },
+
+    {
+      key: "financialYear",
+      label: "Financial Year",
+      accessor: (row) => row?.financialYear || "",
+      type: "text",
+      noWrap: true,
+    },
+
     {
       key: "actions",
       label: "Actions",
@@ -111,14 +130,18 @@ const DICRList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   ];
 
   const searchFields = [
-    "dicrNo",
-    "date",
-    "plantId",
+    "docId",
+    "docDate",
+    "branch",
     "belongsTo",
+    "preparedBy",
     "fromLocation",
     "reworkLocation",
     "rejectionLocation",
     "scrapLocation",
+    "toLocation",
+    "active",
+    "financialYear",
   ];
 
   return (

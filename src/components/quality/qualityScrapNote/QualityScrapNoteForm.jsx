@@ -5,7 +5,6 @@ import { useToast } from "../../Toast/ToastContext";
 import qualityScrapNoteAPI from "../../../api/quality/qualityScrapNoteAPI";
 import branchAPI from "../../../api/branchAPI";
 import locationMasterAPI from "../../../api/locationMasterAPI";
-import { departmentAPI } from "../../../api/departmentAPI";
 import itemAPI from "../../../api/itemAPI";
 import unitMasterAPI from "../../../api/unitAPI";
 import { employeeAPI } from "../../../api/employeeAPI";
@@ -40,7 +39,8 @@ const cellReadOnlyClasses =
   "bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 " +
   "text-gray-500 dark:text-gray-400";
 
-const labelClasses = "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
+const labelClasses =
+  "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
 const fieldGrid =
   "grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-x-4 gap-y-3 items-start";
@@ -289,9 +289,8 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
 );
 
 /* ---------------------------------------------------------------------------- */
-/* Options                                                                      */
+/* Options & helpers                                                            */
 
-const BELONGS_TO = ["APPLIANCES", "ELECTRICALS", "PACKAGING", "RAW MATERIAL"];
 const QUALITY_APPROVAL = ["Approved", "Rejected", "Pending"];
 
 const CHILD_TABS = [
@@ -311,8 +310,41 @@ const emptyScrapRow = () => ({
 
 const fmtDate = (value) => (value ? dayjs(value).format("YYYY-MM-DD") : "");
 
-const generateSNNo = () =>
-  `SN-${dayjs().format("YYYYMMDD")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
+const pad = (n) => String(n ?? 0).padStart(2, "0");
+
+// API returns time as {hour, minute, second, nano}; the form keeps "HH:mm:ss"
+const timeToString = (t) =>
+  t && typeof t === "object"
+    ? `${pad(t.hour)}:${pad(t.minute)}:${pad(t.second)}`
+    : t || dayjs().format("HH:mm:ss");
+
+// "HH:mm:ss" -> { hour, minute, second, nano } with NUMBERS (not "09" strings)
+const stringToTime = (value) => {
+  const [hour, minute, second] = String(value || "00:00:00")
+    .split(":")
+    .map((n) => Number(n) || 0);
+  return { hour, minute, second, nano: 0 };
+};
+
+// Indian FY starts in April: Sep 2026 -> "2026", Feb 2027 -> "2026"
+const getFinancialYear = () => {
+  const now = dayjs();
+  return String(now.month() >= 3 ? now.year() : now.year() - 1);
+};
+
+// Edit mode: API detail rows -> table rows
+const mapDetailRows = (details) =>
+  details?.length
+    ? details.map((d) => ({
+        itemCode: d.item?.itemCode || "",
+        itemDescription: d.item?.itemDescription || "",
+        primaryUnit: d.item?.unit?.id ?? "",
+        stock: d.stock ?? "",
+        quantity: d.quantity ?? "",
+        rate: d.rate ?? "",
+        value: d.value != null ? Number(d.value).toFixed(2) : "",
+      }))
+    : [emptyScrapRow()];
 
 /* ---------------------------------------------------------------------------- */
 
@@ -320,7 +352,7 @@ const QualityScrapNoteForm = ({ data, onBack }) => {
   const { addToast } = useToast();
   const orgId = Number(localStorage.getItem("orgId")) || 0;
   const branch = Number(localStorage.getItem("branchId")) || 0;
-  const usersId = localStorage.getItem("usersId");
+  const usersId = localStorage.getItem("usersId") || "";
 
   const userData = JSON.parse(localStorage.getItem("userData") || "{}");
   const orgName = (
@@ -335,6 +367,7 @@ const QualityScrapNoteForm = ({ data, onBack }) => {
   const [fieldErrors, setFieldErrors] = useState({});
 
   const [plantOptions, setPlantOptions] = useState([]);
+  const [belongsToOptions, setBelongsToOptions] = useState([]);
   const [locationOptions, setLocationOptions] = useState([]);
   const [departmentOptions, setDepartmentOptions] = useState([]);
   const [itemOptions, setItemOptions] = useState([]);
@@ -344,30 +377,30 @@ const QualityScrapNoteForm = ({ data, onBack }) => {
 
   const [header, setHeader] = useState(() => {
     const base = {
-      plantId: data?.plantId?.id ?? data?.plantId ?? "",
-      belongsTo: data?.belongsTo || "",
-      department: data?.department?.id ?? data?.department ?? "",
-      fromLocation: data?.fromLocation || "",
-      toLocation: data?.toLocation || "",
-      preparedBy: data?.preparedBy?.id ?? data?.preparedBy ?? "",
-      snNo: data?.snNo || (data ? "" : generateSNNo()),
+      plantId: data?.plantId?.id ?? data?.plantId ?? data?.branch?.id ?? "",
+      belongsTo: data?.belongsTo?.id ?? "",
+      department: data?.department?.id ?? "",
+      fromLocation: data?.fromLocation?.id ?? "",
+      toLocation: data?.toLocation?.id ?? "",
+      preparedBy: data?.preparedBy?.id ?? "",
+      snNo: data?.docId || data?.snNo || "",
       snDate: data?.snDate || dayjs().format("YYYY-MM-DD"),
-      time: data?.time || dayjs().format("HH:mm:ss"),
+      time: timeToString(data?.time),
       active: data?.active !== false,
     };
     base.snDate = fmtDate(base.snDate);
     return base;
   });
 
-  const [scrapRows, setScrapRows] = useState(
-    data?.scrapDetails?.length ? data.scrapDetails : [emptyScrapRow()],
+  const [scrapRows, setScrapRows] = useState(() =>
+    mapDetailRows(data?.qualityScrapNoteDetailsResponseDTO),
   );
 
   const [summary, setSummary] = useState({
-    authorisedBy: data?.scrapSummary?.authorisedBy?.id ?? data?.scrapSummary?.authorisedBy ?? "",
-    totalScrapValue: data?.scrapSummary?.totalScrapValue ?? "",
-    qualityApproval: data?.scrapSummary?.qualityApproval || "",
-    narration: data?.scrapSummary?.narration || "",
+    authorisedBy: data?.authorizedBy?.id ?? "",
+    totalScrapValue: data?.totalScrapValue ?? "",
+    qualityApproval: data?.qualityApproval || "",
+    narration: data?.narration || "",
   });
 
   /* ---------------- Lookup loading ---------------- */
@@ -397,39 +430,46 @@ const QualityScrapNoteForm = ({ data, onBack }) => {
     }
   }, [orgId, isMacurex]);
 
-  // From Location / To Location reuse the same plant/branch list as Plant ID.
-  useEffect(() => {
-    setLocationOptions(plantOptions);
-  }, [plantOptions]);
-
-  const loadDepartments = useCallback(async () => {
+  // Belongs To -> getListValuesGroup (BELONGS TO)
+  const loadBelongsTo = useCallback(async () => {
     try {
-      const res = await departmentAPI.getAllDepartments(orgId);
-      const departments = res?.paramObjectsMap?.departmentVO || [];
-      if (departments.length) {
-        setDepartmentOptions(
-          departments.map((d) => ({ value: d.id, label: d.departmentName })),
-        );
-      } else {
-        setDepartmentOptions([
-          "Design",
-          "Purchase",
-          "Stores",
-          "Quality",
-          "Production",
-        ]);
-      }
-    } catch (error) {
-      console.error("Failed to load department options:", error);
-      setDepartmentOptions([
-        "Design",
-        "Purchase",
-        "Stores",
-        "Quality",
-        "Production",
-      ]);
+      const res = await qualityScrapNoteAPI.getBelongsTo(orgId);
+      setBelongsToOptions(
+        res.map((v) => ({ value: Number(v.id), label: v.valuesDescription })),
+      );
+    } catch {
+      setBelongsToOptions([]);
+    }
+  }, [orgId]);
+
+  // From Location / To Location -> getLocationByOrgId
+  const loadLocations = useCallback(async () => {
+    try {
+      const res = await qualityScrapNoteAPI.getLocations(orgId, branch);
+      setLocationOptions(
+        res.map((l) => ({ value: l.id, label: l.locationName })),
+      );
+    } catch {
+      setLocationOptions([]);
     }
   }, [orgId, branch]);
+
+  // Department -> getAllDepartmentByOrgId (some names are null -> use code)
+  const loadDepartments = useCallback(async () => {
+    try {
+      const res = await qualityScrapNoteAPI.getDepartments(orgId);
+      setDepartmentOptions(
+        res
+          .filter((d) => d.active === "Active")
+          .map((d) => ({
+            value: d.id,
+            label: d.departmentName || d.departmentCode || String(d.id),
+          })),
+      );
+    } catch {
+      setDepartmentOptions([]);
+    }
+  }, [orgId]);
 
   const loadItems = useCallback(async () => {
     try {
@@ -484,12 +524,39 @@ const QualityScrapNoteForm = ({ data, onBack }) => {
 
   useEffect(() => {
     if (orgId && branch) {
+      loadBelongsTo();
+      loadLocations();
       loadDepartments();
       loadItems();
       loadUnits();
       loadEmployees();
     }
-  }, [orgId, branch, loadDepartments, loadItems, loadUnits, loadEmployees]);
+  }, [
+    orgId,
+    branch,
+    loadBelongsTo,
+    loadLocations,
+    loadDepartments,
+    loadItems,
+    loadUnits,
+    loadEmployees,
+  ]);
+
+  // SN No (new record) -> getQualityScrapNoteDocId
+  useEffect(() => {
+    if (data || !orgId) return;
+    (async () => {
+      try {
+        const docId = await qualityScrapNoteAPI.getQualityScrapNoteDocId(
+          getFinancialYear(),
+          orgId,
+        );
+        setHeader((prev) => ({ ...prev, snNo: docId }));
+      } catch (error) {
+        console.error("Failed to load SN No:", error);
+      }
+    })();
+  }, [data, orgId]);
 
   /* ---------------- Handlers ---------------- */
 
@@ -504,7 +571,7 @@ const QualityScrapNoteForm = ({ data, onBack }) => {
       prev.map((row, i) => {
         if (i !== idx) return row;
 
-        let next = { ...row, [key]: value };
+        const next = { ...row, [key]: value };
 
         if (key === "itemCode") {
           const item = itemMasterMap[value];
@@ -513,11 +580,12 @@ const QualityScrapNoteForm = ({ data, onBack }) => {
           next.stock = item?.stock ?? "";
         }
 
-        if (["quantity", "rate"].includes(key)) {
+        // Quantity * Rate = Value
+        if (key === "quantity" || key === "rate") {
           const qty = parseFloat(next.quantity) || 0;
           const rate = parseFloat(next.rate) || 0;
-          const valueCalc = qty * rate;
-          next.value = valueCalc ? valueCalc.toFixed(2) : "";
+          const calc = qty * rate;
+          next.value = calc ? calc.toFixed(2) : "";
         }
 
         return next;
@@ -536,13 +604,20 @@ const QualityScrapNoteForm = ({ data, onBack }) => {
     setSummary((prev) => ({ ...prev, [name]: value }));
   };
 
-  // Recompute the total scrap value from the detail rows whenever they change.
-  const computedTotalScrapValue = scrapRows.reduce((sum, r) => {
-    const value = parseFloat(r.value) || 0;
-    return sum + value;
-  }, 0);
+  // Total Scrap Value = sum of all row values (recomputed on every render)
+  const computedTotalScrapValue = scrapRows.reduce(
+    (sum, r) => sum + (parseFloat(r.value) || 0),
+    0,
+  );
 
   /* ---------------- Validation & Save ---------------- */
+
+  // A row is sendable only if it has a known item id, quantity and rate
+  const isValidRow = (r) =>
+    r.itemCode &&
+    itemMasterMap[r.itemCode]?.id &&
+    Number(r.quantity) > 0 &&
+    Number(r.rate) > 0;
 
   const validate = () => {
     const errors = {};
@@ -550,16 +625,13 @@ const QualityScrapNoteForm = ({ data, onBack }) => {
     if (!header.plantId) errors.plantId = "Plant ID is required";
     if (!header.belongsTo) errors.belongsTo = "Belongs To is required";
     if (!header.department) errors.department = "Department is required";
-    if (!header.fromLocation)
-      errors.fromLocation = "From Location is required";
+    if (!header.fromLocation) errors.fromLocation = "From Location is required";
     if (!header.toLocation) errors.toLocation = "To Location is required";
     if (!header.preparedBy) errors.preparedBy = "Prepared By is required";
-    if (!header.snNo?.trim()) errors.snNo = "SN No is required";
     if (!header.snDate) errors.snDate = "SN Date is required";
+    // SN No is generated by the backend, so it is not validated here
 
-    const hasValidRow = scrapRows.some(
-      (r) => r.itemCode && r.primaryUnit && Number(r.quantity) > 0 && Number(r.rate) > 0,
-    );
+    const hasValidRow = scrapRows.some((r) => isValidRow(r) && r.primaryUnit);
     if (!hasValidRow)
       errors.scrapDetails =
         "Add at least one item with Item Code, Primary Unit, Quantity and Rate";
@@ -580,25 +652,34 @@ const QualityScrapNoteForm = ({ data, onBack }) => {
 
     const isUpdate = Boolean(data?.id);
 
-    // Single-transaction payload: header + scrap detail items + summary.
-    // The backend keeps the complete scrap record history for audit and
-    // quality tracking (server-side validation).
+    // Shape matches qualityScrapNoteDTO in swagger
     const payload = {
       ...(isUpdate ? { id: data.id } : {}),
       orgId,
       branch,
-      ...header,
-      scrapDetails: scrapRows.filter((r) => r.itemCode?.trim()),
-      scrapSummary: {
-        authorisedBy: summary.authorisedBy,
-        totalScrapValue: computedTotalScrapValue
-          ? computedTotalScrapValue.toFixed(2)
-          : "",
-        qualityApproval: summary.qualityApproval,
-        narration: summary.narration,
-      },
-      createdBy: isUpdate ? data?.createdBy || usersId : usersId,
-      ...(isUpdate ? { updatedBy: usersId } : {}),
+      financialYear: String(data?.financialYear || getFinancialYear()),
+      active: isUpdate
+        ? data.active === true || data.active === "Active"
+        : true,
+      belongsTo: Number(header.belongsTo),
+      department: Number(header.department),
+      fromLocation: Number(header.fromLocation),
+      toLocation: Number(header.toLocation),
+      preparedBy: Number(header.preparedBy),
+      authorizedBy: Number(summary.authorisedBy),
+      qualityApproval: summary.qualityApproval,
+      narration: summary.narration || "",
+      totalScrapValue: Number(computedTotalScrapValue.toFixed(2)),
+      time: header.time,
+      qualityScrapNoteDetailsDTO: scrapRows.filter(isValidRow).map((r) => ({
+        item: Number(itemMasterMap[r.itemCode].id), // DTO needs the item id
+        quantity: Number(r.quantity),
+        rate: Number(r.rate),
+        stock: Number(r.stock) || 0,
+        value: Number(r.value) || 0,
+      })),
+      cancelRemarks: data?.cancelRemarks || "",
+      createdBy: String(isUpdate ? data?.createdBy || usersId : usersId),
     };
 
     try {
@@ -623,13 +704,20 @@ const QualityScrapNoteForm = ({ data, onBack }) => {
         );
       }
     } catch (err) {
+      // Log both sides so a 400 can be diagnosed from the console
+      console.error("Payload sent:", JSON.stringify(payload, null, 2));
+      console.error("Server response:", err.response?.data);
       console.error("Save Quality Scrap Note Error:", err);
-      if (err.response?.data) {
+
+      const body = err.response?.data;
+      if (body) {
         addToast(
-          err.response.data.message ||
-            err.response.data.statusMessage ||
-            err.response.data.error ||
-            JSON.stringify(err.response.data),
+          body.errors?.[0]?.longMessage ||
+            body.errors?.[0]?.shortMessage ||
+            body.message ||
+            body.statusMessage ||
+            body.error ||
+            JSON.stringify(body),
         );
       } else {
         addToast("Something went wrong.");
@@ -680,7 +768,7 @@ const QualityScrapNoteForm = ({ data, onBack }) => {
               value={header.belongsTo}
               onChange={handleHeaderChange}
               error={fieldErrors.belongsTo}
-              options={BELONGS_TO}
+              options={belongsToOptions}
               required
             />
             <Field
@@ -729,8 +817,7 @@ const QualityScrapNoteForm = ({ data, onBack }) => {
               value={header.snNo}
               onChange={handleHeaderChange}
               error={fieldErrors.snNo}
-              required
-              disabled={!data}
+              disabled
             />
             <Field
               type="date"
@@ -753,7 +840,6 @@ const QualityScrapNoteForm = ({ data, onBack }) => {
 
         {/* ---------------- Child Tabs ---------------- */}
         <section className="mt-0 bg-white dark:bg-gray-800">
-          {/* Tabs */}
           <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 mb-0">
             <div className="flex flex-wrap">
               {CHILD_TABS.map((tab) => (
@@ -845,7 +931,7 @@ const QualityScrapNoteForm = ({ data, onBack }) => {
                       ? computedTotalScrapValue.toFixed(2)
                       : ""
                   }
-                  onChange={handleSummaryChange}
+                  onChange={() => {}}
                   disabled
                 />
                 <Field
