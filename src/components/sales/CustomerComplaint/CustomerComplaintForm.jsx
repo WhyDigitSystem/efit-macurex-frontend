@@ -32,6 +32,23 @@ const COMPLAINT_TYPES = ["REGISTER", "VERBAL"];
 /* ---------------------------------------------------------------------------- */
 /* Shared building blocks                                                      */
 
+// Always returns { value, label } where label is a plain string, so React
+// never tries to render an object as a child of <option>.
+const normalizeOption = (opt) => {
+  if (opt !== null && typeof opt === "object") {
+    const value = opt.value ?? "";
+    const rawLabel = opt.label ?? opt.value ?? "";
+    return {
+      value,
+      label:
+        typeof rawLabel === "object"
+          ? JSON.stringify(rawLabel)
+          : String(rawLabel),
+    };
+  }
+  return { value: opt, label: String(opt) };
+};
+
 const Field = ({
   label,
   name,
@@ -61,11 +78,14 @@ const Field = ({
           className={`${controlClasses} ${error ? controlErrClasses : ""}`}
         >
           <option value="">Select {label}</option>
-          {(options || []).map((opt) => (
-            <option key={opt.value ?? opt} value={opt.value ?? opt}>
-              {opt.label ?? opt}
-            </option>
-          ))}
+          {(options || []).map((opt, i) => {
+            const o = normalizeOption(opt);
+            return (
+              <option key={`${o.value}-${i}`} value={o.value}>
+                {o.label}
+              </option>
+            );
+          })}
         </select>
 
         {error && (
@@ -331,7 +351,7 @@ const CustomerComplaintForm = ({ data, onBack }) => {
         setBranchOptions(
           (branches || []).map((b) => ({
             value: b.id,
-            label: b.branchName || b.branchCode || b.id,
+            label: String(b.branchName || b.branchCode || b.id),
           })),
         );
       } catch {
@@ -344,7 +364,10 @@ const CustomerComplaintForm = ({ data, onBack }) => {
         const res = await departmentAPI.getAllDepartments(orgId);
         const departments = res?.paramObjectsMap?.departmentVO || [];
         setDepartmentOptions(
-          departments.map((d) => ({ value: d.id, label: d.departmentName })),
+          departments.map((d) => ({
+            value: d.id,
+            label: String(d.departmentName ?? d.id),
+          })),
         );
       } catch {
         setDepartmentOptions([]);
@@ -353,19 +376,32 @@ const CustomerComplaintForm = ({ data, onBack }) => {
 
     const loadCustomers = async () => {
       try {
-        const customers = await customerComplaintAPI.getCustomerList(
-          orgId,
-          branch,
-        );
+        const res = await customerComplaintAPI.getCustomerList(orgId, branch);
+        console.log("1 api result:", res);
+
+        const customers = (Array.isArray(res) ? res : [res])
+          .flat()
+          .filter(Boolean);
+        console.log("2 customers:", customers);
+
         const map = {};
-        const opts = (customers || []).map((c) => {
-          const code = c.customerId || c.docId || c.customerCode;
-          map[code] = c.customerName || c.name || "";
-          return { value: code, label: c.customerName || c.name || code };
-        });
+        const opts = customers
+          .map((c) => {
+            const code = c.customerId ?? c.id;
+            if (code == null) return null;
+            map[code] = c.customerName || "";
+            return {
+              value: code,
+              label: String(c.customerName || c.customerCode || code),
+            };
+          })
+          .filter(Boolean);
+        console.log("3 options:", opts);
+
         setCustomerOptions(opts);
         setCustomerMap(map);
-      } catch {
+      } catch (error) {
+        console.error("Error loading customers:", error);
         setCustomerOptions([]);
         setCustomerMap({});
       }
@@ -380,7 +416,7 @@ const CustomerComplaintForm = ({ data, onBack }) => {
           map[id] = it;
           return {
             value: id,
-            label: it.itemCode || it.code || id?.toString() || "",
+            label: String(it.itemCode || it.code || id?.toString() || ""),
           };
         });
         setItemOptions(opts);
@@ -460,26 +496,22 @@ const CustomerComplaintForm = ({ data, onBack }) => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     if (fieldErrors[name]) setFieldErrors((prev) => ({ ...prev, [name]: "" }));
-    setForm((prev) => ({ ...prev, [name]: value }));
 
-    if (name === "customer") {
-      const custName = customerMap[value];
-      setForm((prev) => ({
-        ...prev,
-        customer: value,
-        customerName: custName || prev.customerName,
-      }));
-    }
+    setForm((prev) => {
+      const next = { ...prev, [name]: value };
 
-    if (name === "item") {
-      const it = itemMap[value];
-      setForm((prev) => ({
-        ...prev,
-        item: value,
-        itemDescription: it?.itemDescription || prev.itemDescription,
-        customerPartNo: it?.customerPartNo || prev.customerPartNo,
-      }));
-    }
+      if (name === "customer") {
+        next.customerName = customerMap[value] || prev.customerName;
+      }
+
+      if (name === "item") {
+        const it = itemMap[value];
+        next.itemDescription = it?.itemDescription || prev.itemDescription;
+        next.customerPartNo = it?.customerPartNo || prev.customerPartNo;
+      }
+
+      return next;
+    });
   };
 
   const handleImagesChange = (images) => {
@@ -501,8 +533,9 @@ const CustomerComplaintForm = ({ data, onBack }) => {
       errors.complaintNo = "Complaint No is required";
     if (!form.complaintDate)
       errors.complaintDate = "Complaint Date is required";
-    if (!form.customer?.trim()) errors.customer = "Customer is required";
-    if (!form.item?.trim()) errors.item = "Item Code is required";
+    if (!String(form.customer ?? "").trim())
+      errors.customer = "Customer is required";
+    if (!String(form.item ?? "").trim()) errors.item = "Item Code is required";
     if (!form.detailsOfComplaint?.trim())
       errors.detailsOfComplaint = "Details of Complaint is required";
     if (!form.images.length) errors.images = "At least one image is required";
