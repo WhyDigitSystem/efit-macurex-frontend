@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import scrapMaterialReturnAPI from "../../../api/scrapMaterialReturnAPI";
 import { toast } from "../../../utils/toast";
@@ -15,18 +16,36 @@ const ScrapMaterialReturnList = ({
   const ORG_ID = localStorage.getItem("orgId");
   const BRANCH_ID = localStorage.getItem("branchId");
 
+  const normalize = (r) => ({
+    ...r,
+
+    docDateText: r.documentDate || "",
+
+    entryForText: r.entryFor?.code || "",
+
+    vendorText: r.vendorId?.customerName || "",
+
+    toLocationText: r.toLocation?.locationName || "",
+
+    statusText:
+      r.active === "Inactive" || r.active === false ? "Inactive" : "Active",
+  });
+
   const loadRecords = useCallback(async () => {
     try {
       setLoading(true);
-      const data =
-        await scrapMaterialReturnAPI.getScrapMaterialReturnByOrgId(
-          ORG_ID,
-          BRANCH_ID,
-        );
-      data.sort((a, b) => (b.id || 0) - (a.id || 0));
-      setRecords(data);
+
+      const data = await scrapMaterialReturnAPI.getScrapMaterialReturnByOrgId(
+        ORG_ID,
+        BRANCH_ID,
+      );
+
+      const rows = Array.isArray(data) ? data.map(normalize) : [];
+
+      rows.sort((a, b) => (b.id || 0) - (a.id || 0));
+
+      setRecords(rows);
     } catch (error) {
-      console.error("Failed to load scrap/material return records:", error);
       setRecords([]);
       toast.error("Failed to fetch Scrap/Material Return records");
     } finally {
@@ -46,21 +65,15 @@ const ScrapMaterialReturnList = ({
       type: "text",
     },
     {
-      key: "docId",
-      label: "Doc Id",
-      accessor: "docId",
-      type: "text",
-    },
-    {
-      key: "date",
-      label: "Date",
-      accessor: "date",
+      key: "docDate",
+      label: "Doc Date",
+      accessor: "docDateText",
       type: "text",
     },
     {
       key: "entryFor",
       label: "Entry For",
-      accessor: "entryFor",
+      accessor: "entryForText",
       type: "text",
     },
     {
@@ -70,33 +83,21 @@ const ScrapMaterialReturnList = ({
       type: "text",
     },
     {
-      key: "plantId",
-      label: "Plant",
-      accessor: "plantId",
-      type: "text",
-    },
-    {
-      key: "vendorId",
-      label: "Vendor Id",
-      accessor: "vendorId",
-      type: "text",
-    },
-    {
-      key: "vendorName",
-      label: "Vendor Name",
-      accessor: "vendorName",
+      key: "vendor",
+      label: "Vendor",
+      accessor: "vendorText",
       type: "text",
     },
     {
       key: "toLocation",
       label: "To Location",
-      accessor: "toLocation",
+      accessor: "toLocationText",
       type: "text",
     },
     {
       key: "active",
       label: "Status",
-      accessor: "active",
+      accessor: "statusText",
       type: "status",
       statusVariants: {
         Active: {
@@ -122,13 +123,11 @@ const ScrapMaterialReturnList = ({
 
   const searchFields = [
     "docNo",
-    "docId",
-    "entryFor",
+    "docDateText",
+    "entryForText",
     "entryType",
-    "plantId",
-    "vendorId",
-    "vendorName",
-    "toLocation",
+    "vendorText",
+    "toLocationText",
   ];
 
   const filterOptions = [
@@ -140,14 +139,14 @@ const ScrapMaterialReturnList = ({
     {
       value: "active",
       label: "Active",
-      field: "active",
+      field: "statusText",
       filterValue: "active",
       activeValue: "Active",
     },
     {
       value: "inactive",
       label: "Inactive",
-      field: "active",
+      field: "statusText",
       filterValue: "inactive",
       activeValue: "Active",
     },
@@ -178,8 +177,5 @@ const ScrapMaterialReturnList = ({
     />
   );
 };
-
-
-
 
 export default ScrapMaterialReturnList;

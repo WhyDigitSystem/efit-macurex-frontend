@@ -3,7 +3,6 @@ import { useCallback, useEffect, useState } from "react";
 import scrapMaterialReturnAPI from "../../../api/scrapMaterialReturnAPI";
 import locationMasterAPI from "../../../api/locationMasterAPI";
 import branchAPI from "../../../api/branchAPI";
-import partyMasterAPI from "../../../api/partyMasterAPI";
 import itemAPI from "../../../api/itemAPI";
 import unitMasterAPI from "../../../api/unitAPI";
 import { useToast } from "../../Toast/ToastContext";
@@ -44,7 +43,6 @@ const labelClasses =
 const fieldGrid =
   "grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-x-4 gap-y-3 items-start";
 
-// Spacious grid used inside the child tabs so fields breathe more.
 const subTabFieldGrid =
   "grid grid-cols-[repeat(auto-fit,minmax(210px,1fr))] gap-x-5 gap-y-4 items-start";
 
@@ -232,15 +230,7 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
   </tr>
 );
 
-/* Scrap Detail dynamic table. Options support both plain strings and
-   { value, label } objects. Column `lookup` maps to a master map so selecting
-   Item Code auto-fills Item Description / Unit / Available Stock. */
-const ScrapDetailTable = ({
-  columns,
-  rows,
-  onCellChange,
-  onRemoveRow,
-}) => (
+const ScrapDetailTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
   <TableWrapper>
     <TableHead headers={["#", ...columns.map((c) => c.label), "Action"]} />
     <tbody>
@@ -291,11 +281,9 @@ const ScrapDetailTable = ({
 );
 
 /* ---------------------------------------------------------------------------- */
-/* Options                                                                      */
+/* Options & helpers                                                            */
 
-const ENTRY_FOR_OPTIONS = ["SCRAP", "MATERIAL RETURN", "REJECTION"];
-const ENTRY_TYPE_OPTIONS = ["DIRECT", "AGAINST JOB ORDER"];
-const VENDOR_LOCATION_OPTIONS = ["Local", "Inter-State", "SEZ", "Overseas"];
+const ENTRY_TYPE_OPTIONS = ["Received", "Rejection"];
 const YES_NO_OPTIONS = ["YES", "NO"];
 
 const CHILD_TABS = [
@@ -326,8 +314,30 @@ const todayStr = () => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
 
-const autoDocId = () =>
-  `SCR-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, "0")}${String(new Date().getDate()).padStart(2, "0")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
+// Financial year starts in April: Sep 2026 -> "2026", Feb 2027 -> "2026"
+const getFinancialYear = () => {
+  const d = new Date();
+  return String(d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1);
+};
+
+const toNum = (v) => (v === "" || v == null ? 0 : Number(v));
+
+// Accepts either a plain id or a nested { id } object from the backend
+const idOf = (v) => (v && typeof v === "object" ? (v.id ?? "") : (v ?? ""));
+
+// Backend detail row -> form row. Key names are a best guess; adjust once
+// you have a real saved record.
+const mapDetailToRow = (d) => ({
+  id: d.id,
+  itemCode: String(idOf(d.item ?? d.itemId)),
+  itemDescription: d.itemDescription || d.item?.itemDescription || "",
+  unit: String(idOf(d.unit ?? d.unitId)),
+  availableStock: d.availableStock ?? "",
+  recRejQty: d.recQty ?? d.recRejQty ?? "",
+  costRate: d.costRate ?? "",
+  amount: d.amount ?? "",
+  note: d.note || "",
+});
 
 /* ---------------------------------------------------------------------------- */
 
@@ -337,7 +347,11 @@ const ScrapMaterialReturnForm = ({ data, onBack }) => {
   const { addToast } = useToast();
 
   const userData = JSON.parse(localStorage.getItem("userData") || "{}");
-  const orgName = (userData?.companyVO?.companyName || userData?.orgName || "").trim();
+  const orgName = (
+    userData?.companyVO?.companyName ||
+    userData?.orgName ||
+    ""
+  ).trim();
   const isMacurex = ["mecurex", "macurex"].includes(orgName.toLowerCase());
 
   const [activeChildTab, setActiveChildTab] = useState("scrapDetail");
@@ -345,33 +359,49 @@ const ScrapMaterialReturnForm = ({ data, onBack }) => {
   const [fieldErrors, setFieldErrors] = useState({});
 
   const [plantOptions, setPlantOptions] = useState([]);
+  const [entryForOptions, setEntryForOptions] = useState([]);
+  const [vendorList, setVendorList] = useState([]); // raw, for name lookup
   const [vendorOptions, setVendorOptions] = useState([]);
+  const [vendorLocationOptions, setVendorLocationOptions] = useState([]);
   const [locationOptions, setLocationOptions] = useState([]);
   const [itemOptions, setItemOptions] = useState([]);
   const [unitOptions, setUnitOptions] = useState([]);
   const [itemMasterMap, setItemMasterMap] = useState({});
 
   const [header, setHeader] = useState(() => ({
-    plantId: data?.plantId || "",
-    entryFor: data?.entryFor || "",
-    vendorId: data?.vendorId || "",
+    plantId: data?.branch || branch || "",
+    entryFor: idOf(data?.entryFor),
+    vendorId: idOf(data?.vendorId),
     vendorName: data?.vendorName || "",
-    vendorLocation: data?.vendorLocation || "",
-    toLocation: data?.toLocation || "",
+    vendorLocation: idOf(data?.vendorLocation),
+    toLocation: idOf(data?.toLocation),
     entryType: data?.entryType || "",
     docNo: data?.docNo || "",
-    docDate: data?.docDate || "",
-    docId: data?.docId || (data ? "" : autoDocId()),
+    docDate: data?.documentDate || data?.docDate || "",
+    docId: data?.docId || "",
     date: data?.date || todayStr(),
     active: data?.active !== false,
   }));
 
+  const initialDetails =
+    data?.scrapMaterialReturnRejectionDetailsVO ||
+    data?.scrapMaterialReturnRejectionDetailsDTO ||
+    data?.scrapDetails ||
+    [];
+
   const [scrapDetailRows, setScrapDetailRows] = useState(
-    data?.scrapDetails?.length ? data.scrapDetails : [emptyScrapDetailRow()],
+    initialDetails.length
+      ? initialDetails.map(mapDetailToRow)
+      : [emptyScrapDetailRow()],
   );
+
   const [summary, setSummary] = useState({
     ...emptySummary(),
-    ...data?.summary,
+    approvalByQc: data?.approvalByQc || data?.summary?.approvalByQc || "",
+    approvalByPurchase:
+      data?.approvalByPurchase || data?.summary?.approvalByPurchase || "",
+    reasonForRejection:
+      data?.reasonForRejection || data?.summary?.reasonForRejection || "",
   });
 
   /* ---------------- Lookup loading ---------------- */
@@ -401,28 +431,39 @@ const ScrapMaterialReturnForm = ({ data, onBack }) => {
     }
   }, [orgId, isMacurex]);
 
+  const loadEntryFor = useCallback(async () => {
+    try {
+      const res = await scrapMaterialReturnAPI.getEntryFor(orgId);
+      setEntryForOptions(
+        res.map((x) => ({ value: String(x.id), label: x.valuesDescription })),
+      );
+    } catch (error) {
+      console.error("Failed to load Entry For options:", error);
+      setEntryForOptions([]);
+    }
+  }, [orgId]);
+
   const loadVendors = useCallback(async () => {
     try {
-      const res = await partyMasterAPI.getPartyByOrgId(orgId, branch);
+      const res = await scrapMaterialReturnAPI.getVendors(branch, orgId);
+      setVendorList(res);
       setVendorOptions(
-        (res || []).map((v) => ({
-          value: v.id,
-          label: v.customerName || v.docId || v.id,
-        })),
+        res.map((v) => ({ value: String(v.id), label: v.vendorCode })),
       );
     } catch (error) {
       console.error("Failed to load vendor options:", error);
+      setVendorList([]);
       setVendorOptions([]);
     }
   }, [orgId, branch]);
 
   const loadLocations = useCallback(async () => {
     try {
-      const res = await locationMasterAPI.getLocationMasterByOrgId(orgId, branch);
+      const res = await scrapMaterialReturnAPI.getToLocations(branch, orgId);
       setLocationOptions(
-        (res || []).map((l) => ({
-          value: l.locationName || l.id,
-          label: l.locationName || l.id,
+        res.map((l) => ({
+          value: String(l.id),
+          label: `${l.locationId} - ${l.locationName}`,
         })),
       );
     } catch (error) {
@@ -431,13 +472,31 @@ const ScrapMaterialReturnForm = ({ data, onBack }) => {
     }
   }, [orgId, branch]);
 
+  const loadVendorLocations = useCallback(async () => {
+    try {
+      const res = await scrapMaterialReturnAPI.getVendorLocations(
+        branch,
+        orgId,
+      );
+      setVendorLocationOptions(
+        res.map((l) => ({
+          value: String(l.id),
+          label: `${l.locationId} - ${l.locationName}`,
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to load vendor location options:", error);
+      setVendorLocationOptions([]);
+    }
+  }, [orgId, branch]);
+
   const loadItems = useCallback(async () => {
     try {
       const res = await itemAPI.getItems(orgId, branch);
       const map = {};
       const options = (res || []).map((it) => {
-        map[it.itemCode] = it;
-        return { value: it.itemCode, label: it.itemCode };
+        map[String(it.id)] = it;
+        return { value: String(it.id), label: it.itemCode };
       });
       setItemOptions(options);
       setItemMasterMap(map);
@@ -453,7 +512,7 @@ const ScrapMaterialReturnForm = ({ data, onBack }) => {
       const res = await unitMasterAPI.getUnits(branch, orgId);
       setUnitOptions(
         (res || []).map((u) => ({
-          value: u.id,
+          value: String(u.id),
           label: u.unitId,
         })),
       );
@@ -463,18 +522,58 @@ const ScrapMaterialReturnForm = ({ data, onBack }) => {
     }
   }, [orgId, branch]);
 
+  // Doc Id is generated by the server for new records only
+  const loadDocId = useCallback(async () => {
+    if (data?.id) return;
+    try {
+      const docId = await scrapMaterialReturnAPI.getDocId(
+        getFinancialYear(),
+        orgId,
+      );
+      setHeader((prev) => ({ ...prev, docId }));
+    } catch (error) {
+      console.error("Failed to load Doc Id:", error);
+    }
+  }, [orgId, data]);
+
   useEffect(() => {
-    if (orgId) loadPlants();
-  }, [orgId, loadPlants]);
+    if (orgId) {
+      loadPlants();
+      loadEntryFor();
+      loadDocId();
+    }
+  }, [orgId, loadPlants, loadEntryFor, loadDocId]);
 
   useEffect(() => {
     if (orgId && branch) {
       loadVendors();
       loadLocations();
+      loadVendorLocations();
       loadItems();
       loadUnits();
     }
-  }, [orgId, branch, loadVendors, loadLocations, loadItems, loadUnits]);
+  }, [
+    orgId,
+    branch,
+    loadVendors,
+    loadLocations,
+    loadVendorLocations,
+    loadItems,
+    loadUnits,
+  ]);
+
+  // When editing, fill Vendor Name once the vendor list has loaded
+  useEffect(() => {
+    if (header.vendorId && !header.vendorName && vendorList.length) {
+      const vendor = vendorList.find(
+        (v) => String(v.id) === String(header.vendorId),
+      );
+      if (vendor) {
+        setHeader((prev) => ({ ...prev, vendorName: vendor.supplierName }));
+      }
+    }
+  }, [vendorList, header.vendorId, header.vendorName]);
+
   /* ---------------- Handlers ---------------- */
 
   const handleHeaderChange = (e) => {
@@ -483,8 +582,8 @@ const ScrapMaterialReturnForm = ({ data, onBack }) => {
     setHeader((prev) => {
       const next = { ...prev, [name]: value };
       if (name === "vendorId") {
-        const vendor = vendorOptions.find((v) => v.value === value);
-        next.vendorName = vendor?.label || "";
+        const vendor = vendorList.find((v) => String(v.id) === String(value));
+        next.vendorName = vendor?.supplierName || "";
       }
       return next;
     });
@@ -507,7 +606,7 @@ const ScrapMaterialReturnForm = ({ data, onBack }) => {
           next = {
             ...next,
             itemDescription: item?.itemDescription || "",
-            unit: item?.primaryUnits?.id || "",
+            unit: item?.primaryUnits?.id ? String(item.primaryUnits.id) : "",
             availableStock:
               item?.availableStock ??
               item?.openStock ??
@@ -517,10 +616,11 @@ const ScrapMaterialReturnForm = ({ data, onBack }) => {
           };
         }
 
+        // Amount = Rec/Rej Qty x Cost Rate
         if (key === "recRejQty" || key === "costRate") {
           const qty = parseFloat(next.recRejQty) || 0;
           const rate = parseFloat(next.costRate) || 0;
-          next.amount = qty * rate ? (qty * rate).toFixed(2) : "";
+          next.amount = qty && rate ? (qty * rate).toFixed(2) : "";
         }
 
         return next;
@@ -547,8 +647,6 @@ const ScrapMaterialReturnForm = ({ data, onBack }) => {
     if (!header.toLocation) errors.toLocation = "To Location is required";
     if (!header.entryType) errors.entryType = "Entry Type is required";
     if (!header.docNo?.trim()) errors.docNo = "Doc No. is required";
-    if (!header.docId?.trim()) errors.docId = "Doc Id is required";
-    if (!header.date) errors.date = "Date is required";
 
     const hasValidItemRow = scrapDetailRows.some(
       (r) => r.itemCode && Number(r.recRejQty) > 0,
@@ -567,24 +665,42 @@ const ScrapMaterialReturnForm = ({ data, onBack }) => {
     setIsSubmitting(true);
 
     const isUpdate = Boolean(data?.id);
+    const user = localStorage.getItem("userName");
 
     const payload = {
       ...(isUpdate ? { id: data.id } : {}),
       orgId,
       branch,
-      ...header,
-      scrapDetails: scrapDetailRows.filter((r) => r.itemCode?.trim()),
-      summary,
-      createdBy: isUpdate
-        ? data?.createdBy || localStorage.getItem("usersId")
-        : localStorage.getItem("usersId"),
-      ...(isUpdate ? { updatedBy: localStorage.getItem("usersId") } : {}),
+      active: header.active,
+      financialYear: getFinancialYear(),
+      docNo: header.docNo,
+      documentDate: header.docDate || null,
+      entryFor: toNum(header.entryFor),
+      entryType: header.entryType,
+      vendorId: toNum(header.vendorId),
+      vendorLocation: toNum(header.vendorLocation),
+      toLocation: toNum(header.toLocation),
+      approvalByQc: summary.approvalByQc,
+      approvalByPurchase: summary.approvalByPurchase,
+      reasonForRejection: summary.reasonForRejection,
+      createdBy: isUpdate ? data?.createdBy || user : user,
+      scrapMaterialReturnRejectionDetailsDTO: scrapDetailRows
+        .filter((r) => r.itemCode && Number(r.recRejQty) > 0)
+        .map((r) => ({
+          ...(r.id ? { id: r.id } : {}),
+          item: toNum(r.itemCode),
+          unit: toNum(r.unit),
+          availableStock: toNum(r.availableStock),
+          recQty: toNum(r.recRejQty),
+          costRate: toNum(r.costRate),
+          amount: toNum(r.amount),
+          note: r.note || "",
+        })),
     };
 
     try {
-      const response = await scrapMaterialReturnAPI.createUpdateScrapMaterialReturn(
-        payload,
-      );
+      const response =
+        await scrapMaterialReturnAPI.createUpdateScrapMaterialReturn(payload);
 
       if (response?.status) {
         addToast(
@@ -598,6 +714,7 @@ const ScrapMaterialReturnForm = ({ data, onBack }) => {
         addToast(
           response?.errors?.[0]?.shortMessage ||
             response?.errors?.[0]?.longMessage ||
+            response?.paramObjectsMap?.errorMessage ||
             response?.message ||
             "Failed to save Scrap/Material Return record.",
         );
@@ -662,7 +779,7 @@ const ScrapMaterialReturnForm = ({ data, onBack }) => {
               value={header.entryFor}
               onChange={handleHeaderChange}
               error={fieldErrors.entryFor}
-              options={ENTRY_FOR_OPTIONS}
+              options={entryForOptions}
               required
             />
             <Field
@@ -688,7 +805,7 @@ const ScrapMaterialReturnForm = ({ data, onBack }) => {
               name="vendorLocation"
               value={header.vendorLocation}
               onChange={handleHeaderChange}
-              options={VENDOR_LOCATION_OPTIONS}
+              options={vendorLocationOptions}
             />
             <Field
               type="select"
@@ -730,9 +847,7 @@ const ScrapMaterialReturnForm = ({ data, onBack }) => {
               name="docId"
               value={header.docId}
               onChange={handleHeaderChange}
-              error={fieldErrors.docId}
-              required
-              disabled={!data}
+              disabled
             />
             <Field
               type="date"
@@ -740,8 +855,6 @@ const ScrapMaterialReturnForm = ({ data, onBack }) => {
               name="date"
               value={header.date}
               onChange={handleHeaderChange}
-              error={fieldErrors.date}
-              required
               disabled
             />
           </div>
@@ -749,7 +862,6 @@ const ScrapMaterialReturnForm = ({ data, onBack }) => {
 
         {/* ---------------- Child Tabs ---------------- */}
         <section className="mt-0 bg-white dark:bg-gray-800">
-          {/* Tabs */}
           <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 mb-0">
             <div className="flex flex-wrap">
               {CHILD_TABS.map((tab) => (

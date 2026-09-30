@@ -11,42 +11,31 @@ const ScrapMaterialReturnMaster = () => {
   const [editData, setEditData] = useState(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  const ORG_ID = localStorage.getItem("orgId");
-  const BRANCH_ID = localStorage.getItem("branchId");
-
   const handleAddNew = () => {
     setEditData(null);
     setView("form");
   };
 
-  // Pencil icon click -> fetch fresh data by orgId, find the matching record, open form
-  const handleEdit = useCallback(
-    async (row) => {
-      try {
-        const records = await scrapMaterialReturnAPI.getScrapMaterialReturnByOrgId(
-          ORG_ID,
-          BRANCH_ID,
-        );
-        const fresh = records.find((r) => r.id === row.id) || row;
-        setEditData(fresh);
-        setView("form");
-      } catch (error) {
-        console.error("Failed to fetch scrap/material return for edit:", error);
-        toast.error("Failed to load scrap/material return details");
-      }
-    },
-    [ORG_ID, BRANCH_ID],
-  );
+  // Pencil icon -> fetch the record by id (falls back to the list row)
+  const handleEdit = useCallback(async (row) => {
+    try {
+      const fresh = await scrapMaterialReturnAPI.getScrapMaterialReturnById(
+        row.id,
+      );
+      setEditData(fresh || row);
+      setView("form");
+    } catch (error) {
+      console.error("Failed to fetch scrap/material return for edit:", error);
+      toast.error("Failed to load scrap/material return details");
+    }
+  }, []);
 
   const handleBack = () => {
     setEditData(null);
     setView("list");
-    // bump refreshTrigger so the list re-fetches after add/update
     setRefreshTrigger((prev) => prev + 1);
   };
 
-  // List screen back button -> return to the Sub Contract module home.
-  // (Form's back button goes back to the list via handleBack.)
   const handleNavigateHome = () => {
     navigate("/subcontract");
   };
