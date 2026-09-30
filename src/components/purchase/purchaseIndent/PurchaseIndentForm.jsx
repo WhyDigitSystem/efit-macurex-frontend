@@ -174,6 +174,74 @@ const asId = (value) => {
   return value;
 };
 
+/* Unit label: API returns units as { id, unitId: "KG", unitDescription } */
+const unitLabel = (unit) => {
+  if (!unit) return "";
+  if (typeof unit !== "object") return String(unit);
+
+  return (
+    unit.primaryUnit ??
+    unit.unitId ??
+    unit.unitName ??
+    unit.unitDescription ??
+    ""
+  );
+};
+
+/* Normalise the conversion factor dropdown response into [{ value, label }] */
+const normalizeConversionOptions = (response) => {
+  const list = pickArray(response, [
+    "paramObjectsMap.conversionFactorDropdown",
+    "conversionFactorDropdown",
+  ]);
+
+  const seen = new Set();
+
+  return list
+    .map((entry) => {
+      const value =
+        entry && typeof entry === "object"
+          ? (entry.conversionFactor ??
+            entry.factor ??
+            entry.value ??
+            entry.conversionFactorValue)
+          : entry;
+
+      if (value === null || value === undefined || value === "") {
+        return null;
+      }
+
+      return { value: String(value), label: String(value) };
+    })
+    .filter((option) => {
+      if (!option || seen.has(option.value)) return false;
+      seen.add(option.value);
+      return true;
+    });
+};
+
+/* Fetch conversion factor options for a primary -> purchase unit pair */
+const fetchConversionOptions = async ({ branch, fromUnit, toUnit, orgId }) => {
+  if (!branch || !fromUnit || !toUnit || !orgId) {
+    return [];
+  }
+
+  try {
+    const response =
+      await purchaseIndentAPI.getPurchaseIndentConversionFactorDropdown({
+        branch,
+        fromUnit,
+        toUnit,
+        orgId,
+      });
+
+    return normalizeConversionOptions(response);
+  } catch (error) {
+    console.error("Failed to load conversion factors:", error);
+    return [];
+  }
+};
+
 /* -------------------------------------------------------------------------- */
 /* Field */
 /* -------------------------------------------------------------------------- */
@@ -542,6 +610,7 @@ const emptyDetailRow = () => ({
   purchaseUnitLabel: "",
   qtyInPrimaryUnit: "",
   conversionFactor: "",
+  conversionOptions: [],
   qtyInPurchaseUnit: "",
   requiredDate: "",
   purpose: "",
@@ -881,7 +950,12 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
         setRecordId(purchaseIndent.id ?? data.id);
 
         /* Existing Indent No */
-        setIndentNo(purchaseIndent.indentNo ?? data.indentNo ?? "");
+        setIndentNo(
+          purchaseIndent.indentNo ??
+            purchaseIndent.docId ??
+            data.indentNo ??
+            "",
+        );
 
         /* Header */
         setHeader({
@@ -893,7 +967,11 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
 
           branch: asId(purchaseIndent.branch ?? data.branch),
 
-          indentDate: purchaseIndent.indentDate ?? data.indentDate ?? "",
+          indentDate:
+            purchaseIndent.indentDate ??
+            purchaseIndent.docDate ??
+            data.indentDate ??
+            "",
 
           department: asId(purchaseIndent.department ?? data.department),
 
@@ -921,37 +999,75 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
 
         if (finalDetails.length) {
           setDetailRows(
-            finalDetails.map((detail) => ({
-              item: asId(detail.item),
+            finalDetails.map((detail) => {
+              const itemObj =
+                detail.item && typeof detail.item === "object"
+                  ? detail.item
+                  : null;
 
-              itemDescription:
-                detail.itemDescription ?? detail.item?.itemDescription ?? "",
+              // Units are nested inside the item in the API response
+              const primaryUnitObj = detail.primaryUnit ?? itemObj?.primaryUnit;
+              const purchaseUnitObj =
+                detail.purchaseUnit ?? itemObj?.purchaseUnit;
 
-              primaryUnit: asId(detail.primaryUnit),
+              return {
+                item: asId(detail.item),
 
-              primaryUnitLabel:
-                detail.primaryUnitLabel ??
-                detail.primaryUnit?.primaryUnit ??
-                "",
+                itemDescription:
+                  detail.itemDescription ?? itemObj?.itemDescription ?? "",
 
-              purchaseUnit: asId(detail.purchaseUnit),
+                primaryUnit: asId(primaryUnitObj),
 
-              purchaseUnitLabel:
-                detail.purchaseUnitLabel ??
-                detail.purchaseUnit?.primaryUnit ??
-                "",
+                primaryUnitLabel:
+                  detail.primaryUnitLabel ?? unitLabel(primaryUnitObj),
 
-              qtyInPrimaryUnit: detail.qtyInPrimaryUnit ?? "",
+                purchaseUnit: asId(purchaseUnitObj),
 
-              conversionFactor: detail.conversionFactor ?? "",
+                purchaseUnitLabel:
+                  detail.purchaseUnitLabel ?? unitLabel(purchaseUnitObj),
 
-              qtyInPurchaseUnit: detail.qtyInPurchaseUnit ?? "",
+                qtyInPrimaryUnit: detail.qtyInPrimaryUnit ?? "",
 
-              requiredDate: detail.requiredDate ?? "",
+                conversionFactor: detail.conversionFactor ?? "",
 
-              purpose: detail.purpose ?? "",
-            })),
+                conversionOptions: [],
+
+                qtyInPurchaseUnit: detail.qtyInPurchaseUnit ?? "",
+
+                requiredDate: detail.requiredDate ?? "",
+
+                purpose: detail.purpose ?? "",
+              };
+            }),
           );
+
+          /* Load conversion factor options for each saved row */
+          const editBranch = asId(purchaseIndent.branch ?? data.branch);
+
+          finalDetails.forEach(async (detail, rowIndex) => {
+            const itemObj =
+              detail.item && typeof detail.item === "object"
+                ? detail.item
+                : null;
+
+            const fromUnit = asId(detail.primaryUnit ?? itemObj?.primaryUnit);
+            const toUnit = asId(detail.purchaseUnit ?? itemObj?.purchaseUnit);
+
+            const options = await fetchConversionOptions({
+              branch: editBranch,
+              fromUnit,
+              toUnit,
+              orgId: ORG_ID,
+            });
+
+            if (cancelled || !options.length) return;
+
+            setDetailRows((previous) =>
+              previous.map((row, i) =>
+                i === rowIndex ? { ...row, conversionOptions: options } : row,
+              ),
+            );
+          });
         } else {
           setDetailRows([emptyDetailRow()]);
         }
@@ -985,6 +1101,7 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
 
   /* ---------------------------------------------------------------------- */
@@ -1011,28 +1128,16 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
   /* Detail */
   /* ---------------------------------------------------------------------- */
 
-  const withComputedQty = (row) => {
-    const qty = parseFloat(row.qtyInPrimaryUnit);
-
-    const factor = parseFloat(row.conversionFactor);
-
-    return {
-      ...row,
-
-      qtyInPurchaseUnit:
-        !Number.isNaN(qty) && !Number.isNaN(factor)
-          ? Number((qty * factor).toFixed(4))
-          : "",
-    };
-  };
-
   const handleItemSelect = async (index, itemId) => {
+    // Reset item-driven fields but keep user-entered values
     setDetailRows((previous) =>
       previous.map((row, rowIndex) =>
         rowIndex === index
           ? {
               ...emptyDetailRow(),
               item: itemId,
+              qtyInPrimaryUnit: row.qtyInPrimaryUnit,
+              qtyInPurchaseUnit: row.qtyInPurchaseUnit,
               requiredDate: row.requiredDate,
               purpose: row.purpose,
             }
@@ -1053,6 +1158,17 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
         return;
       }
 
+      const primaryUnitObj = itemDetail.primaryUnits ?? itemDetail.primaryUnit;
+      const purchaseUnitObj = itemDetail.purchaseUnit;
+
+      /* primaryUnits.id -> fromUnit, purchaseUnit.id -> toUnit */
+      const conversionOptions = await fetchConversionOptions({
+        branch: header.branch || BRANCH_ID,
+        fromUnit: asId(primaryUnitObj),
+        toUnit: asId(purchaseUnitObj),
+        orgId: ORG_ID,
+      });
+
       setDetailRows((previous) =>
         previous.map((row, rowIndex) =>
           rowIndex === index
@@ -1062,13 +1178,21 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
                 itemDescription:
                   itemDetail.itemDescription ?? itemDetail.description ?? "",
 
-                primaryUnit: itemDetail.primaryUnits?.id ?? "",
+                primaryUnit: asId(primaryUnitObj),
 
-                primaryUnitLabel: itemDetail.primaryUnits?.primaryUnit ?? "",
+                primaryUnitLabel: unitLabel(primaryUnitObj),
 
-                purchaseUnit: itemDetail.purchaseUnit?.id ?? "",
+                purchaseUnit: asId(purchaseUnitObj),
 
-                purchaseUnitLabel: itemDetail.purchaseUnit?.primaryUnit ?? "",
+                purchaseUnitLabel: unitLabel(purchaseUnitObj),
+
+                conversionOptions,
+
+                /* auto-select when there is exactly one factor */
+                conversionFactor:
+                  conversionOptions.length === 1
+                    ? conversionOptions[0].value
+                    : "",
               }
             : row,
         ),
@@ -1087,22 +1211,9 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
     }
 
     setDetailRows((previous) =>
-      previous.map((row, rowIndex) => {
-        if (rowIndex !== index) {
-          return row;
-        }
-
-        const updated = {
-          ...row,
-          [key]: value,
-        };
-
-        if (key === "qtyInPrimaryUnit" || key === "conversionFactor") {
-          return withComputedQty(updated);
-        }
-
-        return updated;
-      }),
+      previous.map((row, rowIndex) =>
+        rowIndex === index ? { ...row, [key]: value } : row,
+      ),
     );
   };
 
@@ -1239,9 +1350,9 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
         details: detailRows.map((row) => ({
           item: Number(row.item),
 
-          primaryUnit: Number(row.primaryUnit),
+          primaryUnit: row.primaryUnit ? Number(row.primaryUnit) : null,
 
-          purchaseUnit: Number(row.purchaseUnit),
+          purchaseUnit: row.purchaseUnit ? Number(row.purchaseUnit) : null,
 
           qtyInPrimaryUnit: Number(row.qtyInPrimaryUnit) || 0,
 
@@ -1249,7 +1360,7 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
 
           qtyInPurchaseUnit: Number(row.qtyInPurchaseUnit) || 0,
 
-          requiredDate: row.requiredDate,
+          requiredDate: row.requiredDate || null,
 
           purpose: row.purpose,
         })),
@@ -1588,25 +1699,72 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
                       />
                     </td>
 
-                    {/* Conversion Factor */}
+                    {/* Conversion Factor (dropdown when available, else manual) */}
 
                     <td className="p-1 align-top">
-                      <input
-                        type="number"
-                        value={row.conversionFactor}
-                        readOnly
-                        className={`${cellInputClasses} bg-gray-100 dark:bg-gray-800`}
-                      />
+                      {row.conversionOptions?.length ? (
+                        <select
+                          value={row.conversionFactor}
+                          onChange={(event) =>
+                            handleDetailCellChange(
+                              index,
+                              "conversionFactor",
+                              event.target.value,
+                            )
+                          }
+                          className={cellInputClasses}
+                          disabled
+                        >
+                          <option value="">-- Select --</option>
+
+                          {row.conversionFactor !== "" &&
+                            !row.conversionOptions.some(
+                              (option) =>
+                                Number(option.value) ===
+                                Number(row.conversionFactor),
+                            ) && (
+                              <option value={row.conversionFactor}>
+                                {row.conversionFactor}
+                              </option>
+                            )}
+
+                          {row.conversionOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          type="number"
+                          value={row.conversionFactor}
+                          onChange={(event) =>
+                            handleDetailCellChange(
+                              index,
+                              "conversionFactor",
+                              event.target.value,
+                            )
+                          }
+                          className={cellInputClasses}
+                          disabled
+                        />
+                      )}
                     </td>
 
-                    {/* Qty Purchase */}
+                    {/* Qty In Purchase Unit (user entry) */}
 
                     <td className="p-1 align-top">
                       <input
                         type="number"
                         value={row.qtyInPurchaseUnit}
-                        readOnly
-                        className={`${cellInputClasses} bg-gray-100 dark:bg-gray-800`}
+                        onChange={(event) =>
+                          handleDetailCellChange(
+                            index,
+                            "qtyInPurchaseUnit",
+                            event.target.value,
+                          )
+                        }
+                        className={cellInputClasses}
                       />
                     </td>
 

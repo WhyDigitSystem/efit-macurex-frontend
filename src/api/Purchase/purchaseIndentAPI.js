@@ -83,8 +83,6 @@ const purchaseIndentAPI = {
     }
   },
 
-  // GET /api/develop/getPurchaseIndentDocId (adjust screenCode/path if your
-  // backend exposes a different doc-numbering endpoint for indents)
   // GET /api/purchaseservice/getPurchaseIndentDocId
   getPurchaseIndentDocId: async ({ financialYear, orgId }) => {
     try {
@@ -104,6 +102,7 @@ const purchaseIndentAPI = {
       throw error;
     }
   },
+
   // GET method - Get item dropdown for Purchase Indent (Indent No. selection on PO)
   getPurchaseIndentItemDropdown: async (branch, orgId) => {
     try {
@@ -122,6 +121,36 @@ const purchaseIndentAPI = {
       return response.data;
     } catch (error) {
       console.error("Error fetching purchase indent item dropdown:", error);
+      throw error;
+    }
+  },
+
+  // GET /api/purchaseservice/getPurchaseIndentConversionFactorDropdown
+  // fromUnit = primary unit id, toUnit = purchase unit id
+  getPurchaseIndentConversionFactorDropdown: async ({
+    branch,
+    fromUnit,
+    toUnit,
+    orgId,
+  }) => {
+    try {
+      const response = await axios.get(
+        `${API_BASE_URL}/api/purchaseservice/getPurchaseIndentConversionFactorDropdown`,
+        {
+          params: {
+            branch: Number(branch),
+            fromUnit: Number(fromUnit),
+            orgId: Number(orgId),
+            toUnit: Number(toUnit),
+          },
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      );
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching conversion factor dropdown:", error);
       throw error;
     }
   },

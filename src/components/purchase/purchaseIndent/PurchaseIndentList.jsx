@@ -61,12 +61,6 @@ const PurchaseIndentList = ({ onAddNew, onEdit, onBack }) => {
         branchId,
       );
 
-      console.log("Purchase Indent API Response:", response);
-      console.log(
-        "Purchase Indent paramObjectsMap:",
-        response?.paramObjectsMap,
-      );
-
       // ============================================================
       // Extract list from API response
       // ============================================================
@@ -86,41 +80,24 @@ const PurchaseIndentList = ({ onAddNew, onEdit, onBack }) => {
         indents = [responseData];
       }
 
-      console.log("Extracted Purchase Indents:", indents);
-
       // ============================================================
       // Transform API data
       // IMPORTANT:
       // Never allow nested objects to reach CommonListViewTable
       // ============================================================
       const transformedData = indents.map((indent) => {
-        // ----------------------------------------------------------
-        // Branch
-        // ----------------------------------------------------------
         const branchName = getDisplayValue(indent.branch, [
           "branchName",
           "name",
           "branchCode",
         ]);
 
-        // ----------------------------------------------------------
-        // Department
-        // API example:
-        // {
-        //   id: 1,
-        //   departmentCode: "DEP001",
-        //   departmentName: "Purchase"
-        // }
-        // ----------------------------------------------------------
         const departmentName = getDisplayValue(indent.department, [
           "departmentName",
           "name",
           "departmentCode",
         ]);
 
-        // ----------------------------------------------------------
-        // Prepared By
-        // ----------------------------------------------------------
         const preparedByName = getDisplayValue(indent.preparedBy, [
           "employeeName",
           "name",
@@ -128,9 +105,6 @@ const PurchaseIndentList = ({ onAddNew, onEdit, onBack }) => {
           "employeeCode",
         ]);
 
-        // ----------------------------------------------------------
-        // By Whom
-        // ----------------------------------------------------------
         const byWhomName = getDisplayValue(indent.byWhom, [
           "employeeName",
           "name",
@@ -138,9 +112,6 @@ const PurchaseIndentList = ({ onAddNew, onEdit, onBack }) => {
           "employeeCode",
         ]);
 
-        // ----------------------------------------------------------
-        // Belongs To
-        // ----------------------------------------------------------
         const belongsTo = getDisplayValue(indent.belongsTo, [
           "name",
           "employeeName",
@@ -167,47 +138,36 @@ const PurchaseIndentList = ({ onAddNew, onEdit, onBack }) => {
             indent.branch?.branchCode ?? indent.branchCode,
           ),
 
-          // Belongs To
           belongsTo,
 
-          // Department
           department: departmentName,
 
-          // Prepared By
           preparedBy: preparedByName,
 
-          // By Whom
           byWhom: byWhomName,
 
-          // Date
           indentDate: getDisplayValue(indent.indentDate ?? indent.docDate),
 
-          // Remarks
           remarks: getDisplayValue(indent.remarks),
 
-          // Cancel Remarks
           cancelRemarks: getDisplayValue(indent.cancelRemarks),
 
-          // Approved
           approved:
             indent.approved === true ||
             indent.approved === "true" ||
             indent.approved === 1,
 
-          // Active
           active:
             indent.active === true ||
             indent.active === "true" ||
             indent.active === 1,
 
-          // Created By
           createdBy: getDisplayValue(indent.createdBy, [
             "employeeName",
             "name",
             "fullName",
           ]),
 
-          // Organization
           orgId: getDisplayValue(indent.orgId),
 
           // Details
@@ -228,8 +188,6 @@ const PurchaseIndentList = ({ onAddNew, onEdit, onBack }) => {
       // Sort newest first
       // ============================================================
       transformedData.sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
-
-      console.log("Transformed Purchase Indents:", transformedData);
 
       setItemData(transformedData);
     } catch (error) {
@@ -258,8 +216,6 @@ const PurchaseIndentList = ({ onAddNew, onEdit, onBack }) => {
       return;
     }
 
-    console.log("Editing Purchase Indent:", item);
-
     if (onEdit) {
       onEdit(item);
     }
@@ -275,10 +231,9 @@ const PurchaseIndentList = ({ onAddNew, onEdit, onBack }) => {
         return;
       }
 
-      console.log("Generating PDF for:", row);
-
       // ============================================================
       // Detail Items
+      // Units are nested inside the item in the API response
       // ============================================================
       const items = (Array.isArray(row.details) ? row.details : []).map(
         (detail) => {
@@ -286,14 +241,18 @@ const PurchaseIndentList = ({ onAddNew, onEdit, onBack }) => {
             detail.item && typeof detail.item === "object" ? detail.item : null;
 
           const primaryUnitObject =
-            detail.primaryUnit && typeof detail.primaryUnit === "object"
+            (detail.primaryUnit && typeof detail.primaryUnit === "object"
               ? detail.primaryUnit
-              : null;
+              : null) ??
+            itemObject?.primaryUnit ??
+            null;
 
           const purchaseUnitObject =
-            detail.purchaseUnit && typeof detail.purchaseUnit === "object"
+            (detail.purchaseUnit && typeof detail.purchaseUnit === "object"
               ? detail.purchaseUnit
-              : null;
+              : null) ??
+            itemObject?.purchaseUnit ??
+            null;
 
           return {
             itemCode:
@@ -309,11 +268,13 @@ const PurchaseIndentList = ({ onAddNew, onEdit, onBack }) => {
             primaryUnitLabel:
               getDisplayValue(detail.primaryUnitLabel) ||
               getDisplayValue(primaryUnitObject?.primaryUnit) ||
+              getDisplayValue(primaryUnitObject?.unitId) ||
               getDisplayValue(primaryUnitObject?.unitName),
 
             purchaseUnitLabel:
               getDisplayValue(detail.purchaseUnitLabel) ||
               getDisplayValue(purchaseUnitObject?.primaryUnit) ||
+              getDisplayValue(purchaseUnitObject?.unitId) ||
               getDisplayValue(purchaseUnitObject?.unitName),
 
             qtyInPrimaryUnit: Number(detail.qtyInPrimaryUnit) || 0,
