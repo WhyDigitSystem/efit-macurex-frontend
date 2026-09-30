@@ -2,10 +2,10 @@ import { useState } from "react";
 import MaintenanceServiceRequestList from "./MaintenanceServiceRequestList";
 import MaintenanceServiceRequestForm from "./MaintenanceServiceRequestForm";
 
-
 const MaintenanceServiceRequestMaster = () => {
   const [screen, setScreen] = useState("list");
   const [editData, setEditData] = useState(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const handleAddNew = () => {
     setEditData(null);
@@ -19,18 +19,14 @@ const MaintenanceServiceRequestMaster = () => {
 
   const handleBack = () => {
     setScreen("list");
+    setEditData(null);
+    setRefreshTrigger((n) => n + 1); // refresh list after save/cancel
   };
 
-  const handleSave = async (payload) => {
-    try {
-      await maintenanceServiceRequestAPI.updateCreateMaintenanceServiceRequest(
-        payload,
-      ); // Create/Update
-      handleBack();
-    } catch (error) {
-      console.error("Error saving maintenance service request:", error);
-      throw error;
-    }
+  // Form already called the save API and, on success, calls onSave.
+  // Here we only need to navigate back to the list.
+  const handleSave = () => {
+    handleBack();
   };
 
   return (
@@ -40,6 +36,7 @@ const MaintenanceServiceRequestMaster = () => {
           onAddNew={handleAddNew}
           onEdit={handleEdit}
           onBack={() => window.history.back()}
+          refreshTrigger={refreshTrigger}
         />
       )}
 

@@ -1,31 +1,41 @@
 import { useCallback, useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import transferOrderAPI from "../../../api/PPC/transferOrderAPI";
-import { toast } from "../../../utils/toast";
+import { useToast } from "../../Toast/ToastContext";
 
 const TransferOrderList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   const [orderData, setOrderData] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const ORG_ID = localStorage.getItem("orgId");
+  const { addToast } = useToast();
+
+  const ORG_ID = Number(localStorage.getItem("orgId"));
 
   const loadOrders = useCallback(async () => {
+    if (!ORG_ID) {
+      setOrderData([]);
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
 
-      const orders = await transferOrderAPI.getByOrgId(ORG_ID);
+      const list = await transferOrderAPI.getByOrgId(ORG_ID);
 
-      orders.sort((a, b) => (b.id || 0) - (a.id || 0));
+      const sorted = (list || []).sort(
+        (a, b) => Number(b.id || 0) - Number(a.id || 0)
+      );
 
-      setOrderData(orders);
+      setOrderData(sorted);
     } catch (error) {
       console.error("Failed to load transfer orders:", error);
+      addToast("Failed to fetch Transfer Orders", "error");
       setOrderData([]);
-      toast.error("Failed to fetch Transfer Orders");
     } finally {
       setLoading(false);
     }
-  }, [ORG_ID]);
+  }, [ORG_ID, addToast]);
 
   useEffect(() => {
     loadOrders();
@@ -33,27 +43,35 @@ const TransferOrderList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
 
   const columns = [
     {
-      key: "documentNo",
+      key: "docId",
       label: "Document No",
-      accessor: (row) => row.documentNo,
+      accessor: (row) => row.docId || "-",
       type: "text",
+      noWrap: true,
     },
     {
       key: "orderType",
       label: "Order Type",
-      accessor: (row) => row.orderType,
+      accessor: (row) =>
+        row.orderType?.description || row.orderType?.code || "-",
       type: "text",
     },
     {
-      key: "date",
+      key: "docDate",
       label: "Date",
-      accessor: (row) => row.date,
+      accessor: (row) => row.docDate || "-",
+      type: "date",
+    },
+    {
+      key: "financialYear",
+      label: "Financial Year",
+      accessor: (row) => row.financialYear || "-",
       type: "text",
     },
     {
       key: "active",
       label: "Status",
-      accessor: "active",
+      accessor: (row) => (row.active ? "Active" : "Inactive"),
       type: "status",
       statusVariants: {
         Active: {
@@ -77,14 +95,10 @@ const TransferOrderList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     },
   ];
 
-  const searchFields = ["documentNo", "orderType", "date"];
+  const searchFields = ["docId", "orderType.description"];
 
   const filterOptions = [
-    {
-      value: "all",
-      label: "All",
-      field: null,
-    },
+    { value: "all", label: "All", field: null },
     {
       value: "active",
       label: "Active",

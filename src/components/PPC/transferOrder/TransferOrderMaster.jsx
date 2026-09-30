@@ -1,47 +1,44 @@
-import { useCallback, useState } from "react";
+import { useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import TransferOrderList from "./TransferOrderList";
 import TransferOrderForm from "./TransferOrderForm";
 import transferOrderAPI from "../../../api/PPC/transferOrderAPI";
-import { toast } from "../../../utils/toast";
+import { useToast } from "../../Toast/ToastContext";
 
 const TransferOrderMaster = () => {
   const navigate = useNavigate();
+  const { addToast } = useToast();
+
   const [view, setView] = useState("list"); // "list" | "form"
   const [editData, setEditData] = useState(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-
-  const ORG_ID = localStorage.getItem("orgId");
 
   const handleAddNew = () => {
     setEditData(null);
     setView("form");
   };
 
-  // Pencil icon click -> fetch fresh data by orgId, find the matching record, open form
+  // Fetch fresh record by id when the pencil is clicked
   const handleEdit = useCallback(
     async (row) => {
       try {
-        const records = await transferOrderAPI.getByOrgId(ORG_ID);
-        const fresh = records.find((r) => r.id === row.id) || row;
-        setEditData(fresh);
+        const fresh = await transferOrderAPI.getById(row.id);
+        setEditData(fresh || row);
         setView("form");
       } catch (error) {
         console.error("Failed to fetch transfer order for edit:", error);
-        toast.error("Failed to load Transfer Order details");
+        addToast("Failed to load Transfer Order details", "error");
       }
     },
-    [ORG_ID],
+    [addToast]
   );
 
   const handleBack = () => {
     setEditData(null);
     setView("list");
-    // bump refreshTrigger so the list re-fetches after add/update
     setRefreshTrigger((prev) => prev + 1);
   };
 
-  // List screen back button -> return to the PPC module home.
   const handleNavigateHome = () => {
     navigate("/ppc");
   };

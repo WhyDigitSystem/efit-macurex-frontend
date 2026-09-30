@@ -35,9 +35,9 @@ const EnquiryList = ({ onAddNew, onEdit, onBack }) => {
 
       const transformedData = enquiries.map((enquiry) => ({
         id: enquiry.id,
-        enquiryNo: enquiry.enquiryNo || "",
+        enquiryNo: enquiry.docId || "",
         enquiryType: enquiry.enquiryType || "",
-        enquiryDate: enquiry.enquiryDate || "",
+        enquiryDate: enquiry.docDate || "",
         branchName: enquiry.branch?.branchName || "",
         branchCode: enquiry.branch?.branchCode || "",
         partyName: enquiry.partyName || "",

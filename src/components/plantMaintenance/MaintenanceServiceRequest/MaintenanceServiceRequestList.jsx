@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-
 import CommonListViewTable from "../../../utils/CommonListViewTable";
-import { toast } from "../../../utils/toast";
+import maintenanceServiceRequestAPI from "../../../api/plantMaintenance/maintenanceServiceRequestAPI";
+import { useToast } from "../../Toast/ToastContext";
 
 const MaintenanceServiceRequestList = ({
   onAddNew,
@@ -12,30 +12,38 @@ const MaintenanceServiceRequestList = ({
   const [requestData, setRequestData] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  const { addToast } = useToast();
+
   const ORG_ID = Number(localStorage.getItem("orgId"));
 
   const loadServiceRequests = useCallback(async () => {
+    if (!ORG_ID) {
+      setRequestData([]);
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
 
-      const response =
+      const list =
         await maintenanceServiceRequestAPI.getMaintenanceServiceRequestByOrgId(
-          ORG_ID,
+          ORG_ID
         );
 
-      const sortedData = (response || []).sort(
-        (a, b) => (b.id || 0) - (a.id || 0),
+      const sorted = (list || []).sort(
+        (a, b) => Number(b.id || 0) - Number(a.id || 0)
       );
 
-      setRequestData(sortedData);
+      setRequestData(sorted);
     } catch (error) {
       console.error("Failed to load maintenance service requests:", error);
+      addToast("Failed to fetch maintenance service requests", "error");
       setRequestData([]);
-      toast.error("Failed to fetch maintenance service requests");
     } finally {
       setLoading(false);
     }
-  }, [ORG_ID]);
+  }, [ORG_ID, addToast]);
 
   useEffect(() => {
     loadServiceRequests();
@@ -45,43 +53,54 @@ const MaintenanceServiceRequestList = ({
     {
       key: "mpNo",
       label: "MP No",
-      accessor: (row) => row.header?.mpNo,
+      accessor: (row) => row.docId || row.mpNo || "-",
       type: "text",
     },
     {
       key: "reportedDate",
       label: "Reported Date",
-      accessor: (row) => row.header?.reportedDate,
+      accessor: (row) => row.reportedDate || row.closingDate || "-",
       type: "date",
+    },
+    {
+      key: "belongTo",
+      label: "Belong To",
+      accessor: (row) =>
+        row.belongTo?.description || row.belongTo?.code || "-",
+      type: "text",
     },
     {
       key: "department",
       label: "Department",
-      accessor: (row) => row.header?.department,
+      accessor: (row) =>
+        row.department?.departmentName ||
+        row.department?.departmentCode ||
+        "-",
       type: "text",
     },
     {
       key: "requestedBy",
       label: "Requested By",
-      accessor: (row) => row.header?.requestedBy,
+      accessor: (row) => row.requestedBy?.employeeName || "-",
       type: "text",
     },
     {
       key: "priority",
       label: "Priority",
-      accessor: (row) => row.header?.priority,
+      accessor: (row) =>
+        row.priority?.description || row.priority?.code || "-",
       type: "badge",
     },
     {
       key: "completed",
       label: "Completed",
-      accessor: (row) => row.header?.completed,
+      accessor: (row) => row.completed || "-",
       type: "badge",
     },
     {
       key: "active",
       label: "Status",
-      accessor: "active",
+      accessor: (row) => (row.active ? "Active" : "Inactive"),
       type: "status",
     },
     {
@@ -94,9 +113,10 @@ const MaintenanceServiceRequestList = ({
   ];
 
   const searchFields = [
-    "header.mpNo",
-    "header.requestedBy",
-    "header.department",
+    "belongTo.description",
+    "department.departmentName",
+    "requestedBy.employeeName",
+    "priority.description",
   ];
 
   return (

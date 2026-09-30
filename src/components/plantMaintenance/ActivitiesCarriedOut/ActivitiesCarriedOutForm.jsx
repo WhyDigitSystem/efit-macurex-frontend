@@ -1,9 +1,18 @@
 // ActivitiesCarriedOutForm.jsx
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
 import { useToast } from "../../Toast/ToastContext";
 import branchAPI from "../../../api/branchAPI";
 import listOfValuesAPI from "../../../api/listOfValuesAPI";
+import employeeAPI from "../../../api/employeeAPI";
+import locationMasterAPI from "../../../api/locationMasterAPI";
+import activitiesCarriedOutAPI from "../../../api/plantMaintenance/activitiesCarriedOutAPI";
+import { departmentAPI } from "../../../api/departmentAPI";
+import toolCategoryAPI from "../../../api/Production/toolCategoryAPI";
+import itemAPI from "../../../api/itemAPI";
+
+/* ---------------------------------------------------------------------------- */
+/* Style tokens                                                                 */
 
 const controlClasses =
     "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -17,6 +26,55 @@ const controlClasses =
 
 const labelClasses = "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
+const fieldGrid =
+    "grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-x-3 gap-y-2 items-start";
+
+/* ---------------------------------------------------------------------------- */
+/* Helpers                                                                      */
+
+const timeToMinutes = (value) => {
+    if (!value) return null;
+    const parts = String(value).split(":");
+    if (parts.length < 2) return null;
+    const h = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10);
+    if (
+        Number.isNaN(h) ||
+        Number.isNaN(m) ||
+        h < 0 ||
+        h > 23 ||
+        m < 0 ||
+        m > 59
+    ) {
+        return null;
+    }
+    return h * 60 + m;
+};
+
+const computeNoOfHrs = (fromTime, toTime) => {
+    const fromMin = timeToMinutes(fromTime);
+    const toMin = timeToMinutes(toTime);
+    if (fromMin === null || toMin === null) return "";
+
+    let diff = toMin - fromMin;
+    if (diff < 0) diff += 24 * 60;
+
+    return (diff / 60).toFixed(2);
+};
+
+// Normalize "HH:MM" or "HH:MM:SS" → "HH:MM:SS"
+const toTimeString = (value) => {
+    if (!value) return "";
+    const parts = String(value).split(":");
+    const hh = String(parts[0] || "00").padStart(2, "0");
+    const mm = String(parts[1] || "00").padStart(2, "0");
+    const ss = String(parts[2] || "00").padStart(2, "0");
+    return `${hh}:${mm}:${ss}`;
+};
+
+/* ---------------------------------------------------------------------------- */
+/* Field                                                                        */
+
 const Field = ({
     label,
     name,
@@ -29,7 +87,6 @@ const Field = ({
     className = "",
     placeholder = "",
     disabled = false,
-    checked = false,
 }) => {
     if (type === "select") {
         return (
@@ -52,7 +109,11 @@ const Field = ({
                         </option>
                     ))}
                 </select>
-                {error && <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">{error}</p>}
+                {error && (
+                    <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
+                        {error}
+                    </p>
+                )}
             </div>
         );
     }
@@ -72,64 +133,19 @@ const Field = ({
                 placeholder={placeholder}
                 disabled={disabled}
             />
-            {error && <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">{error}</p>}
+            {error && (
+                <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
+                    {error}
+                </p>
+            )}
         </div>
     );
 };
 
-const fieldGrid = "grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-x-3 gap-y-2 items-start";
+/* ---------------------------------------------------------------------------- */
+/* Main Component                                                               */
 
-const TableWrapper = ({ children }) => (
-    <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
-        <table className="w-full text-xs">{children}</table>
-    </div>
-);
-
-const TableHead = ({ headers }) => (
-    <thead className="bg-gray-100 dark:bg-gray-700">
-        <tr>
-            {headers.map((h, i) => (
-                <th
-                    key={i}
-                    className={`p-1 ${i === 0 ? "w-8 text-center" : i === headers.length - 1 ? "w-20 text-left" : "text-left"} dark:text-white text-[10px] font-medium whitespace-nowrap`}
-                >
-                    {h}
-                </th>
-            ))}
-        </tr>
-    </thead>
-);
-
-const TableRow = ({
-    children,
-    index,
-    onRemove,
-    disabled,
-    showDelete = true,
-}) => (
-    <tr className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="p-1 text-center font-medium dark:text-white">{index + 1}</td>
-        {children}
-        {showDelete && (
-            <td className="p-1 text-center">
-                <button
-                    type="button"
-                    onClick={onRemove}
-                    disabled={disabled}
-                    className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
-                        ? "bg-gray-400 cursor-not-allowed"
-                        : "bg-red-600 hover:bg-red-700"
-                        }`}
-                >
-                    <Trash2 size={10} />
-                </button>
-            </td>
-        )}
-    </tr>
-);
-
-// Main Component
-const ActivitiesCarriedOutForm = ({ data, onBack }) => {
+const ActivitiesCarriedOutForm = ({ data, onBack, onSave }) => {
     const [orgId] = useState(localStorage.getItem("orgId"));
     const [branchId] = useState(localStorage.getItem("branchId"));
     const { addToast } = useToast();
@@ -137,32 +153,22 @@ const ActivitiesCarriedOutForm = ({ data, onBack }) => {
     const [activeTab, setActiveTab] = useState("activitiesDetails");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [fieldErrors, setFieldErrors] = useState({});
-    const [loading, setLoading] = useState(false);
     const [generatingDocId, setGeneratingDocId] = useState(false);
 
-    // Refs
-    const branchesLoadedRef = useRef(false);
-    const departmentsLoadedRef = useRef(false);
-    const checkedByLoadedRef = useRef(false);
-    const machineToolLoadedRef = useRef(false);
-    const machineToolNoLoadedRef = useRef(false);
-    const pmCheckListLoadedRef = useRef(false);
-    const locationLoadedRef = useRef(false);
-    const maintenanceTypeLoadedRef = useRef(false);
-    const fromLocationLoadedRef = useRef(false);
-    const itemCodeLoadedRef = useRef(false);
-
-    // Dropdown options
+    // Options
     const [plantOptions, setPlantOptions] = useState([]);
     const [departmentOptions, setDepartmentOptions] = useState([]);
     const [checkedByOptions, setCheckedByOptions] = useState([]);
     const [machineToolOptions, setMachineToolOptions] = useState([]);
     const [machineToolNoOptions, setMachineToolNoOptions] = useState([]);
-    const [pmCheckListOptions, setPmCheckListOptions] = useState([]);
+    const [pmCheckListOptions, setPMCheckListOptions] = useState([]);
     const [locationOptions, setLocationOptions] = useState([]);
     const [maintenanceTypeOptions, setMaintenanceTypeOptions] = useState([]);
     const [fromLocationOptions, setFromLocationOptions] = useState([]);
     const [itemCodeOptions, setItemCodeOptions] = useState([]);
+
+    // Raw machine tool list for Location auto-fill
+    const [machineToolList, setMachineToolList] = useState([]);
 
     // Form state
     const [form, setForm] = useState({
@@ -170,7 +176,7 @@ const ActivitiesCarriedOutForm = ({ data, onBack }) => {
         department: data?.department || "",
         checkedBy: data?.checkedBy || "",
         docId: data?.docId || "",
-        date: data?.date || new Date().toISOString().split('T')[0],
+        date: data?.date || new Date().toISOString().split("T")[0],
         machineTool: data?.machineTool || "",
         machineToolNo: data?.machineToolNo || "",
         pmCheckListNo: data?.pmCheckListNo || "",
@@ -179,17 +185,15 @@ const ActivitiesCarriedOutForm = ({ data, onBack }) => {
         fromLocation: data?.fromLocation || "",
     });
 
-    // Activities Details Rows
+    // Activity rows
     const [activityRows, setActivityRows] = useState([
         {
             id: 1,
             scheduledActivity: "",
             itemCode: "",
             itemDescription: "",
-            fromTimeHH: "",
-            fromTimeMM: "",
-            toTimeHH: "",
-            toTimeMM: "",
+            fromTime: "",
+            toTime: "",
             checkingPoints: "",
             parameter: "",
             activitiesCarriedOut: "",
@@ -202,7 +206,6 @@ const ActivitiesCarriedOutForm = ({ data, onBack }) => {
         },
     ]);
 
-    // Components Grid Rows
     const [componentRows, setComponentRows] = useState([
         {
             id: 1,
@@ -211,69 +214,282 @@ const ActivitiesCarriedOutForm = ({ data, onBack }) => {
             reqQty: "",
             rate: "",
             amount: "",
-        },
-    ]);
-
-    // Description Rows
-    const [descriptionRows, setDescriptionRows] = useState([
-        {
-            id: 1,
-            description: "",
-            reqQty: "",
-            rate: "",
-            amount: "",
             remarks: "",
         },
     ]);
 
-    const loadBranches = useCallback(async () => {
-        if (branchesLoadedRef.current) return;
+    /* ------------------------------------------------------------------ */
+    /* Loaders                                                            */
 
+    const loadBranches = useCallback(async () => {
+        if (!orgId) return;
         try {
             const response = await branchAPI.getBranchByOrgId(orgId);
-            const options = (response || []).map(branch => ({
-                value: branch.id,
-                label: branch.branchName || branch.branchCode || branch.id,
-            }));
-            setPlantOptions(options);
-            branchesLoadedRef.current = true;
-        } catch (error) {
-            console.error("Failed to load branches:", error);
+            setPlantOptions(
+                (response || []).map((b) => ({
+                    value: b.id,
+                    label: b.branchName || b.branchCode || b.id,
+                }))
+            );
+        } catch (err) {
+            console.error("Failed to load branches:", err);
+            addToast("Failed to load Plant list", "error");
             setPlantOptions([]);
         }
-    }, [orgId]);
+    }, [orgId, addToast]);
 
-    // Load dropdowns from list of values
-    const loadDropdown = useCallback(async (groupName, setter, ref) => {
-        if (ref.current) return;
-
+    const loadDepartments = useCallback(async () => {
+        if (!orgId) return;
         try {
-            const response = await listOfValuesAPI.getListValuesGroup(groupName, orgId);
-            const options = (response || []).map(item => ({
-                value: item.id,
-                label: item.valuesDescription,
-            }));
-            setter(options);
-            ref.current = true;
-        } catch (error) {
-            console.error(`Failed to load ${groupName}:`, error);
-            setter([]);
+            const res = await departmentAPI.getAllDepartments(orgId);
+            const rawArray = Array.isArray(res)
+                ? res
+                : res?.paramObjectsMap?.departmentVO ||
+                res?.paramObjectsMap?.departmentList ||
+                res?.paramObjectsMap?.departments ||
+                [];
+            setDepartmentOptions(
+                rawArray.map((d) => ({
+                    value: d.id,
+                    label: d.departmentName || d.departmentCode,
+                }))
+            );
+        } catch (err) {
+            console.error("Failed to load departments:", err);
+            addToast("Failed to load Department list", "error");
+            setDepartmentOptions([]);
         }
-    }, [orgId]);
+    }, [orgId, addToast]);
 
-    // Load all dropdowns on mount
+    const loadEmployees = useCallback(async () => {
+        if (!orgId) return;
+        try {
+            const list = await employeeAPI.getEmployeeByOrgId(orgId);
+            const rawArray = Array.isArray(list)
+                ? list
+                : list?.paramObjectsMap?.employeeMasterVO || [];
+            setCheckedByOptions(
+                rawArray.map((e) => ({
+                    value: e.id,
+                    label: e.employeeName || e.name || e.employeeCode,
+                }))
+            );
+        } catch (err) {
+            console.error("Failed to load employees:", err);
+            addToast("Failed to load Employee list", "error");
+            setCheckedByOptions([]);
+        }
+    }, [orgId, addToast]);
+
+    const loadToolCategories = useCallback(async () => {
+        if (!orgId) return;
+        try {
+            const res = await toolCategoryAPI.getToolCategories(orgId);
+            const list =
+                res?.paramObjectsMap?.toolCategoryResponseVO ||
+                res?.data?.paramObjectsMap?.toolCategoryResponseVO ||
+                [];
+            setMachineToolOptions(
+                list.map((t) => ({
+                    value: t.id,
+                    label: t.apllicableFor || t.category || t.id,
+                }))
+            );
+        } catch (err) {
+            console.error("Failed to load tool categories:", err);
+            addToast("Failed to load Machine/Tool list", "error");
+            setMachineToolOptions([]);
+        }
+    }, [orgId, addToast]);
+
+    const loadMachineToolNos = useCallback(
+        async (toolCategoryId) => {
+            if (!toolCategoryId || !orgId || !branchId) {
+                setMachineToolNoOptions([]);
+                setMachineToolList([]);
+                return;
+            }
+            try {
+                const list =
+                    await activitiesCarriedOutAPI.getMachineToolForBreakdown(
+                        toolCategoryId,
+                        orgId,
+                        branchId
+                    );
+                const safeList = list || [];
+                setMachineToolList(safeList);
+                setMachineToolNoOptions(
+                    safeList.map((m) => ({
+                        value: m.number,
+                        label: `${m.number}${m.name ? " - " + m.name : ""}`,
+                    }))
+                );
+            } catch (err) {
+                console.error("Failed to load machine/tool numbers:", err);
+                addToast("Failed to load Machine/Tool numbers", "error");
+                setMachineToolNoOptions([]);
+                setMachineToolList([]);
+            }
+        },
+        [orgId, branchId, addToast]
+    );
+
+    const loadLocations = useCallback(async () => {
+        if (!orgId || !branchId) return;
+        try {
+            const list = await locationMasterAPI.getLocationMasterByOrgId(
+                orgId,
+                branchId
+            );
+            setFromLocationOptions(
+                (list || []).map((l) => ({
+                    value: l.id,
+                    label: l.locationName || l.locationCode || l.description,
+                }))
+            );
+        } catch (err) {
+            console.error("Failed to load locations:", err);
+            addToast("Failed to load Location list", "error");
+            setFromLocationOptions([]);
+        }
+    }, [orgId, branchId, addToast]);
+
+    const loadDropdown = useCallback(
+        async (groupName, setter) => {
+            if (!orgId) return;
+            try {
+                const response = await listOfValuesAPI.getListValuesGroup(
+                    groupName,
+                    orgId
+                );
+                setter(
+                    (response || []).map((item) => ({
+                        value: item.id,
+                        label: item.valuesDescription,
+                    }))
+                );
+            } catch (err) {
+                console.error(`Failed to load ${groupName}:`, err);
+                setter([]);
+            }
+        },
+        [orgId]
+    );
+
+    const loadItems = useCallback(async () => {
+        if (!orgId || !branchId) return;
+        try {
+            const list = await itemAPI.getItems(orgId, branchId);
+            setItemCodeOptions(
+                (list || []).map((it) => ({
+                    value: it.id,
+                    label: `${it.itemCode || ""} - ${it.itemDescription || ""}`,
+                    itemDescription: it.itemDescription || "",
+                }))
+            );
+        } catch (err) {
+            console.error("Failed to load items:", err);
+            addToast("Failed to load Item list", "error");
+            setItemCodeOptions([]);
+        }
+    }, [orgId, branchId, addToast]);
+
+    const loadDocId = useCallback(async () => {
+        if (data?.id || !orgId) return;
+        setGeneratingDocId(true);
+        try {
+            const financialYear = new Date().getFullYear().toString();
+            const docId =
+                await activitiesCarriedOutAPI.getActivitiesCarriedOutDocId(
+                    orgId,
+                    financialYear
+                );
+            if (docId) {
+                setForm((p) => ({ ...p, docId }));
+            }
+        } catch (err) {
+            console.error("Failed to generate Doc ID:", err);
+            addToast("Failed to generate Doc ID", "error");
+        } finally {
+            setGeneratingDocId(false);
+        }
+    }, [orgId, data?.id, addToast]);
+
+    /* ------------------------------------------------------------------ */
+    /* Mount                                                              */
+
     useEffect(() => {
         loadBranches();
-        loadDropdown("DEPARTMENT", setDepartmentOptions, departmentsLoadedRef);
-        loadDropdown("CHECKED BY", setCheckedByOptions, checkedByLoadedRef);
-        loadDropdown("MACHINE TOOL", setMachineToolOptions, machineToolLoadedRef);
-        loadDropdown("MACHINE TOOL NO", setMachineToolNoOptions, machineToolNoLoadedRef);
-        loadDropdown("PM CHECK LIST", setPmCheckListOptions, pmCheckListLoadedRef);
-        loadDropdown("LOCATION", setLocationOptions, locationLoadedRef);
-        loadDropdown("MAINTENANCE TYPE", setMaintenanceTypeOptions, maintenanceTypeLoadedRef);
-        loadDropdown("FROM LOCATION", setFromLocationOptions, fromLocationLoadedRef);
-        loadDropdown("ITEM CODE", setItemCodeOptions, itemCodeLoadedRef);
+        loadDepartments();
+        loadEmployees();
+        loadToolCategories();
+        loadLocations();
+        loadItems();
+        loadDropdown("LOCATION", setLocationOptions);
+        loadDropdown("MAINTENANCE TYPE", setMaintenanceTypeOptions);
+        loadDocId();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    /* Reload machine tool numbers when Machine/Tool changes */
+    useEffect(() => {
+        if (form.machineTool) {
+            loadMachineToolNos(form.machineTool);
+        } else {
+            setMachineToolNoOptions([]);
+            setMachineToolList([]);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [form.machineTool]);
+
+    /* Load PM Check List options whenever Machine No changes */
+    useEffect(() => {
+        const loadPMCheckLists = async () => {
+            if (!form.machineToolNo || !orgId || !branchId) {
+                setPMCheckListOptions([]);
+                return;
+            }
+
+            try {
+                const list = await activitiesCarriedOutAPI.getPMCheckListDropdown(
+                    branchId,
+                    form.machineToolNo,
+                    orgId
+                );
+
+                const mapped = (list || []).map((p) => ({
+                    value: p.id,
+                    label: p.name || String(p.id),
+                }));
+
+                setPMCheckListOptions(mapped);
+
+                // Auto-select first option if the current value is not in the list
+                setForm((prev) => {
+                    const exists = mapped.some(
+                        (o) => String(o.value) === String(prev.pmCheckListNo)
+                    );
+                    if (!exists) {
+                        return {
+                            ...prev,
+                            pmCheckListNo: mapped[0]?.value ?? "",
+                        };
+                    }
+                    return prev;
+                });
+            } catch (err) {
+                console.error("Failed to load PM Check List list:", err);
+                addToast("Failed to load PM Check List", "error");
+                setPMCheckListOptions([]);
+            }
+        };
+
+        loadPMCheckLists();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [form.machineToolNo, orgId, branchId]);
+
+    /* ------------------------------------------------------------------ */
+    /* Handlers                                                           */
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
@@ -282,62 +498,84 @@ const ActivitiesCarriedOutForm = ({ data, onBack }) => {
             setFieldErrors((prev) => ({ ...prev, [name]: "" }));
         }
 
+        // Machine / Tool / Inst. No. → clear PM Check List No, auto-fill Location
+        if (name === "machineToolNo") {
+            const found = machineToolList.find(
+                (m) => String(m.number) === String(value)
+            );
+
+            setForm((prev) => ({
+                ...prev,
+                machineToolNo: value,
+                pmCheckListNo: "", // 👈 reset — effect will reload
+                location: found?.location || prev.location || "",
+            }));
+            return;
+        }
+
         setForm((prev) => ({
             ...prev,
             [name]: type === "checkbox" ? checked : value,
         }));
     };
 
-    // Activity Row Change
+    /* Activity row change */
     const handleActivityRowChange = (index, field, value) => {
-        const updatedRows = [...activityRows];
-        updatedRows[index][field] = value;
-        setActivityRows(updatedRows);
+        setActivityRows((prev) => {
+            const updated = [...prev];
+            const row = { ...updated[index], [field]: value };
+
+            if (field === "itemCode") {
+                const found = itemCodeOptions.find(
+                    (o) => String(o.value) === String(value)
+                );
+                row.itemDescription = found?.itemDescription || "";
+            }
+
+            if (field === "fromTime" || field === "toTime") {
+                row.noOfHrs = computeNoOfHrs(row.fromTime, row.toTime);
+            }
+
+            updated[index] = row;
+            return updated;
+        });
     };
 
-    // Component Row Change
+    /* Component row change */
     const handleComponentRowChange = (index, field, value) => {
-        const updatedRows = [...componentRows];
-        updatedRows[index][field] = value;
+        setComponentRows((prev) => {
+            const updated = [...prev];
+            const row = { ...updated[index], [field]: value };
 
-        // Auto-calculate amount = rate * reqQty
-        if (field === "rate" || field === "reqQty") {
-            const rate = parseFloat(updatedRows[index].rate) || 0;
-            const reqQty = parseFloat(updatedRows[index].reqQty) || 0;
-            updatedRows[index].amount = (rate * reqQty).toFixed(2);
-        }
+            if (field === "itemCode") {
+                const found = itemCodeOptions.find(
+                    (o) => String(o.value) === String(value)
+                );
+                row.itemDescription = found?.itemDescription || "";
+            }
 
-        setComponentRows(updatedRows);
-    };
+            if (field === "rate" || field === "reqQty") {
+                const rate = parseFloat(row.rate) || 0;
+                const reqQty = parseFloat(row.reqQty) || 0;
+                row.amount = (rate * reqQty).toFixed(2);
+            }
 
-    // Description Row Change
-    const handleDescriptionRowChange = (index, field, value) => {
-        const updatedRows = [...descriptionRows];
-        updatedRows[index][field] = value;
-
-        // Auto-calculate amount = rate * reqQty
-        if (field === "rate" || field === "reqQty") {
-            const rate = parseFloat(updatedRows[index].rate) || 0;
-            const reqQty = parseFloat(updatedRows[index].reqQty) || 0;
-            updatedRows[index].amount = (rate * reqQty).toFixed(2);
-        }
-
-        setDescriptionRows(updatedRows);
+            updated[index] = row;
+            return updated;
+        });
     };
 
     const handleAddRow = (type) => {
         if (type === "activity") {
-            setActivityRows([
-                ...activityRows,
+            setActivityRows((prev) => [
+                ...prev,
                 {
                     id: Date.now(),
                     scheduledActivity: "",
                     itemCode: "",
                     itemDescription: "",
-                    fromTimeHH: "",
-                    fromTimeMM: "",
-                    toTimeHH: "",
-                    toTimeMM: "",
+                    fromTime: "",
+                    toTime: "",
                     checkingPoints: "",
                     parameter: "",
                     activitiesCarriedOut: "",
@@ -350,23 +588,12 @@ const ActivitiesCarriedOutForm = ({ data, onBack }) => {
                 },
             ]);
         } else if (type === "component") {
-            setComponentRows([
-                ...componentRows,
+            setComponentRows((prev) => [
+                ...prev,
                 {
                     id: Date.now(),
                     itemCode: "",
                     itemDescription: "",
-                    reqQty: "",
-                    rate: "",
-                    amount: "",
-                },
-            ]);
-        } else if (type === "description") {
-            setDescriptionRows([
-                ...descriptionRows,
-                {
-                    id: Date.now(),
-                    description: "",
                     reqQty: "",
                     rate: "",
                     amount: "",
@@ -381,8 +608,6 @@ const ActivitiesCarriedOutForm = ({ data, onBack }) => {
             setActivityRows(activityRows.filter((_, i) => i !== index));
         } else if (type === "component" && componentRows.length > 1) {
             setComponentRows(componentRows.filter((_, i) => i !== index));
-        } else if (type === "description" && descriptionRows.length > 1) {
-            setDescriptionRows(descriptionRows.filter((_, i) => i !== index));
         }
     };
 
@@ -390,135 +615,179 @@ const ActivitiesCarriedOutForm = ({ data, onBack }) => {
         const errors = {};
         if (!form.plantId) errors.plantId = "Plant ID is required";
         if (!form.department) errors.department = "Department is required";
-        if (!form.machineTool) errors.machineTool = "Machine/Tool/Inst. is required";
+        if (!form.machineTool)
+            errors.machineTool = "Machine/Tool/Inst. is required";
         if (!form.date) errors.date = "Date is required";
-        if (!form.maintenanceType) errors.maintenanceType = "Maintenance Type is required";
+        if (!form.maintenanceType)
+            errors.maintenanceType = "Maintenance Type is required";
         setFieldErrors(errors);
         return Object.keys(errors).length === 0;
     };
 
+    /* ---------------------------------------------------------------- */
+    /* Save                                                             */
     const handleSave = async () => {
-        if (!validate()) return;
+        if (!validate()) {
+            addToast("Please fix validation errors before saving", "error");
+            return;
+        }
         setIsSubmitting(true);
 
         try {
-            // Calculate total amount from component rows
-            const totalAmount = componentRows.reduce((sum, row) => {
-                return sum + (parseFloat(row.amount) || 0);
-            }, 0);
-
-            const payload = {
-                ...(data?.id ? { id: data.id } : {}),
-                plantId: form.plantId,
-                department: form.department,
-                checkedBy: form.checkedBy,
-                docId: form.docId,
-                date: form.date,
-                machineTool: form.machineTool,
-                machineToolNo: form.machineToolNo,
-                pmCheckListNo: form.pmCheckListNo,
-                location: form.location,
-                maintenanceType: form.maintenanceType,
-                fromLocation: form.fromLocation,
-                totalAmount: totalAmount,
-                activities: activityRows.map(row => ({
-                    scheduledActivity: row.scheduledActivity,
-                    itemCode: row.itemCode,
-                    itemDescription: row.itemDescription,
-                    fromTimeHH: row.fromTimeHH,
-                    fromTimeMM: row.fromTimeMM,
-                    toTimeHH: row.toTimeHH,
-                    toTimeMM: row.toTimeMM,
-                    checkingPoints: row.checkingPoints,
-                    parameter: row.parameter,
-                    activitiesCarriedOut: row.activitiesCarriedOut,
-                    status: row.status,
-                    date: row.date,
-                    nextActivity: row.nextActivity,
-                    noOfHrs: row.noOfHrs,
-                    frequency: row.frequency,
-                    nextScheduleD: row.nextScheduleD,
+            const vo = {
+                active: data?.active === "Active" || data?.active === true || true,
+                activitiesCarriedOutComponentDetailsDTO: componentRows
+                    .filter((r) => r.itemCode)
+                    .map((r) => ({
+                        amount: parseFloat(r.amount) || 0,
+                        item: parseInt(r.itemCode) || 0,
+                        rate: parseFloat(r.rate) || 0,
+                        remarks: r.remarks || "",
+                        reqQty: parseFloat(r.reqQty) || 0,
+                    })),
+                activitiesCarriedOutDetailsDTO: activityRows.map((row) => ({
+                    activitiesCarriedOut: row.activitiesCarriedOut || "",
+                    checkingPoints: row.checkingPoints || "",
+                    date: row.date || "",
+                    frequency: row.frequency || "",
+                    fromTime: toTimeString(row.fromTime), // 👈 "HH:MM:SS"
+                    item: parseInt(row.itemCode) || 0,
+                    nextActivity: row.nextActivity || "",
+                    nextScheduleDate: row.nextScheduleD || "",
+                    noOfHrs: parseFloat(row.noOfHrs) || 0,
+                    parameter: row.parameter || "",
+                    scheduledActivity: row.scheduledActivity || "",
+                    status: row.status || "",
+                    toTime: toTimeString(row.toTime), // 👈 "HH:MM:SS"
                 })),
-                components: componentRows.map(row => ({
-                    itemCode: row.itemCode,
-                    itemDescription: row.itemDescription,
-                    reqQty: row.reqQty,
-                    rate: row.rate,
-                    amount: row.amount,
-                })),
-                descriptions: descriptionRows.map(row => ({
-                    description: row.description,
-                    reqQty: row.reqQty,
-                    rate: row.rate,
-                    amount: row.amount,
-                    remarks: row.remarks,
-                })),
-                createdBy: localStorage.getItem("usersId") || "",
+                branch: parseInt(form.plantId) || Number(branchId) || 0,
+                cancelRemarks: "",
+                checkedBy: parseInt(form.checkedBy) || 0,
+                createdBy: localStorage.getItem("userName") || "SYSTEM",
+                department: parseInt(form.department) || 0,
+                financialYear: new Date().getFullYear().toString(),
+                fromLocation: parseInt(form.fromLocation) || 0,
+                location: form.location || "",
+                machineToolInstNo: form.machineToolNo || "",
+                maintenanceType: parseInt(form.maintenanceType) || 0,
                 orgId: Number(orgId),
-                branchId: Number(branchId),
+                pmCheckListNo: parseInt(form.pmCheckListNo) || 0,
+                selectMachineToolInst: parseInt(form.machineTool) || 0,
             };
 
-            console.log("Submit Payload:", payload);
+            if (data?.id) {
+                vo.id = parseInt(data.id);
+            }
 
-            addToast(
-                data?.id
-                    ? "Activities Carried Out updated successfully!"
-                    : "Activities Carried Out created successfully!",
-                "success"
-            );
-            onBack();
+            console.log("📤 Saving Activities Carried Out VO:", vo);
+
+            const response =
+                await activitiesCarriedOutAPI.updateCreateActivitiesCarriedOut(vo);
+            console.log("📥 Response:", response);
+
+            const status =
+                response?.status === true ||
+                response?.success === true ||
+                response?.statusFlag === "Ok" ||
+                response?.status === "SUCCESS" ||
+                response?.status === 200 ||
+                response?.statusCode === 200;
+
+            if (status) {
+                addToast(
+                    data?.id
+                        ? "Activities Carried Out updated successfully!"
+                        : "Activities Carried Out created successfully!",
+                    "success"
+                );
+                if (onSave) onSave(vo);
+                else onBack();
+            } else {
+                const errorMessage =
+                    response?.paramObjectsMap?.message ||
+                    response?.paramObjectsMap?.errorMessage ||
+                    response?.message ||
+                    response?.errorMessage ||
+                    response?.error ||
+                    "Something went wrong";
+                addToast(errorMessage, "error");
+            }
         } catch (err) {
             console.error("Save Activities Carried Out Error:", err);
-            addToast("Something went wrong.", "error");
+            const errorMessage =
+                err?.response?.data?.message ||
+                err?.message ||
+                "Failed to save Activities Carried Out.";
+            addToast(errorMessage, "error");
         } finally {
             setIsSubmitting(false);
         }
     };
 
-    // Activities Details Columns
+    /* ------------------------------------------------------------------ */
+    /* Table config                                                       */
+
     const activityColumns = [
-        { key: "scheduledActivity", label: "Scheduled Activity *", type: "select", options: [] },
-        { key: "itemCode", label: "Item Code", type: "select", options: itemCodeOptions },
+        { key: "scheduledActivity", label: "Scheduled Activity" },
+        {
+            key: "itemCode",
+            label: "Item Code",
+            type: "select",
+            options: itemCodeOptions,
+        },
         { key: "itemDescription", label: "Item Description", type: "text" },
-        { key: "fromTimeHH", label: "From Time (HH) *", type: "text", placeholder: "HH" },
-        { key: "fromTimeMM", label: "From Time (MM)", type: "text", placeholder: "MM" },
-        { key: "toTimeHH", label: "To Time (HH) *", type: "text", placeholder: "HH" },
-        { key: "toTimeMM", label: "To Time (MM)", type: "text", placeholder: "MM" },
+        { key: "fromTime", label: "From Time *", type: "time" },
+        { key: "toTime", label: "To Time *", type: "time" },
         { key: "checkingPoints", label: "Checking Points", type: "text" },
         { key: "parameter", label: "Parameter", type: "text" },
-        { key: "activitiesCarriedOut", label: "Activities Carried Out", type: "text" },
         {
-            key: "status", label: "Status *", type: "select", options: [
+            key: "activitiesCarriedOut",
+            label: "Activities Carried Out",
+            type: "text",
+        },
+        {
+            key: "status",
+            label: "Status *",
+            type: "select",
+            options: [
                 { value: "completed", label: "Completed" },
                 { value: "pending", label: "Pending" },
                 { value: "inProgress", label: "In Progress" },
-            ]
+            ],
         },
         { key: "date", label: "Date", type: "date" },
-        {
-            key: "nextActivity", label: "Next Activity *", type: "select", options: [
-                { value: "yes", label: "Yes" },
-                { value: "no", label: "No" },
-            ]
-        },
-        { key: "noOfHrs", label: "No. Of Hrs", type: "text" },
+        { key: "nextActivity", label: "Next Activity" },
+        { key: "noOfHrs", label: "No. Of Hrs", type: "text", disabled: true },
         { key: "frequency", label: "Frequency", type: "text" },
         { key: "nextScheduleD", label: "Next Schedule Date", type: "date" },
     ];
 
-    // Component Grid Columns
     const componentColumns = [
-        { key: "itemCode", label: "Item Code", type: "select", options: itemCodeOptions },
+        {
+            key: "itemCode",
+            label: "Item Code",
+            type: "select",
+            options: itemCodeOptions,
+        },
         { key: "itemDescription", label: "Item Description", type: "text" },
         { key: "reqQty", label: "Req. Qty", type: "number", step: "0.01" },
         { key: "rate", label: "Rate", type: "number", step: "0.01" },
-        { key: "amount", label: "Amount", type: "number", step: "0.01", disabled: true },
+        {
+            key: "amount",
+            label: "Amount",
+            type: "number",
+            step: "0.01",
+            disabled: true,
+        },
         { key: "remarks", label: "Remarks", type: "text" },
     ];
 
-    const renderTableRows = (rows, columns, handleChange, handleRemove, type) => {
-        return rows.map((row, index) => (
-            <tr key={row.id} className="border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+    const renderTableRows = (rows, columns, onCellChange, onRemove, type) =>
+        rows.map((row, index) => (
+            <tr
+                key={row.id}
+                className="border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+            >
                 <td className="p-1 text-center font-medium dark:text-gray-300">
                     {index + 1}
                 </td>
@@ -530,7 +799,9 @@ const ActivitiesCarriedOutForm = ({ data, onBack }) => {
                             <td key={col.key} className="p-1">
                                 <select
                                     value={value}
-                                    onChange={(e) => handleChange(index, col.key, e.target.value)}
+                                    onChange={(e) =>
+                                        onCellChange(index, col.key, e.target.value)
+                                    }
                                     className={`${controlClasses} h-8 text-xs w-full min-w-[100px]`}
                                 >
                                     <option value="">Select</option>
@@ -549,7 +820,9 @@ const ActivitiesCarriedOutForm = ({ data, onBack }) => {
                             <input
                                 type={col.type === "date" ? "date" : col.type || "text"}
                                 value={value}
-                                onChange={(e) => handleChange(index, col.key, e.target.value)}
+                                onChange={(e) =>
+                                    onCellChange(index, col.key, e.target.value)
+                                }
                                 className={`${controlClasses} h-8 text-xs w-full min-w-[80px]`}
                                 placeholder={col.placeholder || col.label}
                                 step={col.step}
@@ -561,11 +834,11 @@ const ActivitiesCarriedOutForm = ({ data, onBack }) => {
                 <td className="p-1 text-center">
                     <button
                         type="button"
-                        onClick={() => handleRemove(type, index)}
+                        onClick={() => onRemove(type, index)}
                         disabled={rows.length <= 1}
                         className={`h-5 w-5 rounded text-white flex items-center justify-center transition-colors ${rows.length <= 1
-                            ? "bg-gray-400 dark:bg-gray-600 cursor-not-allowed"
-                            : "bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800"
+                                ? "bg-gray-400 dark:bg-gray-600 cursor-not-allowed"
+                                : "bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800"
                             }`}
                     >
                         <Trash2 size={10} />
@@ -573,7 +846,9 @@ const ActivitiesCarriedOutForm = ({ data, onBack }) => {
                 </td>
             </tr>
         ));
-    };
+
+    /* ------------------------------------------------------------------ */
+    /* Render                                                             */
 
     return (
         <div className="p-2 max-w-7xl">
@@ -586,14 +861,15 @@ const ActivitiesCarriedOutForm = ({ data, onBack }) => {
                     <ArrowLeft className="h-4 w-4" />
                 </button>
                 <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-                    {data?.id ? "Edit Activities Carried Out" : "Add Activities Carried Out"}
+                    {data?.id
+                        ? "Edit Activities Carried Out"
+                        : "Add Activities Carried Out"}
                 </h2>
             </div>
 
             {/* Card */}
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-3">
-
-                {/* Form Fields */}
+                {/* Header fields */}
                 <div className={fieldGrid}>
                     <Field
                         type="select"
@@ -632,6 +908,15 @@ const ActivitiesCarriedOutForm = ({ data, onBack }) => {
                         disabled={true}
                     />
                     <Field
+                        label="Date"
+                        name="date"
+                        type="date"
+                        value={form.date}
+                        onChange={handleChange}
+                        error={fieldErrors.date}
+                        required
+                    />
+                    <Field
                         type="select"
                         label="Select Machine/Tool/Inst."
                         name="machineTool"
@@ -640,15 +925,6 @@ const ActivitiesCarriedOutForm = ({ data, onBack }) => {
                         error={fieldErrors.machineTool}
                         required
                         options={machineToolOptions}
-                    />
-                    <Field
-                        label="Date"
-                        name="date"
-                        type="date"
-                        value={form.date}
-                        onChange={handleChange}
-                        error={fieldErrors.date}
-                        required
                     />
                     <Field
                         type="select"
@@ -665,6 +941,7 @@ const ActivitiesCarriedOutForm = ({ data, onBack }) => {
                         value={form.pmCheckListNo}
                         onChange={handleChange}
                         options={pmCheckListOptions}
+                        disabled={!form.machineToolNo}
                     />
                     <Field
                         type="select"
@@ -700,8 +977,8 @@ const ActivitiesCarriedOutForm = ({ data, onBack }) => {
                         type="button"
                         onClick={() => setActiveTab("activitiesDetails")}
                         className={`px-4 py-1.5 text-xs font-semibold rounded-t transition-colors ${activeTab === "activitiesDetails"
-                            ? "bg-blue-600 text-white"
-                            : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                ? "bg-blue-600 text-white"
+                                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                             }`}
                     >
                         Activities Details
@@ -710,15 +987,15 @@ const ActivitiesCarriedOutForm = ({ data, onBack }) => {
                         type="button"
                         onClick={() => setActiveTab("componentsGrid")}
                         className={`px-4 py-1.5 text-xs font-semibold rounded-t transition-colors ${activeTab === "componentsGrid"
-                            ? "bg-blue-600 text-white"
-                            : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                ? "bg-blue-600 text-white"
+                                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                             }`}
                     >
                         Components Grid
                     </button>
                 </div>
 
-                {/* Activities Details Tab */}
+                {/* Activities Details */}
                 {activeTab === "activitiesDetails" && (
                     <div className="mt-2">
                         <div className="flex items-center justify-between mb-2">
@@ -738,7 +1015,9 @@ const ActivitiesCarriedOutForm = ({ data, onBack }) => {
                             <table className="w-full text-xs min-w-[1200px]">
                                 <thead className="bg-gray-100 dark:bg-gray-700">
                                     <tr>
-                                        <th className="p-1 text-center w-10 dark:text-gray-200">S.no</th>
+                                        <th className="p-1 text-center w-10 dark:text-gray-200">
+                                            S.no
+                                        </th>
                                         {activityColumns.map((col) => (
                                             <th
                                                 key={col.key}
@@ -747,7 +1026,9 @@ const ActivitiesCarriedOutForm = ({ data, onBack }) => {
                                                 {col.label}
                                             </th>
                                         ))}
-                                        <th className="p-1 text-center w-10 dark:text-gray-200">Action</th>
+                                        <th className="p-1 text-center w-10 dark:text-gray-200">
+                                            Action
+                                        </th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -764,10 +1045,9 @@ const ActivitiesCarriedOutForm = ({ data, onBack }) => {
                     </div>
                 )}
 
-                {/* Components Grid Tab */}
+                {/* Components Grid */}
                 {activeTab === "componentsGrid" && (
                     <div className="mt-2">
-                        {/* Component Grid Section */}
                         <div className="mb-6">
                             <div className="flex items-center justify-between mb-2">
                                 <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
@@ -786,7 +1066,9 @@ const ActivitiesCarriedOutForm = ({ data, onBack }) => {
                                 <table className="w-full text-xs min-w-[600px]">
                                     <thead className="bg-gray-100 dark:bg-gray-700">
                                         <tr>
-                                            <th className="p-1 text-center w-10 dark:text-gray-200">S.no</th>
+                                            <th className="p-1 text-center w-10 dark:text-gray-200">
+                                                S.no
+                                            </th>
                                             {componentColumns.map((col) => (
                                                 <th
                                                     key={col.key}
@@ -795,7 +1077,9 @@ const ActivitiesCarriedOutForm = ({ data, onBack }) => {
                                                     {col.label}
                                                 </th>
                                             ))}
-                                            <th className="p-1 text-center w-10 dark:text-gray-200">Action</th>
+                                            <th className="p-1 text-center w-10 dark:text-gray-200">
+                                                Action
+                                            </th>
                                         </tr>
                                     </thead>
                                     <tbody>
