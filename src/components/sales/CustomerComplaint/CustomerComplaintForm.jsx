@@ -748,24 +748,20 @@ const CustomerComplaintForm = ({ data, onBack }) => {
               required
             />
             <Field
-              type="textarea"
               label="Details of Complaint"
               name="detailsOfComplaint"
               value={form.detailsOfComplaint}
               onChange={handleChange}
               error={fieldErrors.detailsOfComplaint}
               required
-              className="sm:col-span-2"
             />
             <Field
-              type="textarea"
               label="Remarks"
               name="remarks"
               value={form.remarks}
               onChange={handleChange}
-              className="sm:col-span-2"
             />
-            <div className="sm:col-span-2">
+            <div className="col-span-full max-w-[350px]">
               <ImageUploadField
                 images={form.images}
                 onChange={handleImagesChange}
