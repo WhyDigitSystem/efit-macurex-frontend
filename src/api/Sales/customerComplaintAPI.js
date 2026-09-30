@@ -8,11 +8,6 @@ import apiClient from "../apiClient";
      - customerComplaintDTO      -> JSON stringified complaint object (body)
    The backend persists the complaint + images in a single transaction and
    keeps the complete complaint history for audit purposes. */
-
-// Must match the backend's @RequestPart("...") name exactly.
-// If you get a 400 / "part not present" error, try "customerComplaint".
-const COMPLAINT_PART_NAME = "customerComplaintDTO";
-
 export const customerComplaintAPI = {
   // Get Customer Complaints by Organization ID
   getComplaintByOrgId: async (orgId, branch) => {
@@ -43,16 +38,13 @@ export const customerComplaintAPI = {
     }
   },
 
-  // Get Customer details (used by the Customer dropdown)
+  // Get Customer details (used by the Customer ID dropdown)
   getCustomerList: async (orgId, branch) => {
     try {
       const res = await apiClient.get(
         `/api/dev/getCustomerDetails?branch=${branch}&orgId=${orgId}`,
       );
       const details = res?.paramObjectsMap?.customerDetails;
-
-      // customerDetails is already an array: return it as-is
-      if (Array.isArray(details)) return details;
       return details ? [details] : [];
     } catch (error) {
       console.error("Error fetching customers:", error);
@@ -96,9 +88,9 @@ export const customerComplaintAPI = {
       const dto = { ...(payload.dto || {}) };
       delete dto.images;
 
-      // JSON part carries its own application/json content type
+      // Backend expects the part name "customerComplaint"
       formData.append(
-        COMPLAINT_PART_NAME,
+        "customerComplaint",
         new Blob([JSON.stringify(dto)], { type: "application/json" }),
       );
 
@@ -108,11 +100,12 @@ export const customerComplaintAPI = {
         }
       });
 
-      // No manual Content-Type here: apiClient's request interceptor removes
-      // it for FormData so the browser sets "multipart/form-data; boundary=...".
+      // apiClient's default "Content-Type: application/json" would override
+      // the multipart boundary, so set multipart explicitly here.
       const response = await apiClient.put(
         "/api/dev/updateCreateCustomerComplaint",
         formData,
+        { headers: { "Content-Type": "multipart/form-data" } },
       );
 
       return response;
@@ -121,7 +114,6 @@ export const customerComplaintAPI = {
       throw error;
     }
   },
-
   // GET /api/dev/getCustomerComplaintDocId
   getCustomerComplaintDocId: async ({ financialYear, orgId, screenCode }) => {
     try {
