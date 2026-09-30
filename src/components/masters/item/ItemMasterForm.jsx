@@ -123,6 +123,7 @@ const SELECT_OPTIONS = {
   manufacturedBoughtOut: [
     { value: "Manufactured", label: "Manufactured" },
     { value: "Bought Out", label: "Bought Out" },
+    { value: "Sub Contracted", label: "Sub Contracted" },
   ],
 };
 

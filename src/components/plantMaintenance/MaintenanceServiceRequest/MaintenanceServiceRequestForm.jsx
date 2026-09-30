@@ -1,8 +1,13 @@
 import { ArrowLeft, Save, X } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import maintenanceServiceRequestAPI from "../../../api/plantMaintenance/maintenanceServiceRequestAPI";
+import { departmentAPI } from "../../../api/departmentAPI";
+import employeeAPI from "../../../api/employeeAPI";
+import { useToast } from "../../Toast/ToastContext";
+import listOfValuesAPI from "../../../api/listOfValuesAPI";
 
 /* ---------------------------------------------------------------------------- */
-/* Shared design tokens - identical to other Maintenance forms                 */
+/* Shared design tokens                                                         */
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -21,7 +26,7 @@ const fieldGrid =
   "grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-x-3 gap-y-2 items-start";
 
 /* ---------------------------------------------------------------------------- */
-/* Shared building blocks                                                      */
+/* Shared building blocks                                                       */
 
 const Field = ({
   label,
@@ -51,11 +56,17 @@ const Field = ({
           className={controlClasses}
         >
           <option value="">-- Select --</option>
-          {(options || []).map((opt) => (
-            <option key={opt} value={opt}>
-              {opt}
-            </option>
-          ))}
+          {(options || []).map((opt) => {
+            const optValue =
+              typeof opt === "object" ? opt.value : opt;
+            const optLabel =
+              typeof opt === "object" ? opt.label : opt;
+            return (
+              <option key={optValue} value={optValue}>
+                {optLabel}
+              </option>
+            );
+          })}
         </select>
 
         {error && (
@@ -125,8 +136,6 @@ const Field = ({
   );
 };
 
-/* Config-driven field grid - array of {name,label,type,options,...} descriptors
-   rendered against a values/onChange pair. */
 const FieldsGrid = ({
   fields,
   values,
@@ -185,41 +194,31 @@ const blankFromFields = (fields) =>
   fields.reduce((acc, f) => ({ ...acc, [f.name]: f.default ?? "" }), {});
 
 /* ---------------------------------------------------------------------------- */
-/* Options (swap for real API-driven lists)                                    */
+/* Static options                                                               */
 
-const BELONGS_TO = ["APPLIANCES", "BOSCH"];
-const DEPARTMENTS = [
-  "PURCHASE",
-  "PRODUCTION",
-  "QUALITY",
-  "STORES",
-  "MAINTENANCE",
+const YES_NO = [
+  { value: "NO", label: "NO" },
+  { value: "YES", label: "YES" },
 ];
-const YES_NO = ["NO", "YES"];
-const PRIORITIES = ["Emergency", "Can Delay", "Not Now"];
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const nowTime = () => new Date().toTimeString().slice(0, 8);
-
-/* ---------------------------------------------------------------------------- */
-/* Header fields - this screen has no child tabs/tables, just the flat form.   */
-/* "Approved By" showed a NO default in the source layout like "Completed" -   */
-/* treated here as an approval-status select rather than a name field; swap   */
-/* to a text input if it's meant to capture the approver's name instead.      */
 
 const HEADER_FIELDS = [
   {
     name: "belongTo",
     label: "Belong To:",
     type: "select",
-    options: BELONGS_TO,
+    options: [],
+    required: true,
   },
-  { name: "mpNo", label: "MP No:" },
+  { name: "mpNo", label: "MP No:", auto: true, disabled: true },
   {
     name: "department",
     label: "Department:",
     type: "select",
-    options: DEPARTMENTS,
+    options: [],
+    required: true,
   },
   {
     name: "reportedDate",
@@ -243,10 +242,25 @@ const HEADER_FIELDS = [
     options: YES_NO,
     default: "NO",
   },
-  { name: "priority", label: "Priority:", type: "select", options: PRIORITIES },
+  {
+    name: "priority",
+    label: "Priority:",
+    type: "select",
+    options: [],
+  },
   { name: "closingDate", label: "Closing Date:", type: "date" },
-  { name: "requestedBy", label: "Requested By:" },
-  { name: "preparedBy", label: "Prepared By:" },
+  {
+    name: "requestedBy",
+    label: "Requested By:",
+    type: "select",
+    options: [],
+  },
+  {
+    name: "preparedBy",
+    label: "Prepared By:",
+    type: "select",
+    options: [],
+  },
   {
     name: "approvedBy",
     label: "Approved By:",
@@ -272,70 +286,358 @@ const HEADER_FIELDS = [
 
 const MaintenanceServiceRequestForm = ({ onBack, onSave, editData }) => {
   const ORG_ID = parseInt(localStorage.getItem("orgId"));
+
+  const { addToast } = useToast();
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
+  const [loading, setLoading] = useState(false);
 
   const [header, setHeader] = useState({
     ...blankFromFields(HEADER_FIELDS),
     ...editData?.header,
   });
 
+  /* -------- option lists -------- */
+  const [belongToOptions, setBelongToOptions] = useState([]);
+  const [departmentOptions, setDepartmentOptions] = useState([]);
+  const [priorityOptions, setPriorityOptions] = useState([]);
+  const [employeeOptions, setEmployeeOptions] = useState([]);
+  const [loadingOptions, setLoadingOptions] = useState(false);
+
+  /* ---------------------------------------------------------------- */
+  /* Belong To                                                        */
+  const loadBelongTo = useCallback(async () => {
+    if (!ORG_ID) return [];
+    try {
+      const list = await listOfValuesAPI.getListValuesGroup(
+        "SDS BELONGS TO",
+        ORG_ID
+      );
+      const mapped = (list || []).map((item) => ({
+        value: item.id || item.value,
+        label: item.valuesDescription || item.label || item.name,
+      }));
+      setBelongToOptions(mapped);
+      return mapped;
+    } catch (err) {
+      console.error("Failed to load Belong To:", err);
+      addToast("Failed to load Belong To list", "error");
+      setBelongToOptions([]);
+      return [];
+    }
+  }, [ORG_ID, addToast]);
+
+  /* ---------------------------------------------------------------- */
+  /* Priority                                                         */
+  const loadPriorities = useCallback(async () => {
+    if (!ORG_ID) return [];
+    try {
+      const list = await listOfValuesAPI.getListValuesGroup(
+        "PRIORITY",
+        ORG_ID
+      );
+      const mapped = (list || []).map((item) => ({
+        value: item.id || item.value,
+        label: item.valuesDescription || item.label || item.name,
+      }));
+      setPriorityOptions(mapped);
+      return mapped;
+    } catch (err) {
+      console.error("Failed to load Priorities:", err);
+      addToast("Failed to load Priority list", "error");
+      setPriorityOptions([]);
+      return [];
+    }
+  }, [ORG_ID, addToast]);
+
+  /* ---------------------------------------------------------------- */
+  /* Department                                                       */
+  const loadDepartments = useCallback(async () => {
+    if (!ORG_ID) return [];
+    try {
+      const res = await departmentAPI.getAllDepartments(ORG_ID);
+
+      const rawArray = Array.isArray(res)
+        ? res
+        : res?.paramObjectsMap?.departmentVO ||
+        res?.paramObjectsMap?.departmentList ||
+        res?.paramObjectsMap?.departments ||
+        [];
+
+      const mapped = rawArray.map((d) => ({
+        value: d.id,
+        label: d.departmentName || d.departmentCode,
+      }));
+      setDepartmentOptions(mapped);
+      return mapped;
+    } catch (err) {
+      console.error("Failed to load departments:", err);
+      addToast("Failed to load Department list", "error");
+      setDepartmentOptions([]);
+      return [];
+    }
+  }, [ORG_ID, addToast]);
+
+  /* ---------------------------------------------------------------- */
+  /* Employees                                                        */
+  const loadEmployees = useCallback(async () => {
+    if (!ORG_ID) return [];
+    try {
+      const list = await employeeAPI.getEmployeeByOrgId(ORG_ID);
+
+      const rawArray = Array.isArray(list)
+        ? list
+        : list?.paramObjectsMap?.employeeMasterVO || [];
+
+      const mapped = rawArray.map((e) => ({
+        value: e.id,
+        label: e.employeeName || e.name || e.employeeCode,
+      }));
+      setEmployeeOptions(mapped);
+      return mapped;
+    } catch (err) {
+      console.error("Failed to load employees:", err);
+      addToast("Failed to load Employee list", "error");
+      setEmployeeOptions([]);
+      return [];
+    }
+  }, [ORG_ID, addToast]);
+
+  /* ---------------------------------------------------------------- */
+  /* Doc No (MP No) generation                                        */
+  const loadDocId = useCallback(async () => {
+    if (editData?.id) return;
+    if (!ORG_ID) return;
+    try {
+      const financialYear = new Date().getFullYear().toString();
+      const docId =
+        await maintenanceServiceRequestAPI.getMaintenanceServiceRequestDocId(
+          ORG_ID,
+          financialYear
+        );
+      if (docId) {
+        setHeader((p) => ({ ...p, mpNo: docId }));
+      }
+    } catch (err) {
+      console.error("Failed to generate MP No:", err);
+      addToast("Failed to generate MP No", "error");
+    }
+  }, [ORG_ID, editData?.id, addToast]);
+
+  /* ---------------------------------------------------------------- */
+  /* Load by id for edit                                             */
+  const loadServiceRequestById = useCallback(
+    async (id) => {
+      if (!id) return;
+      setLoading(true);
+      try {
+        const data =
+          await maintenanceServiceRequestAPI.getMaintenanceServiceRequestById(
+            id
+          );
+        if (!data) {
+          addToast("Failed to load Maintenance Service Request", "error");
+          return;
+        }
+
+        setHeader((p) => ({
+          ...p,
+          // Preserve doc id (mpNo) if the API doesn't return it
+          mpNo: data.docId || p.mpNo || "",
+          belongTo: data.belongTo?.id || "",
+          department: data.department?.id || "",
+          reportedDate: data.reportedDate || p.reportedDate || todayISO(),
+          mailId: data.mailId || "",
+          reportedTime: data.reportedTime || "",
+          phoneNo: data.phoneNo || "",
+          completed: data.completed || "NO",
+          priority: data.priority?.id || "",
+          closingDate: data.closingDate || "",
+          requestedBy: data.requestedBy?.id || "",
+          preparedBy: data.preparedBy?.id || "",
+          approvedBy: data.approvedBy || "NO",
+          serviceRequired: data.serviceRequired || "",
+          remarks: data.remarks || "",
+        }));
+      } catch (err) {
+        console.error("Error loading service request by id:", err);
+        addToast("Failed to load Maintenance Service Request", "error");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [addToast]
+  );
+
+  /* ---------------------------------------------------------------- */
+  /* Initial load of option lists                                     */
+  useEffect(() => {
+    const init = async () => {
+      setLoadingOptions(true);
+      await Promise.all([
+        loadBelongTo(),
+        loadPriorities(),
+        loadDepartments(),
+        loadEmployees(),
+      ]);
+      setLoadingOptions(false);
+    };
+    init();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ORG_ID]);
+
+  /* Doc No generation — only for new records */
+  useEffect(() => {
+    loadDocId();
+  }, [loadDocId]);
+
+  /* Load by id — only when editing */
+  useEffect(() => {
+    if (editData?.id) {
+      loadServiceRequestById(editData.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editData?.id]);
+
+  /* ---------------------------------------------------------------- */
   const handleHeaderChange = (e) => {
     const { name, value } = e.target;
-    if (fieldErrors[name]) setFieldErrors((prev) => ({ ...prev, [name]: "" }));
+
+    if (fieldErrors[name]) {
+      setFieldErrors((prev) => ({ ...prev, [name]: "" }));
+    }
+
     setHeader((prev) => ({ ...prev, [name]: value }));
   };
 
+  /* ---------------------------------------------------------------- */
   const validate = () => {
     const errors = {};
 
-    if (!header.reportedDate) errors.reportedDate = "Reported Date is required";
+    if (!header.belongTo) errors.belongTo = "Belong To is required";
+    if (!header.department) errors.department = "Department is required";
+    if (!header.reportedDate)
+      errors.reportedDate = "Reported Date is required";
 
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
+  /* ---------------------------------------------------------------- */
   const handleSave = async () => {
-    if (!validate()) return;
+    if (!validate()) {
+      addToast("Please fix validation errors before saving", "error");
+      return;
+    }
 
     setIsSubmitting(true);
 
+    // ---------- Build base payload (no id) ----------
     const payload = {
-      ...(editData?.id && { id: editData.id }),
-      header,
-      active: editData?.active ?? true,
-      orgId: ORG_ID,
+      active:
+        editData?.active === "Active" ||
+        editData?.active === true ||
+        true,
+      approvedBy: header.approvedBy || "NO",
+      belongTo: parseInt(header.belongTo) || 0,
+      cancel: false,
+      cancelRemarks: "",
+      closingDate: header.closingDate || "",
+      completed: header.completed || "NO",
       createdBy: localStorage.getItem("userName") || "SYSTEM",
+      department: parseInt(header.department) || 0,
+      mailId: header.mailId || "",
+      orgId: ORG_ID,
+      phoneNo: header.phoneNo || "",
+      preparedBy: parseInt(header.preparedBy) || 0,
+      priority: parseInt(header.priority) || 0,
+      remarks: header.remarks || "",
+      reportedTime: header.reportedTime || "",
+      requestedBy: parseInt(header.requestedBy) || 0,
+      serviceRequired: header.serviceRequired || "",
+      updatedBy: localStorage.getItem("userName") || "SYSTEM",
     };
+
+    // ---------- Add id ONLY when updating ----------
+    if (editData?.id) {
+      payload.id = parseInt(editData.id);
+    }
 
     console.log("📤 Saving Maintenance Service Request Payload:", payload);
 
     try {
       const response =
         await maintenanceServiceRequestAPI.updateCreateMaintenanceServiceRequest(
-          payload,
+          payload
         );
       console.log("📥 Response:", response);
 
-      const status = response?.status === true || response?.statusFlag === "Ok";
+      const status =
+        response?.status === true ||
+        response?.success === true ||
+        response?.statusFlag === "Ok" ||
+        response?.status === "SUCCESS" ||
+        response?.status === 200 ||
+        response?.statusCode === 200;
 
       if (status) {
+        addToast(
+          editData?.id
+            ? "Maintenance Service Request updated successfully"
+            : "Maintenance Service Request created successfully",
+          "success"
+        );
         if (onSave) onSave(payload);
       } else {
         const errorMessage =
           response?.paramObjectsMap?.message ||
           response?.paramObjectsMap?.errorMessage ||
           response?.message ||
-          "Failed to save maintenance service request";
-        alert(errorMessage);
+          response?.errorMessage ||
+          response?.error ||
+          "Something went wrong";
+        addToast(errorMessage, "error");
       }
     } catch (error) {
       console.error("❌ Save Error:", error);
-      alert("Failed to save Maintenance Service Request.");
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Failed to save Maintenance Service Request.";
+      addToast(errorMessage, "error");
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  /* ---------------------------------------------------------------- */
+  /* Build runtime field descriptors with loaded options             */
+  const runtimeHeaderFields = useMemo(
+    () =>
+      HEADER_FIELDS.map((f) => {
+        if (f.name === "belongTo")
+          return { ...f, options: belongToOptions };
+        if (f.name === "priority")
+          return { ...f, options: priorityOptions };
+        if (f.name === "department")
+          return { ...f, options: departmentOptions };
+        if (f.name === "requestedBy" || f.name === "preparedBy")
+          return { ...f, options: employeeOptions };
+        return f;
+      }),
+    [belongToOptions, priorityOptions, departmentOptions, employeeOptions]
+  );
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-500 dark:text-gray-400">
+          Loading service request…
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-2 max-w-7xl">
@@ -358,9 +660,16 @@ const MaintenanceServiceRequestForm = ({ onBack, onSave, editData }) => {
       {/* Main Card */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
         <div>
-          <SectionHeader>Service Request Details</SectionHeader>
+          <SectionHeader>
+            Service Request Details
+            {loadingOptions && (
+              <span className="ml-2 text-blue-500 normal-case font-normal">
+                Loading options…
+              </span>
+            )}
+          </SectionHeader>
           <FieldsGrid
-            fields={HEADER_FIELDS}
+            fields={runtimeHeaderFields}
             values={header}
             onChange={handleHeaderChange}
             errors={fieldErrors}

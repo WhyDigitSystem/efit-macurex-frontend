@@ -1,11 +1,11 @@
 import { ArrowLeft, Save, X, Plus } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import dayjs from "dayjs";
 import transferOrderAPI from "../../../api/PPC/transferOrderAPI";
-import { itemAPI } from "../../../api/itemAPI";
 import { unitMasterAPI } from "../../../api/unitAPI";
-import  purchaseContractAPI  from "../../../api/Purchase/purchaseContractAPI";
-import partyMasterAPI from "../../../api/partyMasterAPI";
+import purchaseContractAPI from "../../../api/Purchase/purchaseContractAPI";
+import purchaseOrderAPI from "../../../api/Purchase/purchaseOrderAPI";
+import listOfValuesAPI from "../../../api/listOfValuesAPI";
 import { useToast } from "../../Toast/ToastContext";
 
 /* ---------------------------------------------------------------------------- */
@@ -160,13 +160,12 @@ const TableHead = ({ headers }) => (
       {headers.map((h, i) => (
         <th
           key={i}
-          className={`p-1 whitespace-nowrap ${
-            i === 0
+          className={`p-1 whitespace-nowrap ${i === 0
               ? "w-8 text-center"
               : i === headers.length - 1
                 ? "w-20 text-left"
                 : "text-left"
-          } dark:text-white`}
+            } dark:text-white`}
         >
           {h}
         </th>
@@ -184,11 +183,10 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
         type="button"
         onClick={onRemove}
         disabled={disabled}
-        className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-          disabled
+        className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
             ? "bg-gray-400 cursor-not-allowed"
             : "bg-red-600 hover:bg-red-700"
-        }`}
+          }`}
       >
         X
       </button>
@@ -209,29 +207,23 @@ const SelectCell = ({ value, onChange, options }) => (
   </td>
 );
 
-const InputCell = ({ value, onChange, type = "text", step }) => (
+const InputCell = ({ value, onChange, type = "text", step, readOnly }) => (
   <td
-    className={`p-1 align-top ${
-      type === "date"
+    className={`p-1 align-top ${type === "date"
         ? "min-w-[140px]"
         : type === "number"
           ? "min-w-[100px]"
           : "min-w-[120px]"
-    }`}
+      }`}
   >
     <input
       type={type}
       step={step}
       value={value ?? ""}
       onChange={onChange}
-      className={cellInputClasses}
+      readOnly={readOnly}
+      className={readOnly ? cellReadOnlyClasses : cellInputClasses}
     />
-  </td>
-);
-
-const ReadOnlyCell = ({ value }) => (
-  <td className="p-1 align-top min-w-[140px]">
-    <input value={value ?? ""} readOnly className={cellReadOnlyClasses} />
   </td>
 );
 
@@ -257,9 +249,6 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
                 />
               );
             }
-            if (col.readOnly) {
-              return <ReadOnlyCell key={col.key} value={row[col.key]} />;
-            }
             return (
               <InputCell
                 key={col.key}
@@ -272,6 +261,7 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
                       : "text"
                 }
                 step={col.step}
+                readOnly={col.readOnly}
                 onChange={(e) => onCellChange(idx, col.key, e.target.value)}
               />
             );
@@ -287,37 +277,15 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
 
 const fmtDate = (value) => (value ? dayjs(value).format("YYYY-MM-DD") : "");
 
-const generateDocNo = () => `TRO${dayjs().format("YYYYMMDDHHmmss")}`;
-
-const generateTransId = () => `TRN${dayjs().format("YYYYMMDDHHmmss")}${Math.floor(
-  Math.random() * 100,
-)}`;
-
-const ORDER_TYPE_OPTIONS = [
-  { value: "INTER_BRANCH", label: "Inter Branch" },
-  { value: "INTER_PLANT", label: "Inter Plant" },
-  { value: "INTERNAL", label: "Internal Transfer" },
-  { value: "EDP", label: "EDP" },
-];
-
-const TYPE_OPTIONS = [
-  { value: "FULL", label: "Full" },
-  { value: "PARTIAL", label: "Partial" },
-];
-
-const COMBINE_WITH_OPTIONS = [
-  { value: "NONE", label: "None" },
-  { value: "DP", label: "DP" },
-  { value: "STO", label: "STO" },
-  { value: "GRN", label: "GRN" },
-];
+const generateTransId = () =>
+  `TRN${dayjs().format("YYYYMMDDHHmmss")}${Math.floor(Math.random() * 100)}`;
 
 /* ---------------------------------------------------------------------------- */
 /* Empty state builders                                                        */
 
 const emptyHeader = () => ({
   orderType: "",
-  documentNo: generateDocNo(),
+  documentNo: "",
   date: dayjs().format("YYYY-MM-DD"),
 });
 
@@ -338,55 +306,159 @@ const emptyTransferRow = () => ({
   contractNo: "",
 });
 
-const TransferOrderForm = ({ data, onBack }) => {
+/* ---------------------------------------------------------------------------- */
+
+const TransferOrderForm = ({ data, onBack, onSave }) => {
   const { addToast } = useToast();
   const orgId = Number(localStorage.getItem("orgId"));
   const branch = Number(localStorage.getItem("branchId"));
   const usersId = localStorage.getItem("usersId");
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [tableError, setTableError] = useState("");
+  const [generatingDocId, setGeneratingDocId] = useState(false);
 
   /* ---------------- Lookup options ---------------- */
+  const [orderTypeOptions, setOrderTypeOptions] = useState([]);
   const [itemOptions, setItemOptions] = useState([]);
   const [itemMap, setItemMap] = useState({});
   const [unitOptions, setUnitOptions] = useState([]);
   const [supplierOptions, setSupplierOptions] = useState([]);
   const [supplierMap, setSupplierMap] = useState({});
   const [contractOptions, setContractOptions] = useState([]);
+  const [typeOptions, setTypeOptions] = useState([]);
 
   /* ---------------- Form state ---------------- */
   const [header, setHeader] = useState(() => ({
     ...emptyHeader(),
     ...data?.header,
-    date: fmtDate(data?.header?.date),
+    date: fmtDate(data?.header?.date) || dayjs().format("YYYY-MM-DD"),
+    documentNo: data?.header?.documentNo || "",
   }));
 
   const [transferRows, setTransferRows] = useState(() =>
     data?.transferDetails?.length
       ? data.transferDetails.map((d) => ({
-          ...emptyTransferRow(),
-          ...d,
-          orderDate: fmtDate(d.orderDate),
-          scheduleDate: fmtDate(d.scheduleDate),
-        }))
-      : [emptyTransferRow()],
+        ...emptyTransferRow(),
+        ...d,
+        orderDate: fmtDate(d.orderDate),
+        scheduleDate: fmtDate(d.scheduleDate),
+      }))
+      : [emptyTransferRow()]
+  );
+
+  /* ---------------- Doc No generation ---------------- */
+  const loadDocId = useCallback(async () => {
+    if (data?.id || !orgId) return;
+    setGeneratingDocId(true);
+    try {
+      const financialYear = new Date().getFullYear().toString();
+      const docId = await transferOrderAPI.getTransferOrderDocId(
+        orgId,
+        financialYear
+      );
+      if (docId) {
+        setHeader((p) => ({ ...p, documentNo: docId }));
+      }
+    } catch (err) {
+      console.error("Failed to generate Document No:", err);
+      addToast("Failed to generate Document No", "error");
+    } finally {
+      setGeneratingDocId(false);
+    }
+  }, [orgId, data?.id, addToast]);
+
+  /* ---------------- Load by id for edit ---------------- */
+  const loadTransferOrderById = useCallback(
+    async (id) => {
+      if (!id) return;
+      setLoading(true);
+      try {
+        const vo = await transferOrderAPI.getById(id);
+        if (!vo) {
+          addToast("Failed to load Transfer Order", "error");
+          return;
+        }
+
+        // Header
+        setHeader((p) => ({
+          ...p,
+          orderType: vo.orderType?.id || "",
+          documentNo: vo.docId || p.documentNo || "",
+          date: vo.docDate || p.date,
+        }));
+
+        // Transfer detail rows
+        const rows = vo.transferOrderDetailResponseDTO || [];
+        if (rows.length) {
+          setTransferRows(
+            rows.map((r) => ({
+              ...emptyTransferRow(),
+              id: r.id,
+              orderDate: fmtDate(r.orderDate),
+              itemCode: r.itemCode?.id || "",
+              itemDescription:
+                r.itemDescription || r.itemCode?.itemDescription || "",
+              scheduleDate: fmtDate(r.scheduleDate),
+              qty: r.qty ?? "",
+              unit: r.unit || "",
+              purchaseQty: r.purQty ?? "",
+              purchaseUnit: r.purUnit ?? "",
+              supplierId: r.supplierId?.id || "",
+              supplierName: r.supplierName || r.supplierId?.customerName || "",
+              type: r.type || "",
+              combineWith: r.combineWith || "",
+              transId: r.transId || "",
+              contractNo: r.contractNo || "",
+            }))
+          );
+        } else {
+          setTransferRows([emptyTransferRow()]);
+        }
+      } catch (err) {
+        console.error("Error loading transfer order by id:", err);
+        addToast("Failed to load Transfer Order", "error");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [addToast]
   );
 
   /* ---------------- Lookup loading ---------------- */
-
   useEffect(() => {
     if (!orgId) return;
 
+    const loadOrderTypes = async () => {
+      try {
+        const res = await listOfValuesAPI.getListValuesGroup(
+          "ORDER TYPE",
+          orgId
+        );
+        setOrderTypeOptions(
+          (res || []).map((item) => ({
+            value: item.id || item.value,
+            label: item.valuesDescription || item.label || item.name,
+          }))
+        );
+      } catch {
+        setOrderTypeOptions([]);
+      }
+    };
+
     const loadItems = async () => {
       try {
-        const res = await itemAPI.getItems(orgId, branch);
+        const res = await transferOrderAPI.getTransferOrderItemDropdown(orgId);
         const map = {};
         const opts = (res || []).map((it) => {
-          const code = it.itemCode || it.code || it.id?.toString() || "";
-          map[code] = it;
-          return { value: code, label: code };
+          const id = it.id;
+          map[id] = it;
+          return {
+            value: id,
+            label: `${it.name || ""} - ${it.description || ""}`,
+          };
         });
         setItemOptions(opts);
         setItemMap(map);
@@ -401,10 +473,9 @@ const TransferOrderForm = ({ data, onBack }) => {
         const res = await unitMasterAPI.getUnits(branch, orgId);
         setUnitOptions(
           (res || []).map((u) => ({
-            value: u.unitCode || u.code || u.id?.toString() || "",
-            label:
-              u.unitName || u.name || u.unitCode || u.code || u.id?.toString() || "",
-          })),
+            value: u.id?.toString() || "",
+            label: u.unitId || u.id?.toString() || "",
+          }))
         );
       } catch {
         setUnitOptions([]);
@@ -413,13 +484,18 @@ const TransferOrderForm = ({ data, onBack }) => {
 
     const loadSuppliers = async () => {
       try {
-        const res = await partyMasterAPI.getPartyByOrgId(orgId, branch);
+        const res = await purchaseOrderAPI.getSupplierDetails(orgId, branch);
+        const rawArray = Array.isArray(res)
+          ? res
+          : res?.paramObjectsMap?.mapp || [];
         const map = {};
-        const opts = (res || []).map((p) => {
-          const code = p.docId || p.customerCode || p.id;
-          const name = p.customerName || p.name || "";
-          map[code] = name;
-          return { value: code, label: code };
+        const opts = rawArray.map((p) => {
+          const id = p.supplierId;
+          map[id] = p.supplierName;
+          return {
+            value: id,
+            label: `${p.supplierCode || ""} - ${p.supplierName || ""}`,
+          };
         });
         setSupplierOptions(opts);
         setSupplierMap(map);
@@ -442,14 +518,81 @@ const TransferOrderForm = ({ data, onBack }) => {
       }
     };
 
-    Promise.all([loadItems(), loadUnits(), loadSuppliers(), loadContracts()]);
+    Promise.all([
+      loadOrderTypes(),
+      loadItems(),
+      loadUnits(),
+      loadSuppliers(),
+      loadContracts(),
+    ]);
   }, [orgId, branch]);
+
+  /* ---------------- Type options based on selected Order Type ---------------- */
+  useEffect(() => {
+    const loadTypes = async () => {
+      if (!header.orderType) {
+        setTypeOptions([]);
+        return;
+      }
+
+      const selected = orderTypeOptions.find(
+        (o) => String(o.value) === String(header.orderType)
+      );
+      const orderTypeLabel = selected?.label || "";
+
+      if (!orderTypeLabel) {
+        setTypeOptions([]);
+        return;
+      }
+
+      try {
+        const list = await transferOrderAPI.getTypeDropdownByOrderType(
+          orderTypeLabel,
+          orgId
+        );
+        setTypeOptions(
+          (list || []).map((t) => ({
+            value: t.name ?? t.id,
+            label: t.name ?? t.id,
+          }))
+        );
+      } catch (err) {
+        console.error("Failed to load Type list:", err);
+        setTypeOptions([]);
+      }
+    };
+
+    loadTypes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [header.orderType, orderTypeOptions]);
+
+  /* Doc No generation on mount for new records */
+  useEffect(() => {
+    loadDocId();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* Load by id on edit */
+  useEffect(() => {
+    if (data?.id) {
+      loadTransferOrderById(data.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.id]);
 
   /* ---------------- Header handlers ---------------- */
 
   const handleHeaderChange = (e) => {
     const { name, value } = e.target;
     if (fieldErrors[name]) setFieldErrors((prev) => ({ ...prev, [name]: "" }));
+
+    // Order Type change: clear Type in all rows (options will reload)
+    if (name === "orderType") {
+      setHeader((prev) => ({ ...prev, orderType: value }));
+      setTransferRows((prev) => prev.map((row) => ({ ...row, type: "" })));
+      return;
+    }
+
     setHeader((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -460,24 +603,27 @@ const TransferOrderForm = ({ data, onBack }) => {
       prev.map((row, i) => {
         if (i !== idx) return row;
         let next = { ...row, [key]: value };
+
         if (key === "itemCode") {
           const item = itemMap[value];
-          next.itemDescription = item?.itemDescription || "";
-          if (item?.primaryUnits?.primaryUnit) {
-            next.unit = item.primaryUnits.primaryUnit;
-            next.purchaseUnit = item.primaryUnits.primaryUnit;
+          if (item) {
+            next.itemDescription = item.description || "";
+            next.unit = item.unitCode || "";
           }
         }
+
         if (key === "supplierId") {
           next.supplierName = supplierMap[value] || "";
         }
+
         return next;
-      }),
+      })
     );
   };
 
   const handleAddRow = () =>
     setTransferRows((prev) => [...prev, emptyTransferRow()]);
+
   const handleRemoveRow = (idx) =>
     setTransferRows((prev) => prev.filter((_, i) => i !== idx));
 
@@ -486,7 +632,8 @@ const TransferOrderForm = ({ data, onBack }) => {
   const validate = () => {
     const errors = {};
 
-    if (!header.orderType?.trim()) errors.orderType = "Order Type is required";
+    if (!header.orderType?.toString().trim())
+      errors.orderType = "Order Type is required";
     if (!header.documentNo?.trim())
       errors.documentNo = "Document No is required";
     if (!header.date) errors.date = "Date is required";
@@ -496,16 +643,16 @@ const TransferOrderForm = ({ data, onBack }) => {
     const validRows = transferRows.every(
       (r) =>
         r.orderDate &&
-        r.itemCode?.trim() &&
+        r.itemCode?.toString().trim() &&
         r.itemDescription?.trim() &&
         r.scheduleDate &&
         r.qty !== "" &&
-        Number(r.qty) > 0,
+        Number(r.qty) > 0
     );
 
     if (!validRows)
       setTableError(
-        "Complete all mandatory columns in the Transfer Details grid",
+        "Complete all mandatory columns in the Transfer Details grid"
       );
     else setTableError("");
 
@@ -515,66 +662,93 @@ const TransferOrderForm = ({ data, onBack }) => {
   /* ---------------- Save ---------------- */
 
   const handleSave = async () => {
-    if (!validate()) return;
+    if (!validate()) {
+      addToast("Please fix validation errors before saving", "error");
+      return;
+    }
 
     setIsSubmitting(true);
 
     const isUpdate = Boolean(data?.id);
 
-    // Single-transaction payload: header + transfer details.
-    // The transfer details are linked to the supplier/contract and the backend
-    // keeps the complete transfer order history (server-side validation).
     const payload = {
-      ...(isUpdate ? { id: data.id } : {}),
-      orgId,
-      header: {
-        ...header,
-        documentNo: header.documentNo || generateDocNo(),
-      },
-      transferDetails: transferRows
-        .filter((r) => r.itemCode?.trim())
-        .map((r, i) => ({
-          ...r,
-          transId: r.transId || generateTransId(),
-          sno: i + 1,
-        })),
       active: data?.active ?? true,
-      createdBy: isUpdate ? data?.createdBy || usersId : usersId,
-      ...(isUpdate ? { updatedBy: usersId } : {}),
+      cancel: false,
+      cancelRemarks: "",
+      createdBy: isUpdate ? data?.createdBy || usersId : usersId || "SYSTEM",
+      docDate: header.date || dayjs().format("YYYY-MM-DD"),
+      docId: header.documentNo || "",
+      financialYear: new Date().getFullYear().toString(),
+      orderType: parseInt(header.orderType) || 0,
+      orgId,
+      transferOrderDetailDTO: transferRows
+        .filter((r) => r.itemCode?.toString().trim())
+        .map((r) => ({
+          combineWith: r.combineWith || "",
+          contractNo: r.contractNo || "",
+          id: r.id ? parseInt(r.id) : 0,
+          itemCode: parseInt(r.itemCode) || 0,
+          itemDescription: r.itemDescription || "",
+          orderDate: r.orderDate || "",
+          purQty: parseFloat(r.purchaseQty) || 0,
+          purUnit: r.purchaseUnit || "",
+          qty: parseFloat(r.qty) || 0,
+          scheduleDate: r.scheduleDate || "",
+          supplierId: parseInt(r.supplierId) || 0,
+          supplierName: r.supplierName || "",
+          transId: r.transId || generateTransId(),
+          type: r.type || "",
+          unit: r.unit || "",
+        })),
+      updatedBy: isUpdate ? usersId || "SYSTEM" : "",
     };
+
+    if (isUpdate) {
+      payload.id = parseInt(data.id);
+    }
+
+    console.log("📤 Saving Transfer Order Payload:", payload);
 
     try {
       const response = await transferOrderAPI.createUpdate(payload);
 
-      if (response?.status) {
+      const status =
+        response?.status === true ||
+        response?.success === true ||
+        response?.statusFlag === "Ok" ||
+        response?.status === "SUCCESS" ||
+        response?.status === 200 ||
+        response?.statusCode === 200;
+
+      if (status) {
         addToast(
           response?.paramObjectsMap?.message ||
-            (isUpdate
-              ? "Transfer Order updated successfully!"
-              : "Transfer Order created successfully!"),
+          (isUpdate
+            ? "Transfer Order updated successfully!"
+            : "Transfer Order created successfully!"),
+          "success"
         );
-        onBack?.();
+        if (onSave) onSave(payload);
+        else onBack?.();
       } else {
         addToast(
           response?.errors?.[0]?.shortMessage ||
-            response?.errors?.[0]?.longMessage ||
-            response?.message ||
-            response?.paramObjectsMap?.message ||
-            "Failed to save Transfer Order.",
+          response?.errors?.[0]?.longMessage ||
+          response?.message ||
+          response?.paramObjectsMap?.message ||
+          "Failed to save Transfer Order.",
+          "error"
         );
       }
     } catch (err) {
       console.error("Save Transfer Order Error:", err);
-      if (err.response?.data) {
-        addToast(
-          err.response.data.message ||
-            err.response.data.statusMessage ||
-            err.response.data.error ||
-            JSON.stringify(err.response.data),
-        );
-      } else {
-        addToast("Something went wrong.");
-      }
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.statusMessage ||
+        err?.response?.data?.error ||
+        err?.message ||
+        "Something went wrong.";
+      addToast(msg, "error");
     } finally {
       setIsSubmitting(false);
     }
@@ -591,7 +765,7 @@ const TransferOrderForm = ({ data, onBack }) => {
     { key: "itemDescription", label: "Item Description *", readOnly: true },
     { key: "scheduleDate", label: "Schedule Date *", type: "date" },
     { key: "qty", label: "Qty *", type: "number", step: "0.01" },
-    { key: "unit", label: "Unit", type: "select", options: unitOptions },
+    { key: "unit", label: "Unit" },
     { key: "purchaseQty", label: "Purchase Qty", type: "number", step: "0.01" },
     {
       key: "purchaseUnit",
@@ -606,21 +780,24 @@ const TransferOrderForm = ({ data, onBack }) => {
       options: supplierOptions,
     },
     { key: "supplierName", label: "Supplier Name", readOnly: true },
-    { key: "type", label: "Type", type: "select", options: TYPE_OPTIONS },
-    {
-      key: "combineWith",
-      label: "Combine With",
-      type: "select",
-      options: COMBINE_WITH_OPTIONS,
-    },
-    { key: "transId", label: "Trans ID", readOnly: true },
+    { key: "type", label: "Type", type: "select", options: typeOptions },
+    { key: "combineWith", label: "Combine With" },
+    { key: "transId", label: "Trans ID" },
     {
       key: "contractNo",
       label: "Contract No",
-      type: "select",
-      options: contractOptions,
     },
   ];
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-500 dark:text-gray-400">
+          Loading transfer order…
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full p-2">
@@ -651,7 +828,7 @@ const TransferOrderForm = ({ data, onBack }) => {
               value={header.orderType}
               onChange={handleHeaderChange}
               error={fieldErrors.orderType}
-              options={ORDER_TYPE_OPTIONS}
+              options={orderTypeOptions}
               required
             />
             <Field
@@ -660,6 +837,7 @@ const TransferOrderForm = ({ data, onBack }) => {
               value={header.documentNo}
               onChange={handleHeaderChange}
               error={fieldErrors.documentNo}
+              placeholder={generatingDocId ? "Generating..." : "Auto"}
               disabled
               required
             />

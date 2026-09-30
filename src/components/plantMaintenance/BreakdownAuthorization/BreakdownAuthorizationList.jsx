@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
-import { toast } from "../../../utils/toast";
+import machineToolBreakdownAPI from "../../../api/plantMaintenance/machineToolBreakdownAPI";
+import { useToast } from "../../Toast/ToastContext";
 
 const BreakdownAuthorizationList = ({
   onAddNew,
@@ -11,76 +12,90 @@ const BreakdownAuthorizationList = ({
   const [authData, setAuthData] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  const { addToast } = useToast();
+
   const ORG_ID = Number(localStorage.getItem("orgId"));
+  const BRANCH_ID = Number(localStorage.getItem("branchId"));
 
   const loadBreakdownAuthorizations = useCallback(async () => {
+    if (!ORG_ID || !BRANCH_ID) {
+      setAuthData([]);
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
 
-      const response =
-        await breakdownAuthorizationAPI.getBreakdownAuthorizationByOrgId(
-          ORG_ID,
+      const list =
+        await machineToolBreakdownAPI.getAuthorizationForBreakdownByOrgId(
+          BRANCH_ID,
+          ORG_ID
         );
 
-      const sortedData = (response || []).sort(
-        (a, b) => (b.id || 0) - (a.id || 0),
+      const sorted = (list || []).sort(
+        (a, b) => Number(b.id || 0) - Number(a.id || 0)
       );
 
-      setAuthData(sortedData);
+      setAuthData(sorted);
     } catch (error) {
       console.error("Failed to load breakdown authorizations:", error);
+      addToast("Failed to fetch breakdown authorizations", "error");
       setAuthData([]);
-      toast.error("Failed to fetch breakdown authorizations");
     } finally {
       setLoading(false);
     }
-  }, [ORG_ID]);
+  }, [ORG_ID, BRANCH_ID, addToast]);
 
   useEffect(() => {
     loadBreakdownAuthorizations();
   }, [loadBreakdownAuthorizations, refreshTrigger]);
 
+  // Map API fields to table columns
   const columns = [
     {
       key: "docNo",
       label: "DocNo",
-      accessor: (row) => row.header?.docNo,
+      accessor: (row) => row.docId,
       type: "text",
     },
     {
       key: "docDate",
       label: "DocDate",
-      accessor: (row) => row.header?.docDate,
-      type: "date",
+      accessor: (row) => row.rectificationDate || "-",
+      type: "text",
     },
     {
       key: "plant",
       label: "Plant Id",
-      accessor: (row) => row.header?.plant,
+      accessor: (row) => row.branch?.branchName || row.branch?.branchCode || "-",
       type: "text",
     },
     {
       key: "department",
       label: "Department",
-      accessor: (row) => row.header?.department,
+      accessor: (row) =>
+        row.department?.departmentName ||
+        row.department?.departmentCode ||
+        "-",
       type: "text",
     },
     {
       key: "breakdownNo",
       label: "BreakdownNo",
-      accessor: (row) => row.header?.breakdownNo,
+      accessor: (row) => row.breakdownNo || "-",
       type: "text",
     },
     {
       key: "machineNo",
       label: "Machine No.",
-      accessor: (row) => row.header?.machineNo,
+      accessor: (row) => row.machineNo || "-",
       type: "text",
     },
     {
       key: "working",
       label: "Working",
-      accessor: (row) => row.header?.working,
+      accessor: (row) => row.working || "-",
       type: "badge",
     },
     {
@@ -98,11 +113,7 @@ const BreakdownAuthorizationList = ({
     },
   ];
 
-  const searchFields = [
-    "header.docNo",
-    "header.breakdownNo",
-    "header.machineNo",
-  ];
+  const searchFields = ["breakdownNo", "machineNo", "rectificationNo"];
 
   return (
     <div className="h-full flex flex-col">

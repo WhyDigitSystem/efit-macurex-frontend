@@ -1,17 +1,10 @@
-// initialStageInspectionAPI.js
 import apiClient from "../apiClient";
 
-// Initial Stage Inspection API
-// Mirrors the quality API convention used in this app.
-// The backend persists the header, first article details and summary in a
-// single transaction ... (server-side validation).
-
 const initialStageInspectionAPI = {
-  // Get Initial Stage Inspections by Organization ID
   getInitialStageInspectionByOrgId: async (orgId, branch) => {
     try {
       const res = await apiClient.get(
-        `/api/quality/getInitialStageInspectionByOrgId?branch=${branch}&orgId=${orgId}`,
+        `/api/quality/getInitialStageInspectionByOrgId?branch=${branch}&orgId=${orgId}`
       );
       const list = res?.paramObjectsMap?.initialStageInspectionVO;
       return Array.isArray(list) ? list : list ? [list] : [];
@@ -21,11 +14,10 @@ const initialStageInspectionAPI = {
     }
   },
 
-  // Get Initial Stage Inspection by ID
   getInitialStageInspectionById: async (id) => {
     try {
       const res = await apiClient.get(
-        `/api/quality/getInitialStageInspectionById?id=${id}`,
+        `/api/quality/getInitialStageInspectionById?id=${id}`
       );
       return res?.paramObjectsMap?.initialStageInspectionVO || null;
     } catch (error) {
@@ -34,12 +26,39 @@ const initialStageInspectionAPI = {
     }
   },
 
-  // Create / Update Initial Stage Inspection
+  // NEW — Doc ID
+  getInitialStageInspectionDocId: async (orgId, financialYear) => {
+    try {
+      const res = await apiClient.get(
+        "/api/develop/getInitialStageInspectionDocId",
+        { params: { orgId, financialYear } }
+      );
+      return res?.paramObjectsMap?.initialStageInspectionDocId || "";
+    } catch (error) {
+      console.error("Error fetching initial stage inspection doc id:", error);
+      throw error;
+    }
+  },
+
+  // NEW — Work Order No dropdown
+  getWorkOrderNoDropDown: async (branch, orgId, partyId) => {
+    try {
+      const res = await apiClient.get(
+        "/api/develop/getWorkOrderNoDropDownForInitialStageInspection",
+        { params: { branch, orgId, partyId } }
+      );
+      return res?.paramObjectsMap?.workOrderNoList || [];
+    } catch (error) {
+      console.error("Error fetching work order no list:", error);
+      throw error;
+    }
+  },
+
   createUpdateInitialStageInspection: async (payload) => {
     try {
       const res = await apiClient.put(
         `/api/quality/updateCreateInitialStageInspection`,
-        payload,
+        payload
       );
       return res;
     } catch (error) {

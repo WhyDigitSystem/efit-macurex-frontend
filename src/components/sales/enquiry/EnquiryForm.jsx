@@ -349,6 +349,7 @@ const fetchFileAsBlob = async (url) => {
 // Main Component
 const EnquiryForm = ({ data, onBack, onSave }) => {
   const orgId = localStorage.getItem("orgId");
+  const finYear = localStorage.getItem("finYear");
   const branch = localStorage.getItem("branchId");
   const [userId] = useState(localStorage.getItem("userId"));
   const [activeChildTab, setActiveChildTab] = useState("enquiryDetail");
@@ -488,9 +489,9 @@ const EnquiryForm = ({ data, onBack, onSave }) => {
 
         // Set basic fields
         setValue("id", enquiry.id);
-        setValue("enquiryNo", enquiry.enquiryNo || "");
+        setValue("enquiryNo", enquiry.docId || "");
         setValue("enquiryType", enquiry.enquiryType || "");
-        setValue("enquiryDate", enquiry.enquiryDate || "");
+        setValue("enquiryDate", enquiry.docDate || "");
         setValue("plantId", enquiry.branch?.id || "");
         setValue("partyId", enquiry.customerVO?.id || "");
         setValue("partyName", enquiry.partyName || "");
@@ -701,6 +702,7 @@ const EnquiryForm = ({ data, onBack, onSave }) => {
         status: formData.status || "OPEN",
         description: formData.description || "",
         orgId: parseInt(orgId),
+        financialYear: parseInt(finYear),
         createdBy: userId || "admin",
         cancelRemarks: "",
         active: true,

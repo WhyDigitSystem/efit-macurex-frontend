@@ -8,9 +8,11 @@ import locationMasterAPI from "../../../api/locationMasterAPI";
 import partyMasterAPI from "../../../api/partyMasterAPI";
 import itemAPI from "../../../api/itemAPI";
 import employeeAPI from "../../../api/employeeAPI";
+import shiftAPI from "../../../api/shiftAPI";
+import itemGradeAPI from "../../../api/itemGradeAPI";
 
 /* ---------------------------------------------------------------------------- */
-/* Shared design tokens                                                        */
+/* Design tokens                                                               */
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -185,13 +187,12 @@ const TableHead = ({ headers }) => (
       {headers.map((h, i) => (
         <th
           key={i}
-          className={`p-2 whitespace-nowrap ${
-            i === 0
-              ? "w-8 text-center"
-              : i === headers.length - 1
-                ? "w-20 text-left"
-                : "text-left"
-          } dark:text-white`}
+          className={`p-2 whitespace-nowrap ${i === 0
+            ? "w-8 text-center"
+            : i === headers.length - 1
+              ? "w-20 text-left"
+              : "text-left"
+            } dark:text-white`}
         >
           {h}
         </th>
@@ -209,11 +210,10 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
         type="button"
         onClick={onRemove}
         disabled={disabled}
-        className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-          disabled
-            ? "bg-gray-400 cursor-not-allowed"
-            : "bg-red-600 hover:bg-red-700"
-        }`}
+        className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
+          ? "bg-gray-400 cursor-not-allowed"
+          : "bg-red-600 hover:bg-red-700"
+          }`}
       >
         <Trash2 size={10} />
       </button>
@@ -221,8 +221,6 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
   </tr>
 );
 
-/* Generic dynamic table. Supports text / number / date / select / textarea /
-   readonly columns. Options may be plain strings or { value, label } objects. */
 const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
   <TableWrapper>
     <TableHead headers={["#", ...columns.map((c) => c.label), "Action"]} />
@@ -306,12 +304,17 @@ const CHILD_TABS = [
   { key: "summary", label: "Summary", kind: "fields" },
 ];
 
+const RECOMMENDED_OPTIONS = [
+  { value: "Yes", label: "Yes" },
+  { value: "No", label: "No" },
+];
+
 const fmtDate = (value) => (value ? dayjs(value).format("YYYY-MM-DD") : "");
 
 /* ---------------------------------------------------------------------------- */
 /* Initial Stage Inspection Form                                                */
 
-const InitialStageInspectionForm = ({ data, onBack }) => {
+const InitialStageInspectionForm = ({ data, onBack, onSave }) => {
   const { addToast } = useToast();
   const orgId = Number(localStorage.getItem("orgId")) || 0;
   const branch = Number(localStorage.getItem("branchId")) || 0;
@@ -328,33 +331,29 @@ const InitialStageInspectionForm = ({ data, onBack }) => {
   const [activeChildTab, setActiveChildTab] = useState("firstArticleDetails");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
+  const [generatingDocId, setGeneratingDocId] = useState(false);
 
   /* ---------- Header state ---------- */
-  const [header, setHeader] = useState(() => {
-    const base = {
-      plantId: data?.plantId?.id ?? data?.plantId ?? "",
-      inspectionNo: data?.inspectionNo || "",
-      shift: data?.shift || "",
-      date: data?.date ? fmtDate(data.date) : fmtDate(dayjs()),
-      itemCode: data?.itemCode || "",
-      itemDescription: data?.itemDescription || "",
-      partyDrawingNo: data?.partyDrawingNo || "",
-      drawingNo: data?.drawingNo || "",
-      preparedBy: data?.preparedBy?.id ?? data?.preparedBy ?? "",
-      preparedDate: data?.preparedDate ? fmtDate(data.preparedDate) : "",
-      gradeType: data?.gradeType || "",
-      partyId: data?.partyId?.id ?? data?.partyId ?? "",
-      partyName: data?.partyName || "",
-      workOrderNo: data?.workOrderNo || "",
-      processSheetNo: data?.processSheetNo || "",
-    };
-    return base;
-  });
+  const [header, setHeader] = useState(() => ({
+    plantId: data?.plantId?.id ?? data?.plantId ?? "",
+    inspectionNo: data?.inspectionNo || "",
+    shift: data?.shift || "",
+    date: data?.date ? fmtDate(data.date) : fmtDate(dayjs()),
+    itemCode: data?.itemCode?.id ?? data?.itemCode ?? "",
+    itemDescription: data?.itemDescription || "",
+    partyDrawingNo: data?.partyDrawingNo || "",
+    drawingNo: data?.drawingNo || "",
+    preparedBy: data?.preparedBy?.id ?? data?.preparedBy ?? "",
+    preparedDate: data?.preparedDate ? fmtDate(data.preparedDate) : "",
+    gradeType: data?.gradeType?.id ?? data?.gradeType ?? "",
+    partyId: data?.partyId?.id ?? data?.partyId ?? "",
+    partyName: data?.partyName || "",
+    workOrderNo: data?.workOrderNo?.id ?? data?.workOrderNo ?? "",
+    processSheetNo: data?.processSheetNo || "",
+  }));
 
   const [detailRows, setDetailRows] = useState(
-    data?.firstArticleDetails?.length
-      ? data.firstArticleDetails
-      : [{}],
+    data?.firstArticleDetails?.length ? data.firstArticleDetails : [{}]
   );
 
   const [summary, setSummary] = useState({
@@ -371,7 +370,7 @@ const InitialStageInspectionForm = ({ data, onBack }) => {
   const [employeeOptions, setEmployeeOptions] = useState([]);
   const [shiftOptions, setShiftOptions] = useState([]);
   const [gradeTypeOptions, setGradeTypeOptions] = useState([]);
-  const [processSheetOptions, setProcessSheetOptions] = useState([]);
+  const [workOrderOptions, setWorkOrderOptions] = useState([]);
 
   const loadPlants = useCallback(async () => {
     try {
@@ -381,7 +380,7 @@ const InitialStageInspectionForm = ({ data, onBack }) => {
           (res || []).map((p) => ({
             value: p.id,
             label: p.plantName || p.plantId || p.id,
-          })),
+          }))
         );
       } else {
         const res = await branchAPI.getBranchByOrgId(orgId);
@@ -389,7 +388,7 @@ const InitialStageInspectionForm = ({ data, onBack }) => {
           (res || []).map((b) => ({
             value: b.id,
             label: b.branchName || b.branchCode || b.id,
-          })),
+          }))
         );
       }
     } catch (error) {
@@ -401,12 +400,12 @@ const InitialStageInspectionForm = ({ data, onBack }) => {
   const loadItems = useCallback(async () => {
     try {
       const res = await itemAPI.getItems(orgId, branch);
-      const map = {};
-      const options = (res || []).map((it) => {
-        map[it.id] = it;
-        return { value: it.id, label: it.itemCode || it.id };
-      });
-      setItemOptions(options);
+      setItemOptions(
+        (res || []).map((it) => ({
+          value: it.id,
+          label: it.itemCode || it.id,
+        }))
+      );
     } catch (error) {
       console.error("Failed to load item options:", error);
       setItemOptions([]);
@@ -421,7 +420,7 @@ const InitialStageInspectionForm = ({ data, onBack }) => {
           value: c.id,
           label: c.customerCode || c.docId || c.id,
           partyName: c.customerName || "",
-        })),
+        }))
       );
     } catch (error) {
       console.error("Failed to load party options:", error);
@@ -436,7 +435,7 @@ const InitialStageInspectionForm = ({ data, onBack }) => {
         (res || []).map((e) => ({
           value: e.id,
           label: e.employeeCode || e.employeeName || e.id,
-        })),
+        }))
       );
     } catch (error) {
       console.error("Failed to load employee options:", error);
@@ -444,35 +443,42 @@ const InitialStageInspectionForm = ({ data, onBack }) => {
     }
   }, [orgId]);
 
-  /* TODO: Load shift/grade/process sheet from LOV API when available */
   const loadShifts = useCallback(async () => {
-    setShiftOptions([
-      { value: "1", label: "1st Shift" },
-      { value: "2", label: "2nd Shift" },
-      { value: "3", label: "3rd Shift" },
-    ]);
-  }, []);
+    try {
+      const res = await shiftAPI.getByOrgId(orgId);
+      setShiftOptions(
+        (res || []).map((s) => ({
+          value: s.shiftName || s.id,
+          label: s.shiftName || s.shiftCode || s.id,
+        }))
+      );
+    } catch (error) {
+      console.error("Failed to load shifts:", error);
+      setShiftOptions([]);
+    }
+  }, [orgId]);
 
   const loadGradeTypes = useCallback(async () => {
-    setGradeTypeOptions([
-      { value: "Raw", label: "Raw" },
-      { value: "Finished", label: "Finished" },
-      { value: "Refurbished", label: "Refurbished" },
-    ]);
-  }, []);
+    try {
+      const res = await itemGradeAPI.getAll(orgId);
+      setGradeTypeOptions(
+        (res || []).map((g) => ({
+          value: g.id,
+          label: g.gradeDescription || g.gradeCode || g.id,
+        }))
+      );
+    } catch (error) {
+      console.error("Failed to load grade types:", error);
+      setGradeTypeOptions([]);
+    }
+  }, [orgId]);
 
-  const loadProcessSheets = useCallback(async () => {
-    setProcessSheetOptions([
-      { value: "PS-001", label: "PS-001" },
-      { value: "PS-002", label: "PS-002" },
-      { value: "PS-003", label: "PS-003" },
-    ]);
-  }, []);
-
+  /* Load plants */
   useEffect(() => {
     if (orgId) loadPlants();
   }, [orgId, loadPlants]);
 
+  /* Load all other lookups */
   useEffect(() => {
     if (orgId) {
       loadItems();
@@ -480,9 +486,62 @@ const InitialStageInspectionForm = ({ data, onBack }) => {
       loadEmployees();
       loadShifts();
       loadGradeTypes();
-      loadProcessSheets();
     }
-  }, [orgId, loadItems, loadParties, loadEmployees, loadShifts, loadGradeTypes, loadProcessSheets]);
+  }, [orgId, loadItems, loadParties, loadEmployees, loadShifts, loadGradeTypes]);
+
+  /* Work Order No — reload whenever party changes */
+  useEffect(() => {
+    const loadWorkOrders = async () => {
+      if (!header.partyId) {
+        setWorkOrderOptions([]);
+        return;
+      }
+      try {
+        const res = await initialStageInspectionAPI.getWorkOrderNoDropDown(
+          branch,
+          orgId,
+          header.partyId
+        );
+        setWorkOrderOptions(
+          (res || []).map((w) => ({
+            value: w.id,
+            label: w.name || w.id,
+          }))
+        );
+      } catch (error) {
+        console.error("Failed to load work order nos:", error);
+        setWorkOrderOptions([]);
+      }
+    };
+    loadWorkOrders();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [header.partyId, branch, orgId]);
+
+  /* Inspection No generation */
+  useEffect(() => {
+    const loadDocId = async () => {
+      if (data?.id || !orgId) return;
+      setGeneratingDocId(true);
+      try {
+        const financialYear = new Date().getFullYear().toString();
+        const docId =
+          await initialStageInspectionAPI.getInitialStageInspectionDocId(
+            orgId,
+            financialYear
+          );
+        if (docId) {
+          setHeader((p) => ({ ...p, inspectionNo: docId }));
+        }
+      } catch (err) {
+        console.error("Failed to generate Inspection No:", err);
+        addToast("Failed to generate Inspection No", "error");
+      } finally {
+        setGeneratingDocId(false);
+      }
+    };
+    loadDocId();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgId, data?.id]);
 
   /* ---------------------------------------------------------------------------- */
   /* Handlers                                                                     */
@@ -490,18 +549,25 @@ const InitialStageInspectionForm = ({ data, onBack }) => {
   const handleHeaderChange = (e) => {
     const { name, value } = e.target;
     if (fieldErrors[name]) setFieldErrors((prev) => ({ ...prev, [name]: "" }));
+
     setHeader((prev) => {
       const next = { ...prev, [name]: value };
+
       if (name === "partyId") {
-        const party = partyOptions.find((p) => String(p.value) === String(value));
-        next.partyName = party?.partyName || "";
-      }
-      if (name === "preparedBy") {
-        const employee = employeeOptions.find(
-          (e) => String(e.value) === String(value),
+        const party = partyOptions.find(
+          (p) => String(p.value) === String(value)
         );
-        next.preparedByName = employee?.employeeName || "";
+        next.partyName = party?.partyName || "";
+        next.workOrderNo = ""; // reset work order when party changes
       }
+
+      if (name === "itemCode") {
+        const item = itemOptions.find(
+          (it) => String(it.value) === String(value)
+        );
+        next.itemDescription = item?.label || "";
+      }
+
       return next;
     });
   };
@@ -512,7 +578,7 @@ const InitialStageInspectionForm = ({ data, onBack }) => {
         if (i !== idx) return row;
         const next = { ...row, [key]: value };
         return next;
-      }),
+      })
     );
   };
 
@@ -533,85 +599,148 @@ const InitialStageInspectionForm = ({ data, onBack }) => {
     const errors = {};
 
     if (!header.plantId) errors.plantId = "Plant ID is required";
-    if (!header.inspectionNo?.trim()) errors.inspectionNo = "Inspection No is required";
+    if (!header.inspectionNo?.trim())
+      errors.inspectionNo = "Inspection No is required";
     if (!header.shift) errors.shift = "Shift is required";
     if (!header.date) errors.date = "Date is required";
     if (!header.itemCode) errors.itemCode = "Item Code is required";
     if (!header.partyId) errors.partyId = "Party ID is required";
-    if (!header.workOrderNo?.trim()) errors.workOrderNo = "Work Order No is required";
-    if (!header.processSheetNo?.trim()) errors.processSheetNo = "Process Sheet No is required";
+    if (!header.workOrderNo)
+      errors.workOrderNo = "Work Order No is required";
 
     const validRows = detailRows.filter(
-      (r) => r.operationNo?.trim() || r.parametersToBeChecked?.trim(),
+      (r) => r.operationNo?.trim() || r.parametersToBeChecked?.trim()
     );
     if (!validRows.length)
       errors.firstArticleDetails =
         "Add at least one First Article Details row with Operation No";
+
     detailRows.forEach((r, i) => {
-      if (!r.operationNo?.trim()) errors[`detail.${i}.operationNo`] = "Operation No is required";
-      if (!r.parametersToBeChecked?.trim()) errors[`detail.${i}.parametersToBeChecked`] = "Parameters to be Checked is required";
+      if (!r.operationNo?.trim())
+        errors[`detail.${i}.operationNo`] = "Operation No is required";
+      if (!r.parametersToBeChecked?.trim())
+        errors[`detail.${i}.parametersToBeChecked`] =
+          "Parameters to be Checked is required";
     });
 
     if (!summary.reasonForInitialInspection?.trim())
-      errors.reasonForInitialInspection = "Reason for Initial Inspection is required";
+      errors.reasonForInitialInspection =
+        "Reason for Initial Inspection is required";
     if (!summary.comment?.trim()) errors.comment = "Comment is required";
-    if (!summary.recommendedForProduction) errors.recommendedForProduction = "Recommended for Production is required";
+    if (!summary.recommendedForProduction)
+      errors.recommendedForProduction =
+        "Recommended for Production is required";
 
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
   const handleSave = async () => {
-    if (!validate()) return;
+    if (!validate()) {
+      addToast("Please fix validation errors before saving", "error");
+      return;
+    }
 
     setIsSubmitting(true);
 
     const isUpdate = Boolean(data?.id);
 
+    // Build payload matching the target shape
     const payload = {
-      ...(isUpdate ? { id: data.id } : {}),
-      orgId,
+      active: data?.active === "Active" || data?.active === true || true,
       branch,
-      ...header,
-      firstArticleDetails: detailRows,
-      summary,
-      createdBy: isUpdate ? data?.createdBy || usersId : usersId,
-      ...(isUpdate ? { updatedBy: usersId } : {}),
+      cancel: false,
+      cancelRemarks: "",
+      comment: summary.comment || "",
+      createdBy: isUpdate ? data?.createdBy || usersId : usersId || "SYSTEM",
+      docDate: header.date || fmtDate(dayjs()),
+      docId: header.inspectionNo || "",
+      drawingNo: header.drawingNo || "",
+      financialYear: new Date().getFullYear().toString(),
+      gradeType: parseInt(header.gradeType) || 0,
+      initialStageInspectionDetailDTO: detailRows
+        .filter((r) => r.operationNo?.trim())
+        .map((r) => ({
+          id: r.id ? parseInt(r.id) : 0,
+          initialStageInspectionVO: 0,
+          operationDate: r.operationDate || "",
+          operationNo: r.operationNo || "",
+          operatorName: parseInt(r.operatorName) || 0,
+          parametersToBeChecked: r.parametersToBeChecked || "",
+          remarks: r.remarks || "",
+          sampling1: r.sampleInspection1 || "",
+          sampling2: r.sampleInspection2 || "",
+          sampling3: r.sampleInspection3 || "",
+          sampling4: r.sampleInspection4 || "",
+          sampling5: r.sampleInspection5 || "",
+          specification: r.specification || "",
+          time: r.time || "",
+        })),
+      itemCode: parseInt(header.itemCode) || 0,
+      itemDescription: header.itemDescription || "",
+      orgId,
+      partyDrawingNo: header.partyDrawingNo || "",
+      partyId: parseInt(header.partyId) || 0,
+      partyName: header.partyName || "",
+      preparedBy: parseInt(header.preparedBy) || 0,
+      preparedDate: header.preparedDate || "",
+      processSheetNo: header.processSheetNo || "",
+      reasonForInitialInspection: summary.reasonForInitialInspection || "",
+      recommendedForProduction: summary.recommendedForProduction || "",
+      shift: header.shift || "",
+      updatedBy: isUpdate ? usersId || "SYSTEM" : "",
+      workOrderNo: header.workOrderNo || "",
     };
+
+    if (isUpdate) {
+      payload.id = parseInt(data.id);
+    }
+
+    console.log("📤 Saving Initial Stage Inspection Payload:", payload);
 
     try {
       const response =
-        await initialStageInspectionAPI.createUpdateInitialStageInspection(payload);
+        await initialStageInspectionAPI.createUpdateInitialStageInspection(
+          payload
+        );
 
-      if (response?.status) {
+      const status =
+        response?.status === true ||
+        response?.success === true ||
+        response?.statusFlag === "Ok" ||
+        response?.status === "SUCCESS" ||
+        response?.status === 200 ||
+        response?.statusCode === 200;
+
+      if (status) {
         addToast(
           response?.paramObjectsMap?.message ||
-            (isUpdate
-              ? "Initial Stage Inspection updated successfully!"
-              : "Initial Stage Inspection created successfully!"),
+          (isUpdate
+            ? "Initial Stage Inspection updated successfully!"
+            : "Initial Stage Inspection created successfully!"),
+          "success"
         );
-        onBack?.();
+        if (onSave) onSave(payload);
+        else onBack?.();
       } else {
         addToast(
           response?.errors?.[0]?.shortMessage ||
-            response?.errors?.[0]?.longMessage ||
-            response?.message ||
-            response?.paramObjectsMap?.message ||
-            "Failed to save Initial Stage Inspection.",
+          response?.errors?.[0]?.longMessage ||
+          response?.message ||
+          response?.paramObjectsMap?.message ||
+          "Failed to save Initial Stage Inspection.",
+          "error"
         );
       }
     } catch (err) {
       console.error("Save Initial Stage Inspection Error:", err);
-      if (err.response?.data) {
-        addToast(
-          err.response.data.message ||
-            err.response.data.statusMessage ||
-            err.response.data.error ||
-            JSON.stringify(err.response.data),
-        );
-      } else {
-        addToast("Something went wrong.");
-      }
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.statusMessage ||
+        err?.response?.data?.error ||
+        err?.message ||
+        "Something went wrong.";
+      addToast(msg, "error");
     } finally {
       setIsSubmitting(false);
     }
@@ -658,6 +787,17 @@ const InitialStageInspectionForm = ({ data, onBack }) => {
               value={header.inspectionNo}
               onChange={handleHeaderChange}
               error={fieldErrors.inspectionNo}
+              placeholder={generatingDocId ? "Generating..." : "Auto"}
+              disabled
+              required
+            />
+            <Field
+              type="date"
+              label="Date"
+              name="date"
+              value={header.date}
+              onChange={handleHeaderChange}
+              error={fieldErrors.date}
               required
             />
             <Field
@@ -668,15 +808,6 @@ const InitialStageInspectionForm = ({ data, onBack }) => {
               onChange={handleHeaderChange}
               error={fieldErrors.shift}
               options={shiftOptions}
-              required
-            />
-            <Field
-              type="date"
-              label="Date"
-              name="date"
-              value={header.date}
-              onChange={handleHeaderChange}
-              error={fieldErrors.date}
               required
             />
             <Field
@@ -695,6 +826,7 @@ const InitialStageInspectionForm = ({ data, onBack }) => {
               value={header.itemDescription}
               onChange={handleHeaderChange}
               error={fieldErrors.itemDescription}
+              disabled
             />
             <Field
               label="Party Drawing No"
@@ -756,29 +888,28 @@ const InitialStageInspectionForm = ({ data, onBack }) => {
               disabled
             />
             <Field
+              type="select"
               label="Work Order No"
               name="workOrderNo"
               value={header.workOrderNo}
               onChange={handleHeaderChange}
               error={fieldErrors.workOrderNo}
+              options={workOrderOptions}
+              disabled={!header.partyId}
               required
             />
             <Field
-              type="select"
               label="Process Sheet No"
               name="processSheetNo"
               value={header.processSheetNo}
               onChange={handleHeaderChange}
               error={fieldErrors.processSheetNo}
-              options={processSheetOptions}
-              required
             />
           </div>
         </div>
 
         {/* ---------------- Child Tabs ---------------- */}
         <section className="mt-0 bg-white dark:bg-gray-800">
-          {/* Tabs */}
           <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 mb-0">
             <div className="flex flex-wrap">
               {CHILD_TABS.map((tab) => (
@@ -786,11 +917,10 @@ const InitialStageInspectionForm = ({ data, onBack }) => {
                   key={tab.key}
                   type="button"
                   onClick={() => setActiveChildTab(tab.key)}
-                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap transition-colors ${
-                    activeChildTab === tab.key
-                      ? "bg-blue-600 text-white"
-                      : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                  }`}
+                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap transition-colors ${activeChildTab === tab.key
+                    ? "bg-blue-600 text-white"
+                    : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                    }`}
                 >
                   {tab.label}
                 </button>
@@ -814,15 +944,44 @@ const InitialStageInspectionForm = ({ data, onBack }) => {
               <DynamicTable
                 columns={[
                   { key: "operationNo", label: "Operation No", type: "text" },
-                  { key: "parametersToBeChecked", label: "Parameters to be Checked", type: "text" },
+                  {
+                    key: "parametersToBeChecked",
+                    label: "Parameters to be Checked",
+                    type: "text",
+                  },
                   { key: "specification", label: "Specification", type: "text" },
-                  { key: "sampleInspection1", label: "Sample Inspection 1", type: "number" },
-                  { key: "sampleInspection2", label: "Sample Inspection 2", type: "number" },
-                  { key: "sampleInspection3", label: "Sample Inspection 3", type: "number" },
-                  { key: "sampleInspection4", label: "Sample Inspection 4", type: "number" },
-                  { key: "sampleInspection5", label: "Sample Inspection 5", type: "number" },
+                  {
+                    key: "sampleInspection1",
+                    label: "Sample Inspection 1",
+                    type: "number",
+                  },
+                  {
+                    key: "sampleInspection2",
+                    label: "Sample Inspection 2",
+                    type: "number",
+                  },
+                  {
+                    key: "sampleInspection3",
+                    label: "Sample Inspection 3",
+                    type: "number",
+                  },
+                  {
+                    key: "sampleInspection4",
+                    label: "Sample Inspection 4",
+                    type: "number",
+                  },
+                  {
+                    key: "sampleInspection5",
+                    label: "Sample Inspection 5",
+                    type: "number",
+                  },
                   { key: "time", label: "Time", type: "text" },
-                  { key: "operatorName", label: "Operator Name", type: "select", options: employeeOptions },
+                  {
+                    key: "operatorName",
+                    label: "Operator Name",
+                    type: "select",
+                    options: employeeOptions,
+                  },
                   { key: "operationDate", label: "Operation Date", type: "date" },
                   { key: "remarks", label: "Remarks", type: "textarea" },
                 ]}
@@ -833,16 +992,6 @@ const InitialStageInspectionForm = ({ data, onBack }) => {
               {fieldErrors.firstArticleDetails && (
                 <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
                   {fieldErrors.firstArticleDetails}
-                </p>
-              )}
-              {detailRows.some((r, i) => fieldErrors[`detail.${i}.operationNo`]) && (
-                <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
-                  Operation No is required in every row
-                </p>
-              )}
-              {detailRows.some((r, i) => fieldErrors[`detail.${i}.parametersToBeChecked`]) && (
-                <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
-                  Parameters to be Checked is required in every row
                 </p>
               )}
             </div>
@@ -874,7 +1023,7 @@ const InitialStageInspectionForm = ({ data, onBack }) => {
                   name="recommendedForProduction"
                   value={summary.recommendedForProduction}
                   onChange={handleSummaryChange}
-                  options={["Pass", "Hold", "Rework"]}
+                  options={RECOMMENDED_OPTIONS}
                   required
                 />
               </div>

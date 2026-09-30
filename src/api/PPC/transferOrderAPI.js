@@ -1,17 +1,13 @@
 import apiClient from "../apiClient";
 
-/* Transfer Order API
-   Mirrors the commonmaster API convention used across this app.
-   The backend persists the header + transfer details in a single transaction,
-   links the record to the supplier/contract and keeps the complete transfer
-   order history for audit purposes (server-side validation). */
 const transferOrderAPI = {
   getByOrgId: async (orgId) => {
     try {
       const res = await apiClient.get(
-        `/api/commonmaster/getTransferOrderByOrgId?orgId=${orgId}`,
+        "/api/develop/getTransferOrderByOrgId",
+        { params: { orgId } }
       );
-      return res?.paramObjectsMap?.transferOrderList || [];
+      return res?.paramObjectsMap?.transferOrderResponseVO || [];
     } catch (error) {
       console.error("Error fetching transfer orders:", error);
       throw error;
@@ -21,20 +17,67 @@ const transferOrderAPI = {
   getById: async (id) => {
     try {
       const res = await apiClient.get(
-        `/api/commonmaster/getTransferOrderById?id=${id}`,
+        "/api/develop/getTransferOrderById",
+        { params: { id } }
       );
-      return res?.paramObjectsMap?.transferOrderVO || null;
+      return res?.paramObjectsMap?.transferOrderResponseVO || null;
     } catch (error) {
       console.error("Error fetching transfer order by id:", error);
       throw error;
     }
   },
 
+  getTransferOrderDocId: async (orgId, financialYear) => {
+    try {
+      const res = await apiClient.get(
+        "/api/develop/getTransferOrderDocId",
+        { params: { orgId, financialYear } }
+      );
+      return res?.paramObjectsMap?.transferOrderDocId || "";
+    } catch (error) {
+      console.error("Error fetching transfer order doc id:", error);
+      throw error;
+    }
+  },
+
+  getTransferOrderItemDropdown: async (orgId) => {
+    try {
+      const res = await apiClient.get(
+        "/api/develop/getTransferOrderItemDropdown",
+        { params: { orgId } }
+      );
+      return res?.paramObjectsMap?.itemList || [];
+    } catch (error) {
+      console.error("Error fetching transfer order items:", error);
+      throw error;
+    }
+  },
+
+  // NEW
+  getTypeDropdownByOrderType: async (orderType, orgId) => {
+    try {
+      const res = await apiClient.get(
+        "/api/develop/getTypeDropdownByOrderTypeForTransferOrder",
+        { params: { orderType, orgId } }
+      );
+      return res?.paramObjectsMap?.typeList || [];
+    } catch (error) {
+      console.error("Error fetching type dropdown:", error);
+      throw error;
+    }
+  },
+
   createUpdate: async (data) => {
     try {
-      const res = await apiClient.post(
-        "/api/commonmaster/createUpdateTransferOrder",
+      const res = await apiClient.put(
+        "/api/develop/createUpdateTransferOrder",
         data,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+        }
       );
       return res;
     } catch (error) {

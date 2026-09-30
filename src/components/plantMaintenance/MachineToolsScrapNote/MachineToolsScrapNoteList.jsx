@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
-import { toast } from "../../../utils/toast";
+import machineToolsScrapNoteAPI from "../../../api/plantMaintenance/machineToolsScrapNoteAPI";
+import { useToast } from "../../Toast/ToastContext";
 
 const MachineToolsScrapNoteList = ({
   onAddNew,
@@ -11,28 +12,40 @@ const MachineToolsScrapNoteList = ({
   const [scrapNoteData, setScrapNoteData] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  const { addToast } = useToast();
+
   const ORG_ID = Number(localStorage.getItem("orgId"));
+  const BRANCH_ID = Number(localStorage.getItem("branchId"));
 
   const loadScrapNotes = useCallback(async () => {
+    if (!ORG_ID || !BRANCH_ID) {
+      setScrapNoteData([]);
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
 
-      const response =
-        await machineToolsScrapNoteAPI.getMachineToolsScrapNoteByOrgId(ORG_ID);
+      const list =
+        await machineToolsScrapNoteAPI.getMachineToolsScrapNoteByOrgId(
+          BRANCH_ID,
+          ORG_ID
+        );
 
-      const sortedData = (response || []).sort(
-        (a, b) => (b.id || 0) - (a.id || 0),
+      const sorted = (list || []).sort(
+        (a, b) => Number(b.id || 0) - Number(a.id || 0)
       );
 
-      setScrapNoteData(sortedData);
+      setScrapNoteData(sorted);
     } catch (error) {
       console.error("Failed to load machine tools scrap notes:", error);
+      addToast("Failed to fetch machine tools scrap notes", "error");
       setScrapNoteData([]);
-      toast.error("Failed to fetch machine tools scrap notes");
     } finally {
       setLoading(false);
     }
-  }, [ORG_ID]);
+  }, [ORG_ID, BRANCH_ID, addToast]);
 
   useEffect(() => {
     loadScrapNotes();
@@ -42,49 +55,58 @@ const MachineToolsScrapNoteList = ({
     {
       key: "msnNo",
       label: "MSN No",
-      accessor: (row) => row.header?.msnNo,
+      accessor: (row) => row.docId || row.msnNo || "-",
       type: "text",
     },
     {
       key: "msnDate",
       label: "MSN Date",
-      accessor: (row) => row.header?.msnDate,
+      accessor: (row) => row.docDate || row.msnDate || "-",
       type: "date",
     },
     {
       key: "plant",
       label: "Plant ID",
-      accessor: (row) => row.header?.plant,
+      accessor: (row) =>
+        row.branch?.branchName || row.branch?.branchCode || "-",
       type: "text",
     },
     {
       key: "department",
       label: "Department",
-      accessor: (row) => row.header?.department,
+      accessor: (row) =>
+        row.departement?.departmentName ||
+        row.department?.departmentName ||
+        row.departement?.departmentCode ||
+        row.department?.departmentCode ||
+        "-",
       type: "text",
     },
     {
       key: "fromLocation",
       label: "From Location",
-      accessor: (row) => row.header?.fromLocation,
+      accessor: (row) => row.fromLocation?.locationName || "-",
       type: "text",
     },
     {
       key: "toLocation",
       label: "To Location",
-      accessor: (row) => row.header?.toLocation,
+      accessor: (row) => row.toLocation?.locationName || "-",
       type: "text",
     },
     {
       key: "storeApproval",
       label: "Store Approval",
-      accessor: (row) => row.scrapDetails?.storeApproval,
+      accessor: (row) => row.storeApproval || "-",
       type: "badge",
     },
     {
       key: "active",
       label: "Status",
-      accessor: "active",
+      accessor: (row) =>
+        row.active === "Active" || row.active === true
+          ? "Active"
+          : "Inactive",
       type: "status",
     },
     {
@@ -96,7 +118,7 @@ const MachineToolsScrapNoteList = ({
     },
   ];
 
-  const searchFields = ["header.msnNo", "header.department"];
+  const searchFields = ["departement.departmentName", "belongsTo.description"];
 
   return (
     <div className="h-full flex flex-col">

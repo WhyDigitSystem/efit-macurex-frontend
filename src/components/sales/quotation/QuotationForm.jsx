@@ -230,11 +230,10 @@ const TableRow = ({
           type="button"
           onClick={onRemove}
           disabled={disabled}
-          className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-            disabled
+          className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
               ? "bg-gray-400 cursor-not-allowed"
               : "bg-red-600 hover:bg-red-700"
-          }`}
+            }`}
         >
           <Trash2 size={10} />
         </button>
@@ -301,6 +300,7 @@ const InputCell = ({
   errors,
   value,
   onChange,
+  disabled,
 }) => {
   const getError = () => {
     const parts = name.split(".");
@@ -328,8 +328,12 @@ const InputCell = ({
             {...field}
             type={type}
             step={step}
+            disabled={disabled}
             value={value !== undefined ? value : field.value}
-            className={`${controlClasses} ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
+            className={`${controlClasses} ${errorMessage ? "border-red-500 focus:border-red-500" : ""} ${disabled
+                ? "bg-gray-100 dark:bg-gray-700 cursor-not-allowed"
+                : ""
+              }`}
             onChange={(e) => {
               field.onChange(e);
 
@@ -483,6 +487,42 @@ const QuotationForm = ({ data, onBack }) => {
       }
     });
   }, [watchQuotationItems, itemData, setValue]);
+
+  // Auto-calculate Discount Amount and Quotation Amount per row
+  useEffect(() => {
+    (watchQuotationItems || []).forEach((row, index) => {
+      const qtyOffered = Number(row?.qtyOffered) || 0;
+      const basicPrice = Number(row?.basicPrice) || 0;
+      const discPercent = Number(row?.discPercent) || 0;
+
+      // Gross line amount = Qty Offered × Basic Price
+      const grossLineAmount = qtyOffered * basicPrice;
+
+      // Discount Amount = Gross × Disc% / 100
+      const discountAmount = (grossLineAmount * discPercent) / 100;
+
+      // Quot Amount = Gross − Discount
+      const quotAmount = grossLineAmount - discountAmount;
+
+      const roundedDiscount = Number(discountAmount.toFixed(2));
+      const roundedQuot = Number(quotAmount.toFixed(2));
+
+      // Only update if value changed to avoid infinite loops
+      if (Number(row?.discountAmount || 0) !== roundedDiscount) {
+        setValue(
+          `quotationItems.${index}.discountAmount`,
+          roundedDiscount,
+          { shouldDirty: true },
+        );
+      }
+
+      if (Number(row?.quotAmount || 0) !== roundedQuot) {
+        setValue(`quotationItems.${index}.quotAmount`, roundedQuot, {
+          shouldDirty: true,
+        });
+      }
+    });
+  }, [watchQuotationItems, setValue]);
 
   useEffect(() => {
     if (!taxDetailsArray.fields.length) return;
@@ -740,8 +780,8 @@ const QuotationForm = ({ data, onBack }) => {
 
       const options = enquiryList.map((item) => ({
         value: item.id,
-        label: item.enquiryNo,
-        enquiryDate: item.enquiryDate,
+        label: item.docId,
+        enquiryDate: item.docDate,
         customerEnquiryNo: item.partyRefNo,
         customerEnquiryDate: item.partyRefDate,
         enquiryDetails: item.enquiryDetails,
@@ -814,17 +854,17 @@ const QuotationForm = ({ data, onBack }) => {
 
             result[key] = Array.isArray(response)
               ? response
-                  .filter(
-                    (item) =>
-                      !excludedValues.includes(
-                        item.valuesDescription?.toUpperCase(),
-                      ),
-                  )
-                  .map((item) => ({
-                    value: item.id,
-                    label: item.valuesDescription,
-                    ...item,
-                  }))
+                .filter(
+                  (item) =>
+                    !excludedValues.includes(
+                      item.valuesDescription?.toUpperCase(),
+                    ),
+                )
+                .map((item) => ({
+                  value: item.id,
+                  label: item.valuesDescription,
+                  ...item,
+                }))
               : [];
           } catch (err) {
             console.error(`${group} failed`, err);
@@ -920,20 +960,30 @@ const QuotationForm = ({ data, onBack }) => {
         partyName: formData.partyName || "",
         preparedBy: userId || "admin",
         quotationItemDetailsDTO: (formData.quotationItems || []).map(
-          (item) => ({
-            basicPrice: Number(item.basicPrice || 0),
-            currencyName: Number(item.currencyName) || 0,
-            deliveryDate:
-              formatDateForAPI(item.date) ||
-              new Date().toISOString().split("T")[0],
-            discountPercentage: Number(item.discPercent || 0),
-            discountAmount: Number(item.discountAmount || 0),
-            item: Number(item.itemCode),
-            qty: Number(item.qty || 0),
-            qtyOffered: Number(item.qtyOffered || 0),
-            quotationAmount: Number(item.quotAmount || 0),
-            unit: item.unit || "",
-          }),
+          (item) => {
+            // Recompute to guarantee consistency with backend
+            const qtyOffered = Number(item.qtyOffered || 0);
+            const basicPrice = Number(item.basicPrice || 0);
+            const discPct = Number(item.discPercent || 0);
+            const grossLine = qtyOffered * basicPrice;
+            const discAmt = (grossLine * discPct) / 100;
+            const quotAmt = grossLine - discAmt;
+
+            return {
+              basicPrice,
+              currencyName: Number(item.currencyName) || 0,
+              deliveryDate:
+                formatDateForAPI(item.date) ||
+                new Date().toISOString().split("T")[0],
+              discountPercentage: discPct,
+              discountAmount: Number(discAmt.toFixed(2)),
+              item: Number(item.itemCode),
+              qty: Number(item.qty || 0),
+              qtyOffered,
+              quotationAmount: Number(quotAmt.toFixed(2)),
+              unit: item.unit || "",
+            };
+          },
         ),
         quotationItemTaxDetailsDTO: (formData.taxDetails || []).map((tax) => ({
           amount: Number(tax.amount || 0),
@@ -1197,11 +1247,10 @@ const QuotationForm = ({ data, onBack }) => {
                   key={tab}
                   type="button"
                   onClick={() => setActiveChildTab(tab)}
-                  className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${
-                    activeChildTab === tab
+                  className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${activeChildTab === tab
                       ? "bg-blue-600 text-white"
                       : "text-gray-600 dark:text-gray-300"
-                  }`}
+                    }`}
                 >
                   {tab === "pdfAttachment"
                     ? "PDF Attachment"
@@ -1250,14 +1299,26 @@ const QuotationForm = ({ data, onBack }) => {
               />
               <tbody>
                 {quotationItemsArray.fields.map((field, index) => {
+                  // ----- Auto-calculated display values -----
                   const qtyOffered =
-                    watchQuotationItems?.[index]?.qtyOffered || 0;
+                    Number(watchQuotationItems?.[index]?.qtyOffered) || 0;
                   const basicPrice =
-                    watchQuotationItems?.[index]?.basicPrice || 0;
+                    Number(watchQuotationItems?.[index]?.basicPrice) || 0;
                   const discPercent =
-                    watchQuotationItems?.[index]?.discPercent || 0;
-                  const discountAmount = (basicPrice * discPercent) / 100;
-                  const quotAmount = basicPrice - discountAmount;
+                    Number(watchQuotationItems?.[index]?.discPercent) || 0;
+
+                  // Gross = Qty Offered × Basic Price
+                  const grossLineAmount = qtyOffered * basicPrice;
+
+                  // Discount Amount = Gross × Disc% / 100
+                  const discountAmount = Number(
+                    ((grossLineAmount * discPercent) / 100).toFixed(2),
+                  );
+
+                  // Quot Amount = Gross − Discount
+                  const quotAmount = Number(
+                    (grossLineAmount - discountAmount).toFixed(2),
+                  );
 
                   return (
                     <TableRow
@@ -1338,6 +1399,7 @@ const QuotationForm = ({ data, onBack }) => {
                         placeholder="Disc.%"
                         errors={errors}
                       />
+                      {/* Auto-calculated: Discount Amount (read-only) */}
                       <InputCell
                         control={control}
                         name={`quotationItems.${index}.discountAmount`}
@@ -1345,8 +1407,11 @@ const QuotationForm = ({ data, onBack }) => {
                         step="0.01"
                         placeholder="Discount Amount"
                         errors={errors}
+                        value={discountAmount}
+                        disabled
                       />
 
+                      {/* Auto-calculated: Quot. Amount (read-only) */}
                       <InputCell
                         control={control}
                         name={`quotationItems.${index}.quotAmount`}
@@ -1354,6 +1419,8 @@ const QuotationForm = ({ data, onBack }) => {
                         step="0.01"
                         placeholder="Quotation Amount"
                         errors={errors}
+                        value={quotAmount}
+                        disabled
                       />
                       <InputCell
                         control={control}
@@ -1513,9 +1580,9 @@ const QuotationForm = ({ data, onBack }) => {
                           const fileDisplayName =
                             value && typeof value === "object"
                               ? value.fileName ||
-                                value.name ||
-                                value.filePath?.split("/").pop() ||
-                                "File"
+                              value.name ||
+                              value.filePath?.split("/").pop() ||
+                              "File"
                               : typeof value === "string"
                                 ? value.split("/").pop() || value
                                 : "";

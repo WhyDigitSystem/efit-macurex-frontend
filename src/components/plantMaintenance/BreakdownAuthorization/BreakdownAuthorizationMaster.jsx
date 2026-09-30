@@ -5,6 +5,7 @@ import BreakdownAuthorizationForm from "./BreakdownAuthorizationForm";
 const BreakdownAuthorizationMaster = () => {
   const [screen, setScreen] = useState("list");
   const [editData, setEditData] = useState(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const handleAddNew = () => {
     setEditData(null);
@@ -18,18 +19,14 @@ const BreakdownAuthorizationMaster = () => {
 
   const handleBack = () => {
     setScreen("list");
+    setEditData(null);
+    setRefreshTrigger((n) => n + 1); // refresh list after save/cancel
   };
 
-  const handleSave = async (payload) => {
-    try {
-      await breakdownAuthorizationAPI.updateCreateBreakdownAuthorization(
-        payload,
-      ); // Create/Update
-      handleBack();
-    } catch (error) {
-      console.error("Error saving breakdown authorization:", error);
-      throw error;
-    }
+  // The form already calls the save API and, on success, calls onSave.
+  // So here we only need to navigate back.
+  const handleSave = () => {
+    handleBack();
   };
 
   return (
@@ -39,6 +36,7 @@ const BreakdownAuthorizationMaster = () => {
           onAddNew={handleAddNew}
           onEdit={handleEdit}
           onBack={() => window.history.back()}
+          refreshTrigger={refreshTrigger}
         />
       )}
 
