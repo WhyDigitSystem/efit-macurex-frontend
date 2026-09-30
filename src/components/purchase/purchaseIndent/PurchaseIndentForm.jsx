@@ -188,7 +188,11 @@ const unitLabel = (unit) => {
   );
 };
 
-/* Normalise the conversion factor dropdown response into [{ value, label }] */
+/*
+ * Conversion factor dropdown entry from API:
+ *   { id: 1000000004, multiplicationFactor: 10.0 }
+ * value = id (sent to backend), label = multiplicationFactor (shown to user)
+ */
 const normalizeConversionOptions = (response) => {
   const list = pickArray(response, [
     "paramObjectsMap.conversionFactorDropdown",
@@ -199,25 +203,72 @@ const normalizeConversionOptions = (response) => {
 
   return list
     .map((entry) => {
-      const value =
-        entry && typeof entry === "object"
-          ? (entry.conversionFactor ??
-            entry.factor ??
-            entry.value ??
-            entry.conversionFactorValue)
-          : entry;
+      if (!entry || typeof entry !== "object") return null;
 
-      if (value === null || value === undefined || value === "") {
+      const id = entry.id;
+
+      const factor =
+        entry.multiplicationFactor ??
+        entry.conversionFactor ??
+        entry.factor ??
+        entry.value;
+
+      if (
+        id === null ||
+        id === undefined ||
+        factor === null ||
+        factor === undefined ||
+        factor === ""
+      ) {
         return null;
       }
 
-      return { value: String(value), label: String(value) };
+      if (seen.has(String(id))) return null;
+      seen.add(String(id));
+
+      return { id, value: String(id), label: String(factor) };
     })
-    .filter((option) => {
-      if (!option || seen.has(option.value)) return false;
-      seen.add(option.value);
-      return true;
-    });
+    .filter(Boolean);
+};
+
+/*
+ * Read the saved conversion factor from a detail row of the edit response.
+ * Handles: an object { id, multiplicationFactor }, a plain id, or
+ * alternative field names. Returns { value, option } where option is a
+ * ready-to-display dropdown entry (so it shows even if the dropdown
+ * API returns nothing).
+ */
+const extractSavedConversion = (detail) => {
+  const raw =
+    detail.conversionFactor ??
+    detail.conversionFactorId ??
+    detail.conversionFactorVO ??
+    null;
+
+  let id = "";
+  let label = null;
+
+  if (raw && typeof raw === "object") {
+    id = raw.id ?? "";
+    label =
+      raw.multiplicationFactor ?? raw.conversionFactor ?? raw.factor ?? null;
+  } else if (raw !== null && raw !== undefined && raw !== "") {
+    id = raw;
+    label = detail.multiplicationFactor ?? null;
+  }
+
+  if (id === "" || id === null || id === undefined) {
+    return { value: "", option: null };
+  }
+
+  return {
+    value: String(id),
+    option: {
+      id,
+      value: String(id),
+      label: label !== null && label !== undefined ? String(label) : String(id),
+    },
+  };
 };
 
 /* Fetch conversion factor options for a primary -> purchase unit pair */
@@ -1028,9 +1079,11 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
 
                 qtyInPrimaryUnit: detail.qtyInPrimaryUnit ?? "",
 
-                conversionFactor: detail.conversionFactor ?? "",
+                conversionFactor: extractSavedConversion(detail).value,
 
-                conversionOptions: [],
+                conversionOptions: extractSavedConversion(detail).option
+                  ? [extractSavedConversion(detail).option]
+                  : [],
 
                 qtyInPurchaseUnit: detail.qtyInPurchaseUnit ?? "",
 
@@ -1063,9 +1116,21 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
             if (cancelled || !options.length) return;
 
             setDetailRows((previous) =>
-              previous.map((row, i) =>
-                i === rowIndex ? { ...row, conversionOptions: options } : row,
-              ),
+              previous.map((row, i) => {
+                if (i !== rowIndex) return row;
+
+                /* keep the saved option if the API list doesn't include it */
+                const saved = row.conversionOptions || [];
+                const merged = [...options];
+
+                saved.forEach((option) => {
+                  if (!merged.some((o) => o.value === option.value)) {
+                    merged.unshift(option);
+                  }
+                });
+
+                return { ...row, conversionOptions: merged };
+              }),
             );
           });
         } else {
@@ -1699,56 +1764,29 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
                       />
                     </td>
 
-                    {/* Conversion Factor (dropdown when available, else manual) */}
+                    {/* Conversion Factor (saves ID, shows multiplicationFactor) */}
 
                     <td className="p-1 align-top">
-                      {row.conversionOptions?.length ? (
-                        <select
-                          value={row.conversionFactor}
-                          onChange={(event) =>
-                            handleDetailCellChange(
-                              index,
-                              "conversionFactor",
-                              event.target.value,
-                            )
-                          }
-                          className={cellInputClasses}
-                          disabled
-                        >
-                          <option value="">-- Select --</option>
+                      <select
+                        value={row.conversionFactor ?? ""}
+                        onChange={(event) =>
+                          handleDetailCellChange(
+                            index,
+                            "conversionFactor",
+                            event.target.value,
+                          )
+                        }
+                        disabled={(row.conversionOptions?.length ?? 0) <= 1}
+                        className={cellInputClasses}
+                      >
+                        <option value="">-- Select --</option>
 
-                          {row.conversionFactor !== "" &&
-                            !row.conversionOptions.some(
-                              (option) =>
-                                Number(option.value) ===
-                                Number(row.conversionFactor),
-                            ) && (
-                              <option value={row.conversionFactor}>
-                                {row.conversionFactor}
-                              </option>
-                            )}
-
-                          {row.conversionOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <input
-                          type="number"
-                          value={row.conversionFactor}
-                          onChange={(event) =>
-                            handleDetailCellChange(
-                              index,
-                              "conversionFactor",
-                              event.target.value,
-                            )
-                          }
-                          className={cellInputClasses}
-                          disabled
-                        />
-                      )}
+                        {row.conversionOptions?.map((option) => (
+                          <option key={option.id} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
                     </td>
 
                     {/* Qty In Purchase Unit (user entry) */}
