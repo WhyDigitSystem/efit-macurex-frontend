@@ -76,6 +76,35 @@ const money = (value) => round2(value).toFixed(2);
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
+/* ---- helpers used to map backend (edit) data into form state ---- */
+
+const isObj = (v) => v !== null && typeof v === "object";
+
+const norm = (v) =>
+  String(v ?? "")
+    .trim()
+    .toLowerCase();
+
+const isNumericLike = (v) => /^\d+$/.test(String(v ?? "").trim());
+
+/* First value that is not undefined / null / "" */
+const pick = (...values) => {
+  for (const v of values) {
+    if (v !== undefined && v !== null && v !== "") return v;
+  }
+  return "";
+};
+
+/* ID of a backend value that can be an object or a primitive */
+const idOf = (v, ...keys) => {
+  if (isObj(v)) {
+    return pick(...keys.map((k) => v[k]), v.id);
+  }
+  return v ?? "";
+};
+
+const SYSTEM_TAX_ROWS = ["Gross Amount", "IGST", "CGST", "SGST"];
+
 /* ========================================================================= */
 /* FIELD COMPONENT                                                            */
 /* ========================================================================= */
@@ -384,6 +413,7 @@ const PACKING_TYPES = ["Standard", "Wooden Packing", "Carton", "Pallet"];
 const emptyDetailRow = () => ({
   id: 0,
   item: "",
+  itemCodeText: "",
   itemDescription: "",
   hsnCode: "",
   unit: "",
@@ -434,6 +464,8 @@ const getDefaultValues = () => ({
   supplierRefNo: "",
   refDate: "",
   gstState: "",
+  gstStateName: "",
+  supplierCode: "",
 
   validFrom: "",
   validTo: "",
@@ -469,6 +501,260 @@ const getDefaultValues = () => ({
 });
 
 /* ========================================================================= */
+/* EDIT DATA MAPPING                                                         */
+/*                                                                           */
+/* Converts the backend contract (nested objects) into flat form state.      */
+/* ========================================================================= */
+
+const mapEditData = (c, fallbackBranchId) => {
+  const supplierObj = isObj(c.supplier) ? c.supplier : {};
+
+  const igstRaw = pick(c.igstAppl, c.IGSTAppl, c.isIgstAppl);
+  const isIgst =
+    igstRaw === true || ["true", "yes"].includes(String(igstRaw).toLowerCase());
+
+  const stateRaw = idOf(c.gstState, "stateId");
+  const gstStateId = isNumericLike(stateRaw)
+    ? String(stateRaw)
+    : isNumericLike(supplierObj.gstState)
+      ? String(supplierObj.gstState)
+      : "";
+
+  /* ------------------------------ header ------------------------------ */
+
+  const formData = {
+    ...getDefaultValues(),
+
+    active: !(
+      c.active === false || String(c.active).toLowerCase() === "inactive"
+    ),
+
+    branch: String(idOf(c.branch, "branchId") || fallbackBranchId || ""),
+
+    belongsTo: isObj(c.belongsTo)
+      ? String(
+          pick(c.belongsTo.name, c.belongsTo.value, c.belongsTo.description),
+        )
+      : String(c.belongsTo ?? ""),
+
+    contractNo: String(
+      pick(c.contractNo, c.purchaseContractNo, c.documentNo, c.docId),
+    ),
+
+    /* may be an id OR a name; resolved against options in an effect */
+    department: String(idOf(c.department, "departmentId")),
+
+    date: String(
+      pick(c.date, c.contractDate, c.docDate, c.documentDate, todayISO()),
+    ),
+
+    supplier: String(idOf(c.supplier, "supplierId")),
+
+    supplierCode: String(
+      pick(supplierObj.customerCode, supplierObj.supplierCode, c.supplierCode),
+    ),
+
+    supplierName: String(
+      pick(
+        supplierObj.customerName,
+        supplierObj.supplierName,
+        supplierObj.vendorName,
+        c.supplierName,
+      ),
+    ),
+
+    supplierRefNo: c.supplierRefNo || "",
+    refDate: c.refDate || "",
+
+    gstState: gstStateId,
+
+    gstStateName: isObj(c.gstState)
+      ? String(pick(c.gstState.stateName, c.gstState.stateCode))
+      : "",
+
+    validFrom: c.validFrom || "",
+    validTo: c.validTo || "",
+
+    isIgstAppl: isIgst ? "Yes" : "No",
+
+    purchaseOrderType: String(pick(c.purchaseOrderType, c.poType, "Local")),
+
+    gstnNo: String(pick(c.gstnNo, c.gstNo, supplierObj.gstNo)),
+
+    /* may be an id OR a name; resolved against options in an effect */
+    currency: String(idOf(c.currency, "currencyId")),
+
+    financialYear: String(
+      pick(c.financialYear, String(new Date().getFullYear())),
+    ),
+
+    accounts: c.accounts || "",
+    bank: c.bank || "",
+    swiftCode: c.swiftCode || "",
+    delivery: c.delivery || "",
+    freightForwarder: c.freightForwarder || "",
+    freightType: c.freightType || "",
+    insuranceAmount: pick(c.insuranceAmount, 0),
+    modeOfDespatch: c.modeOfDespatch || "",
+    packingType: c.packingType || "",
+    paymentTerms: c.paymentTerms || "",
+
+    /* backend stores names; resolved to employee ids in an effect */
+    preparedBy: String(idOf(c.preparedBy, "employeeId")),
+    checkedBy: String(idOf(c.checkedBy, "employeeId")),
+    authorisedBy: String(idOf(c.authorisedBy, "employeeId")),
+
+    termsConditions: c.termsConditions || "",
+    notes: c.notes || "",
+    cancelRemarks: c.cancelRemarks || "",
+
+    createdBy: c.createdBy || "",
+  };
+
+  /* ------------------------------ details ----------------------------- */
+
+  const rawDetails = Array.isArray(c.details) ? c.details : [];
+
+  const detailRows = rawDetails.length
+    ? rawDetails.map((d) => {
+        const itemObj = isObj(d.itemCode)
+          ? d.itemCode
+          : isObj(d.item)
+            ? d.item
+            : null;
+        const unitObj = isObj(d.unit) ? d.unit : null;
+
+        const sgstRate = toNumber(d.sgstRate);
+        const cgstRate = toNumber(d.cgstRate);
+        const igstRate = toNumber(d.igstRate);
+
+        /* backend can return 0 rates/amounts; recompute from tax % */
+        const pct = toNumber(
+          pick(
+            d.taxPercentage,
+            d.taxPercent,
+            isIgst ? igstRate : sgstRate + cgstRate,
+          ),
+        );
+        const taxable = Math.max(0, toNumber(pick(d.rateInCurrency, d.rate)));
+        const half = pct / 2;
+
+        return {
+          ...emptyDetailRow(),
+
+          id: d.id ?? 0,
+
+          item: itemObj
+            ? String(pick(itemObj.id, itemObj.itemId))
+            : isNumericLike(d.item)
+              ? String(d.item)
+              : "",
+
+          itemCodeText: itemObj
+            ? String(pick(itemObj.itemCode, itemObj.code))
+            : typeof d.itemCode === "string"
+              ? d.itemCode
+              : "",
+
+          itemDescription: String(
+            pick(
+              itemObj?.itemDescription,
+              itemObj?.itemDesc,
+              d.itemDescription,
+            ),
+          ),
+
+          hsnCode: String(pick(d.hsnCode, d.hsnSacCode, itemObj?.hsnCode)),
+
+          unit: unitObj
+            ? String(
+                pick(
+                  unitObj.id,
+                  isNumericLike(unitObj.unitId) ? unitObj.unitId : "",
+                ),
+              )
+            : isNumericLike(d.unit)
+              ? String(d.unit)
+              : "",
+
+          unitCode: unitObj
+            ? String(
+                pick(
+                  unitObj.unitDescription,
+                  unitObj.unitCode,
+                  unitObj.description,
+                  unitObj.unitId,
+                  d.unitCode,
+                ),
+              )
+            : typeof d.unit === "string" && !isNumericLike(d.unit)
+              ? d.unit
+              : String(d.unitCode ?? ""),
+
+          rateInCurrency: pick(d.rateInCurrency, d.rate, ""),
+
+          taxType: d.taxType || "",
+
+          taxPercentage: pick(
+            d.taxPercentage,
+            d.taxPercent,
+            isIgst ? igstRate : sgstRate + cgstRate,
+          ),
+
+          sgstRate: isIgst ? 0 : half,
+          cgstRate: isIgst ? 0 : half,
+          igstRate: isIgst ? pct : 0,
+
+          sgstAmount: isIgst ? 0 : round2((taxable * half) / 100),
+          cgstAmount: isIgst ? 0 : round2((taxable * half) / 100),
+          igstAmount: isIgst ? round2((taxable * pct) / 100) : 0,
+
+          validFrom: d.validFrom || "",
+          validTo: d.validTo || "",
+        };
+      })
+    : [emptyDetailRow()];
+
+  /* ----------------------------- tax rows ----------------------------- */
+
+  /*
+   * System rows (Gross Amount / IGST / CGST / SGST) are regenerated by the
+   * form, so only the user-added rows are mapped here.
+   */
+  const userTaxRows = (Array.isArray(c.taxDetails) ? c.taxDetails : [])
+    .filter((t) => !SYSTEM_TAX_ROWS.includes(t.particulars))
+    .map((t, index) => ({
+      id: t.id ?? index + 1,
+      particulars: String(pick(t.particulars, t.particular)),
+      tax: pick(t.taxPercent, t.tax, ""),
+      amount: pick(t.amount, ""),
+      isSystemRow: false,
+    }));
+
+  const taxRows = userTaxRows.length ? userTaxRows : [emptyTaxRow()];
+
+  /* ----------------------------- attachments -------------------------- */
+
+  const rawFiles = Array.isArray(c.attachments)
+    ? c.attachments
+    : Array.isArray(c.files)
+      ? c.files
+      : [];
+
+  const fileRows = rawFiles.length
+    ? rawFiles.map((f) => ({
+        id: f.id,
+        name: String(pick(f.name, f.fileName, f.attachmentName)),
+        file: null,
+        filePath: String(pick(f.filePath, f.path, f.url)),
+        isExisting: true,
+      }))
+    : [emptyFileRow()];
+
+  return { formData, detailRows, taxRows, fileRows };
+};
+
+/* ========================================================================= */
 /* COMPONENT                                                                */
 /* ========================================================================= */
 
@@ -485,52 +771,36 @@ const PurchaseContractForm = ({ data: editData, onBack }) => {
   /* FORM STATE                                                              */
   /* ----------------------------------------------------------------------- */
 
-  const [formData, setFormData] = useState(() => ({
-    ...getDefaultValues(),
+  /*
+   * The row passed in from the list seeds the form instantly.
+   * The full record is then fetched with getContractById (see effect below)
+   * and replaces this state.
+   */
+  const [mapped] = useState(() =>
+    isEditMode ? mapEditData(editData, BRANCH_ID) : null,
+  );
 
-    branch: String(editData?.branch ?? BRANCH_ID ?? ""),
-
-    ...(editData || {}),
-  }));
+  const [formData, setFormData] = useState(() =>
+    mapped
+      ? mapped.formData
+      : {
+          ...getDefaultValues(),
+          branch: String(BRANCH_ID || ""),
+        },
+  );
 
   const effectiveBranchId = toInteger(formData.branch || BRANCH_ID);
 
   const [detailRows, setDetailRows] = useState(
-    editData?.details?.length ? editData.details : [emptyDetailRow()],
+    mapped ? mapped.detailRows : [emptyDetailRow()],
   );
 
-  const [taxRows, setTaxRows] = useState(() => {
-    const existing = editData?.taxDetails;
-
-    if (!existing?.length) {
-      return [emptyTaxRow()];
-    }
-
-    return existing.map((row, index) => ({
-      ...row,
-
-      id: row.id ?? index + 1,
-
-      isSystemRow:
-        Boolean(row.isSystemRow) ||
-        ["Gross Amount", "IGST", "CGST", "SGST"].includes(row.particulars),
-    }));
-  });
+  const [taxRows, setTaxRows] = useState(
+    mapped ? mapped.taxRows : [emptyTaxRow()],
+  );
 
   const [fileRows, setFileRows] = useState(
-    editData?.files?.length
-      ? editData.files.map((file) => ({
-          name: file.name || file.fileName || "",
-
-          file: null,
-
-          filePath: file.filePath || "",
-
-          id: file.id,
-
-          isExisting: true,
-        }))
-      : [emptyFileRow()],
+    mapped ? mapped.fileRows : [emptyFileRow()],
   );
 
   /* ----------------------------------------------------------------------- */
@@ -560,6 +830,15 @@ const PurchaseContractForm = ({ data: editData, onBack }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [generatingDocId, setGeneratingDocId] = useState(false);
+
+  /* true while getContractById is running (edit mode only) */
+  const [isLoadingContract, setIsLoadingContract] = useState(isEditMode);
+
+  /*
+   * Bumped after the contract is loaded so the "resolve saved values against
+   * options" effects re-run on the freshly fetched data.
+   */
+  const [hydrationKey, setHydrationKey] = useState(0);
 
   /* ========================================================================= */
   /* MASTER DATA LOADERS                                                       */
@@ -648,6 +927,8 @@ const PurchaseContractForm = ({ data: editData, onBack }) => {
             department.departmentName ||
             department.name ||
             `Dept ${department.id}`,
+
+          departmentCode: department.departmentCode || "",
         })),
       );
     } catch (error) {
@@ -826,6 +1107,71 @@ const PurchaseContractForm = ({ data: editData, onBack }) => {
   );
 
   /* ========================================================================= */
+  /* EDIT MODE: LOAD FULL CONTRACT BY ID                                       */
+  /* ========================================================================= */
+
+  useEffect(() => {
+    if (!isEditMode) return;
+
+    let cancelled = false;
+
+    const loadContract = async () => {
+      setIsLoadingContract(true);
+
+      try {
+        const response = await purchaseContractAPI.getContractById(editData.id);
+
+        const contract = Array.isArray(response) ? response[0] : response;
+
+        if (cancelled) return;
+
+        if (!contract) {
+          addToast("Purchase contract not found", "error");
+          return;
+        }
+
+        console.log("getContractById response:", contract);
+
+        /*
+         * The by-id response may omit some fields (Belongs To, Ref No,
+         * Ref Date, Currency ...). Fall back to the list row for anything
+         * the by-id response leaves out.
+         */
+        const nonNull = Object.fromEntries(
+          Object.entries(contract).filter(
+            ([, v]) => v !== null && v !== undefined,
+          ),
+        );
+
+        const m = mapEditData({ ...editData, ...nonNull }, BRANCH_ID);
+
+        setFormData(m.formData);
+        setDetailRows(m.detailRows);
+        setTaxRows(m.taxRows);
+        setFileRows(m.fileRows);
+
+        setHydrationKey((key) => key + 1);
+      } catch (error) {
+        if (!cancelled) {
+          console.error("Failed to load purchase contract:", error);
+
+          addToast("Failed to load purchase contract details", "error");
+        }
+      } finally {
+        if (!cancelled) setIsLoadingContract(false);
+      }
+    };
+
+    loadContract();
+
+    return () => {
+      cancelled = true;
+    };
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditMode, editData?.id]);
+
+  /* ========================================================================= */
   /* MASTER DATA USE EFFECT                                                   */
   /* ========================================================================= */
 
@@ -854,6 +1200,214 @@ const PurchaseContractForm = ({ data: editData, onBack }) => {
       setItemOptions([]);
     }
   }, [formData.supplier, loadContractItems]);
+
+  /* ========================================================================= */
+  /* EDIT MODE: RESOLVE SAVED VALUES AGAINST LOADED OPTIONS                    */
+  /* ========================================================================= */
+
+  /*
+   * 1) Department / Currency / Prepared By / Checked By / Authorised By
+   *
+   * If the saved value is not one of the option values (for example the
+   * backend returned a name instead of an ID), match it by label and swap
+   * in the option value so the select shows it.
+   */
+  useEffect(() => {
+    if (!isEditMode) return;
+
+    setFormData((previous) => {
+      let next = previous;
+
+      const resolve = (field, options) => {
+        const current = previous[field];
+
+        if (current === "" || current === null || current === undefined) return;
+        if (!options.length) return;
+
+        if (options.some((o) => String(o.value) === String(current))) return;
+
+        const match = options.find((o) =>
+          [o.label, o.employeeName, o.departmentCode]
+            .filter(Boolean)
+            .some((text) => norm(text) === norm(current)),
+        );
+
+        if (match) {
+          if (next === previous) next = { ...previous };
+          next[field] = String(match.value);
+        }
+      };
+
+      resolve("department", departmentOptions);
+      resolve("currency", currencyOptions);
+      resolve("preparedBy", employeeOptions);
+      resolve("checkedBy", employeeOptions);
+      resolve("authorisedBy", employeeOptions);
+
+      return next;
+    });
+  }, [
+    isEditMode,
+    departmentOptions,
+    currencyOptions,
+    employeeOptions,
+    hydrationKey,
+  ]);
+
+  /*
+   * 2) Supplier details (name / GSTN / GST state)
+   *
+   * Only fills values that are empty, so nothing the user typed is overwritten.
+   */
+  useEffect(() => {
+    if (!isEditMode || !formData.supplier || !supplierOptions.length) return;
+
+    const selected = supplierOptions.find(
+      (o) => String(o.value) === String(formData.supplier),
+    );
+
+    if (!selected) {
+      /* saved id differs from dropdown id -> match by supplier code */
+      const byCode = formData.supplierCode
+        ? supplierOptions.find(
+            (o) => norm(o.label) === norm(formData.supplierCode),
+          )
+        : null;
+
+      if (byCode) {
+        setFormData((previous) => ({
+          ...previous,
+          supplier: String(byCode.value),
+        }));
+      }
+
+      return;
+    }
+
+    setFormData((previous) => {
+      const patch = {};
+
+      if (!previous.supplierName && selected.supplierName) {
+        patch.supplierName = selected.supplierName;
+      }
+
+      if (!previous.gstnNo && selected.gstNo) {
+        patch.gstnNo = selected.gstNo;
+      }
+
+      if (!previous.gstState && selected.gstState !== "") {
+        patch.gstState = selected.gstState;
+      }
+
+      return Object.keys(patch).length ? { ...previous, ...patch } : previous;
+    });
+  }, [
+    isEditMode,
+    formData.supplier,
+    formData.supplierCode,
+    supplierOptions,
+    hydrationKey,
+  ]);
+
+  /*
+   * 3) Item rows
+   *
+   * Once the contract items load: match rows by item code if the ID is
+   * missing, and fill description / HSN / unit when they are empty.
+   */
+  useEffect(() => {
+    if (!isEditMode || !itemOptions.length) return;
+
+    setDetailRows((previous) => {
+      let changed = false;
+
+      const next = previous.map((row) => {
+        let current = row;
+
+        let option = itemOptions.find(
+          (o) => String(o.value) === String(current.item),
+        );
+
+        if (!option && current.itemCodeText) {
+          option = itemOptions.find(
+            (o) => norm(o.label) === norm(current.itemCodeText),
+          );
+
+          if (option) {
+            current = { ...current, item: String(option.value) };
+          }
+        }
+
+        if (option) {
+          const patch = {};
+
+          if (!current.itemDescription && option.itemDescription) {
+            patch.itemDescription = option.itemDescription;
+          }
+
+          if (!current.hsnCode && option.hsnCode) {
+            patch.hsnCode = option.hsnCode;
+          }
+
+          if (!current.unit && option.unitId !== "") {
+            patch.unit = option.unitId;
+          }
+
+          if (!current.unitCode && option.unitCode) {
+            patch.unitCode = option.unitCode;
+          }
+
+          if (Object.keys(patch).length) {
+            current = { ...current, ...patch };
+          }
+        }
+
+        if (current !== row) changed = true;
+
+        return current;
+      });
+
+      return changed ? next : previous;
+    });
+  }, [isEditMode, itemOptions, hydrationKey]);
+
+  /*
+   * 4) Tax rows
+   *
+   * The backend stores the tax NAME in "particulars", but the select works
+   * with tax-definition IDs. Convert name -> ID once definitions load.
+   */
+  useEffect(() => {
+    if (!isEditMode || !taxDefinitionOptions.length) return;
+
+    setTaxRows((previous) => {
+      let changed = false;
+
+      const next = previous.map((row) => {
+        if (row.isSystemRow || !row.particulars) return row;
+
+        if (
+          taxDefinitionOptions.some(
+            (o) => String(o.value) === String(row.particulars),
+          )
+        ) {
+          return row;
+        }
+
+        const match = taxDefinitionOptions.find(
+          (o) => norm(o.label) === norm(row.particulars),
+        );
+
+        if (!match) return row;
+
+        changed = true;
+
+        return { ...row, particulars: String(match.value) };
+      });
+
+      return changed ? next : previous;
+    });
+  }, [isEditMode, taxDefinitionOptions, hydrationKey]);
 
   /* ========================================================================= */
   /* CONTRACT NUMBER                                                           */
@@ -926,6 +1480,7 @@ const PurchaseContractForm = ({ data: editData, onBack }) => {
         supplierName: "",
 
         gstState: "",
+        gstStateName: "",
         gstnNo: "",
 
         isIgstAppl: "No",
@@ -951,6 +1506,8 @@ const PurchaseContractForm = ({ data: editData, onBack }) => {
         supplierName: selected?.supplierName || "",
 
         gstState: selected?.gstState ?? "",
+
+        gstStateName: "",
 
         gstnNo: selected?.gstNo || "",
 
@@ -1324,13 +1881,20 @@ const PurchaseContractForm = ({ data: editData, onBack }) => {
   };
 
   const handleViewFile = (row) => {
-    if (!row.file) return;
+    if (row.file) {
+      const url = URL.createObjectURL(row.file);
 
-    const url = URL.createObjectURL(row.file);
+      window.open(url, "_blank", "noopener,noreferrer");
 
-    window.open(url, "_blank", "noopener,noreferrer");
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
 
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
+      return;
+    }
+
+    /* Existing (already saved) attachment */
+    if (row.isExisting && row.filePath) {
+      window.open(row.filePath, "_blank", "noopener,noreferrer");
+    }
   };
 
   /* ========================================================================= */
@@ -1416,34 +1980,16 @@ const PurchaseContractForm = ({ data: editData, onBack }) => {
   /* ========================================================================= */
 
   const handleSave = async () => {
+    if (isLoadingContract) return;
+
     if (!validate()) return;
 
     setIsSubmitting(true);
 
     try {
       /*
-       * ---------------------------------------------------------------------
-       * DETAILS
-       *
-       * Must exactly match Swagger:
-       *
-       * cgstAmount       number
-       * cgstRate         number
-       * hsnCode          string
-       * igstAmount       number
-       * igstRate         number
-       * item             number
-       * rateInCurrency   number
-       * sgstAmount       number
-       * sgstRate         number
-       * taxPercentage    string
-       * taxType          string
-       * unit              number
-       * validFrom        string/date
-       * validTo          string/date
-       * ---------------------------------------------------------------------
+       * DETAILS - must match Swagger.
        */
-
       const details = detailRows
         .filter((row) => row.item)
         .map((row) => ({
@@ -1465,9 +2011,7 @@ const PurchaseContractForm = ({ data: editData, onBack }) => {
 
           sgstRate: toNumber(row.sgstRate),
 
-          /*
-           * Swagger says String.
-           */
+          /* Swagger says String. */
           taxPercentage: String(row.taxPercentage ?? ""),
 
           taxType: row.taxType || "",
@@ -1496,13 +2040,8 @@ const PurchaseContractForm = ({ data: editData, onBack }) => {
         });
 
       /*
-       * ---------------------------------------------------------------------
-       * EMPLOYEE NAMES
-       *
-       * Swagger expects String for these fields.
-       * ---------------------------------------------------------------------
+       * EMPLOYEE NAMES - Swagger expects String for these fields.
        */
-
       const preparedByName =
         employeeOptions.find(
           (employee) => String(employee.value) === String(formData.preparedBy),
@@ -1526,14 +2065,8 @@ const PurchaseContractForm = ({ data: editData, onBack }) => {
         "";
 
       /*
-       * ---------------------------------------------------------------------
        * FINAL API PAYLOAD
-       *
-       * IMPORTANT:
-       * This object now follows the Swagger request body exactly.
-       * ---------------------------------------------------------------------
        */
-
       const payload = {
         ...(isEditMode && {
           id: toInteger(editData.id),
@@ -1597,6 +2130,10 @@ const PurchaseContractForm = ({ data: editData, onBack }) => {
 
         supplier: toInteger(formData.supplier),
 
+        supplierRefNo: formData.supplierRefNo || "",
+
+        refDate: formData.refDate || "",
+
         swiftCode: formData.swiftCode || "",
 
         taxDetails,
@@ -1609,10 +2146,12 @@ const PurchaseContractForm = ({ data: editData, onBack }) => {
       };
 
       /*
-       * ---------------------------------------------------------------------
-       * DEBUG
-       * ---------------------------------------------------------------------
+       * FILES - only newly selected files are uploaded.
+       * Existing (already saved) rows have file === null.
        */
+      const newFiles = fileRows
+        .filter((row) => row.file instanceof File)
+        .map((row) => row.file);
 
       console.log("========================================");
 
@@ -1624,15 +2163,21 @@ const PurchaseContractForm = ({ data: editData, onBack }) => {
 
       console.log("TAX DETAILS:", JSON.stringify(taxDetails, null, 2));
 
+      console.log(
+        "FILES:",
+        newFiles.map((file) => ({
+          name: file.name,
+          type: file.type,
+          size: file.size,
+        })),
+      );
+
       console.log("========================================");
 
-      /*
-       * ---------------------------------------------------------------------
-       * API CALL
-       * ---------------------------------------------------------------------
-       */
-
-      const response = await purchaseContractAPI.createUpdateContract(payload);
+      const response = await purchaseContractAPI.createUpdateContract(
+        payload,
+        newFiles,
+      );
 
       console.log("Purchase Contract API Response:", response);
 
@@ -1684,6 +2229,7 @@ const PurchaseContractForm = ({ data: editData, onBack }) => {
         backendData?.paramObjectsMap?.errorMessage ||
         backendData?.paramObjectsMap?.message ||
         (typeof backendData === "string" ? backendData : "") ||
+        error?.message ||
         "Failed to save Purchase Contract.";
 
       addToast(errorMessage, "error");
@@ -1820,7 +2366,14 @@ const PurchaseContractForm = ({ data: editData, onBack }) => {
         </h2>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
+      <div className="relative bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
+        {/* LOADING OVERLAY (edit mode, while getContractById runs) */}
+        {isLoadingContract && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-white/70 dark:bg-gray-800/70 text-xs text-gray-600 dark:text-gray-300">
+            Loading contract...
+          </div>
+        )}
+
         {/* HEADER */}
         <div>
           <SectionHeader>Purchase Contract (Open)</SectionHeader>
@@ -1912,7 +2465,7 @@ const PurchaseContractForm = ({ data: editData, onBack }) => {
             <Field
               label="GST State"
               name="gstState"
-              value={formData.gstState}
+              value={formData.gstStateName || formData.gstState}
               onChange={handleFieldChange}
               disabled
             />
@@ -2345,7 +2898,7 @@ const PurchaseContractForm = ({ data: editData, onBack }) => {
           <button
             type="button"
             onClick={handleSave}
-            disabled={isSubmitting}
+            disabled={isSubmitting || isLoadingContract}
             className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
           >
             <Save className="h-3 w-3" />

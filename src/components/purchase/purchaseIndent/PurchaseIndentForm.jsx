@@ -1767,26 +1767,12 @@ const PurchaseIndentForm = ({ onBack, onSave, data }) => {
                     {/* Conversion Factor (saves ID, shows multiplicationFactor) */}
 
                     <td className="p-1 align-top">
-                      <select
-                        value={row.conversionFactor ?? ""}
-                        onChange={(event) =>
-                          handleDetailCellChange(
-                            index,
-                            "conversionFactor",
-                            event.target.value,
-                          )
-                        }
-                        disabled={(row.conversionOptions?.length ?? 0) <= 1}
+                      <input
+                        type="text"
+                        value={row.conversionOptions?.[0]?.label ?? ""}
+                        readOnly
                         className={cellInputClasses}
-                      >
-                        <option value="">-- Select --</option>
-
-                        {row.conversionOptions?.map((option) => (
-                          <option key={option.id} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
+                      />
                     </td>
 
                     {/* Qty In Purchase Unit (user entry) */}

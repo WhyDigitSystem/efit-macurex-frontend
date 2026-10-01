@@ -1,16 +1,37 @@
-import { ArrowLeft, Save, X, Plus, Trash2, Copy } from "lucide-react";
-import { useState, useEffect, useCallback } from "react";
-import dayjs from "dayjs";
+import {
+  ArrowLeft,
+  Save,
+  X,
+  Plus,
+  Trash2,
+  Copy,
+  UploadCloud,
+  Eye,
+  File as FileIcon,
+} from "lucide-react";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import branchAPI from "../../../api/branchAPI";
 import { employeeAPI } from "../../../api/employeeAPI";
 import listOfValuesAPI from "../../../api/listOfValuesAPI";
 import directPurchaseAPI from "../../../api/Purchase/directPurchaseAPI";
-
 import { useToast } from "../../Toast/ToastContext";
+
+/* ========================================================================= */
+/* DESIGN TOKENS                                                             */
+/* ========================================================================= */
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
+  "bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 " +
+  "text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 " +
+  "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
+  "dark:focus:ring-blue-400 dark:focus:border-blue-400 " +
+  "disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed";
+
+const cellInputClasses =
+  "w-full h-8 px-2 rounded border text-xs leading-none transition-colors " +
   "bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 " +
   "text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 " +
   "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
@@ -23,27 +44,9 @@ const labelClasses =
 const fieldGrid =
   "grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-x-3 gap-y-2 items-start";
 
-const SectionHeader = ({ children }) => (
-  <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">
-    {children}
-  </h3>
-);
-
-const ToggleButton = ({ value, onChange }) => (
-  <button
-    type="button"
-    onClick={() => onChange(!value)}
-    className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${
-      value ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
-    }`}
-  >
-    <span
-      className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${
-        value ? "translate-x-6" : "translate-x-0.5"
-      }`}
-    />
-  </button>
-);
+/* ========================================================================= */
+/* HELPERS                                                                   */
+/* ========================================================================= */
 
 const toNumber = (value, fallback = 0) => {
   if (value === null || value === undefined || value === "") {
@@ -65,28 +68,373 @@ const toInteger = (value, fallback = 0) => {
   return Number.isFinite(number) ? number : fallback;
 };
 
-const SUPP_TYPE_OPTIONS = ["Local", "Import"];
+const round2 = (value) =>
+  Math.round((toNumber(value) + Number.EPSILON) * 100) / 100;
 
-const DEALER_TYPE_OPTIONS = ["Registered", "Unregistered", "Importer"];
+const money = (value) => round2(value).toFixed(2);
+
+const todayISO = () => new Date().toISOString().slice(0, 10);
+
+const isObj = (v) => v !== null && typeof v === "object";
+
+const norm = (v) =>
+  String(v ?? "")
+    .trim()
+    .toLowerCase();
+
+const isNumericLike = (v) => /^\d+$/.test(String(v ?? "").trim());
+
+/* First value that is not undefined / null / "" */
+const pick = (...values) => {
+  for (const v of values) {
+    if (v !== undefined && v !== null && v !== "") return v;
+  }
+  return "";
+};
+
+/* ID of a backend value that can be an object or a primitive */
+const idOf = (v, ...keys) => {
+  if (isObj(v)) {
+    return pick(...keys.map((k) => v[k]), v.id);
+  }
+  return v ?? "";
+};
+
+const isYes = (v) =>
+  v === true || ["true", "yes"].includes(String(v).toLowerCase());
+
+/* ========================================================================= */
+/* FIELD COMPONENT                                                           */
+/* ========================================================================= */
+
+const Field = ({
+  label,
+  name,
+  value,
+  onChange,
+  error,
+  required,
+  type = "text",
+  options,
+  disabled,
+  className = "",
+  step,
+  min,
+}) => {
+  if (type === "select") {
+    return (
+      <div className={`w-full ${className}`}>
+        <label className={labelClasses}>
+          {label} {required && <span className="text-red-500">*</span>}
+        </label>
+
+        <select
+          name={name}
+          value={value ?? ""}
+          onChange={onChange}
+          disabled={disabled}
+          className={`${controlClasses} ${error ? "border-red-500" : ""}`}
+        >
+          <option value="">-- Select --</option>
+
+          {(options || []).map((opt) => (
+            <option
+              key={typeof opt === "object" ? opt.value : opt}
+              value={typeof opt === "object" ? opt.value : opt}
+            >
+              {typeof opt === "object" ? opt.label : opt}
+            </option>
+          ))}
+        </select>
+
+        {error && <p className="text-[11px] text-red-500 mt-0.5">{error}</p>}
+      </div>
+    );
+  }
+
+  if (type === "textarea") {
+    return (
+      <div className={`w-full ${className}`}>
+        <label className={labelClasses}>
+          {label} {required && <span className="text-red-500">*</span>}
+        </label>
+
+        <textarea
+          name={name}
+          value={value ?? ""}
+          onChange={onChange}
+          rows={3}
+          disabled={disabled}
+          className={
+            "w-full px-2 py-1.5 rounded border text-xs leading-snug transition-colors resize-y " +
+            "bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 " +
+            "text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 " +
+            "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
+            "dark:focus:ring-blue-400 dark:focus:border-blue-400"
+          }
+        />
+
+        {error && <p className="text-[11px] text-red-500 mt-0.5">{error}</p>}
+      </div>
+    );
+  }
+
+  return (
+    <div className={`w-full ${className}`}>
+      <label className={labelClasses}>
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+
+      <input
+        type={type}
+        step={step}
+        min={min}
+        name={name}
+        value={value ?? ""}
+        onChange={onChange}
+        disabled={disabled}
+        className={`${controlClasses} ${error ? "border-red-500" : ""}`}
+      />
+
+      {error && <p className="text-[11px] text-red-500 mt-0.5">{error}</p>}
+    </div>
+  );
+};
+
+/* ========================================================================= */
+/* TABLE COMPONENTS                                                          */
+/* ========================================================================= */
+
+const SectionHeader = ({ children }) => (
+  <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">
+    {children}
+  </h3>
+);
+
+const TableWrapper = ({ children }) => (
+  <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
+    <table className="w-full text-xs min-w-max">{children}</table>
+  </div>
+);
+
+const TableHead = ({ headers }) => (
+  <thead className="bg-gray-100 dark:bg-gray-700">
+    <tr>
+      {headers.map((header, index) => (
+        <th
+          key={index}
+          className={`p-1.5 whitespace-nowrap text-[10px] font-medium dark:text-white ${
+            index === 0 ? "w-8 text-center" : "text-left"
+          }`}
+        >
+          {header}
+        </th>
+      ))}
+    </tr>
+  </thead>
+);
+
+const TableRow = ({ children, index, onRemove, onCopy, disabled }) => (
+  <tr className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
+    <td className="p-1 text-center font-medium dark:text-white text-[10px]">
+      {index + 1}
+    </td>
+
+    {children}
+
+    <td className="p-1 text-center">
+      <div className="flex items-center justify-center gap-1">
+        {onCopy && (
+          <button
+            type="button"
+            onClick={onCopy}
+            className="h-5 w-5 rounded text-white bg-blue-600 hover:bg-blue-700 flex items-center justify-center"
+          >
+            <Copy size={10} />
+          </button>
+        )}
+
+        <button
+          type="button"
+          onClick={onRemove}
+          disabled={disabled}
+          className={`h-5 w-5 rounded text-white flex items-center justify-center ${
+            disabled
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-red-600 hover:bg-red-700"
+          }`}
+        >
+          <Trash2 size={10} />
+        </button>
+      </div>
+    </td>
+  </tr>
+);
+
+const SelectCell = ({ value, onChange, options, disabled = false }) => (
+  <td className="p-0.5 align-top min-w-[110px]">
+    <select
+      value={value ?? ""}
+      onChange={onChange}
+      disabled={disabled}
+      className={cellInputClasses}
+    >
+      <option value="">Select</option>
+
+      {(options || []).map((opt) => (
+        <option
+          key={typeof opt === "object" ? opt.value : opt}
+          value={typeof opt === "object" ? opt.value : opt}
+        >
+          {typeof opt === "object" ? opt.label : opt}
+        </option>
+      ))}
+    </select>
+  </td>
+);
+
+const InputCell = ({
+  value,
+  onChange,
+  type = "text",
+  disabled,
+  minWidth = "100px",
+  min,
+  step,
+}) => (
+  <td className="p-0.5 align-top" style={{ minWidth }}>
+    <input
+      type={type}
+      value={value ?? ""}
+      onChange={onChange}
+      disabled={disabled}
+      min={min}
+      step={step}
+      className={cellInputClasses}
+    />
+  </td>
+);
+
+const DisplayCell = ({ value, minWidth = "100px" }) => (
+  <td className="p-0.5 align-top" style={{ minWidth }}>
+    <div
+      className={
+        `${cellInputClasses} flex items-center bg-gray-100 ` +
+        `dark:bg-gray-800 cursor-not-allowed whitespace-nowrap overflow-hidden`
+      }
+      title={value ?? ""}
+    >
+      {value ?? ""}
+    </div>
+  </td>
+);
+
+const ToggleButton = ({ value, onChange }) => (
+  <button
+    type="button"
+    onClick={() => onChange(!value)}
+    className={`relative flex items-center w-10 h-5 rounded-full transition-colors ${
+      value ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
+    }`}
+  >
+    <span
+      className={`absolute h-4 w-4 bg-white rounded-full shadow transition-transform ${
+        value ? "translate-x-5" : "translate-x-0.5"
+      }`}
+    />
+  </button>
+);
+
+const DynamicTable = ({
+  columns,
+  rows,
+  onCellChange,
+  onRemoveRow,
+  onCopyRow,
+}) => (
+  <TableWrapper>
+    <TableHead headers={["#", ...columns.map((c) => c.label), "Action"]} />
+
+    <tbody>
+      {rows.map((row, index) => (
+        <TableRow
+          key={row.id || index}
+          index={index}
+          onRemove={() => onRemoveRow(index)}
+          onCopy={onCopyRow ? () => onCopyRow(index) : undefined}
+          disabled={rows.length <= 1}
+        >
+          {columns.map((column) => {
+            if (column.type === "display") {
+              return (
+                <DisplayCell
+                  key={column.key}
+                  value={row[column.key]}
+                  minWidth={column.minWidth || "100px"}
+                />
+              );
+            }
+
+            if (column.type === "select") {
+              return (
+                <SelectCell
+                  key={column.key}
+                  value={row[column.key]}
+                  disabled={
+                    typeof column.disabled === "function"
+                      ? column.disabled(row, index)
+                      : column.disabled
+                  }
+                  onChange={(e) =>
+                    onCellChange(index, column.key, e.target.value)
+                  }
+                  options={
+                    typeof column.options === "function"
+                      ? column.options(row, index)
+                      : column.options
+                  }
+                />
+              );
+            }
+
+            return (
+              <InputCell
+                key={column.key}
+                value={row[column.key]}
+                type={column.type === "number" ? "number" : "text"}
+                disabled={
+                  typeof column.disabled === "function"
+                    ? column.disabled(row, index)
+                    : column.disabled
+                }
+                min={column.type === "number" ? 0 : undefined}
+                step={
+                  column.type === "number" ? column.step || "0.01" : undefined
+                }
+                minWidth={column.minWidth || "100px"}
+                onChange={(e) =>
+                  onCellChange(index, column.key, e.target.value)
+                }
+              />
+            );
+          })}
+        </TableRow>
+      ))}
+    </tbody>
+  </TableWrapper>
+);
+
+/* ========================================================================= */
+/* STATIC OPTIONS                                                            */
+/* ========================================================================= */
+
+const YES_NO = ["Yes", "No"];
 
 const TAX_TYPE_OPTIONS = ["GST", "IGST", "Nil Rated", "Exempted", "Non-GST"];
 
 const PARTICULARS_OPTIONS = ["SGST", "CGST", "IGST", "CESS", "SWS"];
 
-const TAX_STRUCTURE_OPTIONS = ["GST", "Non-GST", "Composite"];
-
-const SUBTYPE_OPTIONS = ["Regular", "Casual", "SEZ", "EOU"];
-
-const UNIT_FALLBACK_OPTIONS = [
-  {
-    value: 1000000004,
-    label: "NOS",
-  },
-  {
-    value: 1000000005,
-    label: "KG",
-  },
-];
+const DEALER_TYPE_OPTIONS = ["Registered", "Unregistered", "Importer"];
 
 const LEDGER_ACCOUNT_OPTIONS = [
   "Input CGST",
@@ -97,304 +445,492 @@ const LEDGER_ACCOUNT_OPTIONS = [
   "Service Tax",
 ];
 
-const DirectPurchaseForm = ({ data, onBack }) => {
-  const { addToast } = useToast();
+const UNIT_OPTIONS = [
+  { value: 1000000004, label: "NOS" },
+  { value: 1000000005, label: "KG" },
+];
 
-  const ORG_ID = Number(localStorage.getItem("orgId")) || 0;
+/* ========================================================================= */
+/* EMPTY ROWS                                                                */
+/* ========================================================================= */
 
-  const BRANCH_ID = Number(localStorage.getItem("branchId")) || 0;
+const emptyCashRow = () => ({
+  id: 0,
+  itemCode: "",
+  itemDescription: "",
+  hsnCode: "",
+  taxType: "",
+  tax: "",
+  unit: "",
+  dcQty: "",
+  receivedQty: "",
+  rate: "",
+  amount: "",
+  taxDescription: "",
+  sgstPerc: "",
+  cgstPerc: "",
+  igstPerc: "",
+});
+
+const emptyTaxRow = () => ({
+  id: 0,
+  particulars: "",
+  taxId: "",
+  taxPerc: "",
+  acceptedAmt: "",
+  revisedAmt: "",
+  ledgerAcName: "",
+});
+
+const emptyFileRow = () => ({
+  name: "",
+  file: null,
+  filePath: "",
+  isExisting: false,
+});
+
+/* ========================================================================= */
+/* DEFAULT FORM                                                              */
+/* ========================================================================= */
+
+const getDefaultValues = (branchId, userName) => ({
+  id: 0,
+  active: true,
+
+  branch: String(branchId || ""),
+  invNo: "",
+  invDate: todayISO(),
+  belongsTo: "Domestic",
+  suppType: "Local",
+
+  supplierCode: "",
+  supplierName: "",
+  gstnNo: "",
+  dealerType: "",
+  issueTo: "",
+
+  /* stores ITEM ID (e.g. itemCode 245 -> itemId 1000000011) */
+  itemCategory: "",
+
+  taxStructure: "",
+  tariffHeading: "",
+  creditAcName: "",
+  subType: "",
+  eccNoStNo: "",
+  tallyRefNo: "",
+
+  gstState: "",
+  gstStateCode: "",
+
+  financialYear:
+    localStorage.getItem("finYear") || String(new Date().getFullYear()),
+
+  isIgstApplicable: "No",
+  reverseCharge: "No",
+
+  discount: "",
+  preparedBy: "",
+  remarks: "",
+  cancelRemarks: "",
+
+  createdBy: userName,
+});
+
+/* ========================================================================= */
+/* EDIT DATA: EXTRACT + MAP                                                  */
+/* ========================================================================= */
+
+/*
+ * getDirectPurchaseById returns { status, paramObjectsMap: { <someVO>: {...} } }.
+ * The key name is not fixed here, so look for a direct-purchase key first and
+ * otherwise take the first object / array found in paramObjectsMap.
+ */
+const extractRecord = (response) => {
+  const map = response?.paramObjectsMap || response?.data?.paramObjectsMap;
+
+  if (!map) {
+    return isObj(response) && response.id ? response : null;
+  }
+
+  let record =
+    map.directPurchaseVO ??
+    map.directPurchase ??
+    map.directPurchaseDTO ??
+    Object.values(map).find((v) => isObj(v));
+
+  if (Array.isArray(record)) record = record[0];
+
+  return isObj(record) ? record : null;
+};
+
+/* Find an array on the record by exact key first, then by key pattern */
+const findArray = (d, exactKeys, regex) => {
+  for (const key of exactKeys) {
+    if (Array.isArray(d[key])) return d[key];
+  }
+
+  const found = Object.keys(d).find(
+    (key) => regex.test(key) && Array.isArray(d[key]),
+  );
+
+  return found ? d[found] : [];
+};
+
+/* Unit can be an object, an ID, or a text like "KG" */
+const resolveUnitId = (unit) => {
+  if (isObj(unit)) {
+    return String(pick(unit.unitId, unit.id));
+  }
+
+  if (isNumericLike(unit)) return String(unit);
+
+  if (typeof unit === "string" && unit) {
+    const match = UNIT_OPTIONS.find((o) => norm(o.label) === norm(unit));
+    return match ? String(match.value) : "";
+  }
+
+  return "";
+};
+
+const mapEditData = (d, branchId, userName) => {
+  const supplierObj = isObj(d.supplier) ? d.supplier : {};
+
+  const formData = {
+    ...getDefaultValues(branchId, userName),
+
+    id: d.id || 0,
+
+    active: d.active !== false && String(d.active).toLowerCase() !== "inactive",
+
+    branch: String(pick(idOf(d.branch, "branchId"), d.branchId, branchId, "")),
+
+    invNo: String(pick(d.invNo, d.docNo, d.docId)),
+
+    invDate: String(pick(d.invDate, d.docDate, todayISO())),
+
+    belongsTo: String(pick(d.belongsTo, "Domestic")),
+
+    suppType: String(pick(d.suppType, "Local")),
+
+    supplierCode: String(
+      pick(
+        typeof d.supplierCode === "string" || typeof d.supplierCode === "number"
+          ? d.supplierCode
+          : "",
+        supplierObj.supplierCode,
+        supplierObj.customerCode,
+      ),
+    ),
+
+    supplierName: String(
+      pick(d.supplierName, supplierObj.supplierName, supplierObj.customerName),
+    ),
+
+    gstnNo: String(pick(d.gstnNo, d.gstNo, supplierObj.gstNo)),
+
+    dealerType: String(pick(d.dealerType)),
+
+    issueTo: String(pick(d.issueTo)),
+
+    /* ID, or a code/description that is resolved against options later */
+    itemCategory: pick(idOf(d.itemCategory, "itemId"), d.itemCategoryId),
+
+    taxStructure: d.taxStructure || "",
+    tariffHeading: d.tariffHeading || "",
+    creditAcName: d.creditAcName || "",
+    subType: d.subType || "",
+
+    eccNoStNo: String(pick(d.eccNoStNo, d.eccNo)),
+
+    tallyRefNo: d.tallyRefNo || "",
+
+    gstState: String(idOf(d.gstState, "stateId")),
+
+    gstStateCode: String(
+      pick(d.gstStateCode, isObj(d.gstState) ? d.gstState.stateCode : ""),
+    ),
+
+    financialYear: String(
+      pick(
+        d.financialYear,
+        localStorage.getItem("finYear"),
+        new Date().getFullYear(),
+      ),
+    ),
+
+    isIgstApplicable: isYes(pick(d.isIgstApplicable, d.igstApplicable))
+      ? "Yes"
+      : "No",
+
+    reverseCharge: isYes(pick(d.isReverseCharge, d.reverseCharge))
+      ? "Yes"
+      : "No",
+
+    discount: d.discount ?? "",
+
+    /* ID, or a name that is resolved against employees later */
+    preparedBy: String(idOf(d.preparedBy, "employeeId")),
+
+    remarks: d.remarks || "",
+
+    cancelRemarks: d.cancelRemarks || "",
+
+    createdBy: d.createdBy || userName,
+  };
+
+  /* ------------------------------ cash rows ------------------------------ */
+
+  const rawCash = findArray(
+    d,
+    [
+      "directPurchaseCashDetailsVO",
+      "directPurchaseCashDetailsDTO",
+      "cashItems",
+      "cashDetails",
+    ],
+    /cash/i,
+  );
+
+  const cashRows = rawCash.length
+    ? rawCash.map((row) => {
+        const qty = toNumber(pick(row.receivedQty, row.dcQty, row.qty));
+        const rate = toNumber(row.rate);
+
+        return {
+          ...emptyCashRow(),
+
+          id: row.id ?? 0,
+
+          itemCode: String(
+            pick(isObj(row.itemCode) ? row.itemCode.itemCode : row.itemCode),
+          ),
+
+          itemDescription: String(
+            pick(
+              row.itemDescription,
+              row.description,
+              isObj(row.itemCode) ? row.itemCode.itemDescription : "",
+            ),
+          ),
+
+          hsnCode: String(pick(row.hsnCode, row.hsn, row.hsnSacCode)),
+
+          taxType: row.taxType || "",
+
+          tax: pick(row.tax, row.taxPerc, row.taxPercentage),
+
+          unit: resolveUnitId(row.unit),
+
+          dcQty: pick(row.dcQty, row.qty),
+
+          receivedQty: row.receivedQty ?? "",
+
+          rate: row.rate ?? "",
+
+          amount: pick(row.amount, qty && rate ? money(qty * rate) : ""),
+
+          taxDescription: row.taxDescription || "",
+
+          sgstPerc: row.sgstPerc ?? "",
+          cgstPerc: row.cgstPerc ?? "",
+          igstPerc: row.igstPerc ?? "",
+        };
+      })
+    : [emptyCashRow()];
+
+  /* ------------------------------ tax rows ------------------------------- */
+
+  const rawTax = findArray(
+    d,
+    [
+      "directPurchaseTaxDetailsVO",
+      "directPurchaseTaxDetailsDTO",
+      "taxDetails",
+      "taxDetailsVO",
+    ],
+    /taxdetail/i,
+  );
+
+  const taxRows = rawTax.length
+    ? rawTax.map((row) => ({
+        ...emptyTaxRow(),
+
+        id: row.id ?? 0,
+
+        particulars: String(pick(row.particulars)),
+
+        taxId: String(pick(row.taxId)),
+
+        taxPerc: pick(row.taxPerc, row.tax),
+
+        acceptedAmt: pick(row.acceptedAmt, row.acceptedQtyAmount),
+
+        revisedAmt: pick(row.revisedAmt, row.revisedAmount),
+
+        ledgerAcName: row.ledgerAcName || "",
+      }))
+    : [emptyTaxRow()];
+
+  /* ----------------------------- attachments ----------------------------- */
+
+  const rawFiles = findArray(
+    d,
+    ["attachments", "directPurchaseAttachmentVO", "files"],
+    /attach|file/i,
+  );
+
+  const fileRows = rawFiles.length
+    ? rawFiles.map((f) => ({
+        id: f.id,
+        name: String(pick(f.name, f.fileName, f.attachmentName)),
+        file: null,
+        filePath: String(pick(f.filePath, f.path, f.url)),
+        isExisting: true,
+      }))
+    : [emptyFileRow()];
+
+  return { formData, cashRows, taxRows, fileRows };
+};
+
+/* ========================================================================= */
+/* COMPONENT                                                                 */
+/* ========================================================================= */
+
+const DirectPurchaseForm = ({ data: editData, onBack }) => {
+  const ORG_ID = toInteger(localStorage.getItem("orgId"));
+
+  const BRANCH_ID = toInteger(localStorage.getItem("branchId"));
 
   const USER_NAME =
     localStorage.getItem("userName") ||
     localStorage.getItem("username") ||
     "SYSTEM";
 
-  const isEditMode = Boolean(data?.id);
+  const isEditMode = Boolean(editData?.id);
+
+  const { addToast } = useToast();
+
+  /* ----------------------------------------------------------------------- */
+  /* FORM STATE                                                              */
+  /* ----------------------------------------------------------------------- */
+
+  /*
+   * Initial values come from the list row (fallback). In edit mode they are
+   * replaced by the getDirectPurchaseById response as soon as it arrives.
+   */
+  const [mapped] = useState(() =>
+    isEditMode ? mapEditData(editData, BRANCH_ID, USER_NAME) : null,
+  );
+
+  const [formData, setFormData] = useState(() =>
+    mapped ? mapped.formData : getDefaultValues(BRANCH_ID, USER_NAME),
+  );
+
+  const effectiveBranchId = toInteger(formData.branch || BRANCH_ID);
+
+  const [cashRows, setCashRows] = useState(
+    mapped ? mapped.cashRows : [emptyCashRow()],
+  );
+
+  const [taxRows, setTaxRows] = useState(
+    mapped ? mapped.taxRows : [emptyTaxRow()],
+  );
+
+  const [fileRows, setFileRows] = useState(
+    mapped ? mapped.fileRows : [emptyFileRow()],
+  );
+
+  const [loadingData, setLoadingData] = useState(isEditMode);
+
+  /* ----------------------------------------------------------------------- */
+  /* MASTER DATA                                                             */
+  /* ----------------------------------------------------------------------- */
 
   const [activeTab, setActiveTab] = useState("cashDetail");
 
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [generatingDocId, setGeneratingDocId] = useState(false);
-
-  const [fieldErrors, setFieldErrors] = useState({});
-  const [rowErrors, setRowErrors] = useState({});
-
-  /* ======================================================================== */
-  /* HEADER */
-  /* ======================================================================== */
-
-  const [form, setForm] = useState({
-    id: data?.id || 0,
-
-    branch: String(data?.branch ?? data?.plantId ?? BRANCH_ID ?? ""),
-
-    invNo: data?.invNo || data?.docNo || "",
-
-    invDate: data?.invDate || data?.docDate || dayjs().format("YYYY-MM-DD"),
-
-    belongsTo: data?.belongsTo || "Domestic",
-
-    suppType: data?.suppType || "Local",
-
-    supplierCode: data?.supplierCode || "",
-
-    supplierName: data?.supplierName || "",
-
-    gstnNo: data?.gstnNo || data?.gstNo || "",
-
-    dealerType: data?.dealerType || "",
-
-    issueTo: data?.issueTo || "",
-
-    itemCategory: data?.itemCategory ?? "",
-
-    taxStructure: data?.taxStructure || "",
-
-    tariffHeading: data?.tariffHeading || "",
-
-    creditAcName: data?.creditAcName || "",
-
-    subType: data?.subType || "",
-
-    eccNoStNo: data?.eccNoStNo || data?.eccNo || "",
-
-    tallyRefNo: data?.tallyRefNo || "",
-
-    gstState: data?.gstState ?? "",
-
-    gstStateCode: data?.gstStateCode || "",
-
-    financialYear: data?.financialYear || String(new Date().getFullYear()),
-
-    preparedBy: data?.preparedBy ?? "",
-
-    isIgstApplicable:
-      data?.isIgstApplicable === true ||
-      String(data?.isIgstApplicable).toLowerCase() === "yes",
-
-    reverseCharge:
-      data?.isReverseCharge === true ||
-      data?.reverseCharge === true ||
-      String(data?.isReverseCharge).toLowerCase() === "yes",
-
-    active:
-      data?.active !== false &&
-      String(data?.active).toLowerCase() !== "inactive",
-
-    cancelRemarks: data?.cancelRemarks || "",
-
-    createdBy: data?.createdBy || USER_NAME,
-  });
-
-  const effectiveBranchId = toInteger(form.branch || BRANCH_ID);
-
-  /* ======================================================================== */
-  /* CASH ITEMS */
-  /* ======================================================================== */
-
-  const createEmptyCashItem = () => ({
-    id: Date.now() + Math.random(),
-
-    itemCode: "",
-    itemDescription: "",
-
-    hsnCode: "",
-
-    taxType: "",
-
-    tax: "",
-
-    unit: "",
-
-    dcQty: "",
-    receivedQty: "",
-
-    rate: "",
-    amount: "",
-
-    taxDescription: "",
-
-    sgstPerc: "",
-    sgstAmount: "",
-
-    cgstPerc: "",
-    cgstAmount: "",
-
-    igstPerc: "",
-    igstAmount: "",
-  });
-
-  const [cashItems, setCashItems] = useState(() => {
-    const source = data?.directPurchaseCashDetailsDTO || data?.cashItems || [];
-
-    if (source.length) {
-      return source.map((row) => ({
-        id: Date.now() + Math.random(),
-
-        itemCode: row.itemCode || "",
-
-        itemDescription: row.itemDescription || row.description || "",
-
-        hsnCode: row.hsnCode || row.hsn || "",
-
-        taxType: row.taxType || "",
-
-        tax: row.tax ?? row.taxPerc ?? "",
-
-        unit: row.unit ?? "",
-
-        dcQty: row.dcQty ?? row.qty ?? "",
-
-        receivedQty: row.receivedQty ?? "",
-
-        rate: row.rate ?? "",
-
-        amount: row.amount ?? "",
-
-        taxDescription: row.taxDescription || "",
-
-        sgstPerc: row.sgstPerc ?? "",
-
-        sgstAmount: row.sgstAmount ?? "",
-
-        cgstPerc: row.cgstPerc ?? "",
-
-        cgstAmount: row.cgstAmount ?? "",
-
-        igstPerc: row.igstPerc ?? "",
-
-        igstAmount: row.igstAmount ?? "",
-      }));
-    }
-
-    return [createEmptyCashItem()];
-  });
-
-  /* ======================================================================== */
-  /* TAX ROWS */
-  /* ======================================================================== */
-
-  const createEmptyTaxRow = () => ({
-    id: Date.now() + Math.random(),
-
-    particulars: "",
-
-    taxId: "",
-
-    tax: "",
-
-    taxPerc: "",
-
-    acceptedQtyAmount: "",
-
-    acceptedAmt: "",
-
-    revisedAmount: "",
-
-    revisedAmt: "",
-
-    ledgerAcName: "",
-  });
-
-  const [taxRows, setTaxRows] = useState(() => {
-    const source = data?.directPurchaseTaxDetailsDTO || data?.taxDetails || [];
-
-    if (source.length) {
-      return source.map((row) => ({
-        id: Date.now() + Math.random(),
-
-        particulars: row.particulars || "",
-
-        taxId: row.taxId || "",
-
-        tax: row.tax ?? row.taxPerc ?? "",
-
-        taxPerc: row.taxPerc ?? row.tax ?? "",
-
-        acceptedQtyAmount: row.acceptedQtyAmount ?? row.acceptedAmt ?? "",
-
-        acceptedAmt: row.acceptedAmt ?? row.acceptedQtyAmount ?? "",
-
-        revisedAmount: row.revisedAmount ?? row.revisedAmt ?? "",
-
-        revisedAmt: row.revisedAmt ?? row.revisedAmount ?? "",
-
-        ledgerAcName: row.ledgerAcName || "",
-      }));
-    }
-
-    return [createEmptyTaxRow()];
-  });
-
-  /* ======================================================================== */
-  /* SUMMARY */
-  /* ======================================================================== */
-
-  const [summary, setSummary] = useState({
-    basicAmount: data?.basicAmount ?? "",
-
-    discount: data?.discount ?? "",
-
-    afterDiscountTotal: data?.afterDiscountTotal ?? "",
-
-    totalAmount: data?.totalAmount ?? "",
-
-    preparedBy: data?.preparedBy ?? "",
-
-    remarks: data?.remarks || "",
-  });
-
-  const [remarks, setRemarks] = useState(data?.remarks || "");
-
-  /* ======================================================================== */
-  /* ATTACHMENTS */
-  /* ======================================================================== */
-
-  const [attachments, setAttachments] = useState(
-    data?.attachments?.length
-      ? data.attachments
-      : [
-          {
-            id: Date.now() + Math.random(),
-            file: null,
-          },
-        ],
-  );
-
-  /* ======================================================================== */
-  /* MASTER DATA */
-  /* ======================================================================== */
-
   const [branchOptions, setBranchOptions] = useState([]);
+
+  const [employeeOptions, setEmployeeOptions] = useState([]);
 
   const [supplierOptions, setSupplierOptions] = useState([]);
 
   const [issueToOptions, setIssueToOptions] = useState([]);
 
-  const [employeeOptions, setEmployeeOptions] = useState([]);
-
-  const [itemCategoryOptions, setItemCategoryOptions] = useState([]);
-
   const [gstStateOptions, setGstStateOptions] = useState([]);
 
-  /*
-   * Belongs To is now loaded from the List of Values API.
-   *
-   * The value sent to backend is the LOV description itself,
-   * for example:
-   *
-   * Domestic
-   * Import
-   *
-   * NOT the LOV ID.
-   */
   const [belongsToOptions, setBelongsToOptions] = useState([]);
 
-  const [unitOptions, setUnitOptions] = useState(UNIT_FALLBACK_OPTIONS);
+  /* Item Category options come from getItemType: value = itemId, label = code */
+  const [itemTypeOptions, setItemTypeOptions] = useState([]);
 
-  /* ======================================================================== */
-  /* LOAD BRANCHES */
-  /* ======================================================================== */
+  const [fieldErrors, setFieldErrors] = useState({});
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [generatingDocId, setGeneratingDocId] = useState(false);
+
+  /* ========================================================================= */
+  /* EDIT: LOAD BY ID                                                          */
+  /* ========================================================================= */
+
+  useEffect(() => {
+    if (!isEditMode) return;
+
+    let cancelled = false;
+
+    const loadById = async () => {
+      setLoadingData(true);
+
+      try {
+        const response = await directPurchaseAPI.getDirectPurchaseById(
+          editData.id,
+        );
+
+        console.log("Get Direct Purchase By ID Response:", response);
+
+        const record = extractRecord(response);
+
+        if (!record) {
+          console.error("Direct purchase record not found in response");
+          addToast("Direct Purchase data not found", "error");
+          return;
+        }
+
+        console.log("Direct Purchase record:", record);
+
+        const result = mapEditData(record, BRANCH_ID, USER_NAME);
+
+        if (cancelled) return;
+
+        console.log("Mapped Direct Purchase form data:", result);
+
+        setFormData(result.formData);
+        setCashRows(result.cashRows);
+        setTaxRows(result.taxRows);
+        setFileRows(result.fileRows);
+      } catch (error) {
+        console.error("Failed to load Direct Purchase by ID:", error);
+
+        if (!cancelled) {
+          addToast("Failed to load Direct Purchase data", "error");
+        }
+      } finally {
+        if (!cancelled) setLoadingData(false);
+      }
+    };
+
+    loadById();
+
+    return () => {
+      cancelled = true;
+    };
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditMode, editData?.id]);
+
+  /* ========================================================================= */
+  /* MASTER DATA LOADERS                                                       */
+  /* ========================================================================= */
 
   const loadBranches = useCallback(async () => {
     try {
@@ -426,10 +962,6 @@ const DirectPurchaseForm = ({ data, onBack }) => {
     }
   }, [ORG_ID]);
 
-  /* ======================================================================== */
-  /* LOAD EMPLOYEES */
-  /* ======================================================================== */
-
   const loadEmployees = useCallback(async () => {
     try {
       if (!ORG_ID) return;
@@ -457,97 +989,9 @@ const DirectPurchaseForm = ({ data, onBack }) => {
     }
   }, [ORG_ID]);
 
-  /* ======================================================================== */
-  /* LOAD ITEM CATEGORY */
-  /* ======================================================================== */
-
-  const loadItemCategories = useCallback(async () => {
-    try {
-      if (!ORG_ID) return;
-
-      const response = await listOfValuesAPI.getListValuesGroup(
-        "ITEM CATEGORY",
-        ORG_ID,
-      );
-
-      const list = Array.isArray(response)
-        ? response
-        : response?.paramObjectsMap?.listValues ||
-          response?.paramObjectsMap?.values ||
-          [];
-
-      setItemCategoryOptions(
-        list.map((item) => ({
-          value: item.id,
-
-          label:
-            item.valuesDescription ||
-            item.valueDescription ||
-            item.description ||
-            item.value ||
-            "",
-        })),
-      );
-    } catch (error) {
-      console.error("Failed to load item categories:", error);
-
-      setItemCategoryOptions([]);
-    }
-  }, [ORG_ID]);
-
-  /* ======================================================================== */
-  /* LOAD GST STATES */
-  /* ======================================================================== */
-
-  const loadGstStates = useCallback(async () => {
-    try {
-      if (!ORG_ID) return;
-
-      const response = await listOfValuesAPI.getListValuesGroup(
-        "GST STATE",
-        ORG_ID,
-      );
-
-      const list = Array.isArray(response)
-        ? response
-        : response?.paramObjectsMap?.listValues ||
-          response?.paramObjectsMap?.values ||
-          [];
-
-      setGstStateOptions(
-        list.map((item) => ({
-          value: item.id,
-
-          label:
-            item.valuesDescription ||
-            item.valueDescription ||
-            item.description ||
-            item.value ||
-            "",
-
-          code: item.code || item.stateCode || item.gstStateCode || "",
-        })),
-      );
-    } catch (error) {
-      console.error("Failed to load GST states:", error);
-
-      setGstStateOptions([]);
-    }
-  }, [ORG_ID]);
-
-  /* ======================================================================== */
-  /* LOAD BELONGS TO */
-  /* ======================================================================== */
-
   const loadBelongsTo = useCallback(async () => {
     try {
-      if (!ORG_ID) {
-        console.warn("ORG_ID is missing. Cannot load Belongs To values.");
-
-        setBelongsToOptions([]);
-
-        return;
-      }
+      if (!ORG_ID) return;
 
       const response = await listOfValuesAPI.getListValuesGroup(
         "BELONGS TO",
@@ -561,23 +1005,20 @@ const DirectPurchaseForm = ({ data, onBack }) => {
           response?.paramObjectsMap?.listValueDetails ||
           [];
 
-      const options = list
-        .map((item) => {
-          const description =
-            item?.valuesDescription ||
-            item?.valueDescription ||
-            item?.description ||
-            item?.value ||
-            "";
+      setBelongsToOptions(
+        list
+          .map((item) => {
+            const value =
+              item?.valuesDescription ||
+              item?.valueDescription ||
+              item?.description ||
+              item?.value ||
+              "";
 
-          return {
-            value: description,
-            label: description,
-          };
-        })
-        .filter((item) => item.value);
-
-      setBelongsToOptions(options);
+            return { value, label: value };
+          })
+          .filter((item) => item.value),
+      );
     } catch (error) {
       console.error("Failed to load Belongs To values:", error);
 
@@ -585,13 +1026,38 @@ const DirectPurchaseForm = ({ data, onBack }) => {
     }
   }, [ORG_ID]);
 
-  /* ======================================================================== */
-  /* LOAD SUPPLIERS */
-  /* ======================================================================== */
+  const loadGstStates = useCallback(async () => {
+    try {
+      if (!ORG_ID || !effectiveBranchId) {
+        setGstStateOptions([]);
+        return;
+      }
+
+      const response = await directPurchaseAPI.getGSTStateMasterByOrgId(
+        effectiveBranchId,
+        ORG_ID,
+      );
+
+      const list = Array.isArray(response) ? response : [];
+
+      setGstStateOptions(
+        list.map((item) => ({
+          value: item.id,
+          label: item.stateName || "",
+          code: item.stateCode || "",
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to load GST states:", error);
+
+      setGstStateOptions([]);
+    }
+  }, [ORG_ID, effectiveBranchId]);
 
   const loadSuppliers = useCallback(async () => {
     try {
       if (!ORG_ID || !effectiveBranchId) {
+        setSupplierOptions([]);
         return;
       }
 
@@ -600,13 +1066,13 @@ const DirectPurchaseForm = ({ data, onBack }) => {
         ORG_ID,
       );
 
-      const dataResp = response?.data ?? response;
+      const result = response?.data ?? response;
 
       const list =
-        dataResp?.paramObjectsMap?.mapp ||
-        dataResp?.paramObjectsMap?.supplierVO ||
-        dataResp?.paramObjectsMap?.suppliers ||
-        (Array.isArray(dataResp) ? dataResp : []);
+        result?.paramObjectsMap?.mapp ||
+        result?.paramObjectsMap?.supplierVO ||
+        result?.paramObjectsMap?.suppliers ||
+        (Array.isArray(result) ? result : []);
 
       setSupplierOptions(
         list.map((supplier) => ({
@@ -632,13 +1098,10 @@ const DirectPurchaseForm = ({ data, onBack }) => {
     }
   }, [ORG_ID, effectiveBranchId]);
 
-  /* ======================================================================== */
-  /* LOAD ISSUE TO */
-  /* ======================================================================== */
-
   const loadIssueTo = useCallback(async () => {
     try {
       if (!ORG_ID || !effectiveBranchId) {
+        setIssueToOptions([]);
         return;
       }
 
@@ -647,17 +1110,17 @@ const DirectPurchaseForm = ({ data, onBack }) => {
         ORG_ID,
       );
 
-      const source = Array.isArray(response)
+      const list = Array.isArray(response)
         ? response
-        : response?.paramObjectsMap?.issueTo ||
-          response?.paramObjectsMap?.mapp ||
+        : response?.paramObjectsMap?.mapp ||
+          response?.paramObjectsMap?.issueTo ||
           [];
 
       setIssueToOptions(
-        source.map((row) => ({
-          value: row.issueTo || row.id || "",
+        list.map((item) => ({
+          value: item.issueTo || item.id || "",
 
-          label: row.issueTo || row.name || row.description || "",
+          label: item.issueTo || item.name || item.description || "",
         })),
       );
     } catch (error) {
@@ -667,41 +1130,156 @@ const DirectPurchaseForm = ({ data, onBack }) => {
     }
   }, [ORG_ID, effectiveBranchId]);
 
-  /* ======================================================================== */
-  /* INITIAL MASTER LOAD */
-  /* ======================================================================== */
+  const loadItemTypes = useCallback(async () => {
+    try {
+      if (!ORG_ID || !effectiveBranchId) {
+        setItemTypeOptions([]);
+        return;
+      }
+
+      const list = await directPurchaseAPI.getItemType(
+        effectiveBranchId,
+        ORG_ID,
+      );
+
+      setItemTypeOptions(
+        (Array.isArray(list) ? list : [])
+          .filter((item) => item?.itemId !== null && item?.itemId !== undefined)
+          .map((item) => ({
+            value: item.itemId,
+
+            label: item.itemCode || "",
+
+            itemDescription: item.itemDescription || "",
+          })),
+      );
+    } catch (error) {
+      console.error("Failed to load item types:", error);
+
+      setItemTypeOptions([]);
+    }
+  }, [ORG_ID, effectiveBranchId]);
+
+  /* ========================================================================= */
+  /* MASTER DATA USE EFFECTS                                                   */
+  /* ========================================================================= */
 
   useEffect(() => {
     loadBranches();
     loadEmployees();
-    loadItemCategories();
-    loadGstStates();
     loadBelongsTo();
-  }, [
-    loadBranches,
-    loadEmployees,
-    loadItemCategories,
-    loadGstStates,
-    loadBelongsTo,
-  ]);
-
-  /* ======================================================================== */
-  /* BRANCH DEPENDENT MASTER LOAD */
-  /* ======================================================================== */
+  }, [loadBranches, loadEmployees, loadBelongsTo]);
 
   useEffect(() => {
     loadSuppliers();
     loadIssueTo();
-  }, [loadSuppliers, loadIssueTo]);
+    loadGstStates();
+    loadItemTypes();
+  }, [loadSuppliers, loadIssueTo, loadGstStates, loadItemTypes]);
 
-  /* ======================================================================== */
-  /* DOC NO GENERATION */
-  /* ======================================================================== */
+  /* GST State code follows the selected GST State */
+  useEffect(() => {
+    if (!formData.gstState) return;
+
+    const selected = gstStateOptions.find(
+      (option) => String(option.value) === String(formData.gstState),
+    );
+
+    if (selected?.code && selected.code !== formData.gstStateCode) {
+      setFormData((previous) => ({
+        ...previous,
+        gstStateCode: selected.code,
+      }));
+    }
+  }, [formData.gstState, formData.gstStateCode, gstStateOptions]);
+
+  /* ========================================================================= */
+  /* EDIT: RESOLVE SAVED VALUES AGAINST LOADED OPTIONS                         */
+  /* ========================================================================= */
+
+  /*
+   * Item Category / Prepared By / GST State:
+   * if the saved value is not an option value (for example the backend sent a
+   * code or a name), match it by label and swap in the option value.
+   *
+   * Supplier: fills name / GSTN from the supplier list when they are empty.
+   *
+   * Only empty or unmatched values are touched, so user edits are kept.
+   */
+  useEffect(() => {
+    if (!isEditMode || loadingData) return;
+
+    setFormData((previous) => {
+      let next = previous;
+
+      const set = (field, value) => {
+        if (next === previous) next = { ...previous };
+        next[field] = value;
+      };
+
+      const resolve = (field, options, extraKeys = []) => {
+        const current = previous[field];
+
+        if (current === "" || current === null || current === undefined) return;
+        if (!options.length) return;
+
+        if (options.some((o) => String(o.value) === String(current))) return;
+
+        const match = options.find((o) =>
+          [o.label, ...extraKeys.map((k) => o[k])]
+            .filter(Boolean)
+            .some((text) => norm(text) === norm(current)),
+        );
+
+        if (match) set(field, match.value);
+      };
+
+      resolve("itemCategory", itemTypeOptions, ["itemDescription"]);
+      resolve("preparedBy", employeeOptions);
+      resolve("gstState", gstStateOptions, ["code"]);
+
+      /* Supplier */
+      if (supplierOptions.length && previous.supplierCode) {
+        const supplier = supplierOptions.find(
+          (o) =>
+            norm(o.supplierCode) === norm(previous.supplierCode) ||
+            String(o.value) === String(previous.supplierCode),
+        );
+
+        if (supplier) {
+          if (norm(previous.supplierCode) !== norm(supplier.supplierCode)) {
+            set("supplierCode", supplier.supplierCode);
+          }
+
+          if (!previous.supplierName && supplier.supplierName) {
+            set("supplierName", supplier.supplierName);
+          }
+
+          if (!previous.gstnNo && supplier.gstNo) {
+            set("gstnNo", supplier.gstNo);
+          }
+        }
+      }
+
+      return next;
+    });
+  }, [
+    isEditMode,
+    loadingData,
+    itemTypeOptions,
+    employeeOptions,
+    gstStateOptions,
+    supplierOptions,
+  ]);
+
+  /* ========================================================================= */
+  /* DOC NUMBER                                                                */
+  /* ========================================================================= */
 
   useEffect(() => {
     if (isEditMode) return;
-    if (!ORG_ID) return;
-    if (!form.financialYear) return;
+
+    if (!ORG_ID || !formData.financialYear) return;
 
     let cancelled = false;
 
@@ -710,21 +1288,21 @@ const DirectPurchaseForm = ({ data, onBack }) => {
 
       try {
         const docId = await directPurchaseAPI.getDirectPurchaseDocId(
-          form.financialYear,
+          formData.financialYear,
           ORG_ID,
         );
 
         if (!cancelled) {
-          setForm((previous) => ({
+          setFormData((previous) => ({
             ...previous,
             invNo: docId || "",
           }));
         }
       } catch (error) {
         if (!cancelled) {
-          console.error("Error generating Direct Purchase doc id:", error);
+          console.error("Error generating Doc No:", error);
 
-          addToast("Failed to generate Bill No", "error");
+          addToast("Failed to generate document number", "error");
         }
       } finally {
         if (!cancelled) {
@@ -738,90 +1316,16 @@ const DirectPurchaseForm = ({ data, onBack }) => {
     return () => {
       cancelled = true;
     };
-  }, [isEditMode, ORG_ID, form.financialYear, addToast]);
 
-  /* ======================================================================== */
-  /* GST STATE CODE */
-  /* ======================================================================== */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditMode, ORG_ID, formData.financialYear]);
 
-  useEffect(() => {
-    if (!form.gstState) {
-      return;
-    }
+  /* ========================================================================= */
+  /* FIELD CHANGE                                                              */
+  /* ========================================================================= */
 
-    const selected = gstStateOptions.find(
-      (option) => String(option.value) === String(form.gstState),
-    );
-
-    const possibleCode = selected?.code || selected?.stateCode || "";
-
-    if (possibleCode) {
-      setForm((previous) => ({
-        ...previous,
-        gstStateCode: possibleCode,
-      }));
-    }
-  }, [form.gstState, gstStateOptions]);
-
-  /* ======================================================================== */
-  /* FIELD HANDLERS */
-  /* ======================================================================== */
-
-  const handleFormChange = (event) => {
+  const handleFieldChange = (event) => {
     const { name, value } = event.target;
-
-    if (name === "branch") {
-      setForm((previous) => ({
-        ...previous,
-
-        branch: value,
-
-        supplierCode: "",
-        supplierName: "",
-        gstnNo: "",
-        dealerType: "",
-        issueTo: "",
-      }));
-
-      setSupplierOptions([]);
-      setIssueToOptions([]);
-
-      return;
-    }
-
-    if (name === "supplierCode") {
-      const selected = supplierOptions.find(
-        (option) => String(option.value) === String(value),
-      );
-
-      setForm((previous) => ({
-        ...previous,
-
-        supplierCode: selected?.supplierCode || value,
-
-        supplierName: selected?.supplierName || "",
-
-        gstnNo: selected?.gstNo || "",
-
-        dealerType: selected?.isRegistered ? "Registered" : "Unregistered",
-
-        isIgstApplicable: Boolean(selected?.isRegistered),
-      }));
-
-      if (fieldErrors.supplierCode) {
-        setFieldErrors((previous) => ({
-          ...previous,
-          supplierCode: "",
-        }));
-      }
-
-      return;
-    }
-
-    setForm((previous) => ({
-      ...previous,
-      [name]: value,
-    }));
 
     if (fieldErrors[name]) {
       setFieldErrors((previous) => ({
@@ -829,188 +1333,166 @@ const DirectPurchaseForm = ({ data, onBack }) => {
         [name]: "",
       }));
     }
-  };
 
-  /* ======================================================================== */
-  /* CASH DETAIL */
-  /* ======================================================================== */
+    if (name === "branch") {
+      setFormData((previous) => ({
+        ...previous,
 
-  const addCashItem = () => {
-    setCashItems((previous) => [...previous, createEmptyCashItem()]);
-  };
+        branch: value,
 
-  const removeCashItem = (id) => {
-    setCashItems((previous) =>
-      previous.length <= 1 ? previous : previous.filter((row) => row.id !== id),
-    );
-  };
+        supplierCode: "",
+        supplierName: "",
 
-  const copyCashItem = (source) => {
-    setCashItems((previous) => [
+        gstnNo: "",
+        dealerType: "",
+
+        issueTo: "",
+        itemCategory: "",
+      }));
+
+      setSupplierOptions([]);
+      setIssueToOptions([]);
+      setItemTypeOptions([]);
+
+      return;
+    }
+
+    /* `value` is the supplier id; the form stores the supplier CODE */
+    if (name === "supplierCode") {
+      const selected = supplierOptions.find(
+        (option) => String(option.value) === String(value),
+      );
+
+      setFormData((previous) => ({
+        ...previous,
+
+        supplierCode: selected?.supplierCode || "",
+
+        supplierName: selected?.supplierName || "",
+
+        gstnNo: selected?.gstNo || "",
+
+        dealerType: selected?.isRegistered ? "Registered" : "Unregistered",
+
+        isIgstApplicable: selected?.isRegistered ? "Yes" : "No",
+      }));
+
+      return;
+    }
+
+    /* `value` is the itemId */
+    if (name === "itemCategory") {
+      setFormData((previous) => ({
+        ...previous,
+        itemCategory: value ? Number(value) : "",
+      }));
+
+      return;
+    }
+
+    setFormData((previous) => ({
       ...previous,
-      {
-        ...source,
-        id: Date.now() + Math.random(),
-      },
-    ]);
+      [name]: value,
+    }));
   };
 
-  const handleCashItemChange = (id, field, value) => {
-    setCashItems((previous) =>
-      previous.map((row) => {
-        if (row.id !== id) {
-          return row;
+  /* ========================================================================= */
+  /* CASH DETAIL                                                               */
+  /* ========================================================================= */
+
+  const handleCashCellChange = (index, key, value) => {
+    setCashRows((previous) =>
+      previous.map((row, rowIndex) => {
+        if (rowIndex !== index) return row;
+
+        const updated = { ...row, [key]: value };
+
+        if (key === "dcQty" || key === "receivedQty" || key === "rate") {
+          const qty = toNumber(updated.receivedQty || updated.dcQty);
+
+          updated.amount = money(qty * toNumber(updated.rate));
         }
 
-        const updated = {
-          ...row,
-          [field]: value,
-        };
-
-        /* --------------------------------------------------------------- */
-        /* AMOUNT */
-        /* --------------------------------------------------------------- */
-
-        if (field === "dcQty" || field === "receivedQty" || field === "rate") {
-          const qty = parseFloat(updated.receivedQty || updated.dcQty) || 0;
-
-          const rate = parseFloat(updated.rate) || 0;
-
-          updated.amount = (qty * rate).toFixed(2);
-        }
-
-        /* --------------------------------------------------------------- */
-        /* TAX TYPE */
-        /* --------------------------------------------------------------- */
-
-        if (field === "taxType") {
+        if (key === "taxType") {
           if (value === "GST") {
-            updated.taxDescription = "GST";
-
+            updated.tax = "18";
             updated.sgstPerc = "9";
             updated.cgstPerc = "9";
             updated.igstPerc = "0";
-
-            updated.tax = "18";
+            updated.taxDescription = "GST";
           } else if (value === "IGST") {
-            updated.taxDescription = "IGST";
-
+            updated.tax = "18";
             updated.sgstPerc = "0";
             updated.cgstPerc = "0";
             updated.igstPerc = "18";
-
-            updated.tax = "18";
-          } else if (value === "Nil Rated") {
-            updated.taxDescription = "Nil Rated";
-
-            updated.sgstPerc = "0";
-            updated.cgstPerc = "0";
-            updated.igstPerc = "0";
-
-            updated.tax = "0";
-          } else if (value === "Exempted" || value === "Non-GST") {
-            updated.taxDescription = value;
-
-            updated.sgstPerc = "0";
-            updated.cgstPerc = "0";
-            updated.igstPerc = "0";
-
-            updated.tax = "0";
+            updated.taxDescription = "IGST";
           } else {
-            updated.taxDescription = "";
-
-            updated.sgstPerc = "";
-            updated.cgstPerc = "";
-            updated.igstPerc = "";
-
-            updated.tax = "";
+            updated.tax = "0";
+            updated.sgstPerc = "0";
+            updated.cgstPerc = "0";
+            updated.igstPerc = "0";
+            updated.taxDescription = value || "";
           }
         }
 
-        if (field === "tax") {
-          updated.tax = value;
-        }
-
         return updated;
       }),
     );
-
-    setRowErrors((previous) => ({
-      ...previous,
-      [`${id}-${field}`]: "",
-    }));
   };
 
-  /* ======================================================================== */
-  /* TOTALS */
-  /* ======================================================================== */
+  const addCashRow = () =>
+    setCashRows((previous) => [...previous, emptyCashRow()]);
 
-  const grossAmount = cashItems.reduce(
-    (sum, row) => sum + (parseFloat(row.amount) || 0),
-    0,
-  );
-
-  const taxTotal = taxRows.reduce(
-    (sum, row) => sum + (parseFloat(row.revisedAmount || row.revisedAmt) || 0),
-    0,
-  );
-
-  const discount = parseFloat(summary.discount) || 0;
-
-  const afterDiscountTotal = grossAmount - discount;
-
-  const finalTotal = afterDiscountTotal + taxTotal;
-
-  /* ======================================================================== */
-  /* TAX DETAIL */
-  /* ======================================================================== */
-
-  const addTaxRow = () => {
-    setTaxRows((previous) => [...previous, createEmptyTaxRow()]);
-  };
-
-  const removeTaxRow = (id) => {
-    setTaxRows((previous) =>
-      previous.length <= 1 ? previous : previous.filter((row) => row.id !== id),
+  const removeCashRow = (index) => {
+    setCashRows((previous) =>
+      previous.length <= 1
+        ? previous
+        : previous.filter((_, rowIndex) => rowIndex !== index),
     );
   };
 
-  const handleTaxRowChange = (id, field, value) => {
+  const copyCashRow = (index) => {
+    setCashRows((previous) => [...previous, { ...previous[index], id: 0 }]);
+  };
+
+  /* ========================================================================= */
+  /* TOTALS                                                                    */
+  /* ========================================================================= */
+
+  const grossAmount = useMemo(
+    () => round2(cashRows.reduce((sum, row) => sum + toNumber(row.amount), 0)),
+    [cashRows],
+  );
+
+  const taxTotal = useMemo(
+    () =>
+      round2(taxRows.reduce((sum, row) => sum + toNumber(row.revisedAmt), 0)),
+    [taxRows],
+  );
+
+  const discountAmount = toNumber(formData.discount);
+
+  const afterDiscountTotal = round2(grossAmount - discountAmount);
+
+  const finalTotal = round2(afterDiscountTotal + taxTotal);
+
+  /* ========================================================================= */
+  /* TAX DETAILS                                                               */
+  /* ========================================================================= */
+
+  const handleTaxCellChange = (index, key, value) => {
     setTaxRows((previous) =>
-      previous.map((row) => {
-        if (row.id !== id) {
-          return row;
-        }
+      previous.map((row, rowIndex) => {
+        if (rowIndex !== index) return row;
 
-        const updated = {
-          ...row,
-          [field]: value,
-        };
+        const updated = { ...row, [key]: value };
 
-        if (field === "particulars") {
-          updated.taxId = value;
-        }
+        if (key === "taxPerc") {
+          const tax = Math.max(0, toNumber(value));
 
-        if (field === "taxPerc") {
-          updated.tax = value;
-        }
+          updated.acceptedAmt = money(grossAmount);
 
-        if (field === "tax") {
-          updated.taxPerc = value;
-        }
-
-        if (field === "particulars" || field === "tax" || field === "taxPerc") {
-          const tax = parseFloat(updated.tax || updated.taxPerc) || 0;
-
-          const revised = (grossAmount * tax) / 100;
-
-          updated.acceptedQtyAmount = grossAmount.toFixed(2);
-
-          updated.acceptedAmt = grossAmount.toFixed(2);
-
-          updated.revisedAmount = revised.toFixed(2);
-
-          updated.revisedAmt = revised.toFixed(2);
+          updated.revisedAmt = money((grossAmount * tax) / 100);
         }
 
         return updated;
@@ -1018,321 +1500,285 @@ const DirectPurchaseForm = ({ data, onBack }) => {
     );
   };
 
+  /* Keep tax amounts in step with the gross amount */
   useEffect(() => {
-    setTaxRows((previous) =>
-      previous.map((row) => {
-        if (row.tax === "" && row.taxPerc === "") {
+    setTaxRows((previous) => {
+      const next = previous.map((row) => {
+        if (row.taxPerc === "" || row.taxPerc === null) return row;
+
+        const accepted = money(grossAmount);
+
+        const revised = money(
+          (grossAmount * Math.max(0, toNumber(row.taxPerc))) / 100,
+        );
+
+        if (row.acceptedAmt === accepted && row.revisedAmt === revised) {
           return row;
         }
 
-        const tax = parseFloat(row.tax || row.taxPerc) || 0;
+        return { ...row, acceptedAmt: accepted, revisedAmt: revised };
+      });
 
-        const revised = (grossAmount * tax) / 100;
-
-        return {
-          ...row,
-
-          acceptedQtyAmount: grossAmount.toFixed(2),
-
-          acceptedAmt: grossAmount.toFixed(2),
-
-          revisedAmount: revised.toFixed(2),
-
-          revisedAmt: revised.toFixed(2),
-        };
-      }),
-    );
+      return next.some((row, index) => row !== previous[index])
+        ? next
+        : previous;
+    });
   }, [grossAmount]);
 
-  /* ======================================================================== */
-  /* SUMMARY CALCULATION */
-  /* ======================================================================== */
+  const addTaxRow = () =>
+    setTaxRows((previous) => [...previous, emptyTaxRow()]);
 
-  useEffect(() => {
-    setSummary((previous) => ({
-      ...previous,
-
-      basicAmount: grossAmount.toFixed(2),
-
-      afterDiscountTotal: afterDiscountTotal.toFixed(2),
-
-      totalAmount: finalTotal.toFixed(2),
-    }));
-  }, [grossAmount, afterDiscountTotal, finalTotal]);
-
-  /* ======================================================================== */
-  /* ATTACHMENTS */
-  /* ======================================================================== */
-
-  const addAttachment = () => {
-    setAttachments((previous) => [
-      ...previous,
-      {
-        id: Date.now() + Math.random(),
-        file: null,
-      },
-    ]);
-  };
-
-  const removeAttachment = (id) => {
-    setAttachments((previous) =>
-      previous.length <= 1 ? previous : previous.filter((row) => row.id !== id),
+  const removeTaxRow = (index) => {
+    setTaxRows((previous) =>
+      previous.length <= 1
+        ? previous
+        : previous.filter((_, rowIndex) => rowIndex !== index),
     );
   };
 
-  const handleAttachmentChange = (id, file) => {
-    setAttachments((previous) =>
-      previous.map((row) =>
-        row.id !== id
-          ? row
-          : {
-              ...row,
-              file,
-            },
+  /* ========================================================================= */
+  /* ATTACHMENTS                                                               */
+  /* ========================================================================= */
+
+  const handleFileSelect = (index, file) => {
+    if (!file) return;
+
+    setFileRows((previous) =>
+      previous.map((row, rowIndex) =>
+        rowIndex === index
+          ? { ...row, file, name: file.name, filePath: "", isExisting: false }
+          : row,
       ),
     );
   };
 
-  /* ======================================================================== */
-  /* VALIDATION */
-  /* ======================================================================== */
+  const handleAddFileRow = () =>
+    setFileRows((previous) => [...previous, emptyFileRow()]);
+
+  const handleRemoveFileRow = (index) => {
+    setFileRows((previous) =>
+      previous.length <= 1
+        ? previous
+        : previous.filter((_, rowIndex) => rowIndex !== index),
+    );
+  };
+
+  const handleViewFile = (row) => {
+    if (row.file) {
+      const url = URL.createObjectURL(row.file);
+
+      window.open(url, "_blank", "noopener,noreferrer");
+
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+
+      return;
+    }
+
+    /* Saved attachment: open through the view-file endpoint */
+    if (row.isExisting && row.filePath) {
+      const url = /^https?:/i.test(row.filePath)
+        ? row.filePath
+        : directPurchaseAPI.getViewFileUrl(row.filePath);
+
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+  };
+
+  /* ========================================================================= */
+  /* VALIDATION                                                                */
+  /* ========================================================================= */
 
   const validate = () => {
     const errors = {};
 
-    if (!form.branch) {
-      errors.branch = "Plant ID is required";
-    }
+    if (!formData.branch) errors.branch = "Plant ID is required";
 
-    if (!form.invDate) {
-      errors.invDate = "Bill Date is required";
-    }
+    if (!formData.invDate) errors.invDate = "Doc Date is required";
 
-    if (!form.supplierCode) {
+    if (!formData.supplierCode)
       errors.supplierCode = "Supplier Code is required";
-    }
 
-    if (!form.issueTo) {
-      errors.issueTo = "Issue To is required";
-    }
-
-    const itemErrs = {};
-
-    cashItems.forEach((row) => {
-      if (!String(row.itemCode || "").trim()) {
-        itemErrs[`${row.id}-itemCode`] = "Item Code is required";
-      }
-    });
+    if (!formData.issueTo) errors.issueTo = "Issue To is required";
 
     setFieldErrors(errors);
-    setRowErrors(itemErrs);
 
-    return (
-      Object.keys(errors).length === 0 && Object.keys(itemErrs).length === 0
-    );
+    if (Object.keys(errors).length > 0) {
+      addToast("Please fill all required fields correctly", "error");
+
+      return false;
+    }
+
+    return true;
   };
 
-  /* ======================================================================== */
-  /* BUILD PAYLOAD */
-  /* ======================================================================== */
-
-  const buildPayload = () => {
-    const directPurchaseCashDetailsDTO = cashItems
-      .filter((row) => String(row.itemCode || "").trim())
-      .map((row) => ({
-        dcQty: toNumber(row.dcQty || row.qty),
-
-        hsnCode: row.hsnCode || row.hsn || "",
-
-        itemCode: row.itemCode || "",
-
-        itemDescription: row.itemDescription || row.description || "",
-
-        rate: toNumber(row.rate),
-
-        receivedQty: toNumber(row.receivedQty),
-
-        tax: toNumber(row.tax || row.taxPerc),
-
-        taxType: row.taxType || "",
-
-        unit: toInteger(row.unit),
-      }));
-
-    const directPurchaseTaxDetailsDTO = taxRows
-      .filter((row) => String(row.particulars || "").trim())
-      .map((row) => ({
-        acceptedQtyAmount: toNumber(row.acceptedQtyAmount || row.acceptedAmt),
-
-        particulars: row.particulars,
-
-        revisedAmount: toNumber(row.revisedAmount || row.revisedAmt),
-
-        tax: toNumber(row.tax || row.taxPerc),
-
-        taxId: row.taxId || row.particulars,
-      }));
-
-    /*
-     * IMPORTANT:
-     *
-     * belongsTo is the LOV DESCRIPTION.
-     *
-     * Example:
-     * "Domestic"
-     * "Import"
-     *
-     * Do NOT convert it to Number().
-     */
-
-    const payload = {
-      active: form.active !== false,
-
-      belongsTo: form.belongsTo || "Domestic",
-
-      branch: toInteger(form.branch),
-
-      id: isEditMode ? toInteger(form.id) : undefined,
-
-      cancelRemarks: form.cancelRemarks || "",
-
-      createdBy: isEditMode ? form.createdBy || USER_NAME : USER_NAME,
-
-      dealerType: form.dealerType || "",
-
-      directPurchaseCashDetailsDTO,
-
-      directPurchaseTaxDetailsDTO,
-
-      eccNoStNo: form.eccNoStNo || "",
-
-      financialYear: form.financialYear || String(new Date().getFullYear()),
-
-      gstState: toInteger(form.gstState),
-
-      gstnNo: form.gstnNo || "",
-
-      invDate: form.invDate || dayjs().format("YYYY-MM-DD"),
-
-      invNo: form.invNo || "",
-
-      isIgstApplicable: form.isIgstApplicable ? "Yes" : "No",
-
-      isReverseCharge: form.reverseCharge ? "Yes" : "No",
-
-      issueTo: form.issueTo || "",
-
-      itemCategory: toInteger(form.itemCategory),
-
-      orgId: ORG_ID,
-
-      preparedBy: toInteger(form.preparedBy || summary.preparedBy),
-
-      remarks: remarks || summary.remarks || "",
-
-      suppType: form.suppType || "Local",
-
-      supplierName: form.supplierName || "",
-
-      taxStructure: form.taxStructure || "",
-
-      tariffHeading: form.tariffHeading || "",
-
-      creditAcName: form.creditAcName || "",
-
-      subType: form.subType || "",
-
-      tallyRefNo: form.tallyRefNo || "",
-
-      gstStateCode: form.gstStateCode || "",
-
-      supplierCode: form.supplierCode || "",
-
-      basicAmount: toNumber(summary.basicAmount || grossAmount),
-
-      discount: toNumber(summary.discount),
-
-      afterDiscountTotal: toNumber(
-        summary.afterDiscountTotal || afterDiscountTotal,
-      ),
-
-      totalAmount: toNumber(summary.totalAmount || finalTotal),
-    };
-
-    Object.keys(payload).forEach((key) => {
-      if (payload[key] === undefined) {
-        delete payload[key];
-      }
-    });
-
-    return payload;
-  };
-
-  /* ======================================================================== */
-  /* SAVE */
-  /* ======================================================================== */
+  /* ========================================================================= */
+  /* SAVE                                                                      */
+  /* ========================================================================= */
 
   const handleSave = async () => {
-    if (!validate()) {
-      return;
-    }
+    if (!validate()) return;
 
     setIsSubmitting(true);
 
     try {
-      const payload = buildPayload();
+      const directPurchaseCashDetailsDTO = cashRows
+        .filter((row) => String(row.itemCode || "").trim())
+        .map((row) => ({
+          itemCode: row.itemCode || "",
 
-      const files = attachments
-        .filter((attachment) => attachment?.file instanceof File)
-        .map((attachment) => attachment.file);
+          itemDescription: row.itemDescription || "",
 
-      const finalFiles = Array.isArray(files) ? files : [];
+          dcQty: toNumber(row.dcQty),
 
-      console.log("========== DIRECT PURCHASE FINAL PAYLOAD ==========");
+          hsnCode: row.hsnCode || "",
 
-      console.log(JSON.stringify(payload, null, 2));
+          unit: toInteger(row.unit),
 
-      console.log("========== DIRECT PURCHASE FILES ==========");
+          receivedQty: toNumber(row.receivedQty),
 
-      console.log(finalFiles);
+          rate: toNumber(row.rate),
+
+          tax: toNumber(row.tax),
+
+          taxType: row.taxType || "",
+        }));
+
+      const directPurchaseTaxDetailsDTO = taxRows
+        .filter((row) => String(row.particulars || "").trim())
+        .map((row) => ({
+          acceptedQtyAmount: toNumber(row.acceptedAmt),
+
+          particulars: row.particulars || "",
+
+          revisedAmount: toNumber(row.revisedAmt),
+
+          tax: toNumber(row.taxPerc),
+
+          taxId: row.taxId || row.particulars || "",
+        }));
+
+      const payload = {
+        ...(isEditMode && { id: toInteger(formData.id) }),
+
+        active: formData.active !== false,
+
+        belongsTo: formData.belongsTo || "Domestic",
+
+        branch: toInteger(formData.branch),
+
+        cancelRemarks: formData.cancelRemarks || "",
+
+        createdBy: formData.createdBy || USER_NAME,
+
+        dealerType: formData.dealerType || "",
+
+        directPurchaseCashDetailsDTO,
+
+        directPurchaseTaxDetailsDTO,
+
+        eccNoStNo: formData.eccNoStNo || "",
+
+        financialYear:
+          formData.financialYear || localStorage.getItem("finYear") || "",
+
+        gstState: toInteger(formData.gstState),
+
+        gstStateCode: formData.gstStateCode || "",
+
+        gstnNo: formData.gstnNo || "",
+
+        invDate: formData.invDate || "",
+
+        invNo: formData.invNo || "",
+
+        isIgstApplicable: formData.isIgstApplicable === "Yes" ? "Yes" : "No",
+
+        isReverseCharge: formData.reverseCharge === "Yes" ? "Yes" : "No",
+
+        issueTo: formData.issueTo || "",
+
+        /* itemId returned by getItemType() */
+        itemCategory: toInteger(formData.itemCategory),
+
+        orgId: ORG_ID,
+
+        preparedBy: toInteger(formData.preparedBy),
+
+        remarks: formData.remarks || "",
+
+        suppType: formData.suppType || "Local",
+
+        supplierCode: formData.supplierCode || "",
+
+        supplierName: formData.supplierName || "",
+
+        taxStructure: formData.taxStructure || "",
+
+        tariffHeading: formData.tariffHeading || "",
+
+        creditAcName: formData.creditAcName || "",
+
+        subType: formData.subType || "",
+
+        tallyRefNo: formData.tallyRefNo || "",
+
+        basicAmount: grossAmount,
+
+        discount: discountAmount,
+
+        afterDiscountTotal,
+
+        totalAmount: finalTotal,
+      };
+
+      /* Only newly selected files are uploaded */
+      const files = fileRows
+        .filter((row) => row.file instanceof File)
+        .map((row) => row.file);
 
       const response = await directPurchaseAPI.createUpdateDirectPurchase(
         payload,
-        finalFiles,
+        files,
       );
 
-      const status =
+      const success =
         response?.status === true ||
         response?.statusFlag === "Ok" ||
         response?.statusFlag === "Success";
 
-      if (status) {
+      if (success) {
         addToast(
           isEditMode
-            ? "Direct Purchase Updated Successfully!"
-            : "Direct Purchase Saved Successfully!",
+            ? "Direct Purchase updated successfully"
+            : "Direct Purchase created successfully",
           "success",
         );
 
-        onBack();
+        if (onBack) onBack();
       } else {
-        const errorMessage =
+        addToast(
           response?.paramObjectsMap?.errorMessage ||
-          response?.paramObjectsMap?.message ||
-          response?.message ||
-          "Failed to save direct purchase";
-
-        addToast(errorMessage, "error");
+            response?.paramObjectsMap?.message ||
+            response?.message ||
+            "Failed to save Direct Purchase",
+          "error",
+        );
       }
     } catch (error) {
-      console.error("Error saving direct purchase:", error);
+      console.error(
+        "DIRECT PURCHASE SAVE ERROR:",
+        error?.response?.data || error,
+      );
 
-      console.error("API ERROR RESPONSE:", error?.response?.data);
+      const backendData = error?.response?.data;
 
       addToast(
-        error?.response?.data?.message ||
-          error?.response?.data?.errorMessage ||
-          "Failed to save Direct Purchase.",
+        backendData?.message ||
+          backendData?.errorMessage ||
+          backendData?.paramObjectsMap?.errorMessage ||
+          (typeof backendData === "string" ? backendData : "") ||
+          error?.message ||
+          "Failed to save Direct Purchase",
         "error",
       );
     } finally {
@@ -1340,1082 +1786,518 @@ const DirectPurchaseForm = ({ data, onBack }) => {
     }
   };
 
-  /* ======================================================================== */
-  /* TABS */
-  /* ======================================================================== */
+  /* ========================================================================= */
+  /* TABS & COLUMNS                                                            */
+  /* ========================================================================= */
 
-  const tabs = [
+  const TABS = [
+    { key: "cashDetail", label: "1-Cash Detail" },
+    { key: "taxDetails", label: "2-Tax Details" },
+    { key: "summary", label: "3-Summary" },
+    { key: "attachments", label: "4-Attached Invoice Copy" },
+  ];
+
+  const cashColumns = [
+    { key: "itemCode", label: "Item Code", type: "text" },
+
     {
-      key: "cashDetail",
-      label: "Cash Detail",
+      key: "itemDescription",
+      label: "Item Description",
+      type: "text",
+      minWidth: "170px",
     },
+
+    { key: "hsnCode", label: "HSN/SAC Code", type: "text" },
+
     {
-      key: "taxDetails",
-      label: "Tax Details",
+      key: "taxType",
+      label: "Tax Type",
+      type: "select",
+      options: TAX_TYPE_OPTIONS,
     },
+
+    { key: "tax", label: "Tax %", type: "display", minWidth: "70px" },
+
+    { key: "unit", label: "Unit", type: "select", options: UNIT_OPTIONS },
+
+    { key: "dcQty", label: "DC Qty", type: "number", step: "1" },
+
+    { key: "receivedQty", label: "Received Qty", type: "number", step: "1" },
+
+    { key: "rate", label: "Rate", type: "number" },
+
+    { key: "amount", label: "Amount", type: "display" },
+  ];
+
+  const taxColumns = [
     {
-      key: "summary",
-      label: "Summary",
+      key: "particulars",
+      label: "Particulars",
+      type: "select",
+      options: PARTICULARS_OPTIONS,
     },
+
+    { key: "taxId", label: "Tax ID", type: "text" },
+
+    { key: "taxPerc", label: "Tax %", type: "number" },
+
+    { key: "acceptedAmt", label: "Accepted Amount", type: "display" },
+
+    { key: "revisedAmt", label: "Revised Amount", type: "display" },
+
     {
-      key: "attachments",
-      label: "Attached Invoice Copy",
+      key: "ledgerAcName",
+      label: "Ledger Account",
+      type: "select",
+      options: LEDGER_ACCOUNT_OPTIONS,
+      minWidth: "130px",
     },
   ];
 
-  /* ======================================================================== */
-  /* CASH DETAIL TAB */
-  /* ======================================================================== */
+  const supplierSelectValue =
+    supplierOptions.find(
+      (option) => String(option.supplierCode) === String(formData.supplierCode),
+    )?.value || "";
 
-  const renderCashDetailTab = () => (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <SectionHeader>Cash Detail</SectionHeader>
+  /* ========================================================================= */
+  /* RENDER                                                                    */
+  /* ========================================================================= */
 
-        <button
-          type="button"
-          onClick={addCashItem}
-          className="flex items-center gap-1 px-2 py-1 rounded text-[11px] bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50 transition-colors"
-        >
-          <Plus className="h-3 w-3" />
-          Add Item
-        </button>
-      </div>
-
-      <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
-        <table className="w-full text-xs">
-          <thead className="bg-gray-100 dark:bg-gray-700">
-            <tr>
-              {[
-                "#",
-                "Item Code",
-                "Item Description",
-                "HSN/SAC Code",
-                "Tax Type",
-                "Tax (%)",
-                "Unit",
-                "DC Qty",
-                "Received Qty",
-                "Rate",
-                "Tax Description",
-                "Amount",
-                "SGST Rate",
-                "SGST Amount",
-                "CGST Rate",
-                "CGST Amount",
-                "IGST Rate",
-                "IGST Amount",
-                "Action",
-              ].map((header) => (
-                <th
-                  key={header}
-                  className="px-1.5 py-1 text-left font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap"
-                >
-                  {header}
-                </th>
-              ))}
-            </tr>
-          </thead>
-
-          <tbody>
-            {cashItems.map((row, index) => (
-              <tr
-                key={row.id}
-                className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"
-              >
-                <td className="px-1.5 py-1 text-gray-500 dark:text-gray-400">
-                  {index + 1}
-                </td>
-
-                <td className="px-1.5 py-1">
-                  <input
-                    type="text"
-                    value={row.itemCode}
-                    onChange={(e) =>
-                      handleCashItemChange(row.id, "itemCode", e.target.value)
-                    }
-                    className={`${controlClasses} w-[100px] ${
-                      rowErrors[`${row.id}-itemCode`] ? "border-red-500" : ""
-                    }`}
-                  />
-
-                  {rowErrors[`${row.id}-itemCode`] && (
-                    <p className="text-[10px] text-red-500">
-                      {rowErrors[`${row.id}-itemCode`]}
-                    </p>
-                  )}
-                </td>
-
-                <td className="px-1.5 py-1">
-                  <input
-                    type="text"
-                    value={row.itemDescription}
-                    onChange={(e) =>
-                      handleCashItemChange(
-                        row.id,
-                        "itemDescription",
-                        e.target.value,
-                      )
-                    }
-                    className={`${controlClasses} w-[130px]`}
-                  />
-                </td>
-
-                <td className="px-1.5 py-1">
-                  <input
-                    type="text"
-                    value={row.hsnCode}
-                    onChange={(e) =>
-                      handleCashItemChange(row.id, "hsnCode", e.target.value)
-                    }
-                    className={`${controlClasses} w-[100px]`}
-                  />
-                </td>
-
-                <td className="px-1.5 py-1">
-                  <select
-                    value={row.taxType}
-                    onChange={(e) =>
-                      handleCashItemChange(row.id, "taxType", e.target.value)
-                    }
-                    className={`${controlClasses} w-[95px]`}
-                  >
-                    <option value="">Select</option>
-
-                    {TAX_TYPE_OPTIONS.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-
-                <td className="px-1.5 py-1">
-                  <input
-                    type="text"
-                    value={row.tax}
-                    readOnly
-                    className={`${controlClasses} w-[55px] bg-gray-50 dark:bg-gray-800`}
-                  />
-                </td>
-
-                <td className="px-1.5 py-1">
-                  <select
-                    value={row.unit}
-                    onChange={(e) =>
-                      handleCashItemChange(row.id, "unit", e.target.value)
-                    }
-                    className={`${controlClasses} w-[65px]`}
-                  >
-                    <option value="">-</option>
-
-                    {unitOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-
-                <td className="px-1.5 py-1">
-                  <input
-                    type="number"
-                    value={row.dcQty}
-                    onChange={(e) =>
-                      handleCashItemChange(row.id, "dcQty", e.target.value)
-                    }
-                    className={`${controlClasses} w-[70px]`}
-                  />
-                </td>
-
-                <td className="px-1.5 py-1">
-                  <input
-                    type="number"
-                    value={row.receivedQty}
-                    onChange={(e) =>
-                      handleCashItemChange(
-                        row.id,
-                        "receivedQty",
-                        e.target.value,
-                      )
-                    }
-                    className={`${controlClasses} w-[80px]`}
-                  />
-                </td>
-
-                <td className="px-1.5 py-1">
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={row.rate}
-                    onChange={(e) =>
-                      handleCashItemChange(row.id, "rate", e.target.value)
-                    }
-                    className={`${controlClasses} w-[80px]`}
-                  />
-                </td>
-
-                <td className="px-1.5 py-1">
-                  <input
-                    type="text"
-                    value={row.taxDescription}
-                    onChange={(e) =>
-                      handleCashItemChange(
-                        row.id,
-                        "taxDescription",
-                        e.target.value,
-                      )
-                    }
-                    className={`${controlClasses} w-[95px]`}
-                  />
-                </td>
-
-                <td className="px-1.5 py-1">
-                  <input
-                    type="text"
-                    value={row.amount}
-                    readOnly
-                    className={`${controlClasses} w-[85px] bg-gray-50 dark:bg-gray-800`}
-                  />
-                </td>
-
-                <td className="px-1.5 py-1">
-                  <input
-                    type="text"
-                    value={row.sgstPerc}
-                    readOnly
-                    className={`${controlClasses} w-[60px] bg-gray-50 dark:bg-gray-800`}
-                  />
-                </td>
-
-                <td className="px-1.5 py-1">
-                  <input
-                    type="text"
-                    value={row.sgstAmount}
-                    readOnly
-                    className={`${controlClasses} w-[80px] bg-gray-50 dark:bg-gray-800`}
-                  />
-                </td>
-
-                <td className="px-1.5 py-1">
-                  <input
-                    type="text"
-                    value={row.cgstPerc}
-                    readOnly
-                    className={`${controlClasses} w-[60px] bg-gray-50 dark:bg-gray-800`}
-                  />
-                </td>
-
-                <td className="px-1.5 py-1">
-                  <input
-                    type="text"
-                    value={row.cgstAmount}
-                    readOnly
-                    className={`${controlClasses} w-[80px] bg-gray-50 dark:bg-gray-800`}
-                  />
-                </td>
-
-                <td className="px-1.5 py-1">
-                  <input
-                    type="text"
-                    value={row.igstPerc}
-                    readOnly
-                    className={`${controlClasses} w-[60px] bg-gray-50 dark:bg-gray-800`}
-                  />
-                </td>
-
-                <td className="px-1.5 py-1">
-                  <input
-                    type="text"
-                    value={row.igstAmount}
-                    readOnly
-                    className={`${controlClasses} w-[80px] bg-gray-50 dark:bg-gray-800`}
-                  />
-                </td>
-
-                <td className="px-1.5 py-1 text-center whitespace-nowrap">
-                  <div className="flex items-center justify-center gap-0.5">
-                    <button
-                      type="button"
-                      onClick={() => copyCashItem(row)}
-                      className="p-0.5 rounded text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-                      title="Copy row"
-                    >
-                      <Copy className="h-3 w-3" />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => removeCashItem(row.id)}
-                      disabled={cashItems.length <= 1}
-                      className="p-0.5 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-30"
-                      title="Delete row"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="flex justify-end text-[11px] text-gray-500 dark:text-gray-400">
-        Gross Amount:
-        <span className="font-semibold ml-1">{grossAmount.toFixed(2)}</span>
-      </div>
-    </div>
-  );
-
-  /* ======================================================================== */
-  /* TAX DETAILS TAB */
-  /* ======================================================================== */
-
-  const renderTaxDetailsTab = () => (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <SectionHeader>Tax Details</SectionHeader>
-
-        <button
-          type="button"
-          onClick={addTaxRow}
-          className="flex items-center gap-1 px-2 py-1 rounded text-[11px] bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50 transition-colors"
-        >
-          <Plus className="h-3 w-3" />
-          Add Tax Row
-        </button>
-      </div>
-
-      <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
-        <table className="w-full text-xs">
-          <thead className="bg-gray-100 dark:bg-gray-700">
-            <tr>
-              {[
-                "#",
-                "Particulars",
-                "Tax ID",
-                "Tax %",
-                "Accepted Qty Amount",
-                "Revised Amount",
-                "Ledger Account Name",
-                "Action",
-              ].map((header) => (
-                <th
-                  key={header}
-                  className="px-1.5 py-1 text-left font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap"
-                >
-                  {header}
-                </th>
-              ))}
-            </tr>
-          </thead>
-
-          <tbody>
-            {taxRows.map((row, index) => (
-              <tr
-                key={row.id}
-                className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"
-              >
-                <td className="px-1.5 py-1 text-gray-500 dark:text-gray-400">
-                  {index + 1}
-                </td>
-
-                <td className="px-1.5 py-1">
-                  <select
-                    value={row.particulars}
-                    onChange={(e) =>
-                      handleTaxRowChange(row.id, "particulars", e.target.value)
-                    }
-                    className={`${controlClasses} w-[100px]`}
-                  >
-                    <option value="">Select</option>
-
-                    {PARTICULARS_OPTIONS.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-
-                <td className="px-1.5 py-1">
-                  <input
-                    type="text"
-                    value={row.taxId}
-                    onChange={(e) =>
-                      handleTaxRowChange(row.id, "taxId", e.target.value)
-                    }
-                    className={`${controlClasses} w-[80px]`}
-                  />
-                </td>
-
-                <td className="px-1.5 py-1">
-                  <input
-                    type="number"
-                    value={row.taxPerc || row.tax}
-                    onChange={(e) =>
-                      handleTaxRowChange(row.id, "taxPerc", e.target.value)
-                    }
-                    className={`${controlClasses} w-[60px]`}
-                  />
-                </td>
-
-                <td className="px-1.5 py-1">
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={row.acceptedQtyAmount || row.acceptedAmt}
-                    readOnly
-                    className={`${controlClasses} w-[120px] bg-gray-50 dark:bg-gray-800`}
-                  />
-                </td>
-
-                <td className="px-1.5 py-1">
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={row.revisedAmount || row.revisedAmt}
-                    readOnly
-                    className={`${controlClasses} w-[120px] bg-gray-50 dark:bg-gray-800`}
-                  />
-                </td>
-
-                <td className="px-1.5 py-1">
-                  <select
-                    value={row.ledgerAcName}
-                    onChange={(e) =>
-                      handleTaxRowChange(row.id, "ledgerAcName", e.target.value)
-                    }
-                    className={`${controlClasses} w-[130px]`}
-                  >
-                    <option value="">Select</option>
-
-                    {LEDGER_ACCOUNT_OPTIONS.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-
-                <td className="px-1.5 py-1 text-center">
-                  <button
-                    type="button"
-                    onClick={() => removeTaxRow(row.id)}
-                    disabled={taxRows.length <= 1}
-                    className="p-0.5 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-30"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="flex justify-end gap-4 text-[11px] text-gray-500 dark:text-gray-400">
-        <span>
-          Gross:
-          <strong className="ml-1">{grossAmount.toFixed(2)}</strong>
-        </span>
-
-        <span>
-          Tax:
-          <strong className="ml-1">{taxTotal.toFixed(2)}</strong>
-        </span>
-      </div>
-    </div>
-  );
-
-  /* ======================================================================== */
-  /* SUMMARY TAB */
-  /* ======================================================================== */
-
-  const renderSummaryTab = () => (
-    <div className="space-y-3">
-      <SectionHeader>Summary</SectionHeader>
-
-      <div className={fieldGrid}>
-        <div>
-          <label className={labelClasses}>Basic Amount</label>
-
-          <input
-            type="text"
-            value={summary.basicAmount}
-            readOnly
-            className={`${controlClasses} bg-gray-50 dark:bg-gray-800`}
-          />
-        </div>
-
-        <div>
-          <label className={labelClasses}>Discount</label>
-
-          <input
-            type="number"
-            step="0.01"
-            value={summary.discount}
-            onChange={(e) =>
-              setSummary((previous) => ({
-                ...previous,
-                discount: e.target.value,
-              }))
-            }
-            className={controlClasses}
-          />
-        </div>
-
-        <div>
-          <label className={labelClasses}>After Discount Total Amount</label>
-
-          <input
-            type="text"
-            value={summary.afterDiscountTotal}
-            readOnly
-            className={`${controlClasses} bg-gray-50 dark:bg-gray-800`}
-          />
-        </div>
-
-        <div>
-          <label className={labelClasses}>Total Amount</label>
-
-          <input
-            type="text"
-            value={summary.totalAmount}
-            readOnly
-            className={`${controlClasses} bg-gray-50 dark:bg-gray-800`}
-          />
-        </div>
-
-        <div>
-          <label className={labelClasses}>Prepared By</label>
-
-          <select
-            value={summary.preparedBy}
-            onChange={(e) =>
-              setSummary((previous) => ({
-                ...previous,
-                preparedBy: e.target.value,
-              }))
-            }
-            className={controlClasses}
-          >
-            <option value="">Select</option>
-
-            {employeeOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="col-span-1 md:col-span-2 xl:col-span-3">
-          <label className={labelClasses}>Remarks</label>
-
-          <textarea
-            value={summary.remarks}
-            onChange={(e) => {
-              setSummary((previous) => ({
-                ...previous,
-                remarks: e.target.value,
-              }));
-
-              setRemarks(e.target.value);
-            }}
-            rows={2}
-            className={`${controlClasses} h-auto min-h-[30px] resize-none pt-1`}
-          />
+  if (loadingData) {
+    return (
+      <div className="p-2 max-w-7xl">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-gray-500 dark:text-gray-400 text-sm">
+            Loading...
+          </div>
         </div>
       </div>
-    </div>
-  );
-
-  /* ======================================================================== */
-  /* ATTACHMENTS TAB */
-  /* ======================================================================== */
-
-  const renderAttachmentsTab = () => (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <SectionHeader>Attached Invoice Copy</SectionHeader>
-
-        <button
-          type="button"
-          onClick={addAttachment}
-          className="flex items-center gap-1 px-2 py-1 rounded text-[11px] bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50 transition-colors"
-        >
-          <Plus className="h-3 w-3" />
-          Add Document
-        </button>
-      </div>
-
-      <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
-        <table className="w-full text-xs">
-          <thead className="bg-gray-100 dark:bg-gray-700">
-            <tr>
-              <th className="p-1 w-8 text-center dark:text-white">#</th>
-
-              <th className="p-1 text-left dark:text-white">Invoice Copy</th>
-
-              <th className="p-1 w-20 text-left dark:text-white">Action</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {attachments.map((attachment, index) => (
-              <tr
-                key={attachment.id}
-                className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"
-              >
-                <td className="p-1 text-center font-medium dark:text-white">
-                  {index + 1}
-                </td>
-
-                <td className="p-1">
-                  <input
-                    type="file"
-                    accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.png,.jpg,.jpeg,.gif,.webp,.bmp,.svg,.zip,.rar,.txt"
-                    className="w-full h-9 text-xs file:mr-3 file:px-3 file:py-1 file:rounded file:border-0 file:bg-blue-600 file:text-white hover:file:bg-blue-700 file:cursor-pointer cursor-pointer bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded px-2"
-                    onChange={(e) =>
-                      handleAttachmentChange(
-                        attachment.id,
-                        e.target.files?.[0] || null,
-                      )
-                    }
-                  />
-
-                  {attachment.file && (
-                    <p className="text-[10px] text-gray-500 mt-1">
-                      {attachment.file.name}
-                    </p>
-                  )}
-                </td>
-
-                <td className="p-1 text-center">
-                  <button
-                    type="button"
-                    onClick={() => removeAttachment(attachment.id)}
-                    disabled={attachments.length <= 1}
-                    className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-                      attachments.length <= 1
-                        ? "bg-gray-400 cursor-not-allowed"
-                        : "bg-red-600 hover:bg-red-700"
-                    }`}
-                  >
-                    <Trash2 size={10} />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <p className="text-[10px] text-gray-400">
-        If no invoice copy is selected, the save request sends an empty file
-        list.
-      </p>
-    </div>
-  );
-
-  /* ======================================================================== */
-  /* RENDER */
-  /* ======================================================================== */
+    );
+  }
 
   return (
-    <div className="animate-fadeIn px-3 py-3 max-w-7xl mx-auto">
+    <div className="p-2 max-w-7xl">
+      {/* TITLE */}
       <div className="flex items-center gap-2 mb-3">
         <button
           type="button"
           onClick={onBack}
-          className="p-1 rounded-md text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          disabled={isSubmitting}
+          className="p-1 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
 
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-          {data ? "Edit Direct Purchase" : "New Direct Purchase"}
+          {isEditMode ? "Edit Direct Purchase" : "Add Direct Purchase"}
         </h2>
 
         <div className="ml-auto flex items-center gap-2">
-          <label className={labelClasses}>Active</label>
+          <span className={labelClasses + " mb-0"}>Active</span>
 
           <ToggleButton
-            value={form.active}
+            value={formData.active}
             onChange={(value) =>
-              setForm((previous) => ({
-                ...previous,
-                active: value,
-              }))
+              setFormData((previous) => ({ ...previous, active: value }))
             }
           />
         </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-3">
-        <SectionHeader>Direct Purchase</SectionHeader>
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
+        {/* HEADER */}
+        <div>
+          <SectionHeader>Direct Purchase</SectionHeader>
 
-        <div className={fieldGrid}>
-          {/* Plant ID */}
-
-          <div>
-            <label className={labelClasses}>
-              Plant ID <span className="text-red-500">*</span>
-            </label>
-
-            <select
+          <div className={fieldGrid}>
+            <Field
+              type="select"
+              label="Plant ID"
               name="branch"
-              value={form.branch}
-              onChange={handleFormChange}
-              className={`${controlClasses} ${
-                fieldErrors.branch ? "border-red-500" : ""
-              }`}
-            >
-              <option value="">Select</option>
-
-              {branchOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-
-            {fieldErrors.branch && (
-              <p className="text-[10px] text-red-500 mt-0.5">
-                {fieldErrors.branch}
-              </p>
-            )}
-          </div>
-
-          {/* Doc No */}
-
-          <div>
-            <label className={labelClasses}>Doc No</label>
-
-            <input
-              type="text"
-              value={generatingDocId ? "Generating..." : form.invNo}
-              disabled
-              className={controlClasses}
+              value={formData.branch}
+              onChange={handleFieldChange}
+              error={fieldErrors.branch}
+              options={branchOptions}
+              required
             />
-          </div>
 
-          {/* GST State */}
+            <Field
+              label="Doc No"
+              name="invNo"
+              value={generatingDocId ? "Generating..." : formData.invNo}
+              onChange={() => {}}
+              disabled
+            />
 
-          <div>
-            <label className={labelClasses}>GST State</label>
+            <Field
+              type="date"
+              label="Doc Date"
+              name="invDate"
+              value={formData.invDate}
+              onChange={handleFieldChange}
+              error={fieldErrors.invDate}
+              required
+            />
 
-            <select
-              name="gstState"
-              value={form.gstState}
-              onChange={handleFormChange}
-              className={controlClasses}
-            >
-              <option value="">Select</option>
-
-              {gstStateOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Belongs To - LOV API */}
-
-          <div>
-            <label className={labelClasses}>Belongs To</label>
-
-            <select
+            <Field
+              type="select"
+              label="Belongs To"
               name="belongsTo"
-              value={form.belongsTo}
-              onChange={handleFormChange}
-              className={controlClasses}
-            >
-              <option value="">Select</option>
-
-              {belongsToOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Doc Date */}
-
-          <div>
-            <label className={labelClasses}>Doc Date</label>
-
-            <input
-              type="date"
-              name="invDate"
-              value={form.invDate}
-              onChange={handleFormChange}
-              className={controlClasses}
+              value={formData.belongsTo}
+              onChange={handleFieldChange}
+              options={belongsToOptions}
             />
-          </div>
 
-          {/* GST State Code */}
-
-          <div>
-            <label className={labelClasses}>GST State Code</label>
-
-            <input
-              type="text"
-              value={form.gstStateCode}
-              disabled
-              className={`${controlClasses} bg-gray-50 dark:bg-gray-800`}
-            />
-          </div>
-
-          {/* Supplier Code */}
-
-          <div>
-            <label className={labelClasses}>
-              Supplier Code <span className="text-red-500">*</span>
-            </label>
-
-            <select
+            <Field
+              type="select"
+              label="Supplier Code"
               name="supplierCode"
-              value={
-                supplierOptions.find(
-                  (option) =>
-                    String(option.supplierCode) === String(form.supplierCode),
-                )?.value || ""
-              }
-              onChange={handleFormChange}
-              className={`${controlClasses} ${
-                fieldErrors.supplierCode ? "border-red-500" : ""
-              }`}
-            >
-              <option value="">Select</option>
+              value={supplierSelectValue}
+              onChange={handleFieldChange}
+              error={fieldErrors.supplierCode}
+              options={supplierOptions}
+              required
+            />
 
-              {supplierOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-
-            {fieldErrors.supplierCode && (
-              <p className="text-[10px] text-red-500 mt-0.5">
-                {fieldErrors.supplierCode}
-              </p>
-            )}
-          </div>
-
-          {/* Supplier Name */}
-
-          <div>
-            <label className={labelClasses}>Supplier Name</label>
-
-            <input
-              type="text"
-              value={form.supplierName}
+            <Field
+              label="Supplier Name"
+              name="supplierName"
+              value={formData.supplierName}
+              onChange={handleFieldChange}
               disabled
-              className={controlClasses}
             />
-          </div>
 
-          {/* Invoice Date */}
-
-          <div>
-            <label className={labelClasses}>Inv Date</label>
-
-            <input
-              type="date"
-              name="invDate"
-              value={form.invDate}
-              onChange={handleFormChange}
-              className={controlClasses}
-            />
-          </div>
-
-          {/* Issue To */}
-
-          <div>
-            <label className={labelClasses}>
-              Issue To <span className="text-red-500">*</span>
-            </label>
-
-            <select
-              name="issueTo"
-              value={form.issueTo}
-              onChange={handleFormChange}
-              className={`${controlClasses} ${
-                fieldErrors.issueTo ? "border-red-500" : ""
-              }`}
-            >
-              <option value="">Select</option>
-
-              {issueToOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-
-            {fieldErrors.issueTo && (
-              <p className="text-[10px] text-red-500 mt-0.5">
-                {fieldErrors.issueTo}
-              </p>
-            )}
-          </div>
-
-          {/* GSTN */}
-
-          <div>
-            <label className={labelClasses}>GSTN No</label>
-
-            <input
-              type="text"
+            <Field
+              label="GSTN No"
               name="gstnNo"
-              value={form.gstnNo}
-              onChange={handleFormChange}
-              className={controlClasses}
+              value={formData.gstnNo}
+              onChange={handleFieldChange}
             />
-          </div>
 
-          {/* Inv No */}
-
-          <div>
-            <label className={labelClasses}>Inv No</label>
-
-            <input
-              type="text"
-              value={form.invNo}
-              disabled
-              className={controlClasses}
-            />
-          </div>
-
-          {/* Dealer Type */}
-
-          <div>
-            <label className={labelClasses}>Dealer Type</label>
-
-            <select
+            <Field
+              type="select"
+              label="Dealer Type"
               name="dealerType"
-              value={form.dealerType}
-              onChange={handleFormChange}
-              className={controlClasses}
-            >
-              <option value="">Select</option>
+              value={formData.dealerType}
+              onChange={handleFieldChange}
+              options={DEALER_TYPE_OPTIONS}
+            />
 
-              {DEALER_TYPE_OPTIONS.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Item Category */}
-
-          <div>
-            <label className={labelClasses}>Item Category</label>
-
-            <select
+            <Field
+              type="select"
+              label="Item Category"
               name="itemCategory"
-              value={form.itemCategory}
-              onChange={handleFormChange}
-              className={controlClasses}
-            >
-              <option value="">Select</option>
+              value={formData.itemCategory}
+              onChange={handleFieldChange}
+              options={itemTypeOptions}
+            />
 
-              {itemCategoryOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
+            <Field
+              type="select"
+              label="Issue To"
+              name="issueTo"
+              value={formData.issueTo}
+              onChange={handleFieldChange}
+              error={fieldErrors.issueTo}
+              options={issueToOptions}
+              required
+            />
 
-          {/* ECC */}
+            <Field
+              type="select"
+              label="GST State"
+              name="gstState"
+              value={formData.gstState}
+              onChange={handleFieldChange}
+              options={gstStateOptions}
+            />
 
-          <div>
-            <label className={labelClasses}>ECC No./S.T. No</label>
+            <Field
+              label="GST State Code"
+              name="gstStateCode"
+              value={formData.gstStateCode}
+              onChange={handleFieldChange}
+              disabled
+            />
 
-            <input
-              type="text"
+            <Field
+              label="ECC No./S.T. No"
               name="eccNoStNo"
-              value={form.eccNoStNo}
-              onChange={handleFormChange}
-              className={controlClasses}
+              value={formData.eccNoStNo}
+              onChange={handleFieldChange}
             />
-          </div>
 
-          {/* Reverse Charge */}
-
-          <div>
-            <label className={labelClasses}>Is Reverse Chrg</label>
-
-            <ToggleButton
-              value={form.reverseCharge}
-              onChange={(value) =>
-                setForm((previous) => ({
-                  ...previous,
-                  reverseCharge: value,
-                }))
-              }
+            <Field
+              label="Tally Ref No"
+              name="tallyRefNo"
+              value={formData.tallyRefNo}
+              onChange={handleFieldChange}
             />
-          </div>
 
-          {/* IGST */}
+            <Field
+              type="select"
+              label="Is IGST Applicable"
+              name="isIgstApplicable"
+              value={formData.isIgstApplicable}
+              onChange={handleFieldChange}
+              options={YES_NO}
+            />
 
-          <div>
-            <label className={labelClasses}>Is IGST Applicable</label>
-
-            <ToggleButton
-              value={form.isIgstApplicable}
-              onChange={(value) =>
-                setForm((previous) => ({
-                  ...previous,
-                  isIgstApplicable: value,
-                }))
-              }
+            <Field
+              type="select"
+              label="Is Reverse Charge"
+              name="reverseCharge"
+              value={formData.reverseCharge}
+              onChange={handleFieldChange}
+              options={YES_NO}
             />
           </div>
         </div>
 
-        {/* ================================================================== */}
         {/* TABS */}
-        {/* ================================================================== */}
+        <section className="mt-0 bg-white dark:bg-gray-800">
+          <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 mb-2">
+            <div className="flex overflow-x-auto">
+              {TABS.map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${
+                    activeTab === tab.key
+                      ? "bg-blue-600 text-white"
+                      : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
 
-        <div className="border-b border-gray-200 dark:border-gray-700">
-          <div className="flex">
-            {tabs.map((tab) => (
+            {activeTab === "cashDetail" && (
               <button
-                key={tab.key}
                 type="button"
-                onClick={() => setActiveTab(tab.key)}
-                className={`px-4 py-1.5 text-xs font-semibold rounded-t transition-colors ${
-                  activeTab === tab.key
-                    ? "bg-blue-600 text-white"
-                    : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                }`}
+                onClick={addCashRow}
+                className="h-6 w-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center"
               >
-                {tab.label}
+                <Plus size={12} />
               </button>
-            ))}
+            )}
+
+            {activeTab === "taxDetails" && (
+              <button
+                type="button"
+                onClick={addTaxRow}
+                className="h-6 w-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center"
+              >
+                <Plus size={12} />
+              </button>
+            )}
+
+            {activeTab === "attachments" && (
+              <button
+                type="button"
+                onClick={handleAddFileRow}
+                className="h-6 w-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center"
+              >
+                <Plus size={12} />
+              </button>
+            )}
           </div>
-        </div>
 
-        {activeTab === "cashDetail" && renderCashDetailTab()}
+          {/* CASH DETAIL */}
+          {activeTab === "cashDetail" && (
+            <>
+              <DynamicTable
+                columns={cashColumns}
+                rows={cashRows}
+                onCellChange={handleCashCellChange}
+                onRemoveRow={removeCashRow}
+                onCopyRow={copyCashRow}
+              />
 
-        {activeTab === "taxDetails" && renderTaxDetailsTab()}
+              <div className="flex justify-end mt-1 text-[11px] text-gray-500 dark:text-gray-400">
+                Gross Amount:
+                <span className="font-semibold ml-1">{money(grossAmount)}</span>
+              </div>
+            </>
+          )}
 
-        {activeTab === "summary" && renderSummaryTab()}
+          {/* TAX DETAILS */}
+          {activeTab === "taxDetails" && (
+            <>
+              <DynamicTable
+                columns={taxColumns}
+                rows={taxRows}
+                onCellChange={handleTaxCellChange}
+                onRemoveRow={removeTaxRow}
+              />
 
-        {activeTab === "attachments" && renderAttachmentsTab()}
+              <div className="flex justify-end gap-4 px-1 pt-1 text-[11px] text-gray-500 dark:text-gray-400">
+                <span>
+                  Gross:
+                  <strong className="ml-1">{money(grossAmount)}</strong>
+                </span>
 
-        {/* ================================================================== */}
-        {/* FOOTER */}
-        {/* ================================================================== */}
+                <span>
+                  Tax:
+                  <strong className="ml-1">{money(taxTotal)}</strong>
+                </span>
+              </div>
+            </>
+          )}
 
+          {/* SUMMARY */}
+          {activeTab === "summary" && (
+            <div className="pt-2 space-y-3">
+              <div className={fieldGrid}>
+                <Field
+                  label="Basic Amount"
+                  name="basicAmount"
+                  value={money(grossAmount)}
+                  onChange={() => {}}
+                  disabled
+                />
+
+                <Field
+                  label="Discount"
+                  name="discount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formData.discount}
+                  onChange={handleFieldChange}
+                />
+
+                <Field
+                  label="After Discount Total"
+                  name="afterDiscountTotal"
+                  value={money(afterDiscountTotal)}
+                  onChange={() => {}}
+                  disabled
+                />
+
+                <Field
+                  label="Total Amount"
+                  name="totalAmount"
+                  value={money(finalTotal)}
+                  onChange={() => {}}
+                  disabled
+                />
+
+                <Field
+                  type="select"
+                  label="Prepared By"
+                  name="preparedBy"
+                  value={formData.preparedBy}
+                  onChange={handleFieldChange}
+                  options={employeeOptions}
+                />
+              </div>
+
+              <div className={fieldGrid}>
+                <Field
+                  type="textarea"
+                  label="Remarks"
+                  name="remarks"
+                  value={formData.remarks}
+                  onChange={handleFieldChange}
+                  className="col-span-2 md:col-span-4 xl:col-span-3"
+                />
+
+                <Field
+                  type="textarea"
+                  label="Cancel Remarks"
+                  name="cancelRemarks"
+                  value={formData.cancelRemarks}
+                  onChange={handleFieldChange}
+                  className="col-span-2 md:col-span-4 xl:col-span-3"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* ATTACHMENTS */}
+          {activeTab === "attachments" && (
+            <TableWrapper>
+              <TableHead
+                headers={["#", "File Name", "Attachment", "View", "Action"]}
+              />
+
+              <tbody>
+                {fileRows.map((row, index) => (
+                  <tr
+                    key={index}
+                    className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"
+                  >
+                    <td className="p-1 text-center font-medium dark:text-white text-[10px]">
+                      {index + 1}
+                    </td>
+
+                    <td className="p-1 align-top">
+                      <input
+                        type="text"
+                        value={row.name}
+                        readOnly
+                        placeholder="No file selected"
+                        className={cellInputClasses}
+                      />
+                    </td>
+
+                    <td className="p-1 align-top">
+                      <label className="flex items-center justify-center gap-1 h-8 px-2 rounded border border-dashed border-gray-300 dark:border-gray-600 text-[11px] text-gray-500 dark:text-gray-400 cursor-pointer hover:border-blue-500 hover:text-blue-600 transition-colors">
+                        <UploadCloud size={12} />
+
+                        {row.name ? "Replace file" : "Click to upload"}
+
+                        <input
+                          type="file"
+                          className="hidden"
+                          onChange={(e) =>
+                            handleFileSelect(index, e.target.files?.[0])
+                          }
+                        />
+                      </label>
+                    </td>
+
+                    <td className="p-1 text-center">
+                      {(row.isExisting || row.file) && (
+                        <button
+                          type="button"
+                          onClick={() => handleViewFile(row)}
+                          className="p-1 rounded text-blue-600 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-blue-900/30"
+                        >
+                          {row.isExisting ? (
+                            <Eye size={14} />
+                          ) : (
+                            <FileIcon size={14} />
+                          )}
+                        </button>
+                      )}
+                    </td>
+
+                    <td className="p-1 text-center">
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveFileRow(index)}
+                        disabled={fileRows.length <= 1}
+                        className={`h-5 w-5 rounded text-white flex items-center justify-center ${
+                          fileRows.length <= 1
+                            ? "bg-gray-400 cursor-not-allowed"
+                            : "bg-red-600 hover:bg-red-700"
+                        }`}
+                      >
+                        <Trash2 size={10} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </TableWrapper>
+          )}
+        </section>
+
+        {/* BUTTONS */}
         <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
           <button
             type="button"
@@ -2435,7 +2317,7 @@ const DirectPurchaseForm = ({ data, onBack }) => {
           >
             <Save className="h-3 w-3" />
 
-            {isSubmitting ? "Saving..." : data ? "Update" : "Submit"}
+            {isSubmitting ? "Saving..." : isEditMode ? "Update" : "Save"}
           </button>
         </div>
       </div>

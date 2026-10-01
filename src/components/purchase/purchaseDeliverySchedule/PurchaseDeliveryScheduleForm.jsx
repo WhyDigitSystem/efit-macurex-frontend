@@ -22,33 +22,65 @@ const controlClasses =
 const labelClasses =
   "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
-const fieldGrid =
-  "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3";
+const fieldGrid = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3";
+
+/* ---------------------------------------------------------------------------- */
+/* Error helper (shared by all field components)                                */
+
+const getFieldError = (errors, name) => {
+  const parts = name.split(".");
+  let error = errors;
+
+  for (const part of parts) {
+    if (error && error[part]) {
+      error = error[part];
+    } else {
+      return null;
+    }
+  }
+
+  return error?.message;
+};
 
 /* ---------------------------------------------------------------------------- */
 /* Form Components                                                              */
 
-const SelectField = ({ control, name, label, options, required, errors, onChange, disabled, placeholder }) => {
-  const getError = () => {
-    const parts = name.split(".");
-    let error = errors;
-    for (const part of parts) {
-      if (error && error[part]) {
-        error = error[part];
-      } else {
-        return null;
-      }
+const renderOptions = (options) =>
+  options.map((opt) => {
+    if (typeof opt === "object" && opt !== null) {
+      return (
+        <option key={opt.value} value={opt.value}>
+          {opt.label}
+        </option>
+      );
     }
-    return error?.message;
-  };
 
-  const errorMessage = getError();
+    return (
+      <option key={opt} value={opt}>
+        {opt}
+      </option>
+    );
+  });
+
+const SelectField = ({
+  control,
+  name,
+  label,
+  options,
+  required,
+  errors,
+  onChange,
+  disabled,
+  placeholder,
+}) => {
+  const errorMessage = getFieldError(errors, name);
 
   return (
     <div>
       <label className={labelClasses}>
         {label} {required && <span className="text-red-500">*</span>}
       </label>
+
       <Controller
         name={name}
         control={control}
@@ -56,33 +88,21 @@ const SelectField = ({ control, name, label, options, required, errors, onChange
         render={({ field }) => (
           <select
             {...field}
-            className={`${controlClasses} ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
+            className={`${controlClasses} ${
+              errorMessage ? "border-red-500 focus:border-red-500" : ""
+            }`}
             onChange={(e) => {
               field.onChange(e);
-              if (onChange) {
-                onChange(e.target.value);
-              }
+              if (onChange) onChange(e.target.value);
             }}
             disabled={disabled}
           >
-            <option value="">{placeholder || `Select an option`}</option>
-            {options.map((opt) => {
-              if (typeof opt === 'object' && opt !== null) {
-                return (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                );
-              }
-              return (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
-              );
-            })}
+            <option value="">{placeholder || "Select an option"}</option>
+            {renderOptions(options)}
           </select>
         )}
       />
+
       {errorMessage && (
         <p className="text-red-500 text-[11px]">{errorMessage}</p>
       )}
@@ -101,45 +121,34 @@ const InputField = ({
   disabled,
   step,
 }) => {
-  const getError = () => {
-    const parts = name.split(".");
-    let error = errors;
-    for (const part of parts) {
-      if (error && error[part]) {
-        error = error[part];
-      } else {
-        return null;
-      }
-    }
-    return error?.message;
-  };
-
-  const errorMessage = getError();
+  const errorMessage = getFieldError(errors, name);
 
   return (
     <div>
       <label className={labelClasses}>
         {label} {required && <span className="text-red-500">*</span>}
       </label>
+
       <Controller
         name={name}
         control={control}
         rules={{
-          ...(required && {
-            required: `${label} is required`,
-          }),
+          ...(required && { required: `${label} is required` }),
         }}
         render={({ field }) => (
           <input
             {...field}
             type={type}
             step={step}
-            className={`${controlClasses} ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
+            className={`${controlClasses} ${
+              errorMessage ? "border-red-500 focus:border-red-500" : ""
+            }`}
             placeholder={placeholder}
             disabled={disabled}
           />
         )}
       />
+
       {errorMessage && (
         <p className="text-red-500 text-[11px]">{errorMessage}</p>
       )}
@@ -165,7 +174,13 @@ const TableHead = ({ headers }) => (
       {headers.map((h, i) => (
         <th
           key={i}
-          className={`p-1 ${i === 0 ? "w-8 text-center" : i === headers.length - 1 ? "w-20 text-left" : "text-left"} dark:text-white text-[10px] font-medium whitespace-nowrap`}
+          className={`p-1 ${
+            i === 0
+              ? "w-8 text-center"
+              : i === headers.length - 1
+                ? "w-20 text-left"
+                : "text-left"
+          } dark:text-white text-[10px] font-medium whitespace-nowrap`}
         >
           {h}
         </th>
@@ -183,17 +198,20 @@ const TableRow = ({
 }) => (
   <tr className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
     <td className="p-1 text-center font-medium dark:text-white">{index + 1}</td>
+
     {children}
+
     {showDelete && (
       <td className="p-1 text-center">
         <button
           type="button"
           onClick={onRemove}
           disabled={disabled}
-          className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
-            ? "bg-gray-400 cursor-not-allowed"
-            : "bg-red-600 hover:bg-red-700"
-            }`}
+          className={`h-5 w-5 rounded text-white flex items-center justify-center ${
+            disabled
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-red-600 hover:bg-red-700"
+          }`}
         >
           <Trash2 size={10} />
         </button>
@@ -202,21 +220,16 @@ const TableRow = ({
   </tr>
 );
 
-const SelectCell = ({ control, name, options, required, errors, onChange, disabled }) => {
-  const getError = () => {
-    const parts = name.split(".");
-    let error = errors;
-    for (const part of parts) {
-      if (error && error[part]) {
-        error = error[part];
-      } else {
-        return null;
-      }
-    }
-    return error?.message;
-  };
-
-  const errorMessage = getError();
+const SelectCell = ({
+  control,
+  name,
+  options,
+  required,
+  errors,
+  onChange,
+  disabled,
+}) => {
+  const errorMessage = getFieldError(errors, name);
 
   return (
     <td className="p-1 align-top">
@@ -227,33 +240,21 @@ const SelectCell = ({ control, name, options, required, errors, onChange, disabl
         render={({ field }) => (
           <select
             {...field}
-            className={`${controlClasses} h-8 text-xs ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
+            className={`${controlClasses} h-8 text-xs ${
+              errorMessage ? "border-red-500 focus:border-red-500" : ""
+            }`}
             onChange={(e) => {
               field.onChange(e);
-              if (onChange) {
-                onChange(e.target.value);
-              }
+              if (onChange) onChange(e.target.value);
             }}
             disabled={disabled}
           >
             <option value="">Select</option>
-            {options.map((opt) => {
-              if (typeof opt === 'object' && opt !== null) {
-                return (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                );
-              }
-              return (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
-              );
-            })}
+            {renderOptions(options)}
           </select>
         )}
       />
+
       {errorMessage && (
         <div className="text-red-500 text-[10px] mt-0.5 whitespace-nowrap">
           {errorMessage}
@@ -276,22 +277,7 @@ const InputCell = ({
   onChange,
   onViewClick,
 }) => {
-  const getError = () => {
-    const parts = name.split(".");
-    let error = errors;
-
-    for (const part of parts) {
-      if (error && error[part]) {
-        error = error[part];
-      } else {
-        return null;
-      }
-    }
-
-    return error?.message;
-  };
-
-  const errorMessage = getError();
+  const errorMessage = getFieldError(errors, name);
 
   return (
     <td className="p-1 align-top">
@@ -300,29 +286,28 @@ const InputCell = ({
           <Controller
             name={name}
             control={control}
-            rules={required ? { required: "This field is required" } : undefined}
+            rules={
+              required ? { required: "This field is required" } : undefined
+            }
             render={({ field }) => (
               <input
                 {...field}
                 type={type}
                 step={step}
-                className={`${controlClasses} h-8 text-xs ${align === "right" ? "text-right" : ""
-                  } ${errorMessage
-                    ? "border-red-500 focus:border-red-500"
-                    : ""
-                  }`}
+                className={`${controlClasses} h-8 text-xs ${
+                  align === "right" ? "text-right" : ""
+                } ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
                 placeholder={placeholder}
                 disabled={disabled}
                 onChange={(e) => {
                   field.onChange(e);
-                  if (onChange) {
-                    onChange(e);
-                  }
+                  if (onChange) onChange(e);
                 }}
               />
             )}
           />
         </div>
+
         {onViewClick && (
           <button
             type="button"
@@ -334,6 +319,7 @@ const InputCell = ({
           </button>
         )}
       </div>
+
       {errorMessage && (
         <div className="text-red-500 text-[10px] mt-0.5 whitespace-nowrap">
           {errorMessage}
@@ -357,18 +343,20 @@ const DeliverySchedulePopup = ({
 }) => {
   if (!isOpen) return null;
 
-  // Helper function to get week number
   const getWeekNumber = (dateString) => {
     if (!dateString) return "";
+
     const date = new Date(dateString);
     const startDate = new Date(date.getFullYear(), 0, 1);
+
     const days = Math.floor((date - startDate) / (24 * 60 * 60 * 1000));
-    const weekNumber = Math.ceil((days + startDate.getDay() + 1) / 7);
-    return weekNumber;
+
+    return Math.ceil((days + startDate.getDay() + 1) / 7);
   };
 
   const handleDateChange = (e, index) => {
     const dateValue = e.target.value;
+
     if (dateValue) {
       const weekNo = getWeekNumber(dateValue);
       setValue(`schedule.${index}.weekNo`, weekNo.toString());
@@ -376,18 +364,15 @@ const DeliverySchedulePopup = ({
   };
 
   const handleAddRow = () => {
-    const newItem = {
+    scheduleArray.append({
       planDate: "",
       weekNo: "",
       scheduleQty: "",
-    };
-    scheduleArray.append(newItem);
+    });
   };
 
   const handleSave = () => {
-    if (onSave) {
-      onSave();
-    }
+    if (onSave) onSave();
     onClose();
   };
 
@@ -398,6 +383,7 @@ const DeliverySchedulePopup = ({
           <h3 className="text-base font-semibold text-gray-900 dark:text-white">
             Schedule Details
           </h3>
+
           <button
             onClick={onClose}
             className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -417,6 +403,7 @@ const DeliverySchedulePopup = ({
                 "Action",
               ]}
             />
+
             <tbody>
               {scheduleArray.fields.map((field, index) => (
                 <TableRow
@@ -438,6 +425,7 @@ const DeliverySchedulePopup = ({
                     errors={errors}
                     onChange={(e) => handleDateChange(e, index)}
                   />
+
                   <InputCell
                     control={control}
                     name={`schedule.${index}.weekNo`}
@@ -446,6 +434,7 @@ const DeliverySchedulePopup = ({
                     errors={errors}
                     disabled={true}
                   />
+
                   <InputCell
                     control={control}
                     name={`schedule.${index}.scheduleQty`}
@@ -467,15 +456,19 @@ const DeliverySchedulePopup = ({
             onClick={handleAddRow}
             className="h-8 px-3 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs flex items-center gap-1 transition-colors"
           >
-            <Plus size={12} /> Add Row
+            <Plus size={12} />
+            Add Row
           </button>
+
           <div className="flex gap-2">
             <button
               onClick={handleSave}
               className="px-4 py-2 rounded text-xs text-white bg-green-600 hover:bg-green-700 transition-colors flex items-center gap-1"
             >
-              <Save size={14} /> Submit
+              <Save size={14} />
+              Submit
             </button>
+
             <button
               onClick={onClose}
               className="px-4 py-2 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 transition-colors"
@@ -497,25 +490,15 @@ const BELONGS_TO = ["APPLIANCES", "BOSCH"];
 /* ---------------------------------------------------------------------------- */
 /* Helper Functions                                                             */
 
-// Get week number from date
-const getWeekNumber = (dateString) => {
-  if (!dateString) return "";
-
-  const date = new Date(dateString);
-  const startDate = new Date(date.getFullYear(), 0, 1);
-  const days = Math.floor((date - startDate) / (24 * 60 * 60 * 1000));
-  const weekNumber = Math.ceil((days + startDate.getDay() + 1) / 7);
-  return weekNumber;
-};
-
-// Get current financial year
 const getFinancialYear = () => {
   const now = new Date();
   const year = now.getFullYear();
   const month = now.getMonth();
+
   if (month >= 0 && month <= 2) {
     return `${year - 1}-${year}`;
   }
+
   return `${year}`;
 };
 
@@ -524,14 +507,44 @@ const getCurrentDate = () => {
   const year = today.getFullYear();
   const month = String(today.getMonth() + 1).padStart(2, "0");
   const day = String(today.getDate()).padStart(2, "0");
+
   return `${year}-${month}-${day}`;
+};
+
+/*
+ * FIX: Resolves a unit coming from the edit API into { id, desc }.
+ * Handles an object, a plain string/number, or a missing value.
+ */
+const resolveUnit = (unit, fallbackDesc = "") => {
+  if (unit && typeof unit === "object") {
+    return {
+      id: unit.unitId ?? unit.id ?? "",
+      desc:
+        unit.unitDescription ??
+        unit.description ??
+        unit.unitName ??
+        unit.unit ??
+        unit.name ??
+        fallbackDesc ??
+        "",
+    };
+  }
+
+  if (unit !== undefined && unit !== null && unit !== "") {
+    const isNumeric = !isNaN(Number(unit));
+    return {
+      id: isNumeric ? unit : "",
+      desc: fallbackDesc || (isNumeric ? "" : String(unit)),
+    };
+  }
+
+  return { id: "", desc: fallbackDesc || "" };
 };
 
 /* ---------------------------------------------------------------------------- */
 /* Default Values                                                               */
 
 const getDefaultValues = () => ({
-  // General Info
   plantId: "",
   belongsTo: "",
   docNo: "",
@@ -545,12 +558,18 @@ const getDefaultValues = () => ({
   preparedBy: "",
   note: "",
 
-  // Schedule Details Table
   scheduleDetails: [
     {
       itemCode: "",
+
+      // Backend IDs
       primaryUnit: "",
       purchaseUnit: "",
+
+      // Screen values
+      primaryUnitDescription: "",
+      purchaseUnitDescription: "",
+
       demandQty: "",
       availableStockQty: "",
       qty: "",
@@ -560,7 +579,6 @@ const getDefaultValues = () => ({
     },
   ],
 
-  // Schedule Table (used in popup)
   schedule: [
     {
       planDate: "",
@@ -581,15 +599,18 @@ const CHILD_TABS = [
 const PurchaseDeliveryScheduleForm = ({ data, onBack }) => {
   const [orgId] = useState(localStorage.getItem("orgId"));
   const [branchId] = useState(localStorage.getItem("branchId"));
+
   const { addToast } = useToast();
 
   const [activeChildTab, setActiveChildTab] = useState("scheduleDetails");
+
   const [plantOptions, setPlantOptions] = useState([]);
   const [supplierOptions, setSupplierOptions] = useState([]);
   const [poOptions, setPoOptions] = useState([]);
   const [itemOptions, setItemOptions] = useState([]);
   const [itemData, setItemData] = useState([]);
   const [preparedByOptions, setPreparedByOptions] = useState([]);
+
   const [loadingSuppliers, setLoadingSuppliers] = useState(false);
   const [loadingPO, setLoadingPO] = useState(false);
   const [loadingItems, setLoadingItems] = useState(false);
@@ -597,8 +618,10 @@ const PurchaseDeliveryScheduleForm = ({ data, onBack }) => {
   const [loadingDocId, setLoadingDocId] = useState(false);
   const [loadingData, setLoadingData] = useState(false);
   const [saving, setSaving] = useState(false);
+
   const [showPopup, setShowPopup] = useState(false);
   const [selectedRowIndex, setSelectedRowIndex] = useState(null);
+
   const dataLoadedRef = useRef(false);
   const branchesLoadedRef = useRef(false);
   const suppliersLoadedRef = useRef(false);
@@ -630,7 +653,6 @@ const PurchaseDeliveryScheduleForm = ({ data, onBack }) => {
     name: "schedule",
   });
 
-  // Watch values
   const supplierCode = watch("supplierCode");
   const docDate = watch("docDate");
   const poNo = watch("poNo");
@@ -645,10 +667,12 @@ const PurchaseDeliveryScheduleForm = ({ data, onBack }) => {
 
     try {
       const response = await branchAPI.getBranchByOrgId(orgId);
-      const options = (response || []).map(branch => ({
+
+      const options = (response || []).map((branch) => ({
         value: branch.id,
         label: branch.branchName || branch.branchCode || branch.id,
       }));
+
       setPlantOptions(options);
       branchesLoadedRef.current = true;
     } catch (error) {
@@ -661,23 +685,28 @@ const PurchaseDeliveryScheduleForm = ({ data, onBack }) => {
     if (suppliersLoadedRef.current) return;
 
     setLoadingSuppliers(true);
+
     try {
-      const response = await purchaseDeliveryScheduleAPI.getSupplierDropdownForPurchaseDeliverySchedule(
-        branchId,
-        orgId
-      );
+      const response =
+        await purchaseDeliveryScheduleAPI.getSupplierDropdownForPurchaseDeliverySchedule(
+          branchId,
+          orgId,
+        );
 
       if (response?.status && response?.paramObjectsMap?.supplierList) {
-        const options = response.paramObjectsMap.supplierList.map(supplier => ({
-          value: supplier.supplierCode || supplier.id,
-          label: `${supplier.supplierCode} - ${supplier.supplierName}`,
-          supplierName: supplier.supplierName,
-          id: supplier.id,
-          gstNo: supplier.gstNo,
-          gstApproval: supplier.gstApproval,
-          gstState: supplier.gstState,
-          address: supplier.address,
-        }));
+        const options = response.paramObjectsMap.supplierList.map(
+          (supplier) => ({
+            value: supplier.supplierCode || supplier.id,
+            label: `${supplier.supplierCode} - ${supplier.supplierName}`,
+            supplierName: supplier.supplierName,
+            id: supplier.id,
+            gstNo: supplier.gstNo,
+            gstApproval: supplier.gstApproval,
+            gstState: supplier.gstState,
+            address: supplier.address,
+          }),
+        );
+
         setSupplierOptions(options);
         suppliersLoadedRef.current = true;
       } else {
@@ -692,23 +721,24 @@ const PurchaseDeliveryScheduleForm = ({ data, onBack }) => {
     }
   }, [branchId, orgId, addToast]);
 
-  // Load Doc ID for new form
   const loadDocId = useCallback(async () => {
     if (docIdLoadedRef.current || data?.id) return;
 
     setLoadingDocId(true);
+
     try {
       const financialYear = getFinancialYear();
-      const response = await purchaseDeliveryScheduleAPI.getPurchaseDeliveryScheduleDocId(
-        financialYear,
-        orgId
-      );
+
+      const response =
+        await purchaseDeliveryScheduleAPI.getPurchaseDeliveryScheduleDocId(
+          financialYear,
+          orgId,
+        );
 
       console.log("Doc ID Response:", response);
 
       if (response?.status && response?.paramObjectsMap?.invoiceDocId) {
-        const docId = response.paramObjectsMap.invoiceDocId;
-        setValue("docNo", docId);
+        setValue("docNo", response.paramObjectsMap.invoiceDocId);
         docIdLoadedRef.current = true;
       } else {
         setValue("docNo", "Auto-generated");
@@ -722,7 +752,6 @@ const PurchaseDeliveryScheduleForm = ({ data, onBack }) => {
     }
   }, [orgId, data?.id, setValue, addToast]);
 
-  // Load PO options based on supplier and doc date
   const loadPOOptions = useCallback(async () => {
     if (!supplierCode || !docDate || !orgId || !branchId) {
       setPoOptions([]);
@@ -730,32 +759,41 @@ const PurchaseDeliveryScheduleForm = ({ data, onBack }) => {
     }
 
     setLoadingPO(true);
+
     try {
       const selectedSupplier = supplierOptions.find(
-        (opt) => String(opt.value) === String(supplierCode)
+        (opt) => String(opt.value) === String(supplierCode),
       );
 
       const supplierId = selectedSupplier?.id || supplierCode;
 
-      const response = await purchaseDeliveryScheduleAPI.getPurchaseOrderNumberForPurchaseDeliverySchedule(
-        branchId,
-        supplierId,
-        docDate,
-        orgId
-      );
+      const response =
+        await purchaseDeliveryScheduleAPI.getPurchaseOrderNumberForPurchaseDeliverySchedule(
+          branchId,
+          supplierId,
+          docDate,
+          orgId,
+        );
 
       console.log("PO Response:", response);
 
-      if (response?.purchaseContractList && response.purchaseContractList.length > 0) {
+      if (
+        response?.purchaseContractList &&
+        response.purchaseContractList.length > 0
+      ) {
         const filteredOptions = response.purchaseContractList
-          .filter(item => item.purchaseorderno && item.purchaseorderno.trim() !== "")
-          .map(item => ({
+          .filter(
+            (item) =>
+              item.purchaseorderno && item.purchaseorderno.trim() !== "",
+          )
+          .map((item) => ({
             value: item.purchaseorderno,
             label: item.purchaseorderno,
             id: item.id,
             docDate: item.docDate,
             supplier: item.supplier,
           }));
+
         setPoOptions(filteredOptions);
         poLoadedRef.current = true;
       } else {
@@ -770,7 +808,6 @@ const PurchaseDeliveryScheduleForm = ({ data, onBack }) => {
     }
   }, [supplierCode, docDate, orgId, branchId, supplierOptions, addToast]);
 
-  // Load items based on PO selection
   const loadItems = useCallback(async () => {
     if (!poNo || !orgId || !branchId || !supplierCode) {
       setItemOptions([]);
@@ -779,33 +816,67 @@ const PurchaseDeliveryScheduleForm = ({ data, onBack }) => {
     }
 
     setLoadingItems(true);
+
     try {
       const selectedSupplier = supplierOptions.find(
-        (opt) => String(opt.value) === String(supplierCode)
+        (opt) => String(opt.value) === String(supplierCode),
       );
 
       const supplierId = selectedSupplier?.id || supplierCode;
 
-      const response = await purchaseDeliveryScheduleAPI.getItemsForPurchaseDeliverySchedule(
-        branchId,
-        supplierId,
-        orgId,
-        poNo
-      );
+      const response =
+        await purchaseDeliveryScheduleAPI.getItemsForPurchaseDeliverySchedule(
+          branchId,
+          supplierId,
+          orgId,
+          poNo,
+        );
 
       console.log("Items Response:", response);
 
       if (response?.itemList && response.itemList.length > 0) {
-        const options = response.itemList.map(item => ({
-          value: item.itemCode,
-          label: `${item.itemCode} - ${item.itemDesc || ''}`,
-          primaryUnit: item.primaryUnit || "",
-          purchaseUnit: item.purchaseUnit || "",
+        /*
+         * Normalize API response.
+         *
+         * itemId: 1000000008
+         * itemCode: ITEM980
+         * itemDesc: ITEM 1811
+         * purchaseUnitId: 1000000005
+         * purchaseUnitDescription: KG
+         * primaryUniId: 1000000005
+         * primaryUnitDescription: KG
+         */
+        const normalizedItems = response.itemList.map((item) => ({
+          ...item,
+          itemId: item.itemId ?? "",
+          itemCode: item.itemCode ?? "",
+          itemDesc: item.itemDesc ?? item.itemDescription ?? "",
+          primaryUnitId: item.primaryUniId ?? item.primaryUnitId ?? "",
+          primaryUnitDescription:
+            item.primaryUnitDescription ?? item.primaryUnit ?? "",
+          purchaseUnitId: item.purchaseUnitId ?? "",
+          purchaseUnitDescription:
+            item.purchaseUnitDescription ?? item.purchaseUnit ?? "",
+        }));
+
+        console.log("Normalized Items:", normalizedItems);
+
+        const options = normalizedItems.map((item) => ({
+          value: String(item.itemCode),
+          label: `${item.itemCode} - ${item.itemDesc}`,
           itemId: item.itemId,
           itemDesc: item.itemDesc,
+          primaryUnitId: item.primaryUnitId,
+          primaryUnitDescription: item.primaryUnitDescription,
+          purchaseUnitId: item.purchaseUnitId,
+          purchaseUnitDescription: item.purchaseUnitDescription,
         }));
+
         setItemOptions(options);
-        setItemData(response.itemList);
+
+        // Full normalized data is kept separately for submit.
+        setItemData(normalizedItems);
+
         itemsLoadedRef.current = true;
       } else {
         setItemOptions([]);
@@ -821,24 +892,31 @@ const PurchaseDeliveryScheduleForm = ({ data, onBack }) => {
     }
   }, [poNo, orgId, branchId, supplierCode, supplierOptions, addToast]);
 
-  // Load Prepared By options
   const loadPreparedBy = useCallback(async () => {
     if (preparedByLoadedRef.current) return;
 
     setLoadingPreparedBy(true);
+
     try {
-      const response = await purchaseDeliveryScheduleAPI.getEmployeeDropdownPurchaseContract(
-        branchId,
-        orgId
-      );
+      const response =
+        await purchaseDeliveryScheduleAPI.getEmployeeDropdownPurchaseContract(
+          branchId,
+          orgId,
+        );
 
       console.log("Prepared By Response:", response);
 
       if (response?.status && response?.paramObjectsMap?.employeeList) {
-        const options = response.paramObjectsMap.employeeList.map(employee => ({
-          value: employee.employeeId,
-          label: employee.employeeName || employee.employeeCode || `Employee ${employee.employeeId}`,
-        }));
+        const options = response.paramObjectsMap.employeeList.map(
+          (employee) => ({
+            value: employee.employeeId,
+            label:
+              employee.employeeName ||
+              employee.employeeCode ||
+              `Employee ${employee.employeeId}`,
+          }),
+        );
+
         setPreparedByOptions(options);
         preparedByLoadedRef.current = true;
       } else {
@@ -853,29 +931,32 @@ const PurchaseDeliveryScheduleForm = ({ data, onBack }) => {
     }
   }, [branchId, orgId, addToast]);
 
-  // Load edit data when editing
+  /* -------------------------------------------------------------------------- */
+  /* EDIT DATA                                                                  */
+
   const loadEditData = useCallback(async () => {
     if (!data?.id) return;
 
     setLoadingData(true);
+
     try {
-      const response = await purchaseDeliveryScheduleAPI.getPurchaseDeliveryScheduleById(data.id);
+      const response =
+        await purchaseDeliveryScheduleAPI.getPurchaseDeliveryScheduleById(
+          data.id,
+        );
 
       console.log("Get By ID Response:", response);
 
-      const scheduleData = response?.paramObjectsMap?.purchaseDeliveryScheduleVO;
+      const scheduleData =
+        response?.paramObjectsMap?.purchaseDeliveryScheduleVO;
 
       if (!scheduleData) {
         console.error("Purchase Delivery Schedule data not found");
         return;
       }
 
-      // Get the first detail for preparedBy and note (since they are at header level)
-      const firstDetail = scheduleData.scheduleDetails?.[0] || {};
+      console.log("scheduleData", scheduleData);
 
-      console.log("scheduleData", scheduleData)
-
-      // Map the data to form fields
       const formData = {
         plantId: scheduleData.branch?.id?.toString() || "",
         belongsTo: scheduleData.belongsTo || "",
@@ -889,30 +970,56 @@ const PurchaseDeliveryScheduleForm = ({ data, onBack }) => {
         poDate: scheduleData.purchaseOrderDate || "",
         preparedBy: scheduleData.preparedBy?.id?.toString() || "",
         note: scheduleData.note || "",
-        scheduleDetails: (scheduleData.scheduleDetails || []).map((detail) => ({
-          itemCode: detail.item?.itemCode || "",
-          primaryUnit: detail.primaryUnit?.unitId || "",
-          purchaseUnit: detail.purchaseUnit?.unitId || "",
-          demandQty: detail.demandQty || "",
-          availableStockQty: detail.availableStock || "",
-          qty: detail.qty || "",
-          tentativeQty: detail.tentativeQty || "",
-          tentativeQtyNextMonth: detail.tentativeQtyNextMonth || "",
-          rate: detail.rate || "",
-        })),
-        schedule: (scheduleData.scheduleDetails?.[0]?.schedule || []).map((s) => ({
-          planDate: s.planDate || "",
-          weekNo: s.weekNo?.toString() || "",
-          scheduleQty: s.scheduleQty || "",
-        })),
+
+        /*
+         * FIX: units are resolved with resolveUnit so that the
+         * description is shown on screen in edit mode.
+         */
+        scheduleDetails: (scheduleData.scheduleDetails || []).map((detail) => {
+          const primary = resolveUnit(
+            detail.primaryUnit,
+            detail.primaryUnitDescription ?? detail.primaryUnitName ?? "",
+          );
+
+          const purchase = resolveUnit(
+            detail.purchaseUnit,
+            detail.purchaseUnitDescription ?? detail.purchaseUnitName ?? "",
+          );
+
+          return {
+            itemCode: detail.item?.itemCode || "",
+
+            // Backend IDs
+            primaryUnit: primary.id,
+            purchaseUnit: purchase.id,
+
+            // Display values
+            primaryUnitDescription: primary.desc,
+            purchaseUnitDescription: purchase.desc,
+
+            demandQty: detail.demandQty || "",
+            availableStockQty: detail.availableStock || "",
+            qty: detail.qty || "",
+            tentativeQty: detail.tentativeQty || "",
+            tentativeQtyNextMonth: detail.tentativeQtyNextMonth || "",
+            rate: detail.rate || "",
+          };
+        }),
+
+        schedule: (scheduleData.scheduleDetails?.[0]?.schedule || []).map(
+          (s) => ({
+            planDate: s.planDate || "",
+            weekNo: s.weekNo?.toString() || "",
+            scheduleQty: s.scheduleQty || "",
+          }),
+        ),
       };
 
       console.log("Populated Form Data:", formData);
 
-      // Set all values
       reset(formData);
-      dataLoadedRef.current = true;
 
+      dataLoadedRef.current = true;
     } catch (error) {
       console.error("Failed to load edit data:", error);
       addToast("Failed to load Purchase Delivery Schedule data", "error");
@@ -921,31 +1028,81 @@ const PurchaseDeliveryScheduleForm = ({ data, onBack }) => {
     }
   }, [data?.id, reset, addToast]);
 
-  // Handle item selection - auto-fill primaryUnit and purchaseUnit
-  const handleItemSelect = useCallback((index, selectedItemCode) => {
-    if (!selectedItemCode) {
-      setValue(`scheduleDetails.${index}.primaryUnit`, "");
-      setValue(`scheduleDetails.${index}.purchaseUnit`, "");
-      return;
-    }
+  /* -------------------------------------------------------------------------- */
+  /* ITEM SELECTION                                                             */
 
-    const selectedItem = itemData.find(
-      (item) => item.itemCode === selectedItemCode
-    );
+  const handleItemSelect = useCallback(
+    (index, selectedItemCode) => {
+      const rowPrefix = `scheduleDetails.${index}`;
 
-    if (selectedItem) {
-      setValue(`scheduleDetails.${index}.primaryUnit`, selectedItem.primaryUnit || "");
-      setValue(`scheduleDetails.${index}.purchaseUnit`, selectedItem.purchaseUnit || "");
-    }
-  }, [itemData, setValue]);
+      const clearUnits = () => {
+        setValue(`${rowPrefix}.primaryUnit`, "");
+        setValue(`${rowPrefix}.primaryUnitDescription`, "");
+        setValue(`${rowPrefix}.purchaseUnit`, "");
+        setValue(`${rowPrefix}.purchaseUnitDescription`, "");
+      };
 
-  // Handle View Schedule button click
+      // Clear units if item is cleared.
+      if (!selectedItemCode) {
+        clearUnits();
+        return;
+      }
+
+      const selectedItem = itemData.find(
+        (item) => String(item.itemCode) === String(selectedItemCode),
+      );
+
+      if (!selectedItem) {
+        console.warn("Selected item was not found:", selectedItemCode);
+        clearUnits();
+        return;
+      }
+
+      const primaryUnitId =
+        selectedItem.primaryUnitId ?? selectedItem.primaryUniId ?? "";
+      const primaryUnitDescription = selectedItem.primaryUnitDescription ?? "";
+      const purchaseUnitId = selectedItem.purchaseUnitId ?? "";
+      const purchaseUnitDescription =
+        selectedItem.purchaseUnitDescription ?? "";
+
+      setValue(`${rowPrefix}.primaryUnit`, primaryUnitId, {
+        shouldValidate: true,
+        shouldDirty: true,
+        shouldTouch: true,
+      });
+
+      setValue(`${rowPrefix}.primaryUnitDescription`, primaryUnitDescription, {
+        shouldValidate: true,
+        shouldDirty: true,
+      });
+
+      setValue(`${rowPrefix}.purchaseUnit`, purchaseUnitId, {
+        shouldValidate: true,
+        shouldDirty: true,
+        shouldTouch: true,
+      });
+
+      setValue(
+        `${rowPrefix}.purchaseUnitDescription`,
+        purchaseUnitDescription,
+        {
+          shouldValidate: true,
+          shouldDirty: true,
+        },
+      );
+
+      console.log("Selected Item:", selectedItem);
+      console.log("Primary Unit:", primaryUnitId, primaryUnitDescription);
+      console.log("Purchase Unit:", purchaseUnitId, purchaseUnitDescription);
+    },
+    [itemData, setValue],
+  );
+
   const handleViewSchedule = (index) => {
     setSelectedRowIndex(index);
     setShowPopup(true);
   };
 
-  // Handle Schedule popup save
   const handleScheduleSave = () => {
     addToast("Schedule saved successfully!", "success");
   };
@@ -953,42 +1110,36 @@ const PurchaseDeliveryScheduleForm = ({ data, onBack }) => {
   /* -------------------------------------------------------------------------- */
   /* Effects                                                                    */
 
-  // Load branches only once when component mounts
   useEffect(() => {
     if (orgId && !branchesLoadedRef.current) {
       loadBranches();
     }
   }, [orgId, loadBranches]);
 
-  // Load suppliers only once when component mounts
   useEffect(() => {
     if (orgId && branchId && !suppliersLoadedRef.current) {
       loadSuppliers();
     }
   }, [orgId, branchId, loadSuppliers]);
 
-  // Load Prepared By options only once when component mounts
   useEffect(() => {
     if (orgId && branchId && !preparedByLoadedRef.current) {
       loadPreparedBy();
     }
   }, [orgId, branchId, loadPreparedBy]);
 
-  // Load Doc ID for new form (only if no data is passed)
   useEffect(() => {
     if (orgId && !data?.id && !docIdLoadedRef.current) {
       loadDocId();
     }
   }, [orgId, data?.id, loadDocId]);
 
-  // Load edit data when data prop is provided
   useEffect(() => {
     if (data?.id && !dataLoadedRef.current) {
       loadEditData();
     }
   }, [data?.id, loadEditData]);
 
-  // Load PO options when supplier or doc date changes
   useEffect(() => {
     if (supplierCode && docDate && orgId && branchId) {
       loadPOOptions();
@@ -997,7 +1148,6 @@ const PurchaseDeliveryScheduleForm = ({ data, onBack }) => {
     }
   }, [supplierCode, docDate, orgId, branchId, loadPOOptions]);
 
-  // Load items when PO changes
   useEffect(() => {
     if (poNo && orgId && branchId && supplierCode) {
       loadItems();
@@ -1007,12 +1157,58 @@ const PurchaseDeliveryScheduleForm = ({ data, onBack }) => {
     }
   }, [poNo, orgId, branchId, supplierCode, loadItems]);
 
-  // Auto-fill supplier name when supplier code changes
+  /*
+   * FIX: Fallback for edit mode.
+   * If the edit API did not return the unit text/ID, fill it from the
+   * item list once that has loaded. Only empty values are written.
+   */
+  const scheduleRowCount = scheduleDetails?.length || 0;
+
+  useEffect(() => {
+    if (!itemData.length) return;
+
+    const rows = getValues("scheduleDetails") || [];
+
+    rows.forEach((row, index) => {
+      if (!row?.itemCode) return;
+
+      const needsPrimary = !row.primaryUnitDescription || !row.primaryUnit;
+      const needsPurchase = !row.purchaseUnitDescription || !row.purchaseUnit;
+
+      if (!needsPrimary && !needsPurchase) return;
+
+      const item = itemData.find(
+        (i) => String(i.itemCode) === String(row.itemCode),
+      );
+
+      if (!item) return;
+
+      const prefix = `scheduleDetails.${index}`;
+
+      if (needsPrimary) {
+        setValue(`${prefix}.primaryUnit`, item.primaryUnitId ?? "");
+        setValue(
+          `${prefix}.primaryUnitDescription`,
+          item.primaryUnitDescription ?? "",
+        );
+      }
+
+      if (needsPurchase) {
+        setValue(`${prefix}.purchaseUnit`, item.purchaseUnitId ?? "");
+        setValue(
+          `${prefix}.purchaseUnitDescription`,
+          item.purchaseUnitDescription ?? "",
+        );
+      }
+    });
+  }, [itemData, scheduleRowCount, getValues, setValue]);
+
   useEffect(() => {
     if (supplierCode && supplierOptions.length > 0) {
       const selectedSupplier = supplierOptions.find(
-        (opt) => String(opt.value) === String(supplierCode)
+        (opt) => String(opt.value) === String(supplierCode),
       );
+
       if (selectedSupplier) {
         setValue("supplierName", selectedSupplier.supplierName || "");
       }
@@ -1021,12 +1217,12 @@ const PurchaseDeliveryScheduleForm = ({ data, onBack }) => {
     }
   }, [supplierCode, supplierOptions, setValue]);
 
-  // Auto-fill PO date when PO is selected
   useEffect(() => {
     if (poNo && poOptions.length > 0) {
       const selectedPO = poOptions.find(
-        (opt) => String(opt.value) === String(poNo)
+        (opt) => String(opt.value) === String(poNo),
       );
+
       if (selectedPO) {
         setValue("poDate", selectedPO.docDate || "");
       }
@@ -1035,7 +1231,6 @@ const PurchaseDeliveryScheduleForm = ({ data, onBack }) => {
     }
   }, [poNo, poOptions, setValue]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       dataLoadedRef.current = false;
@@ -1053,6 +1248,7 @@ const PurchaseDeliveryScheduleForm = ({ data, onBack }) => {
 
   const handleAddItem = (arrayName) => {
     const defaultValues = getDefaultValues();
+
     if (arrayName === "scheduleDetails") {
       scheduleDetailsArray.append(defaultValues.scheduleDetails[0]);
     }
@@ -1076,12 +1272,14 @@ const PurchaseDeliveryScheduleForm = ({ data, onBack }) => {
       const isUpdate = Boolean(data?.id);
 
       const selectedSupplier = supplierOptions.find(
-        (opt) => String(opt.value) === String(formData.supplierCode)
+        (opt) => String(opt.value) === String(formData.supplierCode),
       );
+
       const supplierId = selectedSupplier?.id || formData.supplierCode;
 
       const payload = {
         ...(isUpdate ? { id: data.id } : {}),
+
         active: true,
         belongsTo: formData.belongsTo || "",
         branch: Number(branchId),
@@ -1093,26 +1291,44 @@ const PurchaseDeliveryScheduleForm = ({ data, onBack }) => {
         purchaseOrderNo: formData.poNo || "",
         scheduleEndDate: formData.schEndDate || "",
         scheduleStartDate: formData.schStartDate || "",
-        preparedBy: Number(formData.preparedBy),
+        preparedBy: Number(formData.preparedBy) || 0,
         note: formData.note || "",
-        supplier: Number(supplierId),
+        supplier: Number(supplierId) || 0,
+
         scheduleDetails: (formData.scheduleDetails || [])
           .filter((r) => r.itemCode?.trim())
           .map((item) => {
             const selectedItem = itemData.find(
-              (i) => i.itemCode === item.itemCode
+              (i) => String(i.itemCode) === String(item.itemCode),
             );
+
+            /*
+             * item.primaryUnit contains the ID.
+             * item.primaryUnitDescription contains "KG".
+             */
+            const primaryUnitId =
+              item.primaryUnit ||
+              selectedItem?.primaryUnitId ||
+              selectedItem?.primaryUniId ||
+              0;
+
+            const purchaseUnitId =
+              item.purchaseUnit || selectedItem?.purchaseUnitId || 0;
 
             return {
               availableStock: Number(item.availableStockQty) || 0,
               demandQty: Number(item.demandQty) || 0,
               item: Number(selectedItem?.itemId) || 0,
-              primaryUnit: Number(item.primaryUnit) || 0,
-              purchaseUnit: Number(item.purchaseUnit) || 0,
+
+              // Backend gets IDs.
+              primaryUnit: Number(primaryUnitId) || 0,
+              purchaseUnit: Number(purchaseUnitId) || 0,
+
               qty: Number(item.qty) || 0,
               rate: Number(item.rate) || 0,
               tentativeQty: Number(item.tentativeQty) || 0,
               tentativeQtyNextMonth: Number(item.tentativeQtyNextMonth) || 0,
+
               schedule: (formData.schedule || [])
                 .filter((s) => s.planDate || s.scheduleQty)
                 .map((s) => ({
@@ -1124,37 +1340,40 @@ const PurchaseDeliveryScheduleForm = ({ data, onBack }) => {
           }),
       };
 
-      console.log("Submit Payload:", payload);
+      console.log("FINAL SUBMIT PAYLOAD:", payload);
 
-      const response = await purchaseDeliveryScheduleAPI.createUpdateSchedule(payload);
+      const response =
+        await purchaseDeliveryScheduleAPI.createUpdateSchedule(payload);
 
       if (response?.status) {
         addToast(
           response?.paramObjectsMap?.message ||
-          (isUpdate
-            ? "Purchase Delivery Schedule updated successfully!"
-            : "Purchase Delivery Schedule created successfully!"),
-          "success"
+            (isUpdate
+              ? "Purchase Delivery Schedule updated successfully!"
+              : "Purchase Delivery Schedule created successfully!"),
+          "success",
         );
+
         onBack?.();
       } else {
         addToast(
           response?.errors?.[0]?.shortMessage ||
-          response?.errors?.[0]?.longMessage ||
-          response?.message ||
-          "Failed to save Purchase Delivery Schedule.",
-          "error"
+            response?.errors?.[0]?.longMessage ||
+            response?.message ||
+            "Failed to save Purchase Delivery Schedule.",
+          "error",
         );
       }
     } catch (err) {
       console.error("Save Purchase Delivery Schedule Error:", err);
+
       if (err.response?.data) {
         addToast(
           err.response.data.message ||
-          err.response.data.statusMessage ||
-          err.response.data.error ||
-          JSON.stringify(err.response.data),
-          "error"
+            err.response.data.statusMessage ||
+            err.response.data.error ||
+            JSON.stringify(err.response.data),
+          "error",
         );
       } else {
         addToast("Something went wrong.", "error");
@@ -1167,32 +1386,100 @@ const PurchaseDeliveryScheduleForm = ({ data, onBack }) => {
   /* -------------------------------------------------------------------------- */
   /* Render                                                                     */
 
-  // Get the appropriate array based on active tab
   const getActiveArray = () => {
     switch (activeChildTab) {
       case "scheduleDetails":
-        return { fields: scheduleDetailsArray.fields, name: "scheduleDetails" };
+        return {
+          fields: scheduleDetailsArray.fields,
+          name: "scheduleDetails",
+        };
+
       default:
-        return { fields: scheduleDetailsArray.fields, name: "scheduleDetails" };
+        return {
+          fields: scheduleDetailsArray.fields,
+          name: "scheduleDetails",
+        };
     }
   };
 
-  // Get column configuration based on active tab
   const getColumnConfig = () => {
     switch (activeChildTab) {
       case "scheduleDetails":
         return [
-          { key: "itemCode", label: "Item Code *", type: "select", options: itemOptions, required: true },
-          { key: "primaryUnit", label: "Primary Unit", type: "text", disabled: true },
-          { key: "purchaseUnit", label: "Purchase Unit", type: "text", disabled: true },
-          { key: "demandQty", label: "Demand Qty", type: "text", step: "0.00001" },
-          { key: "availableStockQty", label: "Available Stock", type: "text", step: "0.00001" },
-          { key: "qty", label: "Qty", type: "text", step: "0.00001" },
-          { key: "schedule", label: "", type: "schedule", hasViewButton: true },
-          { key: "tentativeQty", label: "Tentative Qty", type: "text", step: "0.00001" },
-          { key: "tentativeQtyNextMonth", label: "Tentative Qty Next Month", type: "text", step: "0.00001" },
-          { key: "rate", label: "Rate", type: "text", step: "0.00001" },
+          {
+            key: "itemCode",
+            label: "Item Code *",
+            type: "select",
+            options: itemOptions,
+            required: true,
+          },
+
+          // DISPLAY DESCRIPTION, NOT UNIT ID.
+          {
+            key: "primaryUnitDescription",
+            label: "Primary Unit",
+            type: "text",
+            disabled: true,
+          },
+
+          // DISPLAY DESCRIPTION, NOT UNIT ID.
+          {
+            key: "purchaseUnitDescription",
+            label: "Purchase Unit",
+            type: "text",
+            disabled: true,
+          },
+
+          {
+            key: "demandQty",
+            label: "Demand Qty",
+            type: "text",
+            step: "0.00001",
+          },
+
+          {
+            key: "availableStockQty",
+            label: "Available Stock",
+            type: "text",
+            step: "0.00001",
+          },
+
+          {
+            key: "qty",
+            label: "Qty",
+            type: "text",
+            step: "0.00001",
+          },
+
+          {
+            key: "schedule",
+            label: "",
+            type: "schedule",
+            hasViewButton: true,
+          },
+
+          {
+            key: "tentativeQty",
+            label: "Tentative Qty",
+            type: "text",
+            step: "0.00001",
+          },
+
+          {
+            key: "tentativeQtyNextMonth",
+            label: "Tentative Qty Next Month",
+            type: "text",
+            step: "0.00001",
+          },
+
+          {
+            key: "rate",
+            label: "Rate",
+            type: "text",
+            step: "0.00001",
+          },
         ];
+
       default:
         return [];
     }
@@ -1222,8 +1509,11 @@ const PurchaseDeliveryScheduleForm = ({ data, onBack }) => {
           >
             <ArrowLeft className="h-4 w-4" />
           </button>
+
           <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-            {data ? "Edit Purchase Delivery Schedule" : "Add Purchase Delivery Schedule"}
+            {data
+              ? "Edit Purchase Delivery Schedule"
+              : "Add Purchase Delivery Schedule"}
           </h2>
         </div>
       </div>
@@ -1233,6 +1523,7 @@ const PurchaseDeliveryScheduleForm = ({ data, onBack }) => {
         {/* General Info */}
         <div>
           <SectionHeader>Purchase Delivery Schedule Details</SectionHeader>
+
           <div className={fieldGrid}>
             <SelectField
               control={control}
@@ -1242,6 +1533,7 @@ const PurchaseDeliveryScheduleForm = ({ data, onBack }) => {
               required
               errors={errors}
             />
+
             <SelectField
               control={control}
               name="belongsTo"
@@ -1250,6 +1542,7 @@ const PurchaseDeliveryScheduleForm = ({ data, onBack }) => {
               required
               errors={errors}
             />
+
             <InputField
               control={control}
               name="docNo"
@@ -1259,6 +1552,7 @@ const PurchaseDeliveryScheduleForm = ({ data, onBack }) => {
               errors={errors}
               disabled={true}
             />
+
             <InputField
               control={control}
               type="date"
@@ -1267,6 +1561,7 @@ const PurchaseDeliveryScheduleForm = ({ data, onBack }) => {
               required
               errors={errors}
             />
+
             <InputField
               control={control}
               type="date"
@@ -1275,6 +1570,7 @@ const PurchaseDeliveryScheduleForm = ({ data, onBack }) => {
               required
               errors={errors}
             />
+
             <InputField
               control={control}
               type="date"
@@ -1283,6 +1579,7 @@ const PurchaseDeliveryScheduleForm = ({ data, onBack }) => {
               required
               errors={errors}
             />
+
             <SelectField
               control={control}
               name="supplierCode"
@@ -1291,8 +1588,11 @@ const PurchaseDeliveryScheduleForm = ({ data, onBack }) => {
               required
               errors={errors}
               disabled={loadingSuppliers}
-              placeholder={loadingSuppliers ? "Loading suppliers..." : "Select an option"}
+              placeholder={
+                loadingSuppliers ? "Loading suppliers..." : "Select an option"
+              }
             />
+
             <InputField
               control={control}
               name="supplierName"
@@ -1302,6 +1602,7 @@ const PurchaseDeliveryScheduleForm = ({ data, onBack }) => {
               errors={errors}
               disabled={true}
             />
+
             <SelectField
               control={control}
               name="poNo"
@@ -1310,8 +1611,15 @@ const PurchaseDeliveryScheduleForm = ({ data, onBack }) => {
               required={false}
               errors={errors}
               disabled={loadingPO || !supplierCode || !docDate}
-              placeholder={loadingPO ? "Loading PO numbers..." : poOptions.length === 0 && supplierCode && docDate ? "No PO available" : "Select an option"}
+              placeholder={
+                loadingPO
+                  ? "Loading PO numbers..."
+                  : poOptions.length === 0 && supplierCode && docDate
+                    ? "No PO available"
+                    : "Select an option"
+              }
             />
+
             <InputField
               control={control}
               type="date"
@@ -1323,7 +1631,7 @@ const PurchaseDeliveryScheduleForm = ({ data, onBack }) => {
           </div>
         </div>
 
-        {/* Child Tables (tab bar + dynamic table) */}
+        {/* Child Tables */}
         <section className="mt-0 bg-white dark:bg-gray-800">
           {/* Tabs */}
           <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 mb-2">
@@ -1333,15 +1641,17 @@ const PurchaseDeliveryScheduleForm = ({ data, onBack }) => {
                   key={tab.key}
                   type="button"
                   onClick={() => setActiveChildTab(tab.key)}
-                  className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${activeChildTab === tab.key
-                    ? "bg-blue-600 text-white"
-                    : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                    }`}
+                  className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${
+                    activeChildTab === tab.key
+                      ? "bg-blue-600 text-white"
+                      : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  }`}
                 >
                   {tab.label}
                 </button>
               ))}
             </div>
+
             {activeChildTab !== "summary" && (
               <button
                 type="button"
@@ -1365,6 +1675,7 @@ const PurchaseDeliveryScheduleForm = ({ data, onBack }) => {
                 errors={errors}
                 disabled={loadingPreparedBy}
               />
+
               <InputField
                 control={control}
                 name="note"
@@ -1375,7 +1686,10 @@ const PurchaseDeliveryScheduleForm = ({ data, onBack }) => {
             </div>
           ) : (
             <TableWrapper>
-              <TableHead headers={["S.No", ...columns.map(col => col.label), "Action"]} />
+              <TableHead
+                headers={["S.No", ...columns.map((col) => col.label), "Action"]}
+              />
+
               <tbody>
                 {activeFields.fields.map((field, index) => (
                   <TableRow
@@ -1450,6 +1764,7 @@ const PurchaseDeliveryScheduleForm = ({ data, onBack }) => {
             <X className="h-3 w-3" />
             Cancel
           </button>
+
           <button
             onClick={handleSubmit(onSubmit)}
             disabled={saving || isSubmitting}

@@ -1,72 +1,102 @@
 import apiClient from "../apiClient";
-import axios from "axios";
-
-const API_BASE_URL = import.meta.env.VITE_API_URL;
-
-const getAuthHeaders = () => {
-  let token =
-    localStorage.getItem("user.token") ||
-    localStorage.getItem("token") ||
-    localStorage.getItem("authToken") ||
-    JSON.parse(localStorage.getItem("user") || "{}")?.token;
-
-  if (token) token = token.replace("Bearer ", "");
-
-  return token ? { Authorization: `Bearer ${token}` } : {};
-};
 
 const purchaseOrderAmendmentAPI = {
+  /**
+   * GET ALL PURCHASE ORDER AMENDMENTS
+   *
+   * GET
+   * /api/develop/getPurchaseOrderAmendmentByOrgId
+   */
   getAll: async (orgId) => {
     try {
       const res = await apiClient.get(
         "/api/develop/getPurchaseOrderAmendmentByOrgId",
         {
-          params: { orgId: Number(orgId) },
+          params: {
+            orgId: Number(orgId),
+          },
         },
       );
+
       return res?.paramObjectsMap?.purchaseOrderAmendmentResponseVO || [];
     } catch (error) {
-      console.error("Error fetching PO amendments:", error);
+      console.error(
+        "Error fetching PO amendments:",
+        error?.response?.data || error,
+      );
+
       throw error;
     }
   },
 
+  /**
+   * GET PURCHASE ORDER AMENDMENT BY ID
+   *
+   * GET
+   * /api/develop/getPurchaseOrderAmendmentById
+   */
   getById: async (id) => {
     try {
       const res = await apiClient.get(
         "/api/develop/getPurchaseOrderAmendmentById",
         {
-          params: { id: Number(id) },
+          params: {
+            id: Number(id),
+          },
         },
       );
-      return (
-        res?.paramObjectsMap?.purchaseOrderAmendmentResponseVO || null
-      );
+
+      return res?.paramObjectsMap?.purchaseOrderAmendmentResponseVO || null;
     } catch (error) {
-      console.error("Error fetching PO amendment by id:", error);
+      console.error(
+        "Error fetching PO amendment by id:",
+        error?.response?.data || error,
+      );
+
       throw error;
     }
   },
 
-  getItemCodeDropdown: async (branch, docId, orgId) => {
+  /**
+   * GET ITEM CODE DROPDOWN
+   *
+   * IMPORTANT:
+   * Backend expects purchaseOrderNumber,
+   * NOT docId.
+   *
+   * GET
+   * /api/develop/getPurchaseOrderAmendmentItemCodeDropdown
+   */
+  getItemCodeDropdown: async (branch, purchaseOrderNumber, orgId) => {
     try {
       const res = await apiClient.get(
         "/api/develop/getPurchaseOrderAmendmentItemCodeDropdown",
         {
           params: {
             branch: Number(branch),
-            docId,
+            purchaseOrderNumber,
             orgId: Number(orgId),
           },
         },
       );
+
       return res?.paramObjectsMap?.itemCodeDropdown || [];
     } catch (error) {
-      console.error("Error fetching PO Amendment item code dropdown:", error);
+      console.error(
+        "Error fetching PO Amendment item code dropdown:",
+        error?.response?.data || error,
+      );
+
       throw error;
     }
   },
 
+  /**
+   * GET DOCUMENT ID
+   *
+   * GET
+   * /api/develop/getPurchaseOrderAmendmentDocId
+   */
   getDocId: async ({ financialYear, orgId, screenCode }) => {
     try {
       const res = await apiClient.get(
@@ -79,13 +109,24 @@ const purchaseOrderAmendmentAPI = {
           },
         },
       );
+
       return res?.paramObjectsMap?.purchaseOrderAmendmentDocId || "";
     } catch (error) {
-      console.error("Error fetching PO Amendment doc id:", error);
+      console.error(
+        "Error fetching PO Amendment doc id:",
+        error?.response?.data || error,
+      );
+
       throw error;
     }
   },
 
+  /**
+   * GET REVISION NUMBER
+   *
+   * GET
+   * /api/develop/getPurchaseOrderAmdRevisionNo
+   */
   getRevisionNo: async ({ branch, orgId, purchaseOrderNumber }) => {
     try {
       const res = await apiClient.get(
@@ -98,13 +139,24 @@ const purchaseOrderAmendmentAPI = {
           },
         },
       );
+
       return res?.paramObjectsMap?.revisionNo ?? 0;
     } catch (error) {
-      console.error("Error fetching PO Amendment revision no:", error);
+      console.error(
+        "Error fetching PO Amendment revision no:",
+        error?.response?.data || error,
+      );
+
       throw error;
     }
   },
 
+  /**
+   * GET PURCHASE ORDER DROPDOWN
+   *
+   * GET
+   * /api/develop/getPurchaseOrderDropdownForPurchaseOrderAmendment
+   */
   getPurchaseOrderDropdownForPurchaseOrderAmendment: async ({
     branch,
     customerId,
@@ -121,36 +173,84 @@ const purchaseOrderAmendmentAPI = {
           },
         },
       );
+
       return res?.paramObjectsMap?.purchaseOrderDropdown || [];
     } catch (error) {
       console.error(
         "Error fetching PO dropdown for PO Amendment:",
-        error,
+        error?.response?.data || error,
       );
+
       throw error;
     }
   },
 
+  /**
+   * CREATE / UPDATE PURCHASE ORDER AMENDMENT
+   *
+   * POST
+   * /api/develop/updateCreatePurchaseOrderAmendment
+   *
+   * IMPORTANT:
+   * Do NOT manually set Content-Type here.
+   *
+   * Axios/browser automatically creates:
+   *
+   * multipart/form-data;
+   * boundary=---------------------------
+   */
   createUpdate: async (formData) => {
     try {
+      if (!(formData instanceof FormData)) {
+        throw new Error("Purchase Order Amendment request must be FormData.");
+      }
+
+      console.log("========== PO AMENDMENT API REQUEST ==========");
+
+      for (const [key, value] of formData.entries()) {
+        if (value instanceof File) {
+          console.log(key, "FILE:", value.name, value.type, value.size);
+        } else if (value instanceof Blob) {
+          console.log(key, "BLOB:", value.type, value.size);
+        } else {
+          console.log(key, value);
+        }
+      }
+
       const response = await apiClient.post(
-        `${API_BASE_URL}/api/develop/updateCreatePurchaseOrderAmendment`,
+        "/api/develop/updateCreatePurchaseOrderAmendment",
         formData,
-        {
-          headers: {
-            "Content-Type": "multipart/form-data",
-          },
-        },
       );
+
+      console.log("========== PO AMENDMENT API RESPONSE ==========");
+
+      console.log(response);
 
       return response;
     } catch (error) {
-      console.error("Error creating/updating PO amendment:", error);
+      console.error("========== PO AMENDMENT API ERROR ==========");
+
+      console.error("Status:", error?.response?.status);
+
+      console.error("Response:", error?.response?.data);
+
+      console.error("Message:", error?.message);
+
       throw error;
     }
   },
 
-  getCurrencyExchangeRateforPurchaseOrderAmendment: async (branch, docId, orgId) => {
+  /**
+   * GET CURRENCY EXCHANGE RATE
+   *
+   * GET
+   * /api/develop/getCurrencyExchangeRateforPurchaseOrderAmendment
+   */
+  getCurrencyExchangeRateforPurchaseOrderAmendment: async (
+    branch,
+    docId,
+    orgId,
+  ) => {
     try {
       const res = await apiClient.get(
         "/api/develop/getCurrencyExchangeRateforPurchaseOrderAmendment",
@@ -162,48 +262,68 @@ const purchaseOrderAmendmentAPI = {
           },
         },
       );
+
       return res?.paramObjectsMap?.currencyDetails || [];
     } catch (error) {
       console.error(
         "Error fetching currency exchange rate for PO Amendment:",
-        error,
+        error?.response?.data || error,
       );
+
       throw error;
     }
   },
 
+  /**
+   * GET UNIT MASTER
+   *
+   * GET
+   * /api/commonmaster/getUnitMasterByOrgId
+   */
   getUnitMasterByOrgId: async (orgId) => {
     try {
       const res = await apiClient.get(
         "/api/commonmaster/getUnitMasterByOrgId",
         {
-          params: { orgId: Number(orgId) },
-        },
-      );
-      return res?.paramObjectsMap?.unitMasterList || [];
-    } catch (error) {
-      console.error("Error fetching unit master by org:", error);
-      throw error;
-    }
-  },
-
-  getListValuesGroup: async (listDescription, orgId) => {
-    try {
-      const res = await apiClient.get(
-        "/api/commonmaster/getListValuesGroup",
-        {
           params: {
-            listDescription,
             orgId: Number(orgId),
           },
         },
       );
+
+      return res?.paramObjectsMap?.unitMasterList || [];
+    } catch (error) {
+      console.error(
+        "Error fetching unit master by org:",
+        error?.response?.data || error,
+      );
+
+      throw error;
+    }
+  },
+
+  /**
+   * GET LIST VALUES
+   *
+   * GET
+   * /api/commonmaster/getListValuesGroup
+   */
+  getListValuesGroup: async (listDescription, orgId) => {
+    try {
+      const res = await apiClient.get("/api/commonmaster/getListValuesGroup", {
+        params: {
+          listDescription,
+          orgId: Number(orgId),
+        },
+      });
+
       return res?.paramObjectsMap?.listValues || [];
     } catch (error) {
       console.error(
         "Error fetching list values group:",
-        error,
+        error?.response?.data || error,
       );
+
       throw error;
     }
   },

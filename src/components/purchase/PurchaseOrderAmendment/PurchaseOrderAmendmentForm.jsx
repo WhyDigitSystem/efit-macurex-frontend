@@ -35,6 +35,23 @@ const asId = (value) => {
   return value;
 };
 
+const fmtDate = (value) => (value ? dayjs(value).format("YYYY-MM-DD") : "");
+
+const getEmptyDetail = () => ({
+  id: "",
+  item: "",
+  itemCode: "",
+  itemName: "",
+  hsnSacCode: "",
+  unit: "",
+  oldQty: "",
+  newQty: "",
+  oldRate: "",
+  newRate: "",
+  oldDeliveryDate: "",
+  newDeliveryDate: "",
+});
+
 const getDefaultValues = () => ({
   id: "",
   branch: "",
@@ -57,27 +74,9 @@ const getDefaultValues = () => ({
   modeOfDespatch: "",
   taxDescription: "",
   remarks: "",
-  details: [
-    {
-      id: "",
-      item: "",
-      itemCode: "",
-      itemName: "",
-      hsnSacCode: "",
-      unit: "",
-      oldQty: "",
-      newQty: "",
-      oldRate: "",
-      newRate: "",
-      oldDeliveryDate: "",
-      newDeliveryDate: "",
-    },
-  ],
+  details: [getEmptyDetail()],
   attachments: [{ file: null, existing: null }],
 });
-
-const fmtDate = (value) =>
-  value ? dayjs(value).format("YYYY-MM-DD") : "";
 
 const SelectField = ({
   control,
@@ -101,9 +100,11 @@ const SelectField = ({
         render={({ field }) => (
           <select
             {...field}
+            value={field.value ?? ""}
             disabled={disabled}
-            className={`${controlClasses} ${errorMessage ? "border-red-500 focus:border-red-500" : ""
-              }`}
+            className={`${controlClasses} ${
+              errorMessage ? "border-red-500 focus:border-red-500" : ""
+            }`}
           >
             <option value="">Select {label}</option>
             {(options || []).map((opt) => (
@@ -134,7 +135,6 @@ const InputField = ({
   errors,
   disabled,
   step,
-  value,
 }) => {
   const errorMessage = errors?.[name]?.message;
   return (
@@ -145,17 +145,16 @@ const InputField = ({
       <Controller
         name={name}
         control={control}
-        rules={
-          required ? { required: `${label} is required` } : undefined
-        }
+        rules={required ? { required: `${label} is required` } : undefined}
         render={({ field }) => (
           <input
             {...field}
+            value={field.value ?? ""}
             type={type}
             step={step}
-            value={value !== undefined ? value : field.value}
-            className={`${controlClasses} ${errorMessage ? "border-red-500 focus:border-red-500" : ""
-              }`}
+            className={`${controlClasses} ${
+              disabled ? "bg-gray-100 dark:bg-gray-800 text-gray-500" : ""
+            } ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
             placeholder={placeholder}
             disabled={disabled}
           />
@@ -180,12 +179,13 @@ const TableHead = ({ headers }) => (
       {headers.map((h, i) => (
         <th
           key={i}
-          className={`p-1 ${i === 0
-            ? "w-8 text-center"
-            : i === headers.length - 1
-              ? "w-20 text-left"
-              : "text-left"
-            } dark:text-white`}
+          className={`p-1 whitespace-nowrap ${
+            i === 0
+              ? "w-8 text-center"
+              : i === headers.length - 1
+                ? "w-20 text-left"
+                : "text-left"
+          } dark:text-white`}
         >
           {h}
         </th>
@@ -213,10 +213,11 @@ const TableRow = ({
           type="button"
           onClick={onPreview}
           disabled={previewDisabled}
-          className={`h-5 w-5 rounded text-white flex items-center justify-center ${previewDisabled
-            ? "bg-gray-400 cursor-not-allowed"
-            : "bg-sky-600 hover:bg-sky-700"
-            }`}
+          className={`h-5 w-5 rounded text-white flex items-center justify-center ${
+            previewDisabled
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-sky-600 hover:bg-sky-700"
+          }`}
           title={previewDisabled ? "No file to preview" : "Preview"}
         >
           <Eye size={10} />
@@ -229,10 +230,11 @@ const TableRow = ({
           type="button"
           onClick={onRemove}
           disabled={disabled}
-          className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
-            ? "bg-gray-400 cursor-not-allowed"
-            : "bg-red-600 hover:bg-red-700"
-            }`}
+          className={`h-5 w-5 rounded text-white flex items-center justify-center ${
+            disabled
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-red-600 hover:bg-red-700"
+          }`}
         >
           <Trash2 size={10} />
         </button>
@@ -241,7 +243,15 @@ const TableRow = ({
   </tr>
 );
 
-const SelectCell = ({ control, name, options, required, errors }) => {
+const SelectCell = ({
+  control,
+  name,
+  options,
+  required,
+  errors,
+  disabled,
+  onChange,
+}) => {
   const errorMessage = errors?.[name]?.message;
   return (
     <td className="p-1 align-top">
@@ -252,8 +262,15 @@ const SelectCell = ({ control, name, options, required, errors }) => {
         render={({ field }) => (
           <select
             {...field}
-            className={`${controlClasses} h-8 text-xs ${errorMessage ? "border-red-500 focus:border-red-500" : ""
-              }`}
+            value={field.value ?? ""}
+            disabled={disabled}
+            className={`${controlClasses} h-8 text-xs ${
+              disabled ? "bg-gray-100 dark:bg-gray-800 text-gray-500" : ""
+            } ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
+            onChange={(e) => {
+              field.onChange(e);
+              if (onChange) onChange(e.target.value);
+            }}
           >
             <option value="">Select an option</option>
             {(options || []).map((opt) => (
@@ -301,8 +318,9 @@ const InputCell = ({
             type={type}
             step={step}
             readOnly={readOnly}
-            className={`${controlClasses} ${readOnly ? "bg-gray-100 dark:bg-gray-800 text-gray-500" : ""
-              } ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
+            className={`${controlClasses} ${
+              readOnly ? "bg-gray-100 dark:bg-gray-800 text-gray-500" : ""
+            } ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
             placeholder={placeholder}
             onChange={(e) => {
               field.onChange(e);
@@ -330,12 +348,11 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
   const dataLoadedRef = useRef(false);
   const amendmentNoLoadedRef = useRef(false);
   const fileInputRefs = useRef({});
-  const mappedItemsRef = useRef(new Set());
   const currencyIdRef = useRef(null);
 
   const [activeTab, setActiveTab] = useState("poDetail");
   const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading] = useState(false);
 
   const [branchOptions, setBranchOptions] = useState([]);
   const [customerOptions, setCustomerOptions] = useState([]);
@@ -356,7 +373,6 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
     handleSubmit,
     watch,
     setValue,
-    getValues,
     reset,
     formState: { errors },
   } = useForm({
@@ -371,16 +387,10 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
   const watchPoNo = watch("poNo");
   const watchCustomer = watch("customer");
 
-  const getFieldArray = (tab) => {
-    switch (tab) {
-      case "poDetail":
-        return detailsArray;
-      case "attachment":
-        return attachmentArray;
-      default:
-        return detailsArray;
-    }
-  };
+  const getFieldArray = (tab) =>
+    tab === "attachment" ? attachmentArray : detailsArray;
+
+  /* ------------------------------ Loaders ------------------------------ */
 
   const loadBranches = useCallback(async () => {
     try {
@@ -398,17 +408,17 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
     try {
       const response = await partyMasterAPI.getPartyByOrgId(orgId, branchId);
       setCustomerOptions(
-        (response || []).map((c) => ({
-          value: c.id ?? c.customerId ?? c.partyId,
-          label:
+        (response || []).map((c) => {
+          const name =
             c.customerName ??
             c.partyName ??
-            `${c.customerCode ?? ""} ${c.customerName ?? ""}`.trim(),
-          customerName:
-            c.customerName ??
-            c.partyName ??
-            `${c.customerCode ?? ""} ${c.customerName ?? ""}`.trim(),
-        })),
+            `${c.customerCode ?? ""} ${c.customerName ?? ""}`.trim();
+          return {
+            value: c.id ?? c.customerId ?? c.partyId,
+            label: name,
+            customerName: name,
+          };
+        }),
       );
     } catch (error) {
       console.error("Failed to load customers:", error);
@@ -419,7 +429,7 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
   const loadItems = useCallback(
     async (poNo) => {
       if (!poNo) {
-        setItemOptions([]);
+        if (!isEditMode) setItemOptions([]);
         return;
       }
       try {
@@ -428,14 +438,31 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
           poNo,
           orgId,
         );
-        setItemOptions(
-          (response || []).map((item) => ({
-            value: item.id ?? item.itemCode,
-            label: item.itemCode || String(item.id ?? ""),
-            itemName: item.itemDescription || "",
-            hsnSacCode: item.hsnSacCode || "",
-          })),
-        );
+        const mapped = (response || []).map((item) => ({
+          value: item.id,
+          label: item.itemCode || String(item.id ?? ""),
+          itemCode: item.itemCode || "",
+          // backend does not return a description yet; falls back to blank
+          itemDescription: item.itemDescription || item.itemName || "",
+          hsnSacCode: item.hsnSacCode || "",
+          unit: item.unit ?? "",
+          qty: item.qty ?? "",
+          rate: item.rate ?? "",
+          deliveryDate: item.deliveryDate || "",
+        }));
+
+        if (isEditMode) {
+          // keep items already on the saved amendment, add any new ones
+          setItemOptions((prev) => {
+            const seen = new Set(mapped.map((o) => String(o.value)));
+            return [
+              ...mapped,
+              ...prev.filter((o) => !seen.has(String(o.value))),
+            ];
+          });
+        } else {
+          setItemOptions(mapped);
+        }
       } catch (error) {
         console.error("Failed to load items:", error);
         if (!isEditMode) setItemOptions([]);
@@ -459,13 +486,13 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
           },
         );
       setPoOptions(
-        list
+        (list || [])
           .filter((po) => po?.docId)
           .map((po) => ({
             value: po.docId,
             label: po.docId,
             docId: po.docId,
-            docDate: po.docDate, // keep docDate for PO Date auto-fill
+            docDate: po.docDate,
             id: po.id,
           })),
       );
@@ -475,24 +502,28 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
     }
   }, [orgId, branchId, watchCustomer]);
 
+  /* ------------------------------ Effects ------------------------------ */
+
   useEffect(() => {
     loadBranches();
     loadCustomers();
   }, [loadBranches, loadCustomers]);
 
   useEffect(() => {
-    if (!branchId) return;
-    loadCustomers();
-  }, [branchId, loadCustomers]);
-
-  useEffect(() => {
     loadPoOptions();
   }, [loadPoOptions]);
 
+  // Load items when PO changes. In create mode, reset the detail rows too.
+  const prevPoRef = useRef(watchPoNo);
   useEffect(() => {
+    if (!isEditMode && prevPoRef.current !== watchPoNo) {
+      setValue("details", [getEmptyDetail()]);
+    }
+    prevPoRef.current = watchPoNo;
     loadItems(watchPoNo);
-  }, [watchPoNo]);
+  }, [watchPoNo, loadItems, isEditMode, setValue]);
 
+  // PO date auto-fill
   useEffect(() => {
     if (!watchPoNo) {
       setValue("poDate", "");
@@ -504,12 +535,11 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
     if (match?.docDate) {
       setValue("poDate", dayjs(match.docDate).format("YYYY-MM-DD"));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [watchPoNo, poOptions]);
+  }, [watchPoNo, poOptions, setValue]);
 
+  // Edit mode: re-select saved PO once options are loaded
   useEffect(() => {
-    if (!isEditMode || !data) return;
-    if (!poOptions.length) return;
+    if (!isEditMode || !data || !poOptions.length) return;
     const savedPoNo = data?.purchaseordernumber;
     if (!savedPoNo) return;
     const match = poOptions.find(
@@ -518,9 +548,9 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
         String(po?.id) === String(savedPoNo),
     );
     if (match) setValue("poNo", match.docId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEditMode, poOptions, data, setValue]);
 
+  // Currency + exchange rate (create mode)
   useEffect(() => {
     if (isEditMode) return;
     if (!watchPoNo) {
@@ -529,64 +559,72 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
       currencyIdRef.current = null;
       return;
     }
-    purchaseOrderAmendmentAPI.getCurrencyExchangeRateforPurchaseOrderAmendment(
-      branchId,
-      watchPoNo,
-      orgId,
-    ).then((currencyDetails) => {
-      if (currencyDetails && currencyDetails.length > 0) {
-        const first = currencyDetails[0];
-        setValue("currency", first.currency || "");
-        setValue("exchangeRate", first.exchangeRate ?? first.buyingExRate ?? 0);
-        currencyIdRef.current = first.currencyId || null;
-      } else {
+    purchaseOrderAmendmentAPI
+      .getCurrencyExchangeRateforPurchaseOrderAmendment(
+        branchId,
+        watchPoNo,
+        orgId,
+      )
+      .then((currencyDetails) => {
+        if (currencyDetails && currencyDetails.length > 0) {
+          const first = currencyDetails[0];
+          setValue("currency", first.currency || "");
+          setValue(
+            "exchangeRate",
+            first.exchangeRate ?? first.buyingExRate ?? 0,
+          );
+          currencyIdRef.current = first.currencyId || null;
+        } else {
+          setValue("currency", "");
+          setValue("exchangeRate", "");
+          currencyIdRef.current = null;
+        }
+      })
+      .catch((error) => {
+        console.error("Failed to fetch currency exchange rate:", error);
         setValue("currency", "");
         setValue("exchangeRate", "");
         currencyIdRef.current = null;
-      }
-    }).catch((error) => {
-      console.error("Failed to fetch currency exchange rate:", error);
-      setValue("currency", "");
-      setValue("exchangeRate", "");
-      currencyIdRef.current = null;
-    });
-  }, [watchPoNo, isEditMode, branchId, orgId]);
+      });
+  }, [watchPoNo, isEditMode, branchId, orgId, setValue]);
 
+  // Belongs-to list
   useEffect(() => {
-    purchaseOrderAmendmentAPI.getListValuesGroup(
-      "SDS BELONGS TO",
-      orgId,
-    ).then((listValues) => {
-      setBelongsToOptions(
-        listValues.map((item) => ({
-          value: item.id,
-          label: item.valuesDescription,
-        }))
-      );
-    }).catch((error) => {
-      console.error("Failed to fetch belongs to list:", error);
-      setBelongsToOptions([
-        { value: "Purchase", label: "Purchase" },
-      ]);
-    });
+    purchaseOrderAmendmentAPI
+      .getListValuesGroup("SDS BELONGS TO", orgId)
+      .then((listValues) => {
+        setBelongsToOptions(
+          (listValues || []).map((item) => ({
+            value: item.id,
+            label: item.valuesDescription,
+          })),
+        );
+      })
+      .catch((error) => {
+        console.error("Failed to fetch belongs to list:", error);
+        setBelongsToOptions([{ value: "Purchase", label: "Purchase" }]);
+      });
   }, [orgId]);
 
+  // Unit master
   useEffect(() => {
-    purchaseOrderAmendmentAPI.getUnitMasterByOrgId(orgId).then((unitList) => {
-      setUnitOptions(
-        unitList.map((item) => ({
-          value: item.id,
-          label: item.description,
-        }))
-      );
-    }).catch((error) => {
-      console.error("Failed to fetch unit master:", error);
-      setUnitOptions([
-        { value: 1694110000000, label: "BAGS" },
-      ]);
-    });
+    purchaseOrderAmendmentAPI
+      .getUnitMasterByOrgId(orgId)
+      .then((unitList) => {
+        setUnitOptions(
+          (unitList || []).map((item) => ({
+            value: item.id,
+            label: item.description,
+          })),
+        );
+      })
+      .catch((error) => {
+        console.error("Failed to fetch unit master:", error);
+        setUnitOptions([]);
+      });
   }, [orgId]);
 
+  // Edit mode: populate form from saved data
   useEffect(() => {
     if (!isEditMode || dataLoadedRef.current) return;
 
@@ -598,14 +636,28 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
     setValue("amendmentNo", src.docId || "");
     setValue(
       "amendmentDate",
-      src.docDate ? dayjs(src.docDate).format("YYYY-MM-DD") : dayjs().format("YYYY-MM-DD"),
+      fmtDate(src.docDate) || dayjs().format("YYYY-MM-DD"),
     );
     setValue("customer", asId(src.customer));
     setValue("customerName", src.customer?.customerName || "");
     setValue("poNo", src.purchaseordernumber || "");
     setValue("poDate", fmtDate(src.poDate || src.purchaseOrderDate));
-    setValue("currency", src.currency || "");
+
+    // currency may be an object ({id, currency}) or a plain value
+    if (src.currency && typeof src.currency === "object") {
+      setValue(
+        "currency",
+        src.currency.currency || src.currency.currencyName || "",
+      );
+      currencyIdRef.current = src.currency.id ?? null;
+    } else {
+      setValue("currency", src.currency || "");
+      currencyIdRef.current = src.currency || null;
+    }
+
     setValue("exchangeRate", src.exchangeRate ?? "");
+    setValue("refNo", src.refNo || "");
+    setValue("refDate", fmtDate(src.refDate));
     setValue("revisionNo", src.revisionNo ?? "");
     setValue("active", src.active !== false);
     setValue("freightType", src.freightType || "");
@@ -621,7 +673,7 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
       itemCode: d.item?.itemCode || "",
       itemName: d.item?.itemDescription || "",
       hsnSacCode: d.item?.hsnSacCode || d.item?.hsn || "",
-      unit: d.unit || "",
+      unit: asId(d.unit),
       oldQty: d.oldQty ?? "",
       newQty: d.newQty ?? "",
       oldRate: d.oldRate ?? "",
@@ -630,13 +682,10 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
       newDeliveryDate: fmtDate(d.newDeliveryDate),
     }));
 
-    setValue("details", details.length ? details : getDefaultValues().details);
+    setValue("details", details.length ? details : [getEmptyDetail()]);
 
-    mappedItemsRef.current = new Set(
-      details.map((d) => String(asId(d.item))).filter(Boolean),
-    );
-
-    const voItemOptions = (src.details || [])
+    // make saved items available in the dropdown
+    const savedItemOptions = (src.details || [])
       .map((d) => d?.item)
       .filter((it) => it && it.id != null)
       .map((it) => ({
@@ -645,32 +694,33 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
         itemCode: it.itemCode || "",
         itemDescription: it.itemDescription || "",
         hsnSacCode: it.hsn || it.hsnSacCode || "",
+        unit: "",
+        qty: "",
+        rate: "",
+        deliveryDate: "",
       }));
 
-    if (voItemOptions.length) {
+    if (savedItemOptions.length) {
       setItemOptions((prev) => {
         const existing = new Set(prev.map((o) => String(o.value)));
-        const merged = [...prev];
-        voItemOptions.forEach((o) => {
-          if (!existing.has(String(o.value))) merged.push(o);
-        });
-        return merged;
+        return [
+          ...prev,
+          ...savedItemOptions.filter((o) => !existing.has(String(o.value))),
+        ];
       });
     }
 
     if ((src.attachments || []).length) {
       setValue(
         "attachments",
-        src.attachments.map((a) => ({
-          file: null,
-          existing: a,
-        })),
+        src.attachments.map((a) => ({ file: null, existing: a })),
       );
     }
 
     dataLoadedRef.current = true;
   }, [isEditMode, data, setValue]);
 
+  // Amendment No (create mode)
   useEffect(() => {
     if (isEditMode || amendmentNoLoadedRef.current) return;
 
@@ -693,13 +743,12 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
     };
 
     generateDocId();
-
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEditMode, orgId, setValue]);
 
+  // Revision No (create mode)
   useEffect(() => {
     if (isEditMode || !watchPoNo) return;
 
@@ -712,27 +761,90 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
           orgId,
           purchaseOrderNumber: watchPoNo,
         });
-        if (!cancelled) {
-          setValue("revisionNo", revisionNo);
-        }
+        if (!cancelled) setValue("revisionNo", revisionNo);
       } catch (error) {
         console.error("Failed to load Revision No:", error);
       }
     };
 
     loadRevisionNo();
-
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isEditMode, watchPoNo, orgId, setValue]);
+  }, [isEditMode, watchPoNo, branchId, orgId, setValue]);
+
+  // Party name auto-fill
+  useEffect(() => {
+    if (!watchCustomer) {
+      setValue("customerName", "");
+      return;
+    }
+    const selected = customerOptions.find(
+      (c) => String(c.value) === String(watchCustomer),
+    );
+    if (selected) {
+      setValue("customerName", selected.customerName || selected.label || "");
+    }
+  }, [watchCustomer, customerOptions, setValue]);
+
+  /* ------------------------------ Handlers ------------------------------ */
+
+  // Fires only when the user picks an item in a row (so it never overwrites
+  // saved values in edit mode and never loops).
+  const handleItemChange = (index, itemId) => {
+    const selected = itemOptions.find(
+      (o) => String(o.value) === String(itemId),
+    );
+
+    const prefix = `details.${index}`;
+    const opts = { shouldDirty: true };
+
+    if (!selected) {
+      setValue(`${prefix}.itemCode`, "", opts);
+      setValue(`${prefix}.itemName`, "", opts);
+      setValue(`${prefix}.hsnSacCode`, "", opts);
+      setValue(`${prefix}.unit`, "", opts);
+      setValue(`${prefix}.oldQty`, "", opts);
+      setValue(`${prefix}.newQty`, "", opts);
+      setValue(`${prefix}.oldRate`, "", opts);
+      setValue(`${prefix}.newRate`, "", opts);
+      setValue(`${prefix}.oldDeliveryDate`, "", opts);
+      setValue(`${prefix}.newDeliveryDate`, "", opts);
+      return;
+    }
+
+    const deliveryDate = fmtDate(selected.deliveryDate);
+
+    setValue(`${prefix}.itemCode`, selected.itemCode || "", opts);
+    setValue(`${prefix}.itemName`, selected.itemDescription || "", opts);
+    setValue(`${prefix}.hsnSacCode`, selected.hsnSacCode || "", opts);
+    setValue(`${prefix}.unit`, selected.unit ?? "", opts);
+
+    // current PO values become the "Old" values
+    setValue(`${prefix}.oldQty`, selected.qty ?? "", opts);
+    setValue(`${prefix}.oldRate`, selected.rate ?? "", opts);
+    setValue(`${prefix}.oldDeliveryDate`, deliveryDate, opts);
+
+    // "New" values start equal to old; user edits what changed
+    setValue(`${prefix}.newQty`, selected.qty ?? "", opts);
+    setValue(`${prefix}.newRate`, selected.rate ?? "", opts);
+    setValue(`${prefix}.newDeliveryDate`, deliveryDate, opts);
+  };
+
+  // hide items already chosen in other rows
+  const getRowItemOptions = (index) => {
+    const chosenElsewhere = new Set(
+      (watchDetails || [])
+        .filter((_, i) => i !== index)
+        .map((r) => String(r?.item || ""))
+        .filter(Boolean),
+    );
+    return itemOptions.filter((o) => !chosenElsewhere.has(String(o.value)));
+  };
 
   const handleAdd = (tab) => {
     if (tab === "poDetail") {
-      detailsArray.append(
-        getDefaultValues().details[0],
-      );
+      detailsArray.append(getEmptyDetail());
     } else if (tab === "attachment") {
       attachmentArray.append({ file: null, existing: null });
     }
@@ -762,6 +874,15 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
     return "Attachment";
   };
 
+  const closePreview = () =>
+    setPreview({
+      url: "",
+      name: "",
+      isImage: false,
+      loading: false,
+      error: "",
+    });
+
   const handleAttachmentPreview = async (row) => {
     const name = getAttachmentName(row);
 
@@ -783,7 +904,7 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
     const existing = row.existing;
     let sourcePath = "";
     if (existing && typeof existing === "object") {
-      sourcePath = existing.filePath || existing;
+      sourcePath = existing.filePath || "";
     } else if (typeof existing === "string") {
       sourcePath = existing;
     }
@@ -803,8 +924,7 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
         JSON.parse(localStorage.getItem("user") || "{}")?.token;
 
       const response = await axios.get(
-        `${import.meta.env.VITE_API_URL
-        }/api/files/download?path=${encodeURIComponent(sourcePath)}`,
+        `${import.meta.env.VITE_API_URL}/api/files/download?path=${encodeURIComponent(sourcePath)}`,
         {
           responseType: "blob",
           headers: token
@@ -836,145 +956,414 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
         error: "",
       });
     } catch (error) {
-      if (error?.response?.status === 401) {
-        setPreview({
-          url: "",
-          name,
-          isImage: false,
-          loading: false,
-          error: "Unauthorized",
-        });
-      } else {
-        setPreview({
-          url: "",
-          name,
-          isImage: false,
-          loading: false,
-          error: "Failed to load file",
-        });
-      }
+      setPreview({
+        url: "",
+        name,
+        isImage: false,
+        loading: false,
+        error:
+          error?.response?.status === 401
+            ? "Unauthorized"
+            : "Failed to load file",
+      });
     }
   };
 
   const onSubmit = async (formData) => {
+    /*
+     * ------------------------------------------------------------
+     * VALIDATE DETAILS
+     * ------------------------------------------------------------
+     */
+    const validDetails = (formData.details || []).filter(
+      (detail) =>
+        detail?.item !== "" &&
+        detail?.item !== null &&
+        detail?.item !== undefined,
+    );
+
+    if (!validDetails.length) {
+      addToast("Add at least one PO detail item", "warning");
+
+      setActiveTab("poDetail");
+
+      return;
+    }
+
+    /*
+     * ------------------------------------------------------------
+     * START SAVING
+     * ------------------------------------------------------------
+     */
     setSaving(true);
 
     try {
       const isUpdate = Boolean(data?.id);
 
-      const poAmendmentData = {
-        ...(isUpdate ? { id: data.id } : {}),
+      /*
+       * ----------------------------------------------------------
+       * HEADER VALUES
+       * ----------------------------------------------------------
+       */
 
+      const branch = Number(formData.branch || branchId);
+
+      const customer = Number(formData.customer || 0);
+
+      const currency = Number(currencyIdRef.current || 0);
+
+      const exchangeRate = Number(formData.exchangeRate || 0);
+
+      /*
+       * ----------------------------------------------------------
+       * REQUIRED VALIDATIONS
+       * ----------------------------------------------------------
+       */
+
+      if (!branch) {
+        addToast("Branch is required", "warning");
+
+        setSaving(false);
+        return;
+      }
+
+      if (!customer) {
+        addToast("Customer is required", "warning");
+
+        setSaving(false);
+        return;
+      }
+
+      if (!formData.poNo) {
+        addToast("Purchase Order No is required", "warning");
+
+        setSaving(false);
+        return;
+      }
+
+      if (!formData.amendmentNo) {
+        addToast("Amendment No is required", "warning");
+
+        setSaving(false);
+        return;
+      }
+
+      if (!formData.amendmentDate) {
+        addToast("Amendment Date is required", "warning");
+
+        setSaving(false);
+        return;
+      }
+
+      /*
+       * ----------------------------------------------------------
+       * PURCHASE ORDER AMENDMENT DTO
+       * ----------------------------------------------------------
+       */
+
+      const poAmendmentData = {
+        /*
+         * ID ONLY FOR UPDATE
+         */
+        ...(isUpdate
+          ? {
+              id: Number(data.id),
+            }
+          : {}),
+
+        /*
+         * ACTIVE
+         */
         active: formData.active !== false,
 
+        /*
+         * BELONGS TO
+         */
         belongsTo: formData.belongsTo || "Purchase",
 
-        branch: Number(formData.branch),
+        /*
+         * BRANCH
+         */
+        branch,
 
+        /*
+         * IMPORTANT:
+         *
+         * Your screen calls this:
+         *
+         * amendmentNo
+         *
+         * Backend amendment DTO needs the document ID.
+         */
+        docId: formData.amendmentNo || "",
+
+        /*
+         * IMPORTANT:
+         *
+         * Your screen calls this:
+         *
+         * amendmentDate
+         *
+         * Backend amendment DTO needs document date.
+         */
+        docDate: formData.amendmentDate || null,
+
+        /*
+         * CANCEL REMARKS
+         */
         cancelRemarks: data?.cancelRemarks || "",
 
+        /*
+         * CREATED BY
+         */
         createdBy:
           (isUpdate ? data?.createdBy : null) ||
           localStorage.getItem("usersId") ||
           loginUserName ||
           "SYSTEM",
 
-        currency: currencyIdRef.current || 0,
+        /*
+         * CURRENCY
+         */
+        currency,
 
-        customer: Number(formData.customer),
+        /*
+         * CUSTOMER
+         */
+        customer,
 
-        exchangeRate: Number(formData.exchangeRate || 0),
+        /*
+         * EXCHANGE RATE
+         */
+        exchangeRate,
 
+        /*
+         * FREIGHT
+         */
         freightType: formData.freightType || "",
 
+        /*
+         * INSURANCE
+         */
         insuranceAmount: Number(formData.insuranceAmount || 0),
 
+        /*
+         * MODE OF DESPATCH
+         */
         modeOfDespatch: formData.modeOfDespatch || "",
 
-        orgId: orgId,
+        /*
+         * ORGANIZATION
+         */
+        orgId,
 
+        /*
+         * PACKING
+         */
         packingType: formData.packingType || "",
 
+        /*
+         * PURCHASE ORDER NUMBER
+         *
+         * IMPORTANT:
+         * Backend expects:
+         *
+         * purchaseordernumber
+         */
         purchaseordernumber: formData.poNo || "",
 
+        /*
+         * REFERENCE NUMBER
+         */
+        refNo: formData.refNo || "",
+
+        /*
+         * REFERENCE DATE
+         */
+        refDate: formData.refDate || null,
+
+        /*
+         * REMARKS
+         */
         remarks: formData.remarks || "",
 
+        /*
+         * REVISION NUMBER
+         */
         revisionNo: Number(formData.revisionNo || 1),
 
+        /*
+         * TAX DESCRIPTION
+         */
         taxDescription: formData.taxDescription || "",
 
-        details: (formData.details || [])
-          .filter((item) => item.item)
-          .map((item) => {
-            const unitMatch = unitOptions.find(
-              (u) => String(u.value) === String(item.unit),
-            );
-            return {
-              item: Number(item.item),
+        /*
+         * --------------------------------------------------------
+         * DETAILS
+         * --------------------------------------------------------
+         */
+        details: validDetails.map((item) => ({
+          /*
+           * Existing detail ID
+           * only during update.
+           */
+          ...(item.id
+            ? {
+                id: Number(item.id),
+              }
+            : {}),
 
-              unit: unitMatch
-                ? Number(unitMatch.value)
-                : item.unit
-                  ? Number(item.unit)
-                  : null,
+          /*
+           * ITEM
+           */
+          item: Number(item.item),
 
-              oldQty: Number(item.oldQty || 0),
+          /*
+           * UNIT
+           */
+          unit:
+            item.unit !== null && item.unit !== undefined && item.unit !== ""
+              ? Number(item.unit)
+              : null,
 
-              newQty: Number(item.newQty || 0),
+          /*
+           * OLD QUANTITY
+           */
+          oldQty: Number(item.oldQty || 0),
 
-              oldRate: Number(item.oldRate || 0),
+          /*
+           * NEW QUANTITY
+           */
+          newQty: Number(item.newQty || 0),
 
-              newRate: Number(item.newRate || 0),
+          /*
+           * OLD RATE
+           */
+          oldRate: Number(item.oldRate || 0),
 
-              oldDeliveryDate: item.oldDeliveryDate || "",
+          /*
+           * NEW RATE
+           */
+          newRate: Number(item.newRate || 0),
 
-              newDeliveryDate: item.newDeliveryDate || "",
-            };
-          }),
+          /*
+           * OLD DELIVERY DATE
+           */
+          oldDeliveryDate: item.oldDeliveryDate || null,
+
+          /*
+           * NEW DELIVERY DATE
+           */
+          newDeliveryDate: item.newDeliveryDate || null,
+        })),
       };
+
+      /*
+       * ----------------------------------------------------------
+       * DEBUG DTO
+       * ----------------------------------------------------------
+       */
+
+      console.log("================================================");
+
+      console.log("PURCHASE ORDER AMENDMENT DTO");
+
+      console.log(JSON.stringify(poAmendmentData, null, 2));
+
+      console.log("================================================");
+
+      /*
+       * ----------------------------------------------------------
+       * CREATE MULTIPART FORM DATA
+       * ----------------------------------------------------------
+       */
 
       const formDataToSend = new FormData();
 
-      const poAmendmentJSON = JSON.stringify(poAmendmentData);
+      /*
+       * ----------------------------------------------------------
+       * DTO JSON BLOB
+       *
+       * IMPORTANT:
+       *
+       * Do not change this name unless
+       * backend controller uses another
+       * @RequestPart name.
+       * ----------------------------------------------------------
+       */
 
-      const poAmendmentBlob = new Blob([poAmendmentJSON], {
+      const dtoBlob = new Blob([JSON.stringify(poAmendmentData)], {
         type: "application/json",
       });
 
       formDataToSend.append(
         "PurchaseOrderAmendmentDTO",
-        poAmendmentBlob,
+        dtoBlob,
         "poAmendmentDTO.json",
       );
 
-      const attachments = formData.attachments || [];
+      /*
+       * ----------------------------------------------------------
+       * ATTACHMENTS
+       * ----------------------------------------------------------
+       */
 
-      if (attachments.length > 0) {
-        for (let i = 0; i < attachments.length; i++) {
-          const attachment = attachments[i]?.file;
+      (formData.attachments || []).forEach((attachment) => {
+        if (attachment?.file instanceof File) {
+          formDataToSend.append("files", attachment.file, attachment.file.name);
+        }
+      });
 
-          if (attachment instanceof File) {
-            formDataToSend.append(
-              "files",
-              attachment,
-              attachment.name,
-            );
-          }
+      /*
+       * ----------------------------------------------------------
+       * DEBUG FORMDATA
+       * ----------------------------------------------------------
+       */
+
+      console.log("================================================");
+
+      console.log("PURCHASE ORDER AMENDMENT MULTIPART DATA");
+
+      for (const [key, value] of formDataToSend.entries()) {
+        if (value instanceof File) {
+          console.log(key, "FILE:", value.name, value.type, value.size);
+        } else if (value instanceof Blob) {
+          console.log(key, "BLOB:", value.type, value.size);
+        } else {
+          console.log(key, value);
         }
       }
 
-      console.log("Sending PO Amendment data:", poAmendmentData);
+      console.log("================================================");
 
-      for (const [key, value] of formDataToSend.entries()) {
-        console.log("FormData:", key, value);
-      }
+      /*
+       * ----------------------------------------------------------
+       * API CALL
+       * ----------------------------------------------------------
+       */
 
       const response =
-        await purchaseOrderAmendmentAPI.createUpdate(
-          formDataToSend,
-        );
+        await purchaseOrderAmendmentAPI.createUpdate(formDataToSend);
 
-      console.log("Full PO Amendment API Response:", response);
+      /*
+       * ----------------------------------------------------------
+       * RESPONSE DEBUG
+       * ----------------------------------------------------------
+       */
+
+      console.log("================================================");
+
+      console.log("PURCHASE ORDER AMENDMENT RESPONSE");
+
+      console.log(response);
+
+      console.log("================================================");
+
+      /*
+       * ----------------------------------------------------------
+       * SUCCESS CHECK
+       * ----------------------------------------------------------
+       */
 
       const isSuccess =
         response?.status === true ||
@@ -984,84 +1373,102 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
         response?.statusCode === 200 ||
         response?.statusFlag === "Ok";
 
+      /*
+       * ----------------------------------------------------------
+       * SUCCESS
+       * ----------------------------------------------------------
+       */
+
       if (isSuccess) {
         addToast(
           response?.paramObjectsMap?.message ||
-          (isUpdate
-            ? "Amendment updated successfully"
-            : "Amendment created successfully"),
+            (isUpdate
+              ? "Amendment updated successfully"
+              : "Amendment created successfully"),
           "success",
         );
 
+        /*
+         * Reset form
+         */
         reset(getDefaultValues());
 
+        /*
+         * Go back to list
+         */
         onBack();
-      } else {
-        const errorMessage =
-          response?.message ||
+
+        return;
+      }
+
+      /*
+       * ----------------------------------------------------------
+       * BACKEND RETURNED RESPONSE
+       * BUT IT WAS NOT SUCCESS
+       * ----------------------------------------------------------
+       */
+
+      addToast(
+        response?.message ||
           response?.paramObjectsMap?.message ||
           response?.errorMessage ||
           response?.error ||
-          "Failed to save amendment";
-
-        addToast(errorMessage, "error");
-      }
+          "Failed to save amendment",
+        "error",
+      );
     } catch (error) {
-      console.error("Error saving PO amendment:", error);
+      /*
+       * ----------------------------------------------------------
+       * ERROR
+       * ----------------------------------------------------------
+       */
 
-      const errorMessage =
+      console.error("================================================");
+
+      console.error("PURCHASE ORDER AMENDMENT SAVE ERROR");
+
+      console.error("================================================");
+
+      console.error("Error:", error);
+
+      console.error("HTTP Status:", error?.response?.status);
+
+      console.error("Backend Response:", error?.response?.data);
+
+      console.error("Backend Message:", error?.response?.data?.message);
+
+      console.error("Backend Error:", error?.response?.data?.error);
+
+      console.error("================================================");
+
+      /*
+       * Try all common Spring response
+       * locations.
+       */
+
+      const backendMessage =
         error?.response?.data?.message ||
+        error?.response?.data?.errorMessage ||
+        error?.response?.data?.error ||
+        error?.response?.data?.exception ||
         error?.response?.data?.paramObjectsMap?.message ||
+        error?.response?.data?.paramObjectsMap?.error ||
         error?.message ||
         "Failed to save amendment. Please try again.";
 
-      addToast(errorMessage, "error");
+      addToast(backendMessage, "error");
     } finally {
+      /*
+       * ----------------------------------------------------------
+       * STOP SAVING
+       * ----------------------------------------------------------
+       */
+
       setSaving(false);
     }
   };
 
-  useEffect(() => {
-    watchDetails?.forEach((row, index) => {
-      if (!row?.item) return;
-      const selectedItem = itemOptions.find(
-        (item) => String(item.value) === String(row.item),
-      );
-      if (!selectedItem) return;
-
-      const isMapped = mappedItemsRef.current.has(String(row.item));
-      if (isMapped && (row.itemCode || row.itemName)) return;
-
-      setValue(`details.${index}.itemCode`, selectedItem.itemCode || "", {
-        shouldDirty: true,
-      });
-      setValue(
-        `details.${index}.itemName`,
-        selectedItem.itemDescription || "",
-        { shouldDirty: true },
-      );
-      setValue(
-        `details.${index}.hsnSacCode`,
-        selectedItem.hsnSacCode || "",
-        { shouldDirty: true },
-      );
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [watchDetails, itemOptions, setValue]);
-
-  useEffect(() => {
-    if (!watchCustomer) {
-      setValue("customerName", "");
-      return;
-    }
-    const selected = customerOptions.find(
-      (c) => String(c.value) === String(watchCustomer),
-    );
-    if (selected) {
-      setValue("customerName", selected.customerName || selected.label || "");
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [watchCustomer, customerOptions, setValue]);
+  /* ------------------------------- Render ------------------------------- */
 
   if (loading) {
     return (
@@ -1078,13 +1485,16 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
       {/* Header */}
       <div className="flex items-center gap-2 mb-3">
         <button
+          type="button"
           onClick={onBack}
           className="p-1 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-          {data?.id ? "Edit Purchase Order Amendment" : "Add Purchase Order Amendment"}
+          {isEditMode
+            ? "Edit Purchase Order Amendment"
+            : "Add Purchase Order Amendment"}
         </h2>
       </div>
 
@@ -1107,16 +1517,14 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
             options={belongsToOptions}
             errors={errors}
           />
-
           <InputField
             control={control}
             name="amendmentNo"
             label="Amendment No"
+            placeholder="Auto"
             disabled
-            value={getValues("amendmentNo") || "Auto"}
             errors={errors}
           />
-
           <InputField
             control={control}
             name="amendmentDate"
@@ -1125,7 +1533,6 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
             required
             errors={errors}
           />
-
           <SelectField
             control={control}
             name="customer"
@@ -1134,7 +1541,6 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
             required
             errors={errors}
           />
-
           <InputField
             control={control}
             name="customerName"
@@ -1143,7 +1549,6 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
             placeholder="Auto-filled"
             disabled
           />
-
           <SelectField
             control={control}
             name="poNo"
@@ -1151,9 +1556,7 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
             required
             errors={errors}
             options={poOptions}
-            placeholder="Select PO No"
           />
-
           <InputField
             type="date"
             control={control}
@@ -1162,15 +1565,14 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
             errors={errors}
             disabled
           />
-
           <InputField
             control={control}
             name="currency"
             label="Currency"
-            placeholder="Enter currency"
+            placeholder="Auto-filled"
             errors={errors}
+            disabled
           />
-
           <InputField
             control={control}
             name="refNo"
@@ -1178,7 +1580,6 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
             placeholder="Enter Ref No."
             errors={errors}
           />
-
           <InputField
             control={control}
             type="date"
@@ -1186,7 +1587,6 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
             label="Ref Date"
             errors={errors}
           />
-
           <InputField
             control={control}
             name="exchangeRate"
@@ -1195,7 +1595,6 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
             step="0.01"
             errors={errors}
           />
-
           <InputField
             control={control}
             name="revisionNo"
@@ -1220,10 +1619,11 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
                   key={tab.key}
                   type="button"
                   onClick={() => setActiveTab(tab.key)}
-                  className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${activeTab === tab.key
-                    ? "bg-blue-600 text-white"
-                    : "text-gray-600 dark:text-gray-300"
-                    }`}
+                  className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${
+                    activeTab === tab.key
+                      ? "bg-blue-600 text-white"
+                      : "text-gray-600 dark:text-gray-300"
+                  }`}
                 >
                   {tab.label}
                 </button>
@@ -1240,7 +1640,7 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
             )}
           </div>
 
-          {/* Tab Content - PO Detail */}
+          {/* PO Detail */}
           {activeTab === "poDetail" && (
             <div className="pt-3">
               <TableWrapper>
@@ -1268,13 +1668,13 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
                       onRemove={() => handleRemove("poDetail", index)}
                       disabled={detailsArray.fields.length <= 1}
                     >
-                      {/* Item dropdown - bound to the item ID */}
                       <SelectCell
                         control={control}
                         name={`details.${index}.item`}
-                        options={itemOptions}
+                        options={getRowItemOptions(index)}
                         required
                         errors={errors}
+                        onChange={(val) => handleItemChange(index, val)}
                       />
                       <InputCell
                         control={control}
@@ -1290,10 +1690,11 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
                         readOnly
                         errors={errors}
                       />
-                      <InputCell
+                      <SelectCell
                         control={control}
                         name={`details.${index}.unit`}
-                        placeholder="unit"
+                        options={unitOptions}
+                        disabled
                         errors={errors}
                       />
                       <InputCell
@@ -1302,6 +1703,7 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
                         type="number"
                         step="0.001"
                         placeholder="Old Qty"
+                        readOnly
                         errors={errors}
                       />
                       <InputCell
@@ -1318,6 +1720,7 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
                         type="number"
                         step="0.01"
                         placeholder="Old Rate"
+                        readOnly
                         errors={errors}
                       />
                       <InputCell
@@ -1332,6 +1735,7 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
                         control={control}
                         name={`details.${index}.oldDeliveryDate`}
                         type="date"
+                        readOnly
                         errors={errors}
                       />
                       <InputCell
@@ -1347,7 +1751,7 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
             </div>
           )}
 
-          {/* Tab Content - Summary */}
+          {/* Summary */}
           {activeTab === "summary" && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-3">
               <SelectField
@@ -1396,11 +1800,13 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
             </div>
           )}
 
-          {/* Tab Content - Attachment */}
+          {/* Attachment */}
           {activeTab === "attachment" && (
             <div className="pt-3 space-y-2">
               <TableWrapper>
-                <TableHead headers={["S.No", "Document", "Preview", "Action"]} />
+                <TableHead
+                  headers={["S.No", "Document", "Preview", "Action"]}
+                />
                 <tbody>
                   {attachmentArray.fields.map((field, index) => (
                     <TableRow
@@ -1468,15 +1874,7 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
         {(preview.url || preview.loading || preview.error) && (
           <div
             className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-3 sm:p-6"
-            onClick={() =>
-              setPreview({
-                url: "",
-                name: "",
-                isImage: false,
-                loading: false,
-                error: "",
-              })
-            }
+            onClick={closePreview}
           >
             <div
               className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col"
@@ -1488,15 +1886,7 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
                 </span>
                 <button
                   type="button"
-                  onClick={() =>
-                    setPreview({
-                      url: "",
-                      name: "",
-                      isImage: false,
-                      loading: false,
-                      error: "",
-                    })
-                  }
+                  onClick={closePreview}
                   className="text-xs text-red-600 hover:underline dark:text-red-400"
                 >
                   Close
@@ -1532,6 +1922,7 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
         {/* Buttons */}
         <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
           <button
+            type="button"
             onClick={onBack}
             disabled={saving}
             className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
@@ -1539,12 +1930,13 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
             <X className="h-3 w-3" /> Cancel
           </button>
           <button
+            type="button"
             onClick={handleSubmit(onSubmit)}
             disabled={saving}
             className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
           >
             <Save className="h-3 w-3" />{" "}
-            {saving ? "Saving..." : data?.id ? "Update" : "Save"}
+            {saving ? "Saving..." : isEditMode ? "Update" : "Save"}
           </button>
         </div>
       </div>

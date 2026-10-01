@@ -180,6 +180,51 @@ const directPurchaseAPI = {
 
     return `${API_BASE_URL}/api/purchaseOrder/viewDirectPurchaseFile/${cleanPath}`;
   },
+  /* ================================================================
+     GST STATE MASTER
+  ================================================================ */
+
+  getGSTStateMasterByOrgId: async (branch, orgId) => {
+    try {
+      const response = await apiClient.get(
+        `/api/commonmaster/getGSTStateMasterByOrgId`,
+        { params: { branch, orgId } },
+      );
+
+      const data = response?.data ?? response;
+
+      return data?.paramObjectsMap?.gstStateMasterList || [];
+    } catch (error) {
+      console.error(
+        "Error fetching GST state master:",
+        error?.response?.data || error,
+      );
+      throw error;
+    }
+  },
+  /* ================================================================
+   ITEM TYPE
+================================================================ */
+  getItemType: async (branch, orgId) => {
+    try {
+      const response = await apiClient.get(`/api/purchaseOrder/getItemType`, {
+        params: {
+          branch,
+          orgId,
+        },
+      });
+
+      const data = response?.data ?? response;
+
+      return data?.paramObjectsMap?.mapp || [];
+    } catch (error) {
+      console.error(
+        "Error fetching item type:",
+        error?.response?.data || error,
+      );
+      throw error;
+    }
+  },
 };
 
 export default directPurchaseAPI;
