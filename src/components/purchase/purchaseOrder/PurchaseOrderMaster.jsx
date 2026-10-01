@@ -11,6 +11,7 @@ const PurchaseOrderMaster = () => {
     setScreen("form");
   };
 
+  // The form itself calls getPurchaseOrderById(row.id, row.poType)
   const handleEdit = (row) => {
     setEditData(row);
     setScreen("form");
@@ -33,6 +34,7 @@ const PurchaseOrderMaster = () => {
 
       {screen === "form" && (
         <PurchaseOrderForm
+          key={editData?.id ?? "new"}
           editData={editData}
           onBack={handleBack}
           onSave={handleBack}

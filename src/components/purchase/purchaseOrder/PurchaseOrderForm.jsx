@@ -7,6 +7,7 @@ import {
   UploadCloud,
   Eye,
   File as FileIcon,
+  Loader2,
 } from "lucide-react";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -17,10 +18,14 @@ import itemAPI from "../../../api/itemAPI";
 import taxDefinitionAPI from "../../../api/taxDefinitionAPI";
 import { departmentAPI } from "../../../api/departmentAPI";
 import purchaseOrderAPI from "../../../api/Purchase/purchaseOrderAPI";
-import purchaseIndentAPI from "../../../api/Purchase/purchaseIndentAPI";
+import employeeAPI from "../../../api/employeeAPI";
 import { useToast } from "../../Toast/ToastContext";
 import countryAPI from "../../../api/countryAPI";
 import listOfValuesAPI from "../../../api/listOfValuesAPI";
+import {
+  extractPurchaseOrder,
+  mapPurchaseOrderForForm,
+} from "./purchaseOrderMapper";
 
 /* ========================================================================= */
 /* DESIGN TOKENS                                                             */
@@ -309,10 +314,7 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
           disabled={rows.length <= 1 || Boolean(row.isSystemRow)}
         >
           {columns.map((column) => {
-            /* ==========================================================
-               DISPLAY
-            ========================================================== */
-
+            /* DISPLAY */
             if (column.type === "display") {
               return (
                 <DisplayCell
@@ -323,10 +325,7 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
               );
             }
 
-            /* ==========================================================
-               SELECT
-            ========================================================== */
-
+            /* SELECT */
             if (column.type === "select") {
               return (
                 <SelectCell
@@ -349,10 +348,7 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
               );
             }
 
-            /* ==========================================================
-               INPUT
-            ========================================================== */
-
+            /* INPUT */
             return (
               <InputCell
                 key={column.key}
@@ -592,6 +588,7 @@ const getDefaultValues = () => ({
 
   amountInWord: "",
 
+  // These three hold the EMPLOYEE ID (shown as employee name in the select)
   preparedBy: "",
   checkedBy: "",
   authorisedBy: "",
@@ -618,52 +615,26 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
 
   const [formData, setFormData] = useState(() => ({
     ...getDefaultValues(),
-    branch: String(editData?.branch ?? BRANCH_ID ?? ""),
-    ...(editData || {}),
+    branch: String(BRANCH_ID || ""),
   }));
 
   // The selected Plant/Branch drives every branch-dependent API.
   const effectiveBranchId = toInteger(formData.branch || BRANCH_ID);
 
-  const [localDetailRows, setLocalDetailRows] = useState(
-    editData?.purchaseOrderLocalDetailsDTO?.length
-      ? editData.purchaseOrderLocalDetailsDTO
-      : [emptyLocalDetailRow()],
-  );
+  // In edit mode these are filled by the load effect below.
+  const [localDetailRows, setLocalDetailRows] = useState([
+    emptyLocalDetailRow(),
+  ]);
 
-  const [importDetailRows, setImportDetailRows] = useState(
-    editData?.purchaseOrderImportDetailsDTO?.length
-      ? editData.purchaseOrderImportDetailsDTO
-      : [emptyImportDetailRow()],
-  );
+  const [importDetailRows, setImportDetailRows] = useState([
+    emptyImportDetailRow(),
+  ]);
 
-  const [taxRows, setTaxRows] = useState(() => {
-    const existing = editData?.purchaseOrderLocalTaxDetailsDTO;
+  const [taxRows, setTaxRows] = useState([emptyTaxRow()]);
 
-    if (!existing?.length) {
-      return [emptyTaxRow()];
-    }
-
-    return existing.map((row, index) => ({
-      ...row,
-      id: row.id ?? index + 1,
-      isSystemRow:
-        Boolean(row.isSystemRow) ||
-        ["Gross Amount", "IGST", "CGST", "SGST"].includes(row.particulars),
-    }));
-  });
   const [belongsToOptions, setBelongsToOptions] = useState([]);
-  const [fileRows, setFileRows] = useState(
-    editData?.purchaseOrderLocalFileUploadDetailsDTO?.length
-      ? editData.purchaseOrderLocalFileUploadDetailsDTO.map((file) => ({
-          name: file.name || file.fileName || "",
-          file: null,
-          filePath: file.filePath || "",
-          id: file.id,
-          isExisting: true,
-        }))
-      : [emptyFileRow()],
-  );
+
+  const [fileRows, setFileRows] = useState([emptyFileRow()]);
 
   /* ----------------------------------------------------------------------- */
   /* MASTER DATA                                                             */
@@ -689,11 +660,17 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
 
   const [shipModeOptions, setShipModeOptions] = useState([]);
 
+  const [employeeOptions, setEmployeeOptions] = useState([]);
+
   const [fieldErrors, setFieldErrors] = useState({});
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [generatingDocId, setGeneratingDocId] = useState(false);
+
+  const [isLoading, setIsLoading] = useState(Boolean(editData?.id));
+
+  const [loadError, setLoadError] = useState("");
 
   const isLocal = formData.poType === "Local";
 
@@ -850,6 +827,33 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
     }
   }, [ORG_ID, effectiveBranchId]);
 
+  /* ---- Employees (Prepared By / Checked By / Authorised By) ---- */
+
+  const loadEmployees = useCallback(async () => {
+    try {
+      if (!ORG_ID) return;
+
+      // employeeAPI.getEmployeeByOrgId already returns the employeeMasterVO array
+      const list = await employeeAPI.getEmployeeByOrgId(ORG_ID);
+
+      setEmployeeOptions(
+        (Array.isArray(list) ? list : [])
+          .filter((emp) => emp.active === "Active" && !emp.cancel)
+          .map((emp) => ({
+            value: emp.id,
+            name: emp.employeeName || "",
+            label: emp.employeeId
+              ? `${emp.employeeName} (${emp.employeeId})`
+              : emp.employeeName || `Employee ${emp.id}`,
+          })),
+      );
+    } catch (error) {
+      console.error("Failed to load employees:", error);
+
+      setEmployeeOptions([]);
+    }
+  }, [ORG_ID]);
+
   const loadItemOptions = useCallback(async () => {
     try {
       if (!ORG_ID) return;
@@ -984,39 +988,6 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
   /* INDENT DROPDOWN                                                           */
   /* ========================================================================= */
 
-  // const loadIndentItemOptions = useCallback(async () => {
-  //   try {
-  //     if (!ORG_ID) return;
-
-  //     const response = await purchaseIndentAPI.getPurchaseIndentItemDropdown(
-  //       BRANCH_ID,
-  //       ORG_ID,
-  //     );
-
-  //     const list = response?.paramObjectsMap?.itemDropdown || [];
-
-  //     setIndentItemOptions(
-  //       list.map((row) => ({
-  //         value: row.itemId,
-
-  //         label: row.itemId != null ? String(row.itemId) : "",
-
-  //         itemCode: row.itemCode || "",
-
-  //         itemDescription: row.itemDescription || "",
-
-  //         purchaseUnit: row.purchaseUnit || "",
-
-  //         primaryUnit: row.primaryUnit || "",
-  //       })),
-  //     );
-  //   } catch (error) {
-  //     console.error("Failed to load purchase indent item dropdown:", error);
-
-  //     setIndentItemOptions([]);
-  //   }
-  // }, [ORG_ID, BRANCH_ID]);
-
   const loadIndentDropdown = useCallback(async () => {
     try {
       if (!ORG_ID) return;
@@ -1039,7 +1010,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
 
       setIndentItemOptions(
         (Array.isArray(list) ? list : []).map((row) => ({
-          // docId is blank in your sample data, so fall back to indentBasicId for the visible label
+          // docId is blank in sample data, so fall back to indentBasicId for the visible label
           value: row.indentDetailId,
           label:
             row.docId || String(row.indentBasicId ?? row.indentDetailId ?? ""),
@@ -1060,6 +1031,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
       setIndentItemOptions([]);
     }
   }, [ORG_ID, formData.poType, formData.belongsTo]);
+
   /* ========================================================================= */
   /* ITEM DETAILS WHEN INDENT IS NOT REQUIRED                                 */
   /* ========================================================================= */
@@ -1079,17 +1051,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
           return;
         }
 
-        console.log("================================================");
-
-        console.log("Loading item details because Indent Required = NO");
-
-        console.log("PO Type:", poType);
-        console.log("Branch:", effectiveBranchId);
-        console.log("Org:", ORG_ID);
-
-        /* ================================================================
-         LOCAL
-      ================================================================ */
+        /* LOCAL */
 
         if (poType === "Local") {
           const response =
@@ -1100,22 +1062,10 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
 
           console.log("LOCAL ITEM DETAILS RESPONSE:", response);
 
-          /*
-           * Supports both:
-           *
-           * response
-           *
-           * and
-           *
-           * response.data
-           */
-
           const data = response?.data ?? response;
 
           const list =
             data?.paramObjectsMap?.mapp || data?.paramObjectsMap?.items || [];
-
-          console.log("LOCAL ITEM DETAILS LIST:", list);
 
           if (!Array.isArray(list) || list.length === 0) {
             console.warn("Local item API returned no items");
@@ -1125,98 +1075,54 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
             return;
           }
 
-          const rows = list.map((item) => {
-            const row = {
-              ...emptyLocalDetailRow(),
+          const rows = list.map((item) => ({
+            ...emptyLocalDetailRow(),
 
-              id: 0,
+            id: 0,
 
-              /*
-               * Backend item ID
-               */
-              item: item.itemId ?? "",
+            item: item.itemId ?? "",
+            itemCode: item.itemCode ?? "",
+            itemDescription: item.itemDescription ?? "",
+            customerPartNo: item.customerPartNo ?? "",
+            hsnCode: item.hsn ?? item.hsnCode ?? "",
 
-              /*
-               * Backend item code
-               */
-              itemCode: item.itemCode ?? "",
+            // Purchase / primary unit are already IDs (e.g. 1000000005)
+            purchaseUnit: item.purchaseUnit ?? "",
+            primaryUnit: item.primaryUnit ?? "",
 
-              /*
-               * Backend description
-               */
-              itemDescription: item.itemDescription ?? "",
+            unitId: item.unitId ?? "",
 
-              /*
-               * Customer part number
-               */
-              customerPartNo: item.customerPartNo ?? "",
+            indentNo: "",
+            indentDate: "",
+            indentQty: "",
+            pendingIndentQty: "",
 
-              /*
-               * HSN
-               */
-              hsnCode: item.hsn ?? item.hsnCode ?? "",
+            taxType: formData.isIgstApplicable === "Yes" ? "IGST" : "SGST",
+            taxPercentage: "",
+            sgstRate: "",
+            cgstRate: "",
+            igstRate: "",
+            sgstAmount: 0,
+            cgstAmount: 0,
+            igstAmount: 0,
 
-              /*
-               * Purchase unit is already an ID
-               *
-               * Example:
-               * 1000000005
-               */
-              purchaseUnit: item.purchaseUnit ?? "",
+            poQtyInPurchaseUnit: "",
+            qtyInPrimaryUnit: "",
 
-              /*
-               * Primary unit is already an ID
-               */
-              primaryUnit: item.primaryUnit ?? "",
+            rateInInr: "",
+            discount: "",
 
-              /*
-               * KG/NOS text if needed elsewhere
-               */
-              unitId: item.unitId ?? "",
+            amountInInr: "",
 
-              /*
-               * Everything user enters later remains empty
-               */
-              indentNo: "",
-              indentDate: "",
-              indentQty: "",
-              pendingIndentQty: "",
-
-              taxType: formData.isIgstApplicable === "Yes" ? "IGST" : "SGST",
-              taxPercentage: "",
-              sgstRate: "",
-              cgstRate: "",
-              igstRate: "",
-              sgstAmount: 0,
-              cgstAmount: 0,
-              igstAmount: 0,
-
-              poQtyInPurchaseUnit: "",
-              qtyInPrimaryUnit: "",
-
-              rateInInr: "",
-              discount: "",
-
-              amountInInr: "",
-
-              deliveryDate: "",
-            };
-
-            console.log("LOCAL MAPPED ROW:", row);
-
-            return row;
-          });
+            deliveryDate: "",
+          }));
 
           setLocalDetailRows(rows);
-
-          console.log("LOCAL ROWS SET:", rows);
 
           return;
         }
 
-        /* ================================================================
-         IMPORT
-      ================================================================ */
+        /* IMPORT */
 
         if (poType === "Import") {
           const response =
@@ -1232,8 +1138,6 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
           const list =
             data?.paramObjectsMap?.mapp || data?.paramObjectsMap?.items || [];
 
-          console.log("IMPORT ITEM DETAILS LIST:", list);
-
           if (!Array.isArray(list) || list.length === 0) {
             console.warn("Import item API returned no items");
 
@@ -1242,74 +1146,35 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
             return;
           }
 
-          const rows = list.map((item) => {
-            const row = {
-              ...emptyImportDetailRow(),
+          const rows = list.map((item) => ({
+            ...emptyImportDetailRow(),
 
-              id: 0,
+            id: 0,
 
-              /*
-               * Item ID
-               */
-              item: item.itemId ?? "",
+            item: item.itemId ?? "",
+            itemCode: item.itemCode ?? "",
+            itemDescription: item.itemDescription ?? "",
+            customerPartNo: item.customerPartNo ?? "",
+            hsnCode: item.hsn ?? item.hsnCode ?? "",
 
-              /*
-               * Item Code
-               */
-              itemCode: item.itemCode ?? "",
+            uom: item.uom ?? "",
+            unitId: item.unitId ?? "",
 
-              /*
-               * Description
-               */
-              itemDescription: item.itemDescription ?? "",
+            indentNo: "",
+            indentDate: "",
+            indentQty: "",
 
-              /*
-               * Customer Part No
-               */
-              customerPartNo: item.customerPartNo ?? "",
+            orderQty: "",
+            orderRate: "",
 
-              /*
-               * HSN
-               */
-              hsnCode: item.hsn ?? item.hsnCode ?? "",
+            fobRateFc: "",
+            fobRateInr: "",
 
-              /*
-               * Import API returns:
-               *
-               * uom: 1000000005
-               */
-              uom: item.uom ?? "",
-
-              /*
-               * Backend unit text
-               */
-              unitId: item.unitId ?? "",
-
-              /*
-               * These are entered by user
-               */
-              indentNo: "",
-              indentDate: "",
-              indentQty: "",
-
-              orderQty: "",
-              orderRate: "",
-
-              fobRateFc: "",
-              fobRateInr: "",
-
-              fobValueFc: "",
-              fobValueInr: "",
-            };
-
-            console.log("IMPORT MAPPED ROW:", row);
-
-            return row;
-          });
+            fobValueFc: "",
+            fobValueInr: "",
+          }));
 
           setImportDetailRows(rows);
-
-          console.log("IMPORT ROWS SET:", rows);
 
           return;
         }
@@ -1327,6 +1192,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
     },
     [ORG_ID, effectiveBranchId, addToast],
   );
+
   const loadBelongsTo = useCallback(async () => {
     try {
       if (!ORG_ID) return;
@@ -1340,7 +1206,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
 
       setBelongsToOptions(
         list.map((item) => ({
-          // "set same" -> value stored is the description itself, not the id
+          // value stored is the description itself, not the id
           value:
             item.valuesDescription ||
             item.valueDescription ||
@@ -1359,6 +1225,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
       setBelongsToOptions([]);
     }
   }, [ORG_ID]);
+
   /* ========================================================================= */
   /* MASTER DATA USE EFFECT                                                    */
   /* ========================================================================= */
@@ -1373,6 +1240,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
     loadCountries();
     loadShipModes();
     loadBelongsTo();
+    loadEmployees();
   }, [
     loadBranches,
     loadCurrencies,
@@ -1383,39 +1251,305 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
     loadCountries,
     loadShipModes,
     loadBelongsTo,
+    loadEmployees,
   ]);
+
+  /* ========================================================================= */
+  /* EDIT MODE: load the full record with getPurchaseOrderById                 */
+  /* ========================================================================= */
+
+  useEffect(() => {
+    if (!editData?.id) {
+      setIsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadPurchaseOrder = async () => {
+      setIsLoading(true);
+      setLoadError("");
+
+      try {
+        const response = await purchaseOrderAPI.getPurchaseOrderById(
+          editData.id,
+          editData.poType,
+        );
+
+        console.log("getPurchaseOrderById response:", response);
+
+        if (cancelled) return;
+
+        const vo = extractPurchaseOrder(response);
+
+        if (!vo) {
+          throw new Error("Purchase Order record not found");
+        }
+
+        const mapped = mapPurchaseOrderForForm(vo);
+
+        console.log("Mapped Purchase Order:", mapped);
+
+        setFormData({
+          ...getDefaultValues(),
+          branch: String(BRANCH_ID || ""),
+          ...mapped.form,
+        });
+
+        setLocalDetailRows(
+          mapped.localRows.length ? mapped.localRows : [emptyLocalDetailRow()],
+        );
+
+        setImportDetailRows(
+          mapped.importRows.length
+            ? mapped.importRows
+            : [emptyImportDetailRow()],
+        );
+
+        setTaxRows(mapped.taxRows.length ? mapped.taxRows : [emptyTaxRow()]);
+
+        setFileRows(
+          mapped.fileRows.length ? mapped.fileRows : [emptyFileRow()],
+        );
+
+        /* The response has no Cust. Part No (and sometimes no HSN),
+           so fetch them per item, same as when an item is selected. */
+        const branchId = toInteger(mapped.form.branch);
+
+        const enrichRows = async (rows, setter) => {
+          if (!rows.length || !branchId) return;
+
+          const fetched = await Promise.all(
+            rows.map(async (row) => {
+              if (!row.item || (row.hsnCode && row.customerPartNo)) {
+                return row;
+              }
+
+              try {
+                const res = await purchaseOrderAPI.getHsnCodeDetails(
+                  branchId,
+                  toInteger(row.item),
+                  ORG_ID,
+                  "yes",
+                );
+
+                const d = res?.paramObjectsMap?.mapp?.[0];
+
+                if (!d) return row;
+
+                return {
+                  ...row,
+                  hsnCode: row.hsnCode || d.hsn || d.hsnCode || "",
+                  customerPartNo: row.customerPartNo || d.customerPartNo || "",
+                };
+              } catch (error) {
+                console.error("Failed to enrich item row:", error);
+                return row;
+              }
+            }),
+          );
+
+          if (cancelled) return;
+
+          setter((previous) =>
+            previous.map((row, i) =>
+              fetched[i] && fetched[i].item === row.item
+                ? {
+                    ...row,
+                    hsnCode: row.hsnCode || fetched[i].hsnCode,
+                    customerPartNo:
+                      row.customerPartNo || fetched[i].customerPartNo,
+                  }
+                : row,
+            ),
+          );
+        };
+
+        enrichRows(mapped.localRows, setLocalDetailRows);
+        enrichRows(mapped.importRows, setImportDetailRows);
+      } catch (error) {
+        if (!cancelled) {
+          console.error("Failed to load purchase order:", error);
+
+          setLoadError(
+            "Failed to load purchase order. Please go back and try again.",
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    loadPurchaseOrder();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editData?.id, editData?.poType]);
+
+  /* ========================================================================= */
+  /* EDIT MODE: fill supplier State / PIN / Address from the supplier list     */
+  /* ========================================================================= */
+
+  useEffect(() => {
+    if (!formData.supplierCode || !supplierOptions.length) return;
+
+    const selected = supplierOptions.find(
+      (option) => String(option.value) === String(formData.supplierCode),
+    );
+
+    if (!selected) return;
+
+    setFormData((previous) => {
+      const next = { ...previous };
+      let changed = false;
+
+      const fillIfEmpty = (key, value) => {
+        if (!previous[key] && value) {
+          next[key] = value;
+          changed = true;
+        }
+      };
+
+      const overwrite = (key, value) => {
+        if (value && previous[key] !== value) {
+          next[key] = value;
+          changed = true;
+        }
+      };
+
+      fillIfEmpty("supplierName", selected.supplierName);
+      fillIfEmpty("supplierAddress", selected.address);
+      fillIfEmpty("gstnNo", selected.gstNo);
+      overwrite("supplierState", selected.stateName);
+      overwrite("supplierPinCode", selected.pinCode);
+
+      return changed ? next : previous;
+    });
+  }, [supplierOptions, formData.supplierCode]);
+
+  /* ========================================================================= */
+  /* EDIT MODE: fill Pending Qty from the Indent dropdown                      */
+  /* ========================================================================= */
+
+  useEffect(() => {
+    if (!isEditMode || !indentItemOptions.length) return;
+
+    setLocalDetailRows((previous) => {
+      let changed = false;
+
+      const next = previous.map((row) => {
+        const missing =
+          row.pendingIndentQty === "" ||
+          row.pendingIndentQty === null ||
+          row.pendingIndentQty === undefined;
+
+        if (!row.indentNo || !missing) return row;
+
+        const option = indentItemOptions.find(
+          (o) => String(o.value) === String(row.indentNo),
+        );
+
+        if (!option) return row;
+
+        changed = true;
+
+        return { ...row, pendingIndentQty: option.pendingIndentQty ?? 0 };
+      });
+
+      return changed ? next : previous;
+    });
+  }, [isEditMode, indentItemOptions, localDetailRows]);
+
+  /* ========================================================================= */
+  /* EDIT MODE: resolve employee NAMES -> IDS                                  */
+  /* (older records may return a name instead of an id)                        */
+  /* ========================================================================= */
+
+  useEffect(() => {
+    if (!employeeOptions.length) return;
+
+    setFormData((prev) => {
+      const next = { ...prev };
+      let changed = false;
+
+      ["preparedBy", "checkedBy", "authorisedBy"].forEach((key) => {
+        const current = prev[key];
+        if (!current) return;
+
+        const byId = employeeOptions.find(
+          (o) => String(o.value) === String(current),
+        );
+        if (byId) return;
+
+        const byName = employeeOptions.find((o) => o.name === current);
+        if (byName) {
+          next[key] = byName.value;
+          changed = true;
+        }
+      });
+
+      return changed ? next : prev;
+    });
+  }, [
+    employeeOptions,
+    formData.preparedBy,
+    formData.checkedBy,
+    formData.authorisedBy,
+  ]);
+
+  /* ========================================================================= */
+  /* EDIT MODE: resolve saved tax LABELS -> tax definition IDS                 */
+  /* ========================================================================= */
+
+  useEffect(() => {
+    if (!taxDefinitionOptions.length) return;
+
+    setTaxRows((prev) => {
+      let changed = false;
+
+      const next = prev.map((row) => {
+        if (row.isSystemRow || !row.particulars) return row;
+
+        const alreadyId = taxDefinitionOptions.some(
+          (o) => String(o.value) === String(row.particulars),
+        );
+        if (alreadyId) return row;
+
+        const match = taxDefinitionOptions.find(
+          (o) => o.label === row.particulars,
+        );
+        if (!match) return row;
+
+        changed = true;
+        return { ...row, particulars: match.value };
+      });
+
+      return changed ? next : prev;
+    });
+  }, [taxDefinitionOptions, taxRows]);
 
   /* ========================================================================= */
   /* AUTO LOAD ITEM DETAILS WHEN INDENT = NO                                  */
   /* ========================================================================= */
 
   useEffect(() => {
-    /*
-     * Edit mode should keep existing details.
-     */
+    // Edit mode should keep existing details.
     if (isEditMode) {
       return;
     }
 
-    /*
-     * API is required only when:
-     *
-     * Indent Required = No
-     */
+    // API is required only when Indent Required = No
     if (isIndentRequired) {
       return;
     }
 
-    /*
-     * PO type must exist.
-     */
     if (!formData.poType) {
       return;
     }
-
-    console.log("Calling item details API because Indent Required = NO");
-
-    console.log("PO Type:", formData.poType);
 
     loadItemDetailsWithoutIndent(formData.poType);
   }, [
@@ -1545,6 +1679,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
       })),
     );
   }, [formData.isIgstApplicable]);
+
   /* ========================================================================= */
   /* FIELD CHANGE                                                              */
   /* ========================================================================= */
@@ -1559,9 +1694,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
       }));
     }
 
-    /* --------------------------------------------------------------------- */
-    /* PLANT / BRANCH CHANGE                                                 */
-    /* --------------------------------------------------------------------- */
+    /* PLANT / BRANCH CHANGE */
 
     if (name === "branch") {
       setFormData((previous) => ({
@@ -1582,9 +1715,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
       return;
     }
 
-    /* --------------------------------------------------------------------- */
-    /* SUPPLIER AUTO FILL                                                    */
-    /* --------------------------------------------------------------------- */
+    /* SUPPLIER AUTO FILL */
 
     if (name === "supplierCode") {
       const selected = supplierOptions.find(
@@ -1606,26 +1737,14 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
 
         gstnNo: selected?.gstNo || "",
 
-        /*
-         * API:
-         *
-         * isRegistered = "true"
-         *       ↓
-         * Is IGST Appl = Yes
-         *
-         * otherwise
-         *       ↓
-         * Is IGST Appl = No
-         */
+        // isRegistered = true -> Is IGST Appl = Yes, otherwise No
         isIgstApplicable: selected?.isRegistered ? "Yes" : "No",
       }));
 
       return;
     }
 
-    /* --------------------------------------------------------------------- */
-    /* CURRENCY                                                              */
-    /* --------------------------------------------------------------------- */
+    /* CURRENCY */
 
     if (name === "currency") {
       setFormData((previous) => ({
@@ -1645,25 +1764,13 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
       return;
     }
 
-    /* --------------------------------------------------------------------- */
-    /* INDENT REQUIRED                                                       */
-    /* --------------------------------------------------------------------- */
+    /* INDENT REQUIRED */
 
     if (name === "indentRequired") {
-      console.log("Indent Required changed:", value);
-
       setFormData((previous) => ({
         ...previous,
         indentRequired: value,
       }));
-
-      /*
-       * ================================================================
-       * YES
-       *
-       * User wants to select Purchase Indent items manually.
-       * ================================================================
-       */
 
       if (value === "Yes") {
         if (formData.poType === "Local") {
@@ -1677,30 +1784,9 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
         return;
       }
 
-      /*
-       * ================================================================
-       * NO
-       *
-       * The useEffect will call:
-       *
-       * Local:
-       * getItemDetailsResponsePurchaseLocal()
-       *
-       * Import:
-       * getItemDetailsResponsePurchaseImport()
-       *
-       * ================================================================
-       */
-
       if (value === "No") {
-        console.log("Indent Required = NO. Item details API will be called.");
-
-        /*
-         * Clear current rows immediately so old
-         * indent rows don't remain visible while
-         * API is loading.
-         */
-
+        // The useEffect will load item details from the API.
+        // Clear rows now so old indent rows aren't visible while loading.
         if (formData.poType === "Local") {
           setLocalDetailRows([]);
         }
@@ -1713,20 +1799,13 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
       }
     }
 
-    /* --------------------------------------------------------------------- */
-    /* PO TYPE                                                               */
-    /* --------------------------------------------------------------------- */
+    /* PO TYPE */
 
     if (name === "poType") {
       setFormData((previous) => ({
         ...previous,
 
         poType: value,
-
-        /*
-         * Local PO:
-         * Currency isn't required.
-         */
 
         ...(value === "Local"
           ? {
@@ -1740,9 +1819,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
       return;
     }
 
-    /* --------------------------------------------------------------------- */
-    /* NORMAL FIELD                                                          */
-    /* --------------------------------------------------------------------- */
+    /* NORMAL FIELD */
 
     setFormData((previous) => ({
       ...previous,
@@ -1953,36 +2030,21 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
 
     return updated;
   };
+
   const handleLocalCellChange = async (index, key, value) => {
     const currentRow = localDetailRows[index];
 
     if (!currentRow) return;
 
-    console.log("LOCAL CELL CHANGE:", {
-      index,
-      key,
-      value,
-      currentRow,
-    });
-
-    // ================================================================
-    // 1. NORMAL ROW UPDATE
-    // ================================================================
-
+    // 1. Normal row update
     let updatedRow = calculateLocalRow(currentRow, key, value);
 
-    // ================================================================
-    // 2. SET IMMEDIATELY
-    // ================================================================
-
+    // 2. Set immediately
     setLocalDetailRows((previous) =>
       previous.map((row, rowIndex) => (rowIndex === index ? updatedRow : row)),
     );
 
-    // ================================================================
-    // 3. ONLY FETCH HSN WHEN ITEM IS SELECTED
-    // ================================================================
-
+    // 3. Only fetch HSN when item is selected
     if (key !== "item" && key !== "indentNo") {
       return;
     }
@@ -1990,27 +2052,15 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
     try {
       let itemId = "";
 
-      // ------------------------------------------------
-      // Direct Item Code selection
-      // ------------------------------------------------
-
       if (key === "item") {
         itemId = value;
       }
-
-      // ------------------------------------------------
-      // Indent selection
-      // ------------------------------------------------
 
       if (key === "indentNo") {
         itemId = updatedRow.item;
       }
 
       itemId = toNumber(itemId);
-
-      console.log("HSN API ITEM ID:", itemId);
-      console.log("HSN API BRANCH:", effectiveBranchId);
-      console.log("HSN API ORG:", ORG_ID);
 
       if (!itemId) {
         console.warn("Item ID is empty. HSN API not called.");
@@ -2027,10 +2077,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
         return;
       }
 
-      // ================================================================
-      // 4. GET HSN
-      // ================================================================
-
+      // 4. Get HSN
       const hsnResponse = await purchaseOrderAPI.getHsnCodeDetails(
         effectiveBranchId,
         itemId,
@@ -2053,17 +2100,12 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
 
       const customerPartNo = hsnData?.customerPartNo ?? "";
 
-      console.log("HSN FOUND:", hsn);
-
       if (!hsn) {
         console.warn("HSN is empty for item:", itemId);
         return;
       }
 
-      // ================================================================
-      // 5. GET TAX USING HSN
-      // ================================================================
-
+      // 5. Get tax using HSN
       const taxResponse = await purchaseOrderAPI.getTaxValueByHsn(hsn, ORG_ID);
 
       console.log("GET TAX RESPONSE:", taxResponse);
@@ -2077,33 +2119,13 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
 
       const taxData = taxList[0];
 
-      console.log("TAX DATA FROM API:", taxData);
-
-      // ================================================================
-      // 6. API VALUES
-      // ================================================================
-
+      // 6. API values
       const sgst = toNumber(taxData?.sgst);
-
       const cgst = toNumber(taxData?.cgst);
-
       const igst = toNumber(taxData?.igst);
-
       const taxPercentage = toNumber(taxData?.taxPercentage);
 
-      console.log("FINAL TAX VALUES:", {
-        hsn,
-        customerPartNo,
-        sgst,
-        cgst,
-        igst,
-        taxPercentage,
-      });
-
-      // ================================================================
-      // 7. UPDATE ROW WITH HSN + TAX
-      // ================================================================
-
+      // 7. Update row with HSN + tax, then recalculate
       setLocalDetailRows((previous) =>
         previous.map((row, rowIndex) => {
           if (rowIndex !== index) {
@@ -2125,10 +2147,6 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
 
             igstRate: igst,
           };
-
-          // ============================================================
-          // 8. RECALCULATE ROW
-          // ============================================================
 
           const recalculatedRow = calculateLocalRow(
             nextRow,
@@ -2223,15 +2241,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
       }
     }
 
-    /*
-     * IMPORT:
-     *
-     * FOB Rate FC
-     *       ×
-     * Exchange Rate
-     *       =
-     * FOB Rate INR
-     */
+    // IMPORT: FOB Rate FC x Exchange Rate = FOB Rate INR
 
     const quantity = isIndentRequired
       ? Math.max(0, toNumber(updated.indentQty))
@@ -2485,6 +2495,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
         .reduce((total, row) => total + toNumber(row.amount), 0),
     );
   }, [taxRows]);
+
   /* ========================================================================= */
   /* CHARGES                                                                  */
   /* ========================================================================= */
@@ -2671,9 +2682,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
       return false;
     }
 
-    /* --------------------------------------------------------------------- */
-    /* LOCAL VALIDATION                                                      */
-    /* --------------------------------------------------------------------- */
+    /* LOCAL VALIDATION */
 
     if (isLocal) {
       const invalidQty = localDetailRows.some(
@@ -2696,11 +2705,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
         return false;
       }
 
-      /*
-       * Only validate indent when
-       * Indent Required = Yes
-       */
-
+      // Only validate indent when Indent Required = Yes
       if (isIndentRequired) {
         const invalidIndent = localDetailRows.some(
           (row) => row.item && toNumber(row.indentQty) <= 0,
@@ -2714,9 +2719,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
       }
     }
 
-    /* --------------------------------------------------------------------- */
-    /* IMPORT VALIDATION                                                     */
-    /* --------------------------------------------------------------------- */
+    /* IMPORT VALIDATION */
 
     if (isImport) {
       if (isIndentRequired) {
@@ -2755,9 +2758,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
     setIsSubmitting(true);
 
     try {
-      /* ------------------------------------------------------------------- */
-      /* FILES                                                               */
-      /* ------------------------------------------------------------------- */
+      /* FILES */
 
       const filesToUpload = [];
 
@@ -2781,9 +2782,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
           };
         });
 
-      /* ------------------------------------------------------------------- */
-      /* LOCAL DETAILS                                                       */
-      /* ------------------------------------------------------------------- */
+      /* LOCAL DETAILS */
 
       const localDetails = isLocal
         ? localDetailRows
@@ -2792,11 +2791,6 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
               id: toInteger(row.id),
 
               item: toInteger(row.item),
-
-              /*
-               * If indent is not required,
-               * send empty values.
-               */
 
               indentNo: isIndentRequired ? row.indentNo || "" : "",
 
@@ -2843,9 +2837,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
             }))
         : [];
 
-      /* ------------------------------------------------------------------- */
-      /* IMPORT DETAILS                                                      */
-      /* ------------------------------------------------------------------- */
+      /* IMPORT DETAILS */
 
       const importDetails = isImport
         ? importDetailRows
@@ -2877,9 +2869,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
             }))
         : [];
 
-      /* ------------------------------------------------------------------- */
-      /* TAX DETAILS                                                         */
-      /* ------------------------------------------------------------------- */
+      /* TAX DETAILS */
 
       const localTaxDetails = isLocal
         ? taxRows
@@ -2901,9 +2891,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
             })
         : [];
 
-      /* ------------------------------------------------------------------- */
-      /* PAYLOAD                                                             */
-      /* ------------------------------------------------------------------- */
+      /* PAYLOAD */
 
       const payload = {
         ...(isEditMode && {
@@ -2914,7 +2902,10 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
 
         amountInWord: formData.amountInWord || "",
 
-        authorisedBy: formData.authorisedBy || "",
+        // employee ID (or null when nothing selected)
+        authorisedBy: formData.authorisedBy
+          ? toInteger(formData.authorisedBy)
+          : null,
 
         bankCharges: toNumber(formData.bankCharges),
 
@@ -2924,7 +2915,8 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
 
         cancelRemarks: formData.cancelRemarks || "",
 
-        checkedBy: formData.checkedBy || "",
+        // employee ID (or null when nothing selected)
+        checkedBy: formData.checkedBy ? toInteger(formData.checkedBy) : null,
 
         countryOfOrigin: formData.countryOfOrigin || "",
 
@@ -3002,7 +2994,8 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
 
         portOfLoading: formData.portOfLoading || "",
 
-        preparedBy: formData.preparedBy || "",
+        // employee ID (or null when nothing selected)
+        preparedBy: formData.preparedBy ? toInteger(formData.preparedBy) : null,
 
         purchaseOrderImportDetailsDTO: importDetails,
 
@@ -3018,11 +3011,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
 
         supplierCode: toInteger(formData.supplierCode),
 
-        /*
-         * These are automatically populated
-         * from supplier selection.
-         */
-
+        // Auto-populated from supplier selection
         supplierName: formData.supplierName || "",
 
         supplierAddress: formData.supplierAddress || "",
@@ -3105,45 +3094,18 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
   /* ========================================================================= */
 
   const LOCAL_TABS = [
-    {
-      key: "poDetail",
-      label: "1-PO Detail",
-    },
-    {
-      key: "taxDetails",
-      label: "2-Tax Details",
-    },
-    {
-      key: "attachments",
-      label: "3-Attachments",
-    },
-    {
-      key: "chargesTerms",
-      label: "4-Charges & Terms",
-    },
-    {
-      key: "summary",
-      label: "5-Summary",
-    },
+    { key: "poDetail", label: "1-PO Detail" },
+    { key: "taxDetails", label: "2-Tax Details" },
+    { key: "attachments", label: "3-Attachments" },
+    { key: "chargesTerms", label: "4-Charges & Terms" },
+    { key: "summary", label: "5-Summary" },
   ];
 
   const IMPORT_TABS = [
-    {
-      key: "poDetail",
-      label: "1-Item Detail",
-    },
-    {
-      key: "attachments",
-      label: "2-Attachments",
-    },
-    {
-      key: "chargesTerms",
-      label: "3-Charges & Terms",
-    },
-    {
-      key: "summary",
-      label: "4-Summary",
-    },
+    { key: "poDetail", label: "1-Item Detail" },
+    { key: "attachments", label: "2-Attachments" },
+    { key: "chargesTerms", label: "3-Charges & Terms" },
+    { key: "summary", label: "4-Summary" },
   ];
 
   const activeTabs = isLocal ? LOCAL_TABS : IMPORT_TABS;
@@ -3154,11 +3116,26 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
     if (!exists) {
       setActiveTab(activeTabs[0].key);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLocal, activeTab]);
 
   /* ========================================================================= */
   /* LOCAL DETAIL COLUMNS                                                      */
   /* ========================================================================= */
+
+  // Keep the saved Indent No visible in edit mode even if it is not in the dropdown list
+  const withCurrentOption = (options) => (row) => {
+    const current = row.indentNo;
+
+    if (
+      !current ||
+      (options || []).some((o) => String(o.value) === String(current))
+    ) {
+      return options;
+    }
+
+    return [{ value: current, label: String(current) }, ...(options || [])];
+  };
 
   const localDetailColumns = [
     ...(isIndentRequired
@@ -3167,21 +3144,18 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
             key: "indentNo",
             label: "Indent No.",
             type: "select",
-            options: indentItemOptions,
+            options: withCurrentOption(indentItemOptions),
           },
-
           {
             key: "indentDate",
             label: "Indent Date",
             type: "date",
           },
-
           {
             key: "indentQty",
             label: "Indent Qty",
             type: "number",
           },
-
           {
             key: "pendingIndentQty",
             label: "Pending Qty",
@@ -3295,15 +3269,13 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
             key: "indentNo",
             label: "Indent No.",
             type: "select",
-            options: indentItemOptions,
+            options: withCurrentOption(indentItemOptions),
           },
-
           {
             key: "indentDate",
             label: "Indent Date",
             type: "date",
           },
-
           {
             key: "indentQty",
             label: "Indent Qty",
@@ -3401,11 +3373,34 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
   /* RENDER                                                                    */
   /* ========================================================================= */
 
+  if (isLoading) {
+    return (
+      <div className="p-6 flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Loading purchase order...
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="p-6 space-y-3">
+        <p className="text-xs text-red-500 dark:text-red-400">{loadError}</p>
+
+        <button
+          type="button"
+          onClick={onBack}
+          className="px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200"
+        >
+          Back
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="p-2 max-w-7xl">
-      {/* ------------------------------------------------------------------- */}
-      {/* TITLE                                                               */}
-      {/* ------------------------------------------------------------------- */}
+      {/* TITLE */}
 
       <div className="flex items-center gap-2 mb-3">
         <button
@@ -3422,14 +3417,10 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
         </h2>
       </div>
 
-      {/* ------------------------------------------------------------------- */}
-      {/* MAIN CARD                                                           */}
-      {/* ------------------------------------------------------------------- */}
+      {/* MAIN CARD */}
 
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
-        {/* =============================================================== */}
-        {/* HEADER                                                          */}
-        {/* =============================================================== */}
+        {/* HEADER */}
 
         <div>
           <SectionHeader>
@@ -3573,8 +3564,6 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
               onChange={handleFieldChange}
               disabled
             />
-
-            {/* Local Supplier Ref */}
 
             {/* Currency - Import */}
 
@@ -3728,8 +3717,6 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
               />
             )}
 
-            {/* Mode of Despatch */}
-
             {/* Financial Year */}
 
             <Field
@@ -3741,9 +3728,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
           </div>
         </div>
 
-        {/* =============================================================== */}
-        {/* TABS                                                            */}
-        {/* =============================================================== */}
+        {/* TABS */}
 
         <section className="mt-0 bg-white dark:bg-gray-800">
           <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 mb-2">
@@ -3801,9 +3786,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
             )}
           </div>
 
-          {/* ============================================================= */}
-          {/* LOCAL DETAILS                                                  */}
-          {/* ============================================================= */}
+          {/* LOCAL DETAILS */}
 
           {activeTab === "poDetail" && isLocal && (
             <>
@@ -3823,9 +3806,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
             </>
           )}
 
-          {/* ============================================================= */}
-          {/* IMPORT DETAILS                                                 */}
-          {/* ============================================================= */}
+          {/* IMPORT DETAILS */}
 
           {activeTab === "poDetail" && isImport && (
             <>
@@ -3850,9 +3831,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
             </>
           )}
 
-          {/* ============================================================= */}
-          {/* TAX DETAILS                                                    */}
-          {/* ============================================================= */}
+          {/* TAX DETAILS */}
 
           {activeTab === "taxDetails" && isLocal && (
             <>
@@ -3907,9 +3886,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
             </>
           )}
 
-          {/* ============================================================= */}
-          {/* ATTACHMENTS                                                    */}
-          {/* ============================================================= */}
+          {/* ATTACHMENTS */}
 
           {activeTab === "attachments" && (
             <TableWrapper>
@@ -3989,9 +3966,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
             </TableWrapper>
           )}
 
-          {/* ============================================================= */}
-          {/* CHARGES & TERMS                                               */}
-          {/* ============================================================= */}
+          {/* CHARGES & TERMS */}
 
           {activeTab === "chargesTerms" && (
             <div className="pt-2 space-y-3">
@@ -4175,9 +4150,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
             </div>
           )}
 
-          {/* ============================================================= */}
-          {/* SUMMARY                                                        */}
-          {/* ============================================================= */}
+          {/* SUMMARY */}
 
           {activeTab === "summary" && (
             <div className="pt-2 space-y-3">
@@ -4260,25 +4233,33 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
                   className="col-span-2 md:col-span-4 xl:col-span-3"
                 />
 
+                {/* Employee dropdowns: show employee name, send employee id */}
+
                 <Field
+                  type="select"
                   label="Prepared By"
                   name="preparedBy"
                   value={formData.preparedBy}
                   onChange={handleFieldChange}
+                  options={employeeOptions}
                 />
 
                 <Field
+                  type="select"
                   label="Checked By"
                   name="checkedBy"
                   value={formData.checkedBy}
                   onChange={handleFieldChange}
+                  options={employeeOptions}
                 />
 
                 <Field
+                  type="select"
                   label="Authorised By"
                   name="authorisedBy"
                   value={formData.authorisedBy}
                   onChange={handleFieldChange}
+                  options={employeeOptions}
                 />
               </div>
 
@@ -4371,9 +4352,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
           )}
         </section>
 
-        {/* =============================================================== */}
-        {/* BUTTONS                                                         */}
-        {/* =============================================================== */}
+        {/* BUTTONS */}
 
         <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
           <button
