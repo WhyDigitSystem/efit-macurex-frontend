@@ -1,5 +1,5 @@
 import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import dayjs from "dayjs";
 import { useToast } from "../../Toast/ToastContext";
 import salesOrderShortCloseAPI from "../../../api/Sales/salesOrderShortCloseAPI";
@@ -329,8 +329,12 @@ const SalesOrderShortCloseForm = ({ data, onBack }) => {
     const base = {
       customerId: data?.customerId?.id ?? data?.customerId ?? "",
       customerName: data?.customerId?.customerName ?? data?.customerName ?? "",
-      salesAgreementNo: data?.docId ?? data?.salesAgreementNo ?? "",
-      shortCloseNo: data?.shortCloseNo || "",
+      // The Sales Agreement No lives on the nested orderAcceptance object,
+      // e.g. { id: 1000000003, docId: "BLR/OA/26-27/00001" }.
+      salesAgreementNo: data?.orderAcceptance?.docId ?? "",
+      // docId carries the generated Short Close document number,
+      // e.g. "BLR/SOS/26-27/00002".
+      shortCloseNo: data?.shortCloseNo || data?.docId || "",
       date: data?.docDate ?? data?.date ?? dayjs().format("YYYY-MM-DD"),
       active: data?.active !== false,
     };
@@ -422,51 +426,37 @@ const SalesOrderShortCloseForm = ({ data, onBack }) => {
   }, [orgId, branch]);
 
   // Loads the short-close detail grid rows.
-  // - If a Sales Agreement No is selected, use its Order Acceptance items.
-  // - If none selected, fall back to all items via the item master.
-  const loadDetailItems = useCallback(
-    async (docId) => {
-      if (docId) {
-        try {
-          const items =
-            await salesOrderShortCloseAPI.getOrderAcceptanceItemDetailsDetails(
-              docId,
-            );
-          setDetailRows(
-            (items || []).map((it) => ({
-              itemId: it.itemId || "",
-              itemCode: it.itemCode,
-              itemDescription: it.itemDescitpion || "",
-              orderId: it.orderId || "",
-              orderQty: it.quantity ?? "",
-              suppliedQty: "",
-              pendingQty: "0.00",
-              requiredQty: "",
-              shortCloseQty: "0.00",
-            })),
-          );
-        } catch (error) {
-          console.error("Failed to load agreement items:", error);
-          setDetailRows([emptyDetailRow()]);
-        }
-      } else {
-        const res = await itemAPI.getItems(orgId, branch);
-        setDetailRows(
-          (res || []).map((it) => ({
-            itemId: it.id || "",
-            itemCode: it.itemCode,
-            itemDescription: it.itemDescription || "",
-            orderQty: "",
-            suppliedQty: "",
-            pendingQty: "0.00",
-            requiredQty: "",
-            shortCloseQty: "0.00",
-          })),
+  // Rows are driven only by the selected Sales Agreement No (its Order
+  // Acceptance items). Clearing the agreement resets the grid to a blank row
+  // instead of falling back to the full item master.
+  const loadDetailItems = useCallback(async (docId) => {
+    if (!docId) {
+      setDetailRows([emptyDetailRow()]);
+      return;
+    }
+    try {
+      const items =
+        await salesOrderShortCloseAPI.getOrderAcceptanceItemDetailsDetails(
+          docId,
         );
-      }
-    },
-    [orgId, branch],
-  );
+      setDetailRows(
+        (items || []).map((it) => ({
+          itemId: it.itemId || "",
+          itemCode: it.itemCode,
+          itemDescription: it.itemDescitpion || "",
+          orderId: it.orderId || "",
+          orderQty: it.quantity ?? "",
+          suppliedQty: "",
+          pendingQty: "0.00",
+          requiredQty: "",
+          shortCloseQty: "0.00",
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to load agreement items:", error);
+      setDetailRows([emptyDetailRow()]);
+    }
+  }, []);
 
   useEffect(() => {
     if (orgId && branch) {
@@ -474,6 +464,18 @@ const SalesOrderShortCloseForm = ({ data, onBack }) => {
       loadItems();
     }
   }, [orgId, branch, loadCustomers, loadItems]);
+
+  // On edit the Sales Agreement No is hydrated from orderAcceptance.docId, so
+  // the agreement list must be loaded for the record's customer or the value
+  // has no matching option and the select renders as "-- Select --".
+  const agreementsLoadedRef = useRef(false);
+  useEffect(() => {
+    if (agreementsLoadedRef.current) return;
+    if (data?.id && header.customerId) {
+      agreementsLoadedRef.current = true;
+      loadAgreements(header.customerId);
+    }
+  }, [data?.id, header.customerId, loadAgreements]);
   const [generatingDocId, setGeneratingDocId] = useState(false);
   useEffect(() => {
     // Don't regenerate the short close number while editing
@@ -533,23 +535,49 @@ const SalesOrderShortCloseForm = ({ data, onBack }) => {
 
   const handleHeaderChange = (e) => {
     const { name, value } = e.target;
-    if (fieldErrors[name]) setFieldErrors((prev) => ({ ...prev, [name]: "" }));
-    setHeader((prev) => {
-      const next = { ...prev, [name]: value };
-      if (name === "customerId") {
-        const customer = customerOptions.find(
-          (c) => String(c.value) === String(value),
-        );
-        next.customerName = customer?.customerName || "";
-        next.salesAgreementNo = "";
-        loadAgreements(value);
-        loadDetailItems("");
-      }
-      if (name === "salesAgreementNo") {
-        loadDetailItems(value);
-      }
-      return next;
+    const isCleared = value === "";
+
+    // Clearing a dropdown must clear its own error plus the errors of every
+    // field that gets reset along with it.
+    setFieldErrors((prev) => {
+      const related =
+        name === "customerId"
+          ? { customerId: "", salesAgreementNo: "", shortCloseNo: "" }
+          : name === "salesAgreementNo"
+            ? { salesAgreementNo: "" }
+            : { [name]: "" };
+      return { ...prev, ...related };
     });
+
+    // Customer ID -> reload agreements, clear the grid, and drop the document
+    // number. The grid stays empty until a Sales Agreement No is picked.
+    if (name === "customerId") {
+      const customer = isCleared
+        ? null
+        : customerOptions.find((c) => String(c.value) === String(value));
+
+      setHeader((prev) => ({
+        ...prev,
+        customerId: value,
+        customerName: customer?.customerName || "",
+        salesAgreementNo: "",
+        shortCloseNo: isCleared ? "" : prev.shortCloseNo,
+      }));
+
+      loadAgreements(value);
+      loadDetailItems("");
+      return;
+    }
+
+    // Sales Agreement No -> load that agreement's items into the grid, or
+    // empty the grid when reset to "-- Select --".
+    if (name === "salesAgreementNo") {
+      setHeader((prev) => ({ ...prev, salesAgreementNo: value }));
+      loadDetailItems(value);
+      return;
+    }
+
+    setHeader((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleCellChange = (idx, key, value) => {
@@ -559,9 +587,16 @@ const SalesOrderShortCloseForm = ({ data, onBack }) => {
 
         let next = { ...row, [key]: value };
 
+        // Item Code drives description and item id. Resetting it to
+        // "-- Select --" clears every field derived from that item.
         if (key === "itemCode") {
-          const item = itemMasterMap[value];
+          const item = value ? itemMasterMap[value] : null;
+          next.itemId = item?.id ?? "";
           next.itemDescription = item?.itemDescription || "";
+          next.orderId = "";
+          next.orderQty = "";
+          next.suppliedQty = "";
+          next.requiredQty = "";
         }
 
         // Pending Qty = Order Qty - Supplied Qty, defaults to 0.00
@@ -627,9 +662,14 @@ const SalesOrderShortCloseForm = ({ data, onBack }) => {
 
     const isUpdate = Boolean(data?.id);
 
+    // Resolve the numeric Order Acceptance id for the payload. Prefer the
+    // dropdown lookup, but fall back to the id on the record itself so an
+    // update never sends 0 when the agreement list has not loaded yet.
     const saleOrderNo =
       agreementOptions.find((ag) => ag.value === header.salesAgreementNo)
-        ?.orderAcceptanceId || 0;
+        ?.orderAcceptanceId ||
+      data?.orderAcceptance?.id ||
+      0;
 
     // Single-transaction payload matching the backend DTO
     // createUpdateSalesOrderShort. Header + details saved together; the backend
