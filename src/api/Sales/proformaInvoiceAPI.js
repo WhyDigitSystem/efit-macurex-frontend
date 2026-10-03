@@ -20,8 +20,6 @@ const proformaInvoiceAPI = {
       const res = await apiClient.get(
         `/api/rejectionInvoice/getProformaInvoiceByOrgId?branch=${branch}&orgId=${orgId}`,
       );
-      // Return the array from paramObjectsMap.proformaInvoiceResponseVO
-      // Note: When fetching list, it returns an array
       const responseData = res?.paramObjectsMap?.proformaInvoiceResponseVO;
       return Array.isArray(responseData) ? responseData : [];
     } catch (error) {
@@ -36,10 +34,22 @@ const proformaInvoiceAPI = {
       const res = await apiClient.get(
         `/api/rejectionInvoice/getProformaInvoiceById?id=${id}`,
       );
-      // Note: When fetching by ID, it returns a single object (not an array)
       return res?.paramObjectsMap?.proformaInvoiceResponseVO || null;
     } catch (error) {
       console.error("Error fetching proforma invoice by ID:", error);
+      throw error;
+    }
+  },
+
+  // 👇 NEW — Get Proforma Invoice DocId
+  getProformaInvoiceDocId: async (financialYear, orgId) => {
+    try {
+      const res = await apiClient.get(
+        `/api/rejectionInvoice/getProformaInvoiceDocId?financialYear=${financialYear}&orgId=${orgId}`,
+      );
+      return res?.paramObjectsMap?.invoiceDocId || null;
+    } catch (error) {
+      console.error("Error fetching proforma invoice docId:", error);
       throw error;
     }
   },

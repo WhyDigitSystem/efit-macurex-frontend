@@ -27,7 +27,7 @@ const DocketInvoiceDetailsList = ({ onAddNew, onEdit, onBack, refreshTrigger }) 
       const response = await docketInvoiceDetailsAPI.getAll(ORG_ID, BRANCH);
       const transformedData = (response || []).map((item) => ({
         id: item.id,
-        docNo: item.docNo || `DK/${item.id}`,
+        docNo: item.docId,
         docDate: item.docDate || "",
         transportId: item.transport?.id || "",
         transportName: item.transport?.transportName || "",

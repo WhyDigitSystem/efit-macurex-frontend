@@ -359,11 +359,9 @@ const todayISO = () => new Date().toISOString().slice(0, 10);
 const currentTime = () => new Date().toTimeString().slice(0, 5);
 
 const getDefaultValues = () => ({
-  // Common fields
   plant: "",
   docType: "Invoice",
 
-  // D.C. Cum Invoice
   invoiceHeader: {
     locationId: "",
     salesInvoiceNo: "",
@@ -378,7 +376,7 @@ const getDefaultValues = () => ({
     customerName: "",
     invoiceType: "",
     customerCode: "",
-    currency: "RS",
+    currency: "",
     schNo: "",
     diNo: "",
     timeOfRemoval: currentTime(),
@@ -457,7 +455,6 @@ const getDefaultValues = () => ({
     pincode: "",
   },
 
-  // Other Sales Invoice
   otherSalesHeader: {
     monthYear: "",
     belongsTo: "",
@@ -535,7 +532,6 @@ const getDefaultValues = () => ({
     narration: "",
   },
 
-  // Rejection Invoice
   rejectionHeader: {
     locationId: "",
     rejectionInvoiceNo: "",
@@ -637,8 +633,6 @@ const DOC_TYPE_OPTIONS = ["Invoice", "Rejection", "Other Sales Invoice"];
 const DOC_TYPE_INVOICE = "Invoice";
 const DOC_TYPE_REJECTION = "Rejection";
 const DOC_TYPE_OTHER_SALES = "Other Sales Invoice";
-
-const DISPATCH_NO_OPTIONS = [];
 
 const LIST_OF_VALUES_GROUPS = {
   PARTICULARS: "Particulars",
@@ -893,6 +887,7 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
   const lastFetchedDINoRef = useRef(null);
   const isDataLoadedRef = useRef(false);
   const lastFetchedDocTypeRef = useRef(null);
+  const savingRef = useRef(false); // 👈 synchronous lock against double-save
 
   const {
     control,
@@ -907,14 +902,14 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
     defaultValues: editData || getDefaultValues(),
   });
 
-  // Watch docType to conditionally render sections
   const docType = watch("docType");
 
-  const isIGSTAppl = watch("invoiceHeader.isIGSTAppl") ||
+  const isIGSTAppl =
+    watch("invoiceHeader.isIGSTAppl") ||
     watch("otherSalesHeader.isIGSTAppl") ||
-    watch("rejectionHeader.isIGSTAppl") || "NO";
+    watch("rejectionHeader.isIGSTAppl") ||
+    "NO";
 
-  // Field arrays
   const invoiceItemsArray = useFieldArray({ control, name: "invoiceItems" });
   const invoiceTaxArray = useFieldArray({ control, name: "invoiceTaxDetails" });
   const otherSalesItemsArray = useFieldArray({ control, name: "otherSalesItems" });
@@ -922,13 +917,11 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
   const rejectionItemsArray = useFieldArray({ control, name: "rejectionItems" });
   const rejectionTaxArray = useFieldArray({ control, name: "rejectionTaxDetails" });
 
-  // Active tabs
   const [activeInvoiceTab, setActiveInvoiceTab] = useState("itemDetails");
   const [activeOtherSalesTab, setActiveOtherSalesTab] = useState("itemDetails");
   const [activeRejectionTab, setActiveRejectionTab] = useState("itemDetails");
 
   const calculateTaxDetails = useCallback(() => {
-    // Determine which items to use based on docType
     let items = [];
     let taxArrayName = "";
     let taxArray;
@@ -955,24 +948,21 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
 
     const isIGST = isIGSTAppl === "YES";
 
-    // Calculate totals
     let totalAmount = 0;
     let totalSGST = 0;
     let totalCGST = 0;
     let totalIGST = 0;
 
-    items.forEach(item => {
+    items.forEach((item) => {
       totalAmount += parseFloat(item.amountInRs) || 0;
       totalSGST += parseFloat(item.sgstAmount) || 0;
       totalCGST += parseFloat(item.cgstAmount) || 0;
       totalIGST += parseFloat(item.igstAmount) || 0;
     });
 
-    // Get existing tax details
     const existingTaxDetails = getValues(taxArrayName) || [];
-    const userAddedRows = existingTaxDetails.filter(item => !item.isSystemRow);
+    const userAddedRows = existingTaxDetails.filter((item) => !item.isSystemRow);
 
-    // Build system rows
     const systemRows = [];
 
     systemRows.push({
@@ -980,7 +970,9 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
       amount: totalAmount,
       isSystemRow: true,
       glAccountName: "",
-      ...(taxArrayName === "rejectionTaxDetails" ? { acceptedQtyAmount: 0, revisedAmount: 0, dbcr: "", dbamt: 0, cramt: 0 } : {})
+      ...(taxArrayName === "rejectionTaxDetails"
+        ? { acceptedQtyAmount: 0, revisedAmount: 0, dbcr: "", dbamt: 0, cramt: 0 }
+        : {}),
     });
 
     if (isIGST) {
@@ -989,7 +981,9 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
         amount: totalIGST,
         isSystemRow: true,
         glAccountName: "",
-        ...(taxArrayName === "rejectionTaxDetails" ? { acceptedQtyAmount: 0, revisedAmount: 0, dbcr: "", dbamt: 0, cramt: 0 } : {})
+        ...(taxArrayName === "rejectionTaxDetails"
+          ? { acceptedQtyAmount: 0, revisedAmount: 0, dbcr: "", dbamt: 0, cramt: 0 }
+          : {}),
       });
     } else {
       systemRows.push({
@@ -997,20 +991,23 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
         amount: totalSGST,
         isSystemRow: true,
         glAccountName: "",
-        ...(taxArrayName === "rejectionTaxDetails" ? { acceptedQtyAmount: 0, revisedAmount: 0, dbcr: "", dbamt: 0, cramt: 0 } : {})
+        ...(taxArrayName === "rejectionTaxDetails"
+          ? { acceptedQtyAmount: 0, revisedAmount: 0, dbcr: "", dbamt: 0, cramt: 0 }
+          : {}),
       });
       systemRows.push({
         particulars: "CGST",
         amount: totalCGST,
         isSystemRow: true,
         glAccountName: "",
-        ...(taxArrayName === "rejectionTaxDetails" ? { acceptedQtyAmount: 0, revisedAmount: 0, dbcr: "", dbamt: 0, cramt: 0 } : {})
+        ...(taxArrayName === "rejectionTaxDetails"
+          ? { acceptedQtyAmount: 0, revisedAmount: 0, dbcr: "", dbamt: 0, cramt: 0 }
+          : {}),
       });
     }
 
     const allTaxEntries = [...systemRows, ...userAddedRows];
 
-    // Check if changed
     const currentRows = getValues(taxArrayName) || [];
     const hasChanged = JSON.stringify(currentRows) !== JSON.stringify(allTaxEntries);
 
@@ -1018,7 +1015,6 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
       taxArray.replace(allTaxEntries);
     }
 
-    // Update terms
     if (docType === DOC_TYPE_INVOICE) {
       const grandTotal = totalAmount + totalSGST + totalCGST + totalIGST;
       setValue("invoiceTerms.netAmount", grandTotal.toFixed(2) || "");
@@ -1026,16 +1022,13 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
     } else if (docType === DOC_TYPE_OTHER_SALES) {
       const grandTotal = totalAmount + totalSGST + totalCGST + totalIGST;
       setValue("otherSalesTerms.netAmount", grandTotal.toFixed(2) || "");
-      setValue("otherSalesTerms.totalAssVal", totalAmount.toFixed(2) || "");
+      setValue("otherSalesTerms.assVal", totalAmount.toFixed(2) || "");
     } else if (docType === DOC_TYPE_REJECTION) {
       const grandTotal = totalAmount + totalSGST + totalCGST + totalIGST;
       setValue("rejectionTerms.netAmount", grandTotal.toFixed(2) || "");
       setValue("rejectionTerms.totalAssVal", totalAmount.toFixed(2) || "");
     }
   }, [docType, getValues, setValue, isIGSTAppl, invoiceTaxArray, otherSalesTaxArray, rejectionTaxArray]);
-  /* -------------------------------------------------------------------------- */
-  /* List of Values Loading                                                     */
-  /* -------------------------------------------------------------------------- */
 
   const loadListOfValuesData = useCallback(async () => {
     try {
@@ -1057,17 +1050,16 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
               items = response.listValues;
             }
 
-            result[key] = items.map(item => ({
+            result[key] = items.map((item) => ({
               value: item.id || item.value,
               label: item.valuesDescription || item.label || item.name,
               ...item,
             }));
-
           } catch (err) {
             console.error(`${group} failed`, err);
             result[key] = [];
           }
-        })
+        }),
       );
 
       setListOfValuesData(result);
@@ -1076,125 +1068,126 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
     }
   }, [ORG_ID]);
 
-  /* -------------------------------------------------------------------------- */
-  /* API Calls                                                                  */
-  /* -------------------------------------------------------------------------- */
-
-  const generateDocId = useCallback(async (docTypeValue) => {
-    // Check for both editData.id AND editId
-    if (editData?.id || editId) {
-      return;
-    }
-
-    if (isGeneratingDocId) return;
-    if (lastGeneratedDocTypeRef.current === docTypeValue) return;
-
-    if (!docTypeValue) return;
-
-    let apiDocType = "";
-    if (docTypeValue === DOC_TYPE_INVOICE) {
-      apiDocType = "Invoice";
-    } else if (docTypeValue === DOC_TYPE_REJECTION) {
-      apiDocType = "Rejection";
-    } else if (docTypeValue === DOC_TYPE_OTHER_SALES) {
-      apiDocType = "Other Sales Invoice";
-    } else {
-      return;
-    }
-
-    setIsGeneratingDocId(true);
-    lastGeneratedDocTypeRef.current = docTypeValue;
-
-    try {
-      const financialYear = new Date().getFullYear().toString();
-      const response = await salesInvoiceAPI.getSalesRejectionInvoiceDocId(
-        ORG_ID,
-        apiDocType,
-        financialYear
-      );
-
-      if (response?.status && response?.paramObjectsMap?.invoiceDocId) {
-        const docId = response.paramObjectsMap.invoiceDocId;
-
-        if (docTypeValue === DOC_TYPE_INVOICE) {
-          setValue("invoiceHeader.salesInvoiceNo", docId);
-        } else if (docTypeValue === DOC_TYPE_REJECTION) {
-          setValue("rejectionHeader.rejectionInvoiceNo", docId);
-        } else if (docTypeValue === DOC_TYPE_OTHER_SALES) {
-          setValue("otherSalesHeader.salesInvoiceNo", docId);
-        }
-
-        addToast(`Document ID generated: ${docId}`, "success");
-      } else {
-        const errorMsg = response?.paramObjectsMap?.message || "Failed to generate document ID";
-        addToast(errorMsg, "error");
+  const generateDocId = useCallback(
+    async (docTypeValue) => {
+      if (editData?.id || editId) {
+        return;
       }
-    } catch (error) {
-      console.error("❌ Error generating document ID:", error);
-    } finally {
-      setIsGeneratingDocId(false);
-    }
-  }, [ORG_ID, editData, editId, setValue, addToast, isGeneratingDocId]);
 
-  const fetchDespatchInstructions = useCallback(async (customerId) => {
-    if (!customerId || !docType) {
-      setDispatchOptions([]);
-      setDispatchNoDetails([]);
-      return;
-    }
+      if (isGeneratingDocId) return;
+      if (lastGeneratedDocTypeRef.current === docTypeValue) return;
 
-    if (loadingDispatch) return;
-    if (lastFetchedCustomerRef.current === customerId && docType === lastFetchedDocTypeRef.current) return;
+      if (!docTypeValue) return;
 
-    setLoadingDispatch(true);
-    lastFetchedCustomerRef.current = customerId;
-    lastFetchedDocTypeRef.current = docType;
-
-    try {
       let apiDocType = "";
-      if (docType === DOC_TYPE_INVOICE) {
+      if (docTypeValue === DOC_TYPE_INVOICE) {
         apiDocType = "Invoice";
-      } else if (docType === DOC_TYPE_REJECTION) {
+      } else if (docTypeValue === DOC_TYPE_REJECTION) {
         apiDocType = "Rejection";
-      } else if (docType === DOC_TYPE_OTHER_SALES) {
+      } else if (docTypeValue === DOC_TYPE_OTHER_SALES) {
         apiDocType = "Other Sales Invoice";
       } else {
         return;
       }
 
-      const response = await salesInvoiceAPI.getDespatchInstructionDetails(
-        ORG_ID,
-        BRANCH_ID,
-        customerId,
-        apiDocType
-      );
+      setIsGeneratingDocId(true);
+      lastGeneratedDocTypeRef.current = docTypeValue;
 
-      if (response?.status && response?.paramObjectsMap?.despatchInstructions) {
-        const instructions = response.paramObjectsMap.despatchInstructions;
-        setDispatchNoDetails(instructions);
+      try {
+        const financialYear = new Date().getFullYear().toString();
+        const response = await salesInvoiceAPI.getSalesRejectionInvoiceDocId(
+          ORG_ID,
+          apiDocType,
+          financialYear,
+        );
 
-        const options = instructions.map((item, index) => ({
-          value: item.despatchInstructionNo || item.id || index,
-          label: item.despatchInstructionNo || "Unknown",
-          data: item,
-        }));
-        setDispatchOptions(options);
+        if (response?.status && response?.paramObjectsMap?.invoiceDocId) {
+          const docId = response.paramObjectsMap.invoiceDocId;
 
-        addToast(`Loaded ${options.length} despatch instruction(s)`, "success");
-      } else {
+          if (docTypeValue === DOC_TYPE_INVOICE) {
+            setValue("invoiceHeader.salesInvoiceNo", docId);
+          } else if (docTypeValue === DOC_TYPE_REJECTION) {
+            setValue("rejectionHeader.rejectionInvoiceNo", docId);
+          } else if (docTypeValue === DOC_TYPE_OTHER_SALES) {
+            setValue("otherSalesHeader.salesInvoiceNo", docId);
+          }
+
+          addToast(`Document ID generated: ${docId}`, "success");
+        } else {
+          const errorMsg = response?.paramObjectsMap?.message || "Failed to generate document ID";
+          addToast(errorMsg, "error");
+        }
+      } catch (error) {
+        console.error("❌ Error generating document ID:", error);
+      } finally {
+        setIsGeneratingDocId(false);
+      }
+    },
+    [ORG_ID, editData, editId, setValue, addToast, isGeneratingDocId],
+  );
+
+  const fetchDespatchInstructions = useCallback(
+    async (customerId) => {
+      if (!customerId || !docType) {
         setDispatchOptions([]);
         setDispatchNoDetails([]);
-        const errorMsg = response?.paramObjectsMap?.message || "No despatch instructions found";
-        addToast(errorMsg, "info");
+        return;
       }
-    } catch (error) {
-      console.error("❌ Error fetching despatch instructions:", error);
-      setDispatchOptions([]);
-      setDispatchNoDetails([]);
-    } finally {
-      setLoadingDispatch(false);
-    }
-  }, [ORG_ID, BRANCH_ID, docType, addToast, loadingDispatch]);
+
+      if (loadingDispatch) return;
+      if (lastFetchedCustomerRef.current === customerId && docType === lastFetchedDocTypeRef.current) return;
+
+      setLoadingDispatch(true);
+      lastFetchedCustomerRef.current = customerId;
+      lastFetchedDocTypeRef.current = docType;
+
+      try {
+        let apiDocType = "";
+        if (docType === DOC_TYPE_INVOICE) {
+          apiDocType = "Invoice";
+        } else if (docType === DOC_TYPE_REJECTION) {
+          apiDocType = "Rejection";
+        } else if (docType === DOC_TYPE_OTHER_SALES) {
+          apiDocType = "Other Sales Invoice";
+        } else {
+          return;
+        }
+
+        const response = await salesInvoiceAPI.getDespatchInstructionDetails(
+          ORG_ID,
+          BRANCH_ID,
+          customerId,
+          apiDocType,
+        );
+
+        if (response?.status && response?.paramObjectsMap?.despatchInstructions) {
+          const instructions = response.paramObjectsMap.despatchInstructions;
+          setDispatchNoDetails(instructions);
+
+          const options = instructions.map((item, index) => ({
+            value: item.despatchInstructionNo || item.id || index,
+            label: item.despatchInstructionNo || "Unknown",
+            data: item,
+          }));
+          setDispatchOptions(options);
+
+          addToast(`Loaded ${options.length} despatch instruction(s)`, "success");
+        } else {
+          setDispatchOptions([]);
+          setDispatchNoDetails([]);
+          const errorMsg = response?.paramObjectsMap?.message || "No despatch instructions found";
+          addToast(errorMsg, "info");
+        }
+      } catch (error) {
+        console.error("❌ Error fetching despatch instructions:", error);
+        setDispatchOptions([]);
+        setDispatchNoDetails([]);
+      } finally {
+        setLoadingDispatch(false);
+      }
+    },
+    [ORG_ID, BRANCH_ID, docType, addToast, loadingDispatch],
+  );
 
   const loadBranches = useCallback(async () => {
     setLoadingPlants(true);
@@ -1274,7 +1267,6 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
     setLoadingItems(true);
     try {
       const response = await salesInvoiceAPI.getItemMasterDetails(ORG_ID, BRANCH_ID);
-      console.log("📦 General Items Response:", response);
 
       if (response?.status && response?.paramObjectsMap?.itemMasterVO) {
         const items = response.paramObjectsMap.itemMasterVO;
@@ -1285,15 +1277,13 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
           itemMap[code] = item;
           return {
             value: code,
-            label: item.itemCode || item.itemDescription || "Unknown"
+            label: item.itemCode || item.itemDescription || "Unknown",
           };
         });
 
         setItemCodeOptions(options);
         setItemDataMap(itemMap);
         setGeneralItemsLoaded(true);
-
-        console.log("✅ General Items loaded:", options);
       } else {
         const errorMsg = response?.paramObjectsMap?.message || "Failed to load items";
         addToast(errorMsg, "error");
@@ -1306,205 +1296,206 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
     }
   }, [ORG_ID, BRANCH_ID, addToast, loadingItems, generalItemsLoaded]);
 
-  const fetchMonthYear = useCallback(async (schNo) => {
-    if (!schNo || !docType) {
-      return;
-    }
-
-    if (loadingMonthYear) return;
-    if (lastFetchedSchNoRef.current === schNo) return;
-
-    setLoadingMonthYear(true);
-    lastFetchedSchNoRef.current = schNo;
-
-    try {
-      if (docType !== DOC_TYPE_INVOICE && docType !== DOC_TYPE_REJECTION) {
-        setLoadingMonthYear(false);
+  const fetchMonthYear = useCallback(
+    async (schNo) => {
+      if (!schNo || !docType) {
         return;
       }
 
-      const response = await salesInvoiceAPI.getMonthYearForSalesRejectionInv(
-        ORG_ID,
-        BRANCH_ID,
-        schNo
-      );
+      if (loadingMonthYear) return;
+      if (lastFetchedSchNoRef.current === schNo) return;
 
-      if (response?.status && response?.paramObjectsMap?.monthYearDetails) {
-        const monthYearDetails = response.paramObjectsMap.monthYearDetails;
+      setLoadingMonthYear(true);
+      lastFetchedSchNoRef.current = schNo;
 
-        if (monthYearDetails.length > 0) {
-          let monthYear = monthYearDetails[0].monthYear || "";
-
-          if (monthYear && monthYear.includes('-')) {
-            const parts = monthYear.split('-');
-            if (parts.length === 2) {
-              const month = parts[0].padStart(2, '0');
-              const year = parts[1];
-              monthYear = `${year}-${month}`;
-            }
-          }
-
-          const headerNames = ["invoiceHeader", "rejectionHeader"];
-          headerNames.forEach((headerName) => {
-            setValue(`${headerName}.monthYear`, monthYear);
-          });
-
-          addToast(`Month/Year loaded: ${monthYear}`, "success");
-        } else {
-          addToast("No month/year data found", "info");
+      try {
+        if (docType !== DOC_TYPE_INVOICE && docType !== DOC_TYPE_REJECTION) {
+          setLoadingMonthYear(false);
+          return;
         }
-      } else {
-        const errorMsg = response?.paramObjectsMap?.message || "Failed to fetch month/year";
-        addToast(errorMsg, "error");
-      }
-    } catch (error) {
-      console.error("❌ Error fetching month/year:", error);
-    } finally {
-      setLoadingMonthYear(false);
-    }
-  }, [ORG_ID, BRANCH_ID, docType, setValue, addToast, loadingMonthYear]);
 
-  const fetchItemDetails = useCallback(async (diNo) => {
-    if (!diNo || !docType) {
-      // If no DI.No, load general items
-      await loadItems();
-      return;
-    }
+        const response = await salesInvoiceAPI.getMonthYearForSalesRejectionInv(
+          ORG_ID,
+          BRANCH_ID,
+          schNo,
+        );
 
-    if (loadingItems) return;
-    if (lastFetchedDINoRef.current === diNo) return;
+        if (response?.status && response?.paramObjectsMap?.monthYearDetails) {
+          const monthYearDetails = response.paramObjectsMap.monthYearDetails;
 
-    setLoadingItems(true);
-    lastFetchedDINoRef.current = diNo;
+          if (monthYearDetails.length > 0) {
+            let monthYear = monthYearDetails[0].monthYear || "";
 
-    try {
-      const response = await salesInvoiceAPI.getItemDetailsForSalesRejectionInvoice(
-        ORG_ID,
-        BRANCH_ID,
-        diNo
-      );
-
-      console.log("📦 DI Item Details Response:", response);
-
-      if (response?.status && response?.paramObjectsMap?.itemDetails) {
-        const items = response.paramObjectsMap.itemDetails;
-
-        const itemMap = {};
-        const options = items.map((item) => {
-          const code = item.itemCode || item.itemId;
-          itemMap[code] = item;
-          return {
-            value: code,
-            label: item.itemCode || item.itemDescription || "Unknown"
-          };
-        });
-
-        setItemCodeOptions(options);
-        setItemDataMap(itemMap);
-        setGeneralItemsLoaded(false); // Reset flag since we're using DI-specific items
-
-        if (items.length > 0) {
-          let itemsArrayName;
-          if (docType === DOC_TYPE_INVOICE) {
-            itemsArrayName = "invoiceItems";
-          } else if (docType === DOC_TYPE_OTHER_SALES) {
-            itemsArrayName = "otherSalesItems";
-          } else if (docType === DOC_TYPE_REJECTION) {
-            itemsArrayName = "rejectionItems";
-          } else {
-            return;
-          }
-
-          const isIGST = isIGSTAppl === "YES";
-
-          const mappedItems = items.map((item) => {
-            const qty = parseFloat(item.despatchQty) || 0;
-            const rate = parseFloat(item.newRate) || 0;
-            const amount = qty * rate;
-
-            let sgstRate = 0, cgstRate = 0, igstRate = 0;
-            let sgstAmount = 0, cgstAmount = 0, igstAmount = 0;
-
-            if (isIGST) {
-              igstRate = parseFloat(item.igst) || 0;
-              igstAmount = (amount * igstRate) / 100;
-            } else {
-              sgstRate = parseFloat(item.sgst) || 0;
-              cgstRate = parseFloat(item.cgst) || 0;
-              sgstAmount = (amount * sgstRate) / 100;
-              cgstAmount = (amount * cgstRate) / 100;
+            if (monthYear && monthYear.includes("-")) {
+              const parts = monthYear.split("-");
+              if (parts.length === 2) {
+                const month = parts[0].padStart(2, "0");
+                const year = parts[1];
+                monthYear = `${year}-${month}`;
+              }
             }
 
+            const headerNames = ["invoiceHeader", "rejectionHeader"];
+            headerNames.forEach((headerName) => {
+              setValue(`${headerName}.monthYear`, monthYear);
+            });
+
+            addToast(`Month/Year loaded: ${monthYear}`, "success");
+          } else {
+            addToast("No month/year data found", "info");
+          }
+        } else {
+          const errorMsg = response?.paramObjectsMap?.message || "Failed to fetch month/year";
+          addToast(errorMsg, "error");
+        }
+      } catch (error) {
+        console.error("❌ Error fetching month/year:", error);
+      } finally {
+        setLoadingMonthYear(false);
+      }
+    },
+    [ORG_ID, BRANCH_ID, docType, setValue, addToast, loadingMonthYear],
+  );
+
+  const fetchItemDetails = useCallback(
+    async (diNo) => {
+      if (!diNo || !docType) {
+        await loadItems();
+        return;
+      }
+
+      if (loadingItems) return;
+      if (lastFetchedDINoRef.current === diNo) return;
+
+      setLoadingItems(true);
+      lastFetchedDINoRef.current = diNo;
+
+      try {
+        const response = await salesInvoiceAPI.getItemDetailsForSalesRejectionInvoice(
+          ORG_ID,
+          BRANCH_ID,
+          diNo,
+        );
+
+        if (response?.status && response?.paramObjectsMap?.itemDetails) {
+          const items = response.paramObjectsMap.itemDetails;
+
+          const itemMap = {};
+          const options = items.map((item) => {
+            const code = item.itemCode || item.itemId;
+            itemMap[code] = item;
             return {
-              itemCode: item.itemCode || "",
-              itemDescription: item.itemDescription || "",
-              hsnSacCode: item.hsn || "",
-              taxType: isIGST ? "IGST" : "SGST+CGST",
-              taxPercent: isIGST ? igstRate : sgstRate,
-              customerPartNo: item.customerPartNo || "",
-              unit: item.unitId || item.unitMasterId || "",
-              lastInvoicedDate: "",
-              tariffNo: "",
-              stock: "",
-              soContractNo: item.salesOrderContractNo || "",
-              despQty: item.despatchQty || "",
-              noOfPackages: "",
-              packageType: "",
-              rateInSelectedCurr: item.newRate || "",
-              amtInSelectedCurrency: amount || "",
-              amountInRs: amount || "",
-              sgstRate: sgstRate,
-              sgstAmount: sgstAmount,
-              cgstRate: cgstRate,
-              cgstAmount: cgstAmount,
-              igstRate: igstRate,
-              igstAmount: igstAmount,
-              edPercent: "",
+              value: code,
+              label: item.itemCode || item.itemDescription || "Unknown",
             };
           });
 
-          setValue(itemsArrayName, mappedItems);
+          setItemCodeOptions(options);
+          setItemDataMap(itemMap);
+          setGeneralItemsLoaded(false);
 
-          setTimeout(() => {
-            calculateTaxDetails();
-          }, 100);
+          if (items.length > 0) {
+            let itemsArrayName;
+            if (docType === DOC_TYPE_INVOICE) {
+              itemsArrayName = "invoiceItems";
+            } else if (docType === DOC_TYPE_OTHER_SALES) {
+              itemsArrayName = "otherSalesItems";
+            } else if (docType === DOC_TYPE_REJECTION) {
+              itemsArrayName = "rejectionItems";
+            } else {
+              return;
+            }
 
-          addToast(`Loaded ${mappedItems.length} item(s) for DI: ${diNo}`, "success");
-        } else {
-          let itemsArrayName;
-          if (docType === DOC_TYPE_INVOICE) {
-            itemsArrayName = "invoiceItems";
-          } else if (docType === DOC_TYPE_OTHER_SALES) {
-            itemsArrayName = "otherSalesItems";
-          } else if (docType === DOC_TYPE_REJECTION) {
-            itemsArrayName = "rejectionItems";
+            const isIGST = isIGSTAppl === "YES";
+
+            const mappedItems = items.map((item) => {
+              const qty = parseFloat(item.despatchQty) || 0;
+              const rate = parseFloat(item.newRate) || 0;
+              const amount = qty * rate;
+
+              let sgstRate = 0,
+                cgstRate = 0,
+                igstRate = 0;
+              let sgstAmount = 0,
+                cgstAmount = 0,
+                igstAmount = 0;
+
+              if (isIGST) {
+                igstRate = parseFloat(item.igst) || 0;
+                igstAmount = (amount * igstRate) / 100;
+              } else {
+                sgstRate = parseFloat(item.sgst) || 0;
+                cgstRate = parseFloat(item.cgst) || 0;
+                sgstAmount = (amount * sgstRate) / 100;
+                cgstAmount = (amount * cgstRate) / 100;
+              }
+
+              return {
+                itemCode: item.itemCode || "",
+                itemDescription: item.itemDescription || "",
+                hsnSacCode: item.hsn || "",
+                taxType: isIGST ? "IGST" : "SGST+CGST",
+                taxPercent: isIGST ? igstRate : sgstRate,
+                customerPartNo: item.customerPartNo || "",
+                unit: item.unitId || item.unitMasterId || "",
+                lastInvoicedDate: "",
+                tariffNo: "",
+                stock: "",
+                soContractNo: item.salesOrderContractNo || "",
+                despQty: item.despatchQty || "",
+                noOfPackages: "",
+                packageType: "",
+                rateInSelectedCurr: item.newRate || "",
+                amtInSelectedCurrency: amount || "",
+                amountInRs: amount || "",
+                sgstRate: sgstRate,
+                sgstAmount: sgstAmount,
+                cgstRate: cgstRate,
+                cgstAmount: cgstAmount,
+                igstRate: igstRate,
+                igstAmount: igstAmount,
+                edPercent: "",
+              };
+            });
+
+            setValue(itemsArrayName, mappedItems);
+
+            setTimeout(() => {
+              calculateTaxDetails();
+            }, 100);
+
+            addToast(`Loaded ${mappedItems.length} item(s) for DI: ${diNo}`, "success");
           } else {
-            return;
+            let itemsArrayName;
+            if (docType === DOC_TYPE_INVOICE) {
+              itemsArrayName = "invoiceItems";
+            } else if (docType === DOC_TYPE_OTHER_SALES) {
+              itemsArrayName = "otherSalesItems";
+            } else if (docType === DOC_TYPE_REJECTION) {
+              itemsArrayName = "rejectionItems";
+            } else {
+              return;
+            }
+            setValue(itemsArrayName, []);
+            setItemCodeOptions([]);
+            setItemDataMap({});
+            addToast("No items found for this dispatch instruction", "info");
+            await loadItems();
           }
-          setValue(itemsArrayName, []);
-          setItemCodeOptions([]);
-          setItemDataMap({});
-          addToast("No items found for this dispatch instruction", "info");
-
-          // Fallback to general items if DI items not found
+        } else {
+          const errorMsg = response?.paramObjectsMap?.message || "Failed to fetch item details";
+          addToast(errorMsg, "error");
           await loadItems();
         }
-      } else {
-        const errorMsg = response?.paramObjectsMap?.message || "Failed to fetch item details";
-        addToast(errorMsg, "error");
-        // Fallback to general items on error
+      } catch (error) {
+        console.error("❌ Error fetching item details:", error);
         await loadItems();
+      } finally {
+        setLoadingItems(false);
       }
-    } catch (error) {
-      console.error("❌ Error fetching item details:", error);
-      // Fallback to general items on error
-      await loadItems();
-    } finally {
-      setLoadingItems(false);
-    }
-  }, [ORG_ID, BRANCH_ID, docType, setValue, addToast, loadingItems, isIGSTAppl, loadItems]);
-
-  // Add this after your API call functions
+    },
+    [ORG_ID, BRANCH_ID, docType, setValue, addToast, loadingItems, isIGSTAppl, loadItems],
+  );
 
   const loadEditData = useCallback(async () => {
     if (!editId) return;
@@ -1514,21 +1505,15 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
     try {
       const response = await salesInvoiceAPI.getSalesInvoiceById(editId);
 
-      console.log("📥 Edit Data Response:", response);
-
       if (response?.status && response?.paramObjectsMap?.salesRejectionInvoice) {
         const data = response.paramObjectsMap.salesRejectionInvoice;
 
-        // Map the API response to form structure
         const mappedData = mapApiDataToForm(data);
-
-        // Reset the form with mapped data
         reset(mappedData);
         isDataLoadedRef.current = true;
 
         addToast("Invoice data loaded successfully", "success");
 
-        // If there are items, populate the item data map
         const items = getItemsFromData(data);
         if (items.length > 0) {
           const map = {};
@@ -1550,7 +1535,7 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
             };
             return {
               value: code,
-              label: code || item.itemDescription || "Unknown"
+              label: code || item.itemDescription || "Unknown",
             };
           });
           setItemCodeOptions(options);
@@ -1558,7 +1543,6 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
           setGeneralItemsLoaded(true);
         }
 
-        // Set customer details if available
         if (data.customer) {
           const customer = {
             value: data.customer.customerId,
@@ -1574,13 +1558,11 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
           };
           setCustomerDetails(customer);
 
-          // Fetch dispatch instructions for this customer
           if (data.customer.customerId) {
             await fetchDespatchInstructions(data.customer.customerId);
           }
         }
 
-        // Set dispatch options if dispatch instruction exists
         if (data.dispatchInstructionNo) {
           const dispatchOpt = {
             value: data.dispatchInstructionNo,
@@ -1590,16 +1572,14 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
               despatchInstructionDate: data.dispatchInstructionDate,
               scheduleNo: data.scheduleNo,
               scheduleDate: data.scheduleDate,
-            }
+            },
           };
           setDispatchOptions([dispatchOpt]);
         }
 
-        // Calculate tax details after data is loaded
         setTimeout(() => {
           calculateTaxDetails();
         }, 300);
-
       } else {
         const errorMsg = response?.paramObjectsMap?.message || "Failed to load invoice data";
         addToast(errorMsg, "error");
@@ -1612,258 +1592,245 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
     }
   }, [editId, reset, addToast, fetchDespatchInstructions, calculateTaxDetails]);
 
-  /* -------------------------------------------------------------------------- */
-  /* Customer Selection Handler                                                 */
-  /* -------------------------------------------------------------------------- */
+  const handleCustomerChange = useCallback(
+    async (customerId) => {
+      if (isFetchingCustomerRef.current) return;
+      if (lastSelectedCustomerRef.current === customerId) return;
 
-  const handleCustomerChange = useCallback(async (customerId) => {
-    if (isFetchingCustomerRef.current) return;
-    if (lastSelectedCustomerRef.current === customerId) return;
-
-    if (!customerId) {
-      setCustomerDetails(null);
-      setGeneralItemsLoaded(false);
-      lastSelectedCustomerRef.current = null;
-      const headerNames = ["invoiceHeader", "otherSalesHeader", "rejectionHeader"];
-      headerNames.forEach((headerName) => {
-        setValue(`${headerName}.customerId`, "");
-        setValue(`${headerName}.customerName`, "");
-        setValue(`${headerName}.customerCode`, "");
-        setValue(`${headerName}.gstnNo`, "");
-        setValue(`${headerName}.partyGstState`, "");
-        setValue(`${headerName}.isIGSTAppl`, "NO");
-        setValue(`${headerName}.customerType`, "");
-        setValue(`${headerName}.currency`, "");
-        setValue(`${headerName}.currencyId`, ""); // Clear currency ID
-        setValue(`${headerName}.exchangeRate`, "");
-        setValue(`${headerName}.diNo`, "");
-        setValue(`${headerName}.diDate`, "");
-        setValue(`${headerName}.schNo`, "");
-        setValue(`${headerName}.schDate`, "");
-        if (docType === DOC_TYPE_INVOICE || docType === DOC_TYPE_REJECTION || docType === DOC_TYPE_OTHER_SALES) {
-          setValue(`${headerName}.monthYear`, "");
+      if (!customerId) {
+        setCustomerDetails(null);
+        setGeneralItemsLoaded(false);
+        lastSelectedCustomerRef.current = null;
+        const headerNames = ["invoiceHeader", "otherSalesHeader", "rejectionHeader"];
+        headerNames.forEach((headerName) => {
+          setValue(`${headerName}.customerId`, "");
+          setValue(`${headerName}.customerName`, "");
+          setValue(`${headerName}.customerCode`, "");
+          setValue(`${headerName}.gstnNo`, "");
+          setValue(`${headerName}.partyGstState`, "");
+          setValue(`${headerName}.isIGSTAppl`, "NO");
+          setValue(`${headerName}.customerType`, "");
+          setValue(`${headerName}.currency`, "");
+          setValue(`${headerName}.currencyId`, "");
+          setValue(`${headerName}.exchangeRate`, "");
+          setValue(`${headerName}.diNo`, "");
+          setValue(`${headerName}.diDate`, "");
+          setValue(`${headerName}.schNo`, "");
+          setValue(`${headerName}.schDate`, "");
+          if (docType === DOC_TYPE_INVOICE || docType === DOC_TYPE_REJECTION || docType === DOC_TYPE_OTHER_SALES) {
+            setValue(`${headerName}.monthYear`, "");
+          }
+        });
+        setValue("invoiceShipping.customerId", "");
+        setValue("invoiceShipping.customerName", "");
+        setValue("invoiceShipping.customerCode", "");
+        setValue("invoiceShipping.gstNo", "");
+        setValue("invoiceShipping.address", "");
+        setValue("invoiceShipping.city", "");
+        setValue("invoiceShipping.partyGstState", "");
+        setValue("invoiceShipping.pincode", "");
+        setDispatchOptions([]);
+        setDispatchNoDetails([]);
+        setItemCodeOptions([]);
+        setItemDataMap({});
+        if (docType === DOC_TYPE_INVOICE) {
+          invoiceItemsArray.replace([]);
+        } else if (docType === DOC_TYPE_OTHER_SALES) {
+          otherSalesItemsArray.replace([]);
+        } else if (docType === DOC_TYPE_REJECTION) {
+          rejectionItemsArray.replace([]);
         }
-      });
-      setValue("invoiceShipping.customerId", "");
-      setValue("invoiceShipping.customerName", "");
-      setValue("invoiceShipping.customerCode", "");
-      setValue("invoiceShipping.gstNo", "");
-      setValue("invoiceShipping.address", "");
-      setValue("invoiceShipping.city", "");
-      setValue("invoiceShipping.partyGstState", "");
-      setValue("invoiceShipping.pincode", "");
-      setDispatchOptions([]);
-      setDispatchNoDetails([]);
-      setItemCodeOptions([]);
-      setItemDataMap({});
-      if (docType === DOC_TYPE_INVOICE) {
-        invoiceItemsArray.replace([]);
-      } else if (docType === DOC_TYPE_OTHER_SALES) {
-        otherSalesItemsArray.replace([]);
-      } else if (docType === DOC_TYPE_REJECTION) {
-        rejectionItemsArray.replace([]);
+        return;
       }
-      return;
-    }
 
-    isFetchingCustomerRef.current = true;
-    lastSelectedCustomerRef.current = customerId;
+      isFetchingCustomerRef.current = true;
+      lastSelectedCustomerRef.current = customerId;
 
-    try {
-      const selectedCustomer = customerOptions.find(
-        (c) => String(c.value) === String(customerId)
-      );
+      try {
+        const selectedCustomer = customerOptions.find((c) => String(c.value) === String(customerId));
 
-      if (selectedCustomer) {
-        setCustomerDetails(selectedCustomer);
+        if (selectedCustomer) {
+          setCustomerDetails(selectedCustomer);
+
+          const headerNames = ["invoiceHeader", "otherSalesHeader", "rejectionHeader"];
+          headerNames.forEach((headerName) => {
+            setValue(`${headerName}.customerId`, selectedCustomer.value);
+            setValue(`${headerName}.customerName`, selectedCustomer.customerName || "");
+            setValue(`${headerName}.customerCode`, selectedCustomer.customerCode || "");
+            setValue(`${headerName}.gstnNo`, selectedCustomer.gstNo || "");
+            setValue(`${headerName}.partyGstState`, selectedCustomer.partyGstState || "");
+            setValue(`${headerName}.isIGSTAppl`, selectedCustomer.isIGSTApplicable || "NO");
+            setValue(`${headerName}.customerType`, selectedCustomer.customerType || "");
+          });
+
+          setValue("invoiceShipping.customerId", selectedCustomer.value);
+          setValue("invoiceShipping.customerName", selectedCustomer.customerName || "");
+          setValue("invoiceShipping.customerCode", selectedCustomer.customerCode || "");
+          setValue("invoiceShipping.gstNo", selectedCustomer.gstNo || "");
+          setValue("invoiceShipping.address", selectedCustomer.address || "");
+          setValue("invoiceShipping.city", selectedCustomer.city || "");
+          setValue("invoiceShipping.partyGstState", selectedCustomer.partyGstState || "");
+          setValue("invoiceShipping.pincode", selectedCustomer.pincode || "");
+
+          try {
+            const currencyResponse = await salesInvoiceAPI.getCurrencyDetails(ORG_ID, BRANCH_ID, customerId);
+
+            if (currencyResponse?.status && currencyResponse?.paramObjectsMap?.currencyDetails) {
+              const currencyData = currencyResponse.paramObjectsMap.currencyDetails[0];
+              headerNames.forEach((headerName) => {
+                setValue(`${headerName}.currency`, currencyData.currency || "RS");
+                setValue(`${headerName}.currencyId`, currencyData.currencyId || 0);
+                setValue(`${headerName}.exchangeRate`, currencyData.exchangeRate || "");
+              });
+              addToast("Currency details loaded successfully", "success");
+            }
+          } catch (currencyError) {
+            console.error("Error fetching currency details:", currencyError);
+          }
+
+          await fetchDespatchInstructions(customerId);
+
+          addToast("Customer details loaded successfully", "success");
+        } else {
+          addToast("Customer not found", "error");
+        }
+      } catch (error) {
+        console.error("Error selecting customer:", error);
+        addToast("Failed to load customer details", "error");
+      } finally {
+        isFetchingCustomerRef.current = false;
+      }
+    },
+    [customerOptions, setValue, addToast, ORG_ID, BRANCH_ID, fetchDespatchInstructions, docType],
+  );
+
+  const handleDispatchChange = useCallback(
+    (selectedValue) => {
+      if (!selectedValue) {
+        const headerNames = ["invoiceHeader", "otherSalesHeader", "rejectionHeader"];
+        headerNames.forEach((headerName) => {
+          setValue(`${headerName}.diNo`, "");
+          setValue(`${headerName}.diDate`, "");
+          setValue(`${headerName}.schNo`, "");
+          setValue(`${headerName}.schDate`, "");
+          if (docType === DOC_TYPE_INVOICE || docType === DOC_TYPE_REJECTION) {
+            setValue(`${headerName}.monthYear`, "");
+          }
+        });
+        loadItems();
+        return;
+      }
+
+      const selected = dispatchOptions.find((opt) => String(opt.value) === String(selectedValue));
+      if (selected && selected.data) {
+        const data = selected.data;
 
         const headerNames = ["invoiceHeader", "otherSalesHeader", "rejectionHeader"];
         headerNames.forEach((headerName) => {
-          setValue(`${headerName}.customerId`, selectedCustomer.value);
-          setValue(`${headerName}.customerName`, selectedCustomer.customerName || "");
-          setValue(`${headerName}.customerCode`, selectedCustomer.customerCode || "");
-          setValue(`${headerName}.gstnNo`, selectedCustomer.gstNo || "");
-          setValue(`${headerName}.partyGstState`, selectedCustomer.partyGstState || "");
-          setValue(`${headerName}.isIGSTAppl`, selectedCustomer.isIGSTApplicable || "NO");
-          setValue(`${headerName}.customerType`, selectedCustomer.customerType || "");
+          setValue(`${headerName}.diNo`, data.despatchInstructionNo || "");
+          setValue(`${headerName}.diDate`, data.despatchInstructionDate || "");
+          setValue(`${headerName}.schNo`, data.scheduleNo || "");
+          setValue(`${headerName}.schDate`, data.scheduleDate || "");
         });
 
-        setValue("invoiceShipping.customerId", selectedCustomer.value);
-        setValue("invoiceShipping.customerName", selectedCustomer.customerName || "");
-        setValue("invoiceShipping.customerCode", selectedCustomer.customerCode || "");
-        setValue("invoiceShipping.gstNo", selectedCustomer.gstNo || "");
-        setValue("invoiceShipping.address", selectedCustomer.address || "");
-        setValue("invoiceShipping.city", selectedCustomer.city || "");
-        setValue("invoiceShipping.partyGstState", selectedCustomer.partyGstState || "");
-        setValue("invoiceShipping.pincode", selectedCustomer.pincode || "");
-
-        try {
-          const currencyResponse = await salesInvoiceAPI.getCurrencyDetails(ORG_ID, BRANCH_ID, customerId);
-          console.log("Currency Details Response:", currencyResponse);
-
-          if (currencyResponse?.status && currencyResponse?.paramObjectsMap?.currencyDetails) {
-            const currencyData = currencyResponse.paramObjectsMap.currencyDetails[0];
-            headerNames.forEach((headerName) => {
-              // Store both the currency code and the currency ID
-              setValue(`${headerName}.currency`, currencyData.currency || "RS");
-              setValue(`${headerName}.currencyId`, currencyData.currencyId || 0); // Store the ID
-              setValue(`${headerName}.exchangeRate`, currencyData.exchangeRate || "");
-            });
-            addToast("Currency details loaded successfully", "success");
-          }
-        } catch (currencyError) {
-          console.error("Error fetching currency details:", currencyError);
+        if (data.scheduleNo) {
+          fetchMonthYear(data.scheduleNo);
         }
 
-        await fetchDespatchInstructions(customerId);
-
-        addToast("Customer details loaded successfully", "success");
-      } else {
-        addToast("Customer not found", "error");
-      }
-    } catch (error) {
-      console.error("Error selecting customer:", error);
-      addToast("Failed to load customer details", "error");
-    } finally {
-      isFetchingCustomerRef.current = false;
-    }
-  }, [customerOptions, setValue, addToast, ORG_ID, BRANCH_ID, fetchDespatchInstructions, docType]);
-
-  const handleDispatchChange = useCallback((selectedValue) => {
-    if (!selectedValue) {
-      const headerNames = ["invoiceHeader", "otherSalesHeader", "rejectionHeader"];
-      headerNames.forEach((headerName) => {
-        setValue(`${headerName}.diNo`, "");
-        setValue(`${headerName}.diDate`, "");
-        setValue(`${headerName}.schNo`, "");
-        setValue(`${headerName}.schDate`, "");
-        if (docType === DOC_TYPE_INVOICE || docType === DOC_TYPE_REJECTION) {
-          setValue(`${headerName}.monthYear`, "");
+        if (data.despatchInstructionNo) {
+          fetchItemDetails(data.despatchInstructionNo);
+        } else {
+          loadItems();
         }
-      });
-      // Load general items when DI is cleared
-      loadItems();
-      return;
-    }
 
-    const selected = dispatchOptions.find(opt => String(opt.value) === String(selectedValue));
-    if (selected && selected.data) {
-      const data = selected.data;
+        addToast(`Loaded despatch instruction: ${data.despatchInstructionNo}`, "success");
+      }
+    },
+    [dispatchOptions, setValue, addToast, docType, fetchMonthYear, fetchItemDetails, loadItems],
+  );
 
-      const headerNames = ["invoiceHeader", "otherSalesHeader", "rejectionHeader"];
-      headerNames.forEach((headerName) => {
-        setValue(`${headerName}.diNo`, data.despatchInstructionNo || "");
-        setValue(`${headerName}.diDate`, data.despatchInstructionDate || "");
-        setValue(`${headerName}.schNo`, data.scheduleNo || "");
-        setValue(`${headerName}.schDate`, data.scheduleDate || "");
-      });
-
-      if (data.scheduleNo) {
-        fetchMonthYear(data.scheduleNo);
+  const handleItemCodeChange = useCallback(
+    (selectedValue, rowIndex, fieldPath) => {
+      if (!selectedValue) {
+        return;
       }
 
-      // Fetch DI-specific items if DI.No exists
-      if (data.despatchInstructionNo) {
-        fetchItemDetails(data.despatchInstructionNo);
+      const itemData = itemDataMap[selectedValue];
+      if (!itemData) {
+        return;
+      }
+
+      let arrayName = "";
+      if (fieldPath.includes("invoiceItems")) {
+        arrayName = "invoiceItems";
+      } else if (fieldPath.includes("otherSalesItems")) {
+        arrayName = "otherSalesItems";
+      } else if (fieldPath.includes("rejectionItems")) {
+        arrayName = "rejectionItems";
+      }
+
+      if (!arrayName) {
+        return;
+      }
+
+      const isIGST = isIGSTAppl === "YES";
+
+      setValue(`${arrayName}.${rowIndex}.itemDescription`, itemData.itemDescription || "");
+      setValue(`${arrayName}.${rowIndex}.hsnSacCode`, itemData.hsn || "");
+      setValue(`${arrayName}.${rowIndex}.unit`, itemData.unitId || "");
+      setValue(`${arrayName}.${rowIndex}.soContractNo`, itemData.salesOrderContractNo || "");
+      setValue(`${arrayName}.${rowIndex}.despQty`, itemData.despatchQty || "");
+      setValue(`${arrayName}.${rowIndex}.rateInSelectedCurr`, itemData.newRate || "");
+
+      const qty = parseFloat(itemData.despatchQty) || 0;
+      const rate = parseFloat(itemData.newRate) || 0;
+      const amount = qty * rate;
+      setValue(`${arrayName}.${rowIndex}.amtInSelectedCurrency`, amount || "");
+      setValue(`${arrayName}.${rowIndex}.amountInRs`, amount || "");
+
+      if (isIGST) {
+        const igstRate = parseFloat(itemData.igst) || 0;
+        const igstAmount = (amount * igstRate) / 100;
+        setValue(`${arrayName}.${rowIndex}.igstRate`, igstRate);
+        setValue(`${arrayName}.${rowIndex}.igstAmount`, igstAmount || "");
+        setValue(`${arrayName}.${rowIndex}.sgstRate`, "");
+        setValue(`${arrayName}.${rowIndex}.sgstAmount`, "");
+        setValue(`${arrayName}.${rowIndex}.cgstRate`, "");
+        setValue(`${arrayName}.${rowIndex}.cgstAmount`, "");
       } else {
-        // Otherwise load general items
-        loadItems();
+        const sgstRate = parseFloat(itemData.sgst) || 0;
+        const cgstRate = parseFloat(itemData.cgst) || 0;
+        const sgstAmount = (amount * sgstRate) / 100;
+        const cgstAmount = (amount * cgstRate) / 100;
+        setValue(`${arrayName}.${rowIndex}.sgstRate`, sgstRate);
+        setValue(`${arrayName}.${rowIndex}.sgstAmount`, sgstAmount || "");
+        setValue(`${arrayName}.${rowIndex}.cgstRate`, cgstRate);
+        setValue(`${arrayName}.${rowIndex}.cgstAmount`, cgstAmount || "");
+        setValue(`${arrayName}.${rowIndex}.igstRate`, "");
+        setValue(`${arrayName}.${rowIndex}.igstAmount`, "");
       }
 
-      addToast(`Loaded despatch instruction: ${data.despatchInstructionNo}`, "success");
-    }
-  }, [dispatchOptions, setValue, addToast, docType, fetchMonthYear, fetchItemDetails, loadItems]);
+      let taxType = "";
+      let taxPercent = 0;
+      if (isIGST) {
+        taxType = "IGST";
+        taxPercent = parseFloat(itemData.igst) || 0;
+      } else if (itemData.sgst > 0 && itemData.cgst > 0) {
+        taxType = "SGST+CGST";
+        taxPercent = parseFloat(itemData.sgst) || 0;
+      }
+      setValue(`${arrayName}.${rowIndex}.taxType`, taxType);
+      setValue(`${arrayName}.${rowIndex}.taxPercent`, taxPercent);
 
-  const handleItemCodeChange = useCallback((selectedValue, rowIndex, fieldPath) => {
-    if (!selectedValue) {
-      return;
-    }
+      setTimeout(() => {
+        calculateTaxDetails();
+      }, 100);
 
-    const itemData = itemDataMap[selectedValue];
-    if (!itemData) {
-      console.log("No item data found for:", selectedValue);
-      return;
-    }
+      addToast(`Item details loaded for: ${itemData.itemCode}`, "success");
+    },
+    [itemDataMap, setValue, addToast, isIGSTAppl, calculateTaxDetails],
+  );
 
-    let arrayName = "";
-    if (fieldPath.includes("invoiceItems")) {
-      arrayName = "invoiceItems";
-    } else if (fieldPath.includes("otherSalesItems")) {
-      arrayName = "otherSalesItems";
-    } else if (fieldPath.includes("rejectionItems")) {
-      arrayName = "rejectionItems";
-    }
-
-    if (!arrayName) {
-      return;
-    }
-
-    const isIGST = isIGSTAppl === "YES";
-
-    // Auto-fill fields
-    setValue(`${arrayName}.${rowIndex}.itemDescription`, itemData.itemDescription || "");
-    setValue(`${arrayName}.${rowIndex}.hsnSacCode`, itemData.hsn || "");
-    setValue(`${arrayName}.${rowIndex}.unit`, itemData.unitId || "");
-    setValue(`${arrayName}.${rowIndex}.soContractNo`, itemData.salesOrderContractNo || "");
-    setValue(`${arrayName}.${rowIndex}.despQty`, itemData.despatchQty || "");
-    setValue(`${arrayName}.${rowIndex}.rateInSelectedCurr`, itemData.newRate || "");
-
-    // Calculate amounts
-    const qty = parseFloat(itemData.despatchQty) || 0;
-    const rate = parseFloat(itemData.newRate) || 0;
-    const amount = qty * rate;
-    setValue(`${arrayName}.${rowIndex}.amtInSelectedCurrency`, amount || "");
-    setValue(`${arrayName}.${rowIndex}.amountInRs`, amount || "");
-
-    // Set tax rates based on IGST applicability
-    if (isIGST) {
-      const igstRate = parseFloat(itemData.igst) || 0;
-      const igstAmount = (amount * igstRate) / 100;
-      setValue(`${arrayName}.${rowIndex}.igstRate`, igstRate);
-      setValue(`${arrayName}.${rowIndex}.igstAmount`, igstAmount || "");
-      setValue(`${arrayName}.${rowIndex}.sgstRate`, "");
-      setValue(`${arrayName}.${rowIndex}.sgstAmount`, "");
-      setValue(`${arrayName}.${rowIndex}.cgstRate`, "");
-      setValue(`${arrayName}.${rowIndex}.cgstAmount`, "");
-    } else {
-      const sgstRate = parseFloat(itemData.sgst) || 0;
-      const cgstRate = parseFloat(itemData.cgst) || 0;
-      const sgstAmount = (amount * sgstRate) / 100;
-      const cgstAmount = (amount * cgstRate) / 100;
-      setValue(`${arrayName}.${rowIndex}.sgstRate`, sgstRate);
-      setValue(`${arrayName}.${rowIndex}.sgstAmount`, sgstAmount || "");
-      setValue(`${arrayName}.${rowIndex}.cgstRate`, cgstRate);
-      setValue(`${arrayName}.${rowIndex}.cgstAmount`, cgstAmount || "");
-      setValue(`${arrayName}.${rowIndex}.igstRate`, "");
-      setValue(`${arrayName}.${rowIndex}.igstAmount`, "");
-    }
-
-    // Determine tax type
-    let taxType = "";
-    let taxPercent = 0;
-    if (isIGST) {
-      taxType = "IGST";
-      taxPercent = parseFloat(itemData.igst) || 0;
-    } else if (itemData.sgst > 0 && itemData.cgst > 0) {
-      taxType = "SGST+CGST";
-      taxPercent = parseFloat(itemData.sgst) || 0;
-    }
-    setValue(`${arrayName}.${rowIndex}.taxType`, taxType);
-    setValue(`${arrayName}.${rowIndex}.taxPercent`, taxPercent);
-
-    // Recalculate tax details
-    setTimeout(() => {
-      calculateTaxDetails();
-    }, 100);
-
-    addToast(`Item details loaded for: ${itemData.itemCode}`, "success");
-  }, [itemDataMap, setValue, addToast, isIGSTAppl]);
-
-  /* -------------------------------------------------------------------------- */
-  /* Tax Details Calculation                                                    */
-  /* -------------------------------------------------------------------------- */
-
-  // Recalculate tax details when items change
   useEffect(() => {
     const subscription = watch((value, { name }) => {
       if (name && (name.includes("Items") || name.includes("igstAmount") || name.includes("sgstAmount") || name.includes("cgstAmount"))) {
@@ -1876,31 +1843,20 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
     return () => subscription.unsubscribe();
   }, [watch, calculateTaxDetails]);
 
-  /* -------------------------------------------------------------------------- */
-  /* Helper Functions                                                           */
-  /* -------------------------------------------------------------------------- */
-
-  // Add this after your existing helper functions
-
-  // Helper to extract items from API response
   const getItemsFromData = (data) => {
     return data.salesRejectionInvoiceDetails || [];
   };
 
-  // Helper to map API response to form structure
   const mapApiDataToForm = (data) => {
     const baseForm = getDefaultValues();
 
-    // Common fields
     baseForm.plant = data.branch?.id || "";
     baseForm.docType = data.docType || "Invoice";
 
-    // Determine document type
     const isInvoice = data.docType === DOC_TYPE_INVOICE;
     const isRejection = data.docType === DOC_TYPE_REJECTION;
     const isOtherSales = data.docType === DOC_TYPE_OTHER_SALES;
 
-    // Common header mapping
     const headerMapping = {
       locationId: data.location?.id || "",
       belongsTo: data.belongsTo || "",
@@ -1932,7 +1888,6 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
       supplierInvNo: data.supplierInvoiceNo || "",
     };
 
-    // Map header based on document type
     if (isInvoice) {
       baseForm.invoiceHeader = {
         ...baseForm.invoiceHeader,
@@ -1960,7 +1915,6 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
       };
     }
 
-    // Map items
     const items = data.salesRejectionInvoiceDetails || [];
     const mappedItems = items.map((item) => {
       const isIGST = data.igstAppl;
@@ -1991,7 +1945,6 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
       };
     });
 
-    // Assign items to the correct array
     if (isInvoice) {
       baseForm.invoiceItems = mappedItems.length > 0 ? mappedItems : baseForm.invoiceItems;
     } else if (isRejection) {
@@ -2000,7 +1953,6 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
       baseForm.otherSalesItems = mappedItems.length > 0 ? mappedItems : baseForm.otherSalesItems;
     }
 
-    // Map tax details
     const taxDetails = data.salesRejectionInvoiceTaxDetails || [];
     const mappedTaxDetails = taxDetails.map((tax) => ({
       particulars: tax.particulars?.description || tax.particulars || "",
@@ -2014,7 +1966,6 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
       isSystemRow: true,
     }));
 
-    // Assign tax details to the correct array
     if (isInvoice) {
       baseForm.invoiceTaxDetails = mappedTaxDetails.length > 0 ? mappedTaxDetails : baseForm.invoiceTaxDetails;
     } else if (isRejection) {
@@ -2023,7 +1974,6 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
       baseForm.otherSalesTaxDetails = mappedTaxDetails.length > 0 ? mappedTaxDetails : baseForm.otherSalesTaxDetails;
     }
 
-    // Map terms
     const termsMapping = {
       totalInsurance: data.totalInsurance || "",
       totalFreight: data.totalFreight || "",
@@ -2049,7 +1999,6 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
       baseForm.otherSalesTerms = { ...baseForm.otherSalesTerms, ...termsMapping };
     }
 
-    // Map shipping details (only for Invoice)
     if (isInvoice && data.customer) {
       baseForm.invoiceShipping = {
         customerId: data.customer.customerId || "",
@@ -2156,10 +2105,6 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
     return "";
   };
 
-  /* -------------------------------------------------------------------------- */
-  /* Handlers                                                                   */
-  /* -------------------------------------------------------------------------- */
-
   const handleAddRow = (arrayName) => {
     const config = getActiveTabConfig();
     if (!config) return;
@@ -2191,33 +2136,15 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
     }
   };
 
-  /* -------------------------------------------------------------------------- */
-  /* Validation                                                                 */
-  /* -------------------------------------------------------------------------- */
-
-  const validate = (data) => {
-    const errors = {};
-
-    if (!data.plant) errors.plant = "Plant Id is required";
-    if (!data.docType) errors.docType = "Doc Type is required";
-
-    const header = data.invoiceHeader || data.otherSalesHeader || data.rejectionHeader;
-    if (!header?.invoiceDate) {
-      errors.invoiceDate = "Invoice Date is required";
-    }
-
-    return errors;
-  };
-
-  /* -------------------------------------------------------------------------- */
-  /* Submit                                                                     */
-  /* -------------------------------------------------------------------------- */
-
   const onSubmit = async (formData) => {
+    // 👇 Synchronous lock — prevents duplicate submission even before
+    //    React updates `saving`/`isSubmitting` on the next render.
+    if (savingRef.current) return;
+    savingRef.current = true;
+
     setSaving(true);
 
     try {
-      // Helper function to format date
       const formatDateForAPI = (dateString) => {
         if (!dateString) return "";
         try {
@@ -2231,16 +2158,14 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
         }
       };
 
-      // Helper to parse boolean values
       const parseBoolean = (value) => {
-        if (typeof value === 'boolean') return value;
-        if (typeof value === 'string') {
-          return value.toUpperCase() === 'YES' || value === 'true';
+        if (typeof value === "boolean") return value;
+        if (typeof value === "string") {
+          return value.toUpperCase() === "YES" || value === "true";
         }
         return false;
       };
 
-      // Get the appropriate header based on docType
       let header = {};
       let items = [];
       let taxDetails = [];
@@ -2265,62 +2190,49 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
         terms = formData.rejectionTerms || {};
       }
 
-      // ============================================================
-      // STEM 1 & 2: Map items to the API format with item ID and unit ID
-      // ============================================================
       const mappedItems = items
-        .filter(item => item.itemCode && item.itemCode.trim())
-        .map(item => {
+        .filter((item) => item.itemCode && item.itemCode.trim())
+        .map((item) => {
           const isIGST = header.isIGSTAppl === "YES";
 
-          // STEM 3: Get the actual item ID from the itemDataMap
           const itemData = itemDataMap[item.itemCode];
           const itemId = itemData?.itemId || itemData?.id || 0;
 
-          // STEM 4: Get the actual unit ID from the itemDataMap
           const unitId = itemData?.unitMasterId || 0;
 
           return {
-            cgstRate: isIGST ? 0 : (parseFloat(item.cgstRate) || 0),
+            cgstRate: isIGST ? 0 : parseFloat(item.cgstRate) || 0,
             customerPartNo: item.customerPartNo || "",
             despatchQty: parseFloat(item.despQty) || 0,
             hsnSacCode: item.hsnSacCode || "",
-            igstRate: isIGST ? (parseFloat(item.igstRate) || 0) : 0,
-            // STEM 3: Use the actual item ID here
+            igstRate: isIGST ? parseFloat(item.igstRate) || 0 : 0,
             item: itemId,
             newRate: parseFloat(item.rateInSelectedCurr) || 0,
             salesOrderContractNo: item.soContractNo || "",
-            sgstRate: isIGST ? 0 : (parseFloat(item.sgstRate) || 0),
+            sgstRate: isIGST ? 0 : parseFloat(item.sgstRate) || 0,
             stock: item.stock || "",
             taxPercentage: parseFloat(item.taxPercent) || 0,
             taxType: item.taxType || "",
-            // STEM 4: Use the actual unit ID here
             unit: Number(unitId),
           };
         });
 
-      // ============================================================
-      // STEM 5: Map tax details with particulars ID from List of Values
-      // ============================================================
       const mappedTaxDetails = taxDetails
-        .filter(tax => tax.particulars && tax.particulars.trim())
-        .map(tax => {
-          // Find the particulars ID from the List of Values data
+        .filter((tax) => tax.particulars && tax.particulars.trim())
+        .map((tax) => {
           const particularsOptions = listOfValuesData.PARTICULARS || [];
-          const found = particularsOptions.find(opt => opt.label === tax.particulars);
+          const found = particularsOptions.find((opt) => opt.label === tax.particulars);
           const particularsId = found?.value || 0;
 
           return {
             acceptedQtyAmount: parseFloat(tax.acceptedQtyAmount) || 0,
             amount: parseFloat(tax.amount) || 0,
             glAccountName: tax.glAccountName || "",
-            // STEM 5: Use the particulars ID here
             particulars: Number(particularsId),
             revisedAmount: parseFloat(tax.revisedAmount) || 0,
           };
         });
 
-      // Build the payload
       const payload = {
         active: true,
         amountInWords: terms.amountInWords || "",
@@ -2369,15 +2281,13 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
         salesRejectionInvoiceTaxDetailsDTO: mappedTaxDetails,
       };
 
-      // In the onSubmit function, add the ID if editing
       if (editId) {
         payload.id = parseInt(editId);
       } else if (editData?.id) {
         payload.id = editData.id;
       }
 
-      // Remove empty or default fields to clean up the payload
-      Object.keys(payload).forEach(key => {
+      Object.keys(payload).forEach((key) => {
         if (payload[key] === "" || payload[key] === null || payload[key] === undefined) {
           delete payload[key];
         }
@@ -2397,7 +2307,7 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
       if (status) {
         addToast(
           editData ? "Sales invoice updated successfully" : "Sales invoice created successfully",
-          "success"
+          "success",
         );
         if (onSave) onSave(payload);
         onBack();
@@ -2413,7 +2323,8 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
       console.error("❌ Save Error:", error);
       let errorMessage = "Failed to save Sales Invoice.";
       if (error.response?.data) {
-        errorMessage = error.response.data.message ||
+        errorMessage =
+          error.response.data.message ||
           error.response.data.statusMessage ||
           error.response.data.error ||
           JSON.stringify(error.response.data);
@@ -2423,14 +2334,10 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
       addToast(errorMessage, "error");
     } finally {
       setSaving(false);
+      savingRef.current = false; // 👈 release the lock
     }
   };
 
-  /* -------------------------------------------------------------------------- */
-  /* Effects                                                                    */
-  /* -------------------------------------------------------------------------- */
-
-  // Load edit data if editId is provided
   useEffect(() => {
     if (editId) {
       loadEditData();
@@ -2456,15 +2363,10 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
   }, []);
 
   useEffect(() => {
-    if (!editData?.id && docType) {
-      generateDocId(docType);
-    }
-  }, [docType, editData?.id, generateDocId]);
-
-  useEffect(() => {
     const subscription = watch((value, { name }) => {
-      if (name && name.includes('schNo')) {
-        const schNo = value.invoiceHeader?.schNo ||
+      if (name && name.includes("schNo")) {
+        const schNo =
+          value.invoiceHeader?.schNo ||
           value.otherSalesHeader?.schNo ||
           value.rejectionHeader?.schNo;
 
@@ -2477,7 +2379,6 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
     return () => subscription.unsubscribe();
   }, [watch, docType, fetchMonthYear]);
 
-  // Auto-populate date/time fields
   useEffect(() => {
     const now = new Date();
     const currentDate = now.toISOString().slice(0, 10);
@@ -2502,10 +2403,6 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
       }
     });
   }, [docType, setValue, getValues]);
-
-  /* -------------------------------------------------------------------------- */
-  /* Render Helpers                                                             */
-  /* -------------------------------------------------------------------------- */
 
   const renderFieldsGrid = (fields, sectionName) => {
     return (
@@ -2621,7 +2518,21 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
             );
           }
 
-          const readOnlyFields = ["customerName", "customerCode", "gstnNo", "partyGstState", "isIGSTAppl", "customerType", "currency", "exchangeRate", "monthYear", "timeOfIssue", "timeOfRemoval", "dateOfIssue", "dateOfRemoval"];
+          const readOnlyFields = [
+            "customerName",
+            "customerCode",
+            "gstnNo",
+            "partyGstState",
+            "isIGSTAppl",
+            "customerType",
+            "currency",
+            "exchangeRate",
+            "monthYear",
+            "timeOfIssue",
+            "timeOfRemoval",
+            "dateOfIssue",
+            "dateOfRemoval",
+          ];
           const isReadOnly = readOnlyFields.includes(field.name) || field.readOnly || isAutoFill;
 
           return (
@@ -2650,16 +2561,15 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
       return col;
     });
 
-    // Conditionally filter tax columns based on IGST applicability
     if ((docType === DOC_TYPE_INVOICE || docType === DOC_TYPE_REJECTION) && !isTax) {
       const isIGST = isIGSTAppl === "YES";
       const sgstColumns = ["sgstRate", "sgstAmount", "cgstRate", "cgstAmount"];
       const igstColumns = ["igstRate", "igstAmount"];
 
       if (isIGST) {
-        dynamicColumns = dynamicColumns.filter(col => !sgstColumns.includes(col.key));
+        dynamicColumns = dynamicColumns.filter((col) => !sgstColumns.includes(col.key));
       } else {
-        dynamicColumns = dynamicColumns.filter(col => !igstColumns.includes(col.key));
+        dynamicColumns = dynamicColumns.filter((col) => !igstColumns.includes(col.key));
       }
     }
 
@@ -2715,8 +2625,8 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
                     onClick={() => handleRemoveRow(isTax ? "tax" : "items", index)}
                     disabled={rowsArray.fields.length <= 1}
                     className={`h-7 w-7 rounded text-white flex items-center justify-center ${rowsArray.fields.length <= 1
-                      ? "bg-gray-400 cursor-not-allowed"
-                      : "bg-red-600 hover:bg-red-700"
+                        ? "bg-gray-400 cursor-not-allowed"
+                        : "bg-red-600 hover:bg-red-700"
                       }`}
                   >
                     <Trash2 size={14} />
@@ -2730,13 +2640,10 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
     );
   };
 
-  // Tax Details render with List of Values for particulars
-  const renderTaxDetailsTable = (columns, rowsArray, arrayName, isTax = true) => {
-    // Get options for particulars from List of Values
+  const renderTaxDetailsTable = (columns, rowsArray, arrayName) => {
     const particularsOptions = listOfValuesData.PARTICULARS || [];
 
-    // Get system option labels
-    const systemOptionLabels = ['Gross Amount', 'IGST', 'CGST', 'SGST'];
+    const systemOptionLabels = ["Gross Amount", "IGST", "CGST", "SGST"];
 
     const dynamicColumns = columns.map((col) => {
       if (col.key === "particulars") {
@@ -2757,13 +2664,12 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
             const particulars = getValues(`${arrayName}.${index}.particulars`);
             const isReadOnly = isSystemRow || systemOptionLabels.includes(particulars);
 
-            // For system rows, only show their specific value
             let availableOptions = [];
             if (isSystemRow) {
               availableOptions = [{ label: particulars, value: particulars }];
             } else {
-              availableOptions = particularsOptions.filter(option =>
-                !systemOptionLabels.includes(option.label)
+              availableOptions = particularsOptions.filter(
+                (option) => !systemOptionLabels.includes(option.label),
               );
             }
 
@@ -2783,7 +2689,7 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
                           render={({ field }) => (
                             <select
                               {...field}
-                              className={`${controlClasses} ${isReadOnly ? 'bg-gray-100 dark:bg-gray-700 cursor-not-allowed' : ''}`}
+                              className={`${controlClasses} ${isReadOnly ? "bg-gray-100 dark:bg-gray-700 cursor-not-allowed" : ""}`}
                               disabled={isReadOnly}
                               onChange={(e) => {
                                 field.onChange(e.target.value);
@@ -2822,8 +2728,8 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
                     onClick={() => handleRemoveRow("tax", index)}
                     disabled={rowsArray.fields.length <= 1 || isSystemRow}
                     className={`h-7 w-7 rounded text-white flex items-center justify-center ${rowsArray.fields.length <= 1 || isSystemRow
-                      ? "bg-gray-400 cursor-not-allowed"
-                      : "bg-red-600 hover:bg-red-700"
+                        ? "bg-gray-400 cursor-not-allowed"
+                        : "bg-red-600 hover:bg-red-700"
                       }`}
                   >
                     <Trash2 size={14} />
@@ -2855,7 +2761,7 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
       termsName,
       shippingFields,
       shippingName,
-      hasShipping
+      hasShipping,
     } = config;
 
     const showItemDetails = activeTab === "itemDetails";
@@ -2873,8 +2779,8 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
                 type="button"
                 onClick={() => setActiveTab(tab.key)}
                 className={`px-5 py-2 text-xs font-semibold rounded-t-lg whitespace-nowrap transition-colors ${activeTab === tab.key
-                  ? "bg-blue-600 text-white shadow-md"
-                  : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                    ? "bg-blue-600 text-white shadow-md"
+                    : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                   }`}
               >
                 {tab.label}
@@ -2908,16 +2814,10 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
           {showTaxDetails && renderTaxDetailsTable(taxColumns, taxArray, taxArrayName, true)}
         </div>
 
-        {showTerms && (
-          <div className="pt-4">
-            {renderFieldsGrid(termsFields, termsName)}
-          </div>
-        )}
+        {showTerms && <div className="pt-4">{renderFieldsGrid(termsFields, termsName)}</div>}
 
         {showShipping && hasShipping && shippingFields && (
-          <div className="pt-4">
-            {renderFieldsGrid(shippingFields, shippingName)}
-          </div>
+          <div className="pt-4">{renderFieldsGrid(shippingFields, shippingName)}</div>
         )}
       </section>
     );
@@ -2934,7 +2834,6 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
         </div>
       ) : (
         <>
-          {/* Header */}
           <div className="flex items-center gap-2 mb-3">
             <button
               onClick={onBack}
@@ -2947,9 +2846,7 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
             </h2>
           </div>
 
-          {/* Main Card */}
           <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
-            {/* Common Fields */}
             <div>
               <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">
                 Sales Invoice Details
@@ -2972,13 +2869,12 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
                   options={DOC_TYPE_OPTIONS}
                   required
                   errors={errors}
-                  disabled={!!editId || loading}  // ← ADD THIS LINE
+                  disabled={!!editId || loading}
                   placeholder="-- Select Doc Type --"
                 />
               </div>
             </div>
 
-            {/* Doc Type Specific Header Fields */}
             {docType && (
               <>
                 <div>
@@ -2988,14 +2884,13 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
                   {renderFieldsGrid(getHeaderFields().fields, getHeaderFields().name)}
                 </div>
 
-                {/* Child Tabs */}
                 {renderChildTabs()}
               </>
             )}
 
-            {/* Buttons */}
             <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
               <button
+                type="button"
                 onClick={onBack}
                 disabled={isSubmitting || saving}
                 className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
@@ -3004,12 +2899,13 @@ const SalesInvoiceForm = ({ onBack, onSave, editData, editId }) => {
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={handleSubmit(onSubmit)}
-                disabled={isSubmitting || saving || loading}  // ← ADD loading TO THE DISABLED CONDITION
+                disabled={isSubmitting || saving || loading}
                 className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
               >
                 <Save className="h-3 w-3" />
-                {isSubmitting || saving ? "Saving..." : editId ? "Update" : editData ? "Update" : "Save"}  {/* ← UPDATE THIS LINE */}
+                {isSubmitting || saving ? "Saving..." : editId ? "Update" : editData ? "Update" : "Save"}
               </button>
             </div>
           </div>

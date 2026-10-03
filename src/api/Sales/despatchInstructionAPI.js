@@ -93,6 +93,19 @@ const despatchInstructionAPI = {
     }
   },
 
+  // 👇 Get Despatch Instruction Doc Id
+  getDespatchInstructionDocId: async ({ financialYear, orgId }) => {
+    try {
+      const res = await apiClient.get(
+        `/api/dev/getDespatchInstructionDocId?financialYear=${financialYear}&orgId=${orgId}`,
+      );
+      return res?.paramObjectsMap?.despatchDocId || null;
+    } catch (error) {
+      console.error("Error fetching dispatch doc id:", error);
+      throw error;
+    }
+  },
+
   // Create / Update Despatch Instruction
   createUpdateDispatch: async (payload) => {
     try {

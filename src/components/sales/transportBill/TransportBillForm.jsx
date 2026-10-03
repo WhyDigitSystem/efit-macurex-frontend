@@ -259,6 +259,7 @@ const ToggleSwitch = ({ value, onChange }) => (
 const TransportBillForm = ({ data, onBack }) => {
   const { addToast } = useToast();
   const orgId = Number(localStorage.getItem("orgId"));
+  const finYear = Number(localStorage.getItem("finYear"));
   const branchId = Number(localStorage.getItem("branchId"));
 
   const [activeTab, setActiveTab] = useState("payment1");
@@ -311,7 +312,7 @@ const TransportBillForm = ({ data, onBack }) => {
             const formData = {
               id: response.id || 0,
               plantId: response.branch?.id || "",
-              docNo: response.docNo || "",
+              docNo: response.docId || "",
               docDate: response.docDate || "",
               transportName: response.transportName?.id || "",
               billNo: response.billNo || "",
@@ -511,6 +512,7 @@ const TransportBillForm = ({ data, onBack }) => {
     // Base payload without id
     const payload = {
       orgId: orgId,
+      financialYear: finYear,
       branch: formData.plantId || branchId,
       docNo: formData.docNo || "",
       docDate: formData.docDate || "",

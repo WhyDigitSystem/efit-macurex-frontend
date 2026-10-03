@@ -88,6 +88,7 @@ const getDefaultValues = () => ({
 const DocketInvoiceDetailsForm = ({ data, onBack }) => {
   const { addToast } = useToast();
   const orgId = Number(localStorage.getItem("orgId")) || 0;
+  const finYear = Number(localStorage.getItem("finYear")) || 0;
   const branch = Number(localStorage.getItem("branchId")) || 1000000001;
   const dataLoadedRef = useRef(false);
 
@@ -262,7 +263,7 @@ const DocketInvoiceDetailsForm = ({ data, onBack }) => {
           const formData = {
             id: response.id || 0,
             plantId: response.branch?.id || "",
-            docNo: response.docNo || `DK/${response.id}`,
+            docNo: response.docId,
             docDate: response.docDate || "",
             transportId: response.transport?.id || "",
             transportName: response.transport?.transportName || "",
@@ -406,6 +407,7 @@ const DocketInvoiceDetailsForm = ({ data, onBack }) => {
       // Only include id if it exists and is > 0 (update mode)
       ...(values.id && values.id > 0 ? { id: values.id } : {}),
       orgId: orgId,
+      financialYear: finYear,
       branch: parseInt(values.plantId) || branch,
       docNo: values.docNo || "",
       transport: parseInt(values.transportId) || 0,

@@ -23,8 +23,8 @@ const SalesDeliveryList = ({ onAddNew, onEdit, onBack }) => {
       // Transform the data for the table
       const transformedData = salesList.map((item) => ({
         id: item.id,
-        dlvNo: item.dlvNo || "-",
-        dlvDate: item.dlvDate || "-",
+        dlvNo: item.docId || "-",
+        dlvDate: item.docDate || "-",
         branch: item.branch?.branchName || "-",
         branchCode: item.branch?.branchCode || "-",
         monthOfSchedule: item.monthOfSchedule || "-",

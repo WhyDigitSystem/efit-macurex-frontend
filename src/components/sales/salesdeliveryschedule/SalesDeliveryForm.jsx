@@ -69,50 +69,18 @@ const SELECT_OPTIONS = {
     "December",
   ],
   dayNo: [
-    "1",
-    "2",
-    "3",
-    "4",
-    "5",
-    "6",
-    "7",
-    "8",
-    "9",
-    "10",
-    "11",
-    "12",
-    "13",
-    "14",
-    "15",
-    "16",
-    "17",
-    "18",
-    "19",
-    "20",
-    "21",
-    "22",
-    "23",
-    "24",
-    "25",
-    "26",
-    "27",
-    "28",
-    "29",
-    "30",
-    "31",
+    "1", "2", "3", "4", "5", "6", "7", "8", "9", "10",
+    "11", "12", "13", "14", "15", "16", "17", "18", "19", "20",
+    "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31",
   ],
   day: [
-    "Monday",
-    "Tuesday",
-    "Wednesday",
-    "Thursday",
-    "Friday",
-    "Saturday",
-    "Sunday",
+    "Monday", "Tuesday", "Wednesday", "Thursday",
+    "Friday", "Saturday", "Sunday",
   ],
 };
 
-// Helper function to get week number
+/* --------------------------- Helpers --------------------------- */
+
 const getWeekNumber = (date) => {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
@@ -124,22 +92,17 @@ const getWeekNumber = (date) => {
   );
 };
 
-// Helper function to get day name
 const getDayName = (date) => {
   const days = [
-    "Sunday",
-    "Monday",
-    "Tuesday",
-    "Wednesday",
-    "Thursday",
-    "Friday",
-    "Saturday",
+    "Sunday", "Monday", "Tuesday", "Wednesday",
+    "Thursday", "Friday", "Saturday",
   ];
   const d = new Date(date);
   return days[d.getDay()];
 };
 
-// Helper Components
+/* ----------------------- Helper Components ---------------------- */
+
 const SelectField = ({
   control,
   name,
@@ -154,15 +117,11 @@ const SelectField = ({
     const parts = name.split(".");
     let error = errors;
     for (const part of parts) {
-      if (error && error[part]) {
-        error = error[part];
-      } else {
-        return null;
-      }
+      if (error && error[part]) error = error[part];
+      else return null;
     }
     return error?.message;
   };
-
   const errorMessage = getError();
 
   return (
@@ -177,12 +136,11 @@ const SelectField = ({
         render={({ field }) => (
           <select
             {...field}
-            className={`${controlClasses} ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
+            className={`${controlClasses} ${errorMessage ? "border-red-500 focus:border-red-500" : ""
+              }`}
             onChange={(e) => {
               field.onChange(e);
-              if (onChange) {
-                onChange(e.target.value);
-              }
+              if (onChange) onChange(e.target.value);
             }}
             disabled={disabled}
           >
@@ -227,15 +185,11 @@ const InputField = ({
     const parts = name.split(".");
     let error = errors;
     for (const part of parts) {
-      if (error && error[part]) {
-        error = error[part];
-      } else {
-        return null;
-      }
+      if (error && error[part]) error = error[part];
+      else return null;
     }
     return error?.message;
   };
-
   const errorMessage = getError();
 
   return (
@@ -246,18 +200,15 @@ const InputField = ({
       <Controller
         name={name}
         control={control}
-        rules={{
-          ...(required && {
-            required: `${label} is required`,
-          }),
-        }}
+        rules={{ ...(required && { required: `${label} is required` }) }}
         render={({ field }) => (
           <input
             {...field}
             type={type}
             step={step}
-            value={value || field.value}
-            className={`${controlClasses} ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
+            value={value !== undefined ? value : field.value}
+            className={`${controlClasses} ${errorMessage ? "border-red-500 focus:border-red-500" : ""
+              }`}
             placeholder={placeholder}
             disabled={disabled}
           />
@@ -282,7 +233,12 @@ const TableHead = ({ headers }) => (
       {headers.map((h, i) => (
         <th
           key={i}
-          className={`p-1 ${i === 0 ? "w-8 text-center" : i === headers.length - 1 ? "w-20 text-left" : "text-left"} dark:text-white`}
+          className={`p-1 ${i === 0
+              ? "w-8 text-center"
+              : i === headers.length - 1
+                ? "w-20 text-left"
+                : "text-left"
+            } dark:text-white`}
         >
           {h}
         </th>
@@ -307,11 +263,10 @@ const TableRow = ({
           type="button"
           onClick={onRemove}
           disabled={disabled}
-          className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-            disabled
+          className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
               ? "bg-gray-400 cursor-not-allowed"
               : "bg-red-600 hover:bg-red-700"
-          }`}
+            }`}
         >
           <Trash2 size={10} />
         </button>
@@ -333,15 +288,11 @@ const SelectCell = ({
     const parts = name.split(".");
     let error = errors;
     for (const part of parts) {
-      if (error && error[part]) {
-        error = error[part];
-      } else {
-        return null;
-      }
+      if (error && error[part]) error = error[part];
+      else return null;
     }
     return error?.message;
   };
-
   const errorMessage = getError();
 
   return (
@@ -353,12 +304,11 @@ const SelectCell = ({
         render={({ field }) => (
           <select
             {...field}
-            className={`${controlClasses} h-8 text-xs ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
+            className={`${controlClasses} h-8 text-xs ${errorMessage ? "border-red-500 focus:border-red-500" : ""
+              }`}
             onChange={(e) => {
               field.onChange(e);
-              if (onChange) {
-                onChange(e.target.value);
-              }
+              if (onChange) onChange(e.target.value);
             }}
             disabled={disabled}
           >
@@ -406,15 +356,11 @@ const InputCell = ({
     const parts = name.split(".");
     let error = errors;
     for (const part of parts) {
-      if (error && error[part]) {
-        error = error[part];
-      } else {
-        return null;
-      }
+      if (error && error[part]) error = error[part];
+      else return null;
     }
     return error?.message;
   };
-
   const errorMessage = getError();
 
   return (
@@ -432,15 +378,14 @@ const InputCell = ({
                 {...field}
                 type={type}
                 step={step}
-                value={value || field.value}
-                className={`${controlClasses} h-8 text-xs ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
+                value={value !== undefined ? value : field.value}
+                className={`${controlClasses} h-8 text-xs ${errorMessage ? "border-red-500 focus:border-red-500" : ""
+                  }`}
                 placeholder={placeholder}
                 disabled={disabled}
                 onChange={(e) => {
                   field.onChange(e);
-                  if (onChange) {
-                    onChange(e);
-                  }
+                  if (onChange) onChange(e);
                 }}
               />
             )}
@@ -488,20 +433,17 @@ const DeliverySchedulePopup = ({
   };
 
   const handleAddRow = () => {
-    const newItem = {
+    deliveryScheduleArray.append({
       dayNo: "",
       deliveryDate: "",
       weekNo: "",
       day: "",
       deliveryQty: 0,
-    };
-    deliveryScheduleArray.append(newItem);
+    });
   };
 
   const handleSave = () => {
-    if (onSave) {
-      onSave();
-    }
+    if (onSave) onSave();
     onClose();
   };
 
@@ -561,13 +503,13 @@ const DeliverySchedulePopup = ({
                     type="number"
                     placeholder="Week No."
                     errors={errors}
-                    disabled={true}
+                    disabled
                   />
                   <InputCell
                     control={control}
                     name={`deliverySchedule.${index}.day`}
                     errors={errors}
-                    disabled={true}
+                    disabled
                   />
                   <InputCell
                     control={control}
@@ -611,7 +553,10 @@ const DeliverySchedulePopup = ({
   );
 };
 
-// Main Component
+/* ------------------------------------------------------------------ */
+/* Main Component                                                      */
+/* ------------------------------------------------------------------ */
+
 const SalesDeliveryForm = ({ data, onBack }) => {
   const [orgId] = useState(localStorage.getItem("orgId"));
   const [branchId] = useState(localStorage.getItem("branchId"));
@@ -632,6 +577,7 @@ const SalesDeliveryForm = ({ data, onBack }) => {
     handleSubmit,
     watch,
     setValue,
+    getValues,
     reset,
     formState: { errors, isSubmitting },
   } = useForm({
@@ -648,17 +594,19 @@ const SalesDeliveryForm = ({ data, onBack }) => {
     name: "deliverySchedule",
   });
 
-  // Function to transform API data to form data
+  const watchScheduleDetails = watch("scheduleDetails") || [];
+
+  /* --------------------- Data Transformers --------------------- */
+
   const transformApiDataToForm = (apiData) => {
     if (!apiData) return getDefaultValues();
 
-    // Get the first detail's delivery schedules
     const firstDetail = apiData.details?.[0] || {};
     const deliverySchedules = firstDetail.deliverySchedules || [];
 
     return {
-      divNo: apiData.dlvNo || "",
-      divDate: apiData.dlvDate || new Date().toISOString().split("T")[0],
+      divNo: apiData.docId || "",
+      divDate: apiData.docDate || new Date().toISOString().split("T")[0],
       plantId: apiData.branch?.id?.toString() || "",
       belongsTo: apiData.belongsTo || "",
       monthOfSchedule: apiData.monthOfSchedule || "",
@@ -677,19 +625,19 @@ const SalesDeliveryForm = ({ data, onBack }) => {
         pendingQty: detail.pendingQty || 0,
         actualPlannedQty: detail.actualPlannedQty || 0,
       })) || [
-        {
-          soNo: "",
-          invoiceType: "",
-          itemCode: "",
-          itemId: 0,
-          itemDescription: "",
-          unit: "",
-          unitId: 0,
-          orderQty: 0,
-          pendingQty: 0,
-          actualPlannedQty: 0,
-        },
-      ],
+          {
+            soNo: "",
+            invoiceType: "",
+            itemCode: "",
+            itemId: 0,
+            itemDescription: "",
+            unit: "",
+            unitId: 0,
+            orderQty: 0,
+            pendingQty: 0,
+            actualPlannedQty: 0,
+          },
+        ],
       deliverySchedule: deliverySchedules.map((schedule) => ({
         dayNo: schedule.dayNo?.toString() || "",
         deliveryDate: schedule.deliveryDate || "",
@@ -697,253 +645,19 @@ const SalesDeliveryForm = ({ data, onBack }) => {
         day: schedule.dayName || "",
         deliveryQty: schedule.deliveryQty || 0,
       })) || [
-        {
-          dayNo: "",
-          deliveryDate: "",
-          weekNo: "",
-          day: "",
-          deliveryQty: 0,
-        },
-      ],
+          {
+            dayNo: "",
+            deliveryDate: "",
+            weekNo: "",
+            day: "",
+            deliveryQty: 0,
+          },
+        ],
       remarks: apiData.remarks || "",
     };
   };
 
-  // Load edit data if ID is provided
-  const loadEditData = useCallback(async () => {
-    if (!data?.id) return;
-
-    try {
-      setLoading(true);
-      const response = await salesDeliveryAPI.getSalesDeliveryById(data.id);
-      console.log("Get By ID Response:", response);
-
-      const salesData = response?.paramObjectsMap?.salesDeliverySchedule;
-      if (salesData) {
-        setEditData(salesData);
-        const formData = transformApiDataToForm(salesData);
-        reset(formData);
-      }
-    } catch (error) {
-      console.error("Failed to load sales delivery data:", error);
-      alert(error.message || "Failed to load sales delivery schedule data");
-    } finally {
-      setLoading(false);
-    }
-  }, [data?.id, reset]);
-
-  const getFieldArray = (tab) => {
-    switch (tab) {
-      case "scheduleDetails":
-        return scheduleDetailsArray;
-      case "deliverySchedule":
-        return deliveryScheduleArray;
-      default:
-        return scheduleDetailsArray;
-    }
-  };
-
-  const handleAdd = (tab) => {
-    const defaultValues = getDefaultValues();
-    const newItem = defaultValues[tab]?.[0] || {};
-    getFieldArray(tab).append(newItem);
-  };
-
-  const handleRemove = (tab, index) => {
-    const { fields, remove } = getFieldArray(tab);
-    if (fields.length > 1) remove(index);
-  };
-
-  const handleViewDeliverySchedule = (index) => {
-    setSelectedRowIndex(index);
-    setShowPopup(true);
-  };
-
-  const handleCustomerChange = (customerId) => {
-    const selectedCustomer = customerData.find(
-      (c) => String(c.value) === String(customerId),
-    );
-
-    if (selectedCustomer) {
-      setValue("customerName", selectedCustomer.customerName || "");
-    } else {
-      setValue("customerName", "");
-    }
-  };
-
-  const handleMonthChange = (month) => {
-    if (!month) {
-      setValue("monthYear", "");
-      return;
-    }
-
-    const monthIndex = SELECT_OPTIONS.monthOfSchedule.indexOf(month);
-
-    if (monthIndex === -1) {
-      setValue("monthYear", "");
-      return;
-    }
-
-    const monthNumber = String(monthIndex + 1).padStart(2, "0");
-    const year = new Date().getFullYear();
-
-    setValue("monthYear", `${monthNumber}-${year}`);
-  };
-
-  const handleContractChange = async (contractNo, index) => {
-    try {
-      const selectedContract = contractData.find(
-        (c) => String(c.value) === String(contractNo),
-      );
-
-      setValue(
-        `scheduleDetails.${index}.invoiceType`,
-        selectedContract?.invoiceType || "",
-      );
-
-      setValue(`scheduleDetails.${index}.itemCode`, "");
-      setValue(`scheduleDetails.${index}.itemId`, 0);
-      setValue(`scheduleDetails.${index}.itemDescription`, "");
-      setValue(`scheduleDetails.${index}.unit`, "");
-      setValue(`scheduleDetails.${index}.unitId`, 0);
-      setValue(`scheduleDetails.${index}.orderQty`, 0);
-      setValue(`scheduleDetails.${index}.pendingQty`, 0);
-
-      if (!contractNo) {
-        setItemData([]);
-        return;
-      }
-
-      const response = await salesDeliveryAPI.getItemDetails(
-        orgId,
-        branchId,
-        contractNo,
-      );
-
-      const items = response?.paramObjectsMap?.itemList || [];
-
-      const options = items.map((item) => ({
-        value: item.itemCode,
-        label: item.itemCode,
-        itemId: item.itemId,
-        itemDescription: item.itemDescription,
-        unit: item.unit,
-        unitId: item.unitId,
-        orderQty: item.orderQty,
-      }));
-
-      setItemData(options);
-    } catch (error) {
-      console.error("Failed to load item details:", error);
-      setItemData([]);
-    }
-  };
-
-  const handleItemChange = (itemCode, index) => {
-    const selectedItem = itemData.find(
-      (item) => String(item.value) === String(itemCode),
-    );
-
-    if (selectedItem) {
-      setValue(
-        `scheduleDetails.${index}.itemDescription`,
-        selectedItem.itemDescription || "",
-      );
-
-      setValue(`scheduleDetails.${index}.unit`, selectedItem.unit || "");
-
-      setValue(`scheduleDetails.${index}.orderQty`, selectedItem.orderQty || 0);
-
-      setValue(`scheduleDetails.${index}.itemId`, selectedItem.itemId || 0);
-
-      setValue(`scheduleDetails.${index}.unitId`, selectedItem.unitId || 0);
-    } else {
-      setValue(`scheduleDetails.${index}.itemDescription`, "");
-      setValue(`scheduleDetails.${index}.unit`, "");
-      setValue(`scheduleDetails.${index}.orderQty`, 0);
-      setValue(`scheduleDetails.${index}.itemId`, 0);
-      setValue(`scheduleDetails.${index}.unitId`, 0);
-    }
-  };
-
-  useEffect(() => {
-    loadBranches();
-    loadBelongsTo();
-    loadCustomerDetails();
-    loadContractNoDetails();
-
-    // Load edit data if editing
-    if (data?.id) {
-      loadEditData();
-    }
-  }, []);
-
-  const [generatingDocId, setGeneratingDocId] = useState(false);
-
-  useEffect(() => {
-    // Don't regenerate the div no while editing
-    if (data?.id) return;
-
-    const generateDivNo = async () => {
-      setGeneratingDocId(true);
-      setValue("divNo", "");
-
-      try {
-        const storedOrgId = localStorage.getItem("orgId");
-        const storedBranchId = localStorage.getItem("branchId");
-
-        if (!storedOrgId || !storedBranchId) {
-          console.error("OrgId or BranchId not found in localStorage");
-          return;
-        }
-
-        const mappingList =
-          await docTypeMappingAPI.getDocumentTypeMappingByOrgId(
-            storedOrgId,
-            storedBranchId,
-          );
-
-        const record = mappingList?.[0];
-        const sdsDetail = record?.documentTypeMappingDetails?.find(
-          (d) => d.screenCode === "SDS",
-        );
-
-        if (!sdsDetail) {
-          console.error(
-            "Sales Delivery Schedule document mapping not found for screenCode SDS",
-          );
-          addToast(
-            "No document type mapping found for Sales Delivery Schedule (SDS)",
-            "error",
-          );
-          return;
-        }
-
-        const docId = await salesDeliveryAPI.getSalesDeliveryScheduleDocId({
-          financialYear: sdsDetail.finYear,
-          orgId: sdsDetail.orgId,
-          screenCode: sdsDetail.screenCode,
-        });
-
-        if (docId) {
-          setValue("divNo", docId);
-        } else {
-          addToast("Failed to generate Div. No.", "error");
-        }
-      } catch (error) {
-        console.error(
-          "Error generating sales delivery schedule number:",
-          error,
-        );
-        addToast("Failed to generate Div. No.", "error");
-      } finally {
-        setGeneratingDocId(false);
-      }
-    };
-
-    generateDivNo();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data]);
+  /* ------------------------- Loaders ------------------------- */
 
   const loadBranches = useCallback(async () => {
     try {
@@ -1001,15 +715,12 @@ const SalesDeliveryForm = ({ data, onBack }) => {
         orgId,
         branchId,
       );
-
       const res = response?.paramObjectsMap?.contractList || [];
-
       const options = res.map((contract) => ({
         value: contract.contractNo,
         label: contract.contractNo,
         invoiceType: contract.invoiceType,
       }));
-
       setContractData(options);
     } catch (error) {
       console.error("Failed to load contract numbers:", error);
@@ -1017,17 +728,329 @@ const SalesDeliveryForm = ({ data, onBack }) => {
     }
   }, [branchId, orgId]);
 
+  /**
+   * 👇 Load item options for a given contract and (optionally) preserve the
+   * currently-selected itemCode so the <select> keeps showing it.
+   */
+  const loadItemsForContract = useCallback(
+    async (contractNo, preserveItemCode = null, rowIndex = null) => {
+      if (!contractNo) {
+        setItemData([]);
+        return;
+      }
+
+      try {
+        const response = await salesDeliveryAPI.getItemDetails(
+          orgId,
+          branchId,
+          contractNo,
+        );
+
+        const items = response?.paramObjectsMap?.itemList || [];
+
+        const options = items.map((item) => ({
+          value: item.itemCode,
+          label: item.itemCode,
+          itemId: item.itemId,
+          itemDescription: item.itemDescription,
+          unit: item.unit,
+          unitId: item.unitId,
+          orderQty: item.orderQty,
+        }));
+
+        // 👇 If edit mode provided a preserved item code that isn't in the
+        //    returned list, inject a synthetic option so the select renders it.
+        if (preserveItemCode && !options.some((o) => o.value === preserveItemCode)) {
+          options.unshift({
+            value: preserveItemCode,
+            label: preserveItemCode,
+            itemId: 0,
+            itemDescription: "",
+            unit: "",
+            unitId: 0,
+            orderQty: 0,
+          });
+        }
+
+        setItemData(options);
+
+        // 👇 On edit mode, restore the item details into the row so downstream
+        //    fields (itemDescription, unit, orderQty, itemId, unitId) are not blank.
+        if (preserveItemCode && rowIndex !== null) {
+          const match = options.find((o) => o.value === preserveItemCode);
+          if (match) {
+            setValue(
+              `scheduleDetails.${rowIndex}.itemDescription`,
+              match.itemDescription || "",
+            );
+            setValue(
+              `scheduleDetails.${rowIndex}.unit`,
+              match.unit || "",
+            );
+            setValue(
+              `scheduleDetails.${rowIndex}.orderQty`,
+              match.orderQty || 0,
+            );
+            setValue(
+              `scheduleDetails.${rowIndex}.itemId`,
+              match.itemId || 0,
+            );
+            setValue(
+              `scheduleDetails.${rowIndex}.unitId`,
+              match.unitId || 0,
+            );
+          }
+        }
+      } catch (error) {
+        console.error("Failed to load item details:", error);
+        setItemData([]);
+      }
+    },
+    [orgId, branchId, setValue],
+  );
+
+  /* ---------------------- Edit data loading ---------------------- */
+
+  const loadEditData = useCallback(async () => {
+    if (!data?.id) return;
+
+    try {
+      setLoading(true);
+      const response = await salesDeliveryAPI.getSalesDeliveryById(data.id);
+      console.log("Get By ID Response:", response);
+
+      const salesData = response?.paramObjectsMap?.salesDeliverySchedule;
+      if (salesData) {
+        setEditData(salesData);
+        const formData = transformApiDataToForm(salesData);
+        reset(formData);
+
+        // 👇 KEY FIX: preload items for each row's contract so the
+        //            Item Code <select> has matching options to render.
+        const details = salesData.details || [];
+        for (let i = 0; i < details.length; i++) {
+          const contractNo = details[i].soNocontractNo;
+          const itemCode = details[i].item?.itemCode;
+          if (contractNo && itemCode) {
+            // Sequential to avoid clobbering itemData between rows;
+            // the last iteration wins in shared-state model — but since
+            // each row may share itemData, we keep the LAST row's items in
+            // state and rely on injected synthetic option for others.
+            await loadItemsForContract(contractNo, itemCode, i);
+          } else if (contractNo) {
+            await loadItemsForContract(contractNo, null, i);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Failed to load sales delivery data:", error);
+      addToast(error.message || "Failed to load sales delivery schedule data");
+    } finally {
+      setLoading(false);
+    }
+  }, [data?.id, reset, addToast, loadItemsForContract]);
+
+  /* ---------------------- Field array helpers ------------------- */
+
+  const getFieldArray = (tab) => {
+    switch (tab) {
+      case "scheduleDetails":
+        return scheduleDetailsArray;
+      case "deliverySchedule":
+        return deliveryScheduleArray;
+      default:
+        return scheduleDetailsArray;
+    }
+  };
+
+  const handleAdd = (tab) => {
+    const defaultValues = getDefaultValues();
+    const newItem = defaultValues[tab]?.[0] || {};
+    getFieldArray(tab).append(newItem);
+  };
+
+  const handleRemove = (tab, index) => {
+    const { fields, remove } = getFieldArray(tab);
+    if (fields.length > 1) remove(index);
+  };
+
+  const handleViewDeliverySchedule = (index) => {
+    setSelectedRowIndex(index);
+    setShowPopup(true);
+  };
+
+  const handleCustomerChange = (customerId) => {
+    const selectedCustomer = customerData.find(
+      (c) => String(c.value) === String(customerId),
+    );
+    setValue(
+      "customerName",
+      selectedCustomer?.customerName || "",
+    );
+  };
+
+  const handleMonthChange = (month) => {
+    if (!month) {
+      setValue("monthYear", "");
+      return;
+    }
+    const monthIndex = SELECT_OPTIONS.monthOfSchedule.indexOf(month);
+    if (monthIndex === -1) {
+      setValue("monthYear", "");
+      return;
+    }
+    const monthNumber = String(monthIndex + 1).padStart(2, "0");
+    const year = new Date().getFullYear();
+    setValue("monthYear", `${monthNumber}-${year}`);
+  };
+
+  const handleContractChange = async (contractNo, index) => {
+    try {
+      const selectedContract = contractData.find(
+        (c) => String(c.value) === String(contractNo),
+      );
+
+      setValue(
+        `scheduleDetails.${index}.invoiceType`,
+        selectedContract?.invoiceType || "",
+      );
+
+      // Clear selected item fields when contract changes
+      setValue(`scheduleDetails.${index}.itemCode`, "");
+      setValue(`scheduleDetails.${index}.itemId`, 0);
+      setValue(`scheduleDetails.${index}.itemDescription`, "");
+      setValue(`scheduleDetails.${index}.unit`, "");
+      setValue(`scheduleDetails.${index}.unitId`, 0);
+      setValue(`scheduleDetails.${index}.orderQty`, 0);
+      setValue(`scheduleDetails.${index}.pendingQty`, 0);
+
+      if (!contractNo) {
+        setItemData([]);
+        return;
+      }
+
+      await loadItemsForContract(contractNo, null, index);
+    } catch (error) {
+      console.error("Failed to load item details:", error);
+      setItemData([]);
+    }
+  };
+
+  const handleItemChange = (itemCode, index) => {
+    const selectedItem = itemData.find(
+      (item) => String(item.value) === String(itemCode),
+    );
+
+    if (selectedItem) {
+      setValue(
+        `scheduleDetails.${index}.itemDescription`,
+        selectedItem.itemDescription || "",
+      );
+      setValue(`scheduleDetails.${index}.unit`, selectedItem.unit || "");
+      setValue(
+        `scheduleDetails.${index}.orderQty`,
+        selectedItem.orderQty || 0,
+      );
+      setValue(
+        `scheduleDetails.${index}.itemId`,
+        selectedItem.itemId || 0,
+      );
+      setValue(
+        `scheduleDetails.${index}.unitId`,
+        selectedItem.unitId || 0,
+      );
+    } else {
+      setValue(`scheduleDetails.${index}.itemDescription`, "");
+      setValue(`scheduleDetails.${index}.unit`, "");
+      setValue(`scheduleDetails.${index}.orderQty`, 0);
+      setValue(`scheduleDetails.${index}.itemId`, 0);
+      setValue(`scheduleDetails.${index}.unitId`, 0);
+    }
+  };
+
+  /* ------------------------- Effects ------------------------- */
+
+  useEffect(() => {
+    loadBranches();
+    loadBelongsTo();
+    loadCustomerDetails();
+    loadContractNoDetails();
+
+    if (data?.id) {
+      loadEditData();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const [generatingDocId, setGeneratingDocId] = useState(false);
+
+  useEffect(() => {
+    if (data?.id) return;
+
+    const generateDivNo = async () => {
+      setGeneratingDocId(true);
+      setValue("divNo", "");
+
+      try {
+        const storedOrgId = localStorage.getItem("orgId");
+        const storedBranchId = localStorage.getItem("branchId");
+        if (!storedOrgId || !storedBranchId) return;
+
+        const mappingList =
+          await docTypeMappingAPI.getDocumentTypeMappingByOrgId(
+            storedOrgId,
+            storedBranchId,
+          );
+
+        const record = mappingList?.[0];
+        const sdsDetail = record?.documentTypeMappingDetails?.find(
+          (d) => d.screenCode === "SDS",
+        );
+
+        if (!sdsDetail) {
+          addToast(
+            "No document type mapping found for Sales Delivery Schedule (SDS)",
+            "error",
+          );
+          return;
+        }
+
+        const docId = await salesDeliveryAPI.getSalesDeliveryScheduleDocId({
+          financialYear: sdsDetail.finYear,
+          orgId: sdsDetail.orgId,
+          screenCode: sdsDetail.screenCode,
+        });
+
+        if (docId) setValue("divNo", docId);
+        else addToast("Failed to generate Div. No.", "error");
+      } catch (error) {
+        console.error(
+          "Error generating sales delivery schedule number:",
+          error,
+        );
+        addToast("Failed to generate Div. No.", "error");
+      } finally {
+        setGeneratingDocId(false);
+      }
+    };
+
+    generateDivNo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
+
+  /* --------------------------- Submit --------------------------- */
+
   const transformFormData = (formData, orgId, branchId, isEditMode) => {
     const deliverySchedules =
       formData.deliverySchedule && formData.deliverySchedule.length > 0
         ? formData.deliverySchedule.map((schedule) => ({
-            dayName: schedule.day || "",
-            dayNo: parseInt(schedule.dayNo) || 0,
-            deliveryDate:
-              schedule.deliveryDate || new Date().toISOString().split("T")[0],
-            deliveryQty: parseFloat(schedule.deliveryQty) || 0,
-            weekNo: parseInt(schedule.weekNo) || 0,
-          }))
+          dayName: schedule.day || "",
+          dayNo: parseInt(schedule.dayNo) || 0,
+          deliveryDate:
+            schedule.deliveryDate || new Date().toISOString().split("T")[0],
+          deliveryQty: parseFloat(schedule.deliveryQty) || 0,
+          weekNo: parseInt(schedule.weekNo) || 0,
+        }))
         : [];
 
     const payload = {
@@ -1037,8 +1060,7 @@ const SalesDeliveryForm = ({ data, onBack }) => {
       cancelRemarks: "",
       createdBy: localStorage.getItem("userId") || "1",
       customer: parseInt(formData.customerId) || 0,
-      dlvNo: formData.divNo || "", // <-- add, matches apiData.dlvNo used in transformApiDataToForm
-      dlvDate: formData.divDate || "", // <-- add, matches apiData.dlvDate
+      docId: formData.divNo || "",
       details: formData.scheduleDetails.map((detail) => {
         const itemId = detail.itemId || parseInt(detail.itemCode) || 0;
         const unitId = detail.unitId || 0;
@@ -1118,6 +1140,8 @@ const SalesDeliveryForm = ({ data, onBack }) => {
       </div>
     );
   }
+
+  /* --------------------------- Render --------------------------- */
 
   return (
     <div className="p-2 max-w-7xl relative">
@@ -1205,7 +1229,7 @@ const SalesDeliveryForm = ({ data, onBack }) => {
           />
         </div>
 
-        {/* Child Tables */}
+        {/* Child Tabs */}
         <section className="mt-0 bg-white dark:bg-gray-800">
           <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 mb-0">
             <div className="flex">
@@ -1214,11 +1238,10 @@ const SalesDeliveryForm = ({ data, onBack }) => {
                   key={tab}
                   type="button"
                   onClick={() => setActiveChildTab(tab)}
-                  className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${
-                    activeChildTab === tab
+                  className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${activeChildTab === tab
                       ? "bg-blue-600 text-white"
                       : "text-gray-600 dark:text-gray-300"
-                  }`}
+                    }`}
                 >
                   {tab === "scheduleDetails" ? "Schedule Details" : "Summary"}
                 </button>

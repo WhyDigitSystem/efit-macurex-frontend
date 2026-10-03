@@ -1,5 +1,5 @@
 import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useState, useRef, useMemo } from "react";
 import { useForm, Controller, useFieldArray } from "react-hook-form";
 import dayjs from "dayjs";
 import { useToast } from "../../Toast/ToastContext";
@@ -9,8 +9,6 @@ import branchAPI from "../../../api/branchAPI";
 import locationMasterAPI from "../../../api/locationMasterAPI";
 import { stateAPI } from "../../../api/stateAPI";
 import { employeeAPI } from "../../../api/employeeAPI";
-import docTypeMappingAPI from "../../../api/docTypeMappingAPI";
-import dailyExchangeRateAPI from "../../../api/dailyExchangeRateAPI";
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -185,8 +183,14 @@ const SelectCell = ({ control, name, options, required, errors, onChange, disabl
   );
 };
 
+/**
+ * InputCell
+ *   - `overrideValue`: if provided (and not undefined), shows this in the input
+ *     regardless of RHF's internal value. Use for computed fields.
+ */
 const InputCell = ({
-  control, name, type = "text", step, placeholder, required, errors, align = "left", disabled, readOnly, onChange,
+  control, name, type = "text", step, placeholder, required, errors,
+  align = "left", disabled, readOnly, onChange, overrideValue,
 }) => {
   const getError = () => {
     const parts = name.split(".");
@@ -201,18 +205,31 @@ const InputCell = ({
         name={name}
         control={control}
         rules={required ? { required: "This field is required" } : undefined}
-        render={({ field }) => (
-          <input
-            {...field}
-            type={type}
-            step={step}
-            className={`${controlClasses} ${align === "right" ? "text-right" : ""} ${errorMessage ? "border-red-500 focus:border-red-500" : ""} ${readOnly ? "bg-gray-50 dark:bg-gray-800" : ""}`}
-            placeholder={placeholder}
-            disabled={disabled}
-            readOnly={readOnly}
-            onChange={(e) => { field.onChange(e); if (onChange) onChange(e); }}
-          />
-        )}
+        render={({ field }) => {
+          const displayValue =
+            overrideValue !== undefined && overrideValue !== null
+              ? overrideValue
+              : (field.value ?? "");
+
+          return (
+            <input
+              type={type}
+              step={step}
+              name={field.name}
+              ref={field.ref}
+              onBlur={field.onBlur}
+              value={displayValue}
+              className={`${controlClasses} ${align === "right" ? "text-right" : ""} ${errorMessage ? "border-red-500 focus:border-red-500" : ""} ${readOnly ? "bg-gray-50 dark:bg-gray-800" : ""}`}
+              placeholder={placeholder}
+              disabled={disabled}
+              readOnly={readOnly}
+              onChange={(e) => {
+                field.onChange(e);
+                if (onChange) onChange(e);
+              }}
+            />
+          );
+        }}
       />
       {errorMessage && <p className="text-red-500 text-[9px] mt-0.5">{errorMessage}</p>}
     </td>
@@ -223,7 +240,7 @@ const InputCell = ({
 
 const BELONGS_TO = ["Appliances", "Bosch"];
 const YES_NO = ["Yes", "No"];
-const INVOICE_REF_TYPES = ["With Our Invoice"," Without Our Invoice"];
+const INVOICE_REF_TYPES = ["With Our Invoice", "Without Our Invoice"];
 const CURRENCY = [""];
 
 const roundHalfUp = (value, decimals = 2) => {
@@ -251,8 +268,11 @@ const getDefaultItemRow = () => ({
   amountInCurrency: 0,
   amount: 0,
   sgstRate: 0,
+  sgstAmount: 0,
   cgstRate: 0,
+  cgstAmount: 0,
   igstRate: 0,
+  igstAmount: 0,
 });
 
 const getDefaultTaxRow = () => ({
@@ -303,9 +323,6 @@ const getDefaultValues = () => ({
 
 // ===================== Helpers =====================
 
-const fmt = (n) =>
-  (Number(n) || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
 const numberToWords = (num) => {
   if (!num || isNaN(num)) return "";
   const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
@@ -327,6 +344,22 @@ const numberToWords = (num) => {
   return (words || "Zero").trim() + " Rupees Only";
 };
 
+/**
+ * Derive the effective rate percentages for a row based on
+ * the current IGST-applicable flag and the row's taxPercentage.
+ */
+const deriveRowRates = (row, isIGST) => {
+  const taxPct = Number(row?.taxPercentage) || 0;
+
+  if (isIGST === "Yes") {
+    return { sgstRate: 0, cgstRate: 0, igstRate: taxPct };
+  }
+
+  // If taxType is explicitly set to SGST, or default when IGST is No:
+  const half = roundHalfUp(taxPct / 2, 4);
+  return { sgstRate: half, cgstRate: half, igstRate: 0 };
+};
+
 // ===================== Main Component =====================
 
 const SalesReturnForm = ({ data, onBack }) => {
@@ -339,6 +372,7 @@ const SalesReturnForm = ({ data, onBack }) => {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
   const dataLoadedRef = useRef(false);
+  const savingRef = useRef(false);
 
   // Lookup states
   const [plantOptions, setPlantOptions] = useState([]);
@@ -352,10 +386,10 @@ const SalesReturnForm = ({ data, onBack }) => {
   const [employeeOptions, setEmployeeOptions] = useState([]);
   const [returnTypeOptions, setReturnTypeOptions] = useState([]);
   const [currencyOptions, setCurrencyOptions] = useState(CURRENCY);
-  const [buyingExRate, setBuyingExRate] = useState(0);
   const currencyMap = useRef({});
   const baseItemOptions = useRef([]);
   const baseItemMap = useRef({});
+
   const defaults = useCallback(() => {
     const base = getDefaultValues();
     if (data) {
@@ -408,8 +442,11 @@ const SalesReturnForm = ({ data, onBack }) => {
           amountInCurrency: it.amountInSelectedCurrency || it.amountInCurrency || 0,
           amount: it.amount || 0,
           sgstRate: it.sgstRate || 0,
+          sgstAmount: it.sgstAmount || 0,
           cgstRate: it.cgstRate || 0,
+          cgstAmount: it.cgstAmount || 0,
           igstRate: it.igstRate || 0,
+          igstAmount: it.igstAmount || 0,
         }));
       }
 
@@ -452,89 +489,152 @@ const SalesReturnForm = ({ data, onBack }) => {
   const watchInvoiceRefType = watch("invoiceRefType");
   const watchInvoiceNo = watch("invoiceNo");
 
-  // ---- Auto-calculate amounts ----
-  useEffect(() => {
-    if (!watchItems?.length) return;
+  /* =========================================================
+   * Derived values — computed every render.
+   * These NEVER go stale, because we read them fresh from
+   * the current watched state.
+   * ========================================================= */
+  const derivedItems = useMemo(() => {
+    const exRate = Number(watchExchangeRate) || 0;
+    return (watchItems || []).map((row) => {
+      const qty = Number(row?.receivedQty) || 0;
+      const rate = Number(row?.rate) || 0;
+      const amount = roundHalfUp(qty * rate, 2);
+
+      const { sgstRate, cgstRate, igstRate } = deriveRowRates(
+        row,
+        watchIsIGST,
+      );
+
+      const sgstAmount = roundHalfUp((amount * sgstRate) / 100, 2);
+      const cgstAmount = roundHalfUp((amount * cgstRate) / 100, 2);
+      const igstAmount = roundHalfUp((amount * igstRate) / 100, 2);
+
+      const rateInCurrency =
+        exRate > 0 ? roundHalfUp(rate / exRate, 2) : 0;
+      const amountInCurrency =
+        exRate > 0 ? roundHalfUp(qty * rateInCurrency, 2) : 0;
+
+      return {
+        amount,
+        sgstRate,
+        cgstRate,
+        igstRate,
+        sgstAmount,
+        cgstAmount,
+        igstAmount,
+        rateInCurrency,
+        amountInCurrency,
+      };
+    });
+  }, [watchItems, watchIsIGST, watchExchangeRate]);
+
+  // Aggregate for the tax summary row + net amount
+  const derivedTotals = useMemo(() => {
     let net = 0;
-    watchItems.forEach((row, idx) => {
-      const qty = Number(row.receivedQty) || 0;
-      const rate = Number(row.rate) || 0;
-      const amt = qty * rate;
-      if (Number(row.amount) !== amt) {
-        setValue(`items.${idx}.amount`, amt, { shouldDirty: true });
-      }
-      const exRate = Number(watchExchangeRate) || 0;
-      let rateInCurr = 0;
-      if (exRate !== 0 && row.rate != null) {
-        rateInCurr = roundHalfUp(rate / exRate, 2);
-        const amtInCurr = qty * rateInCurr;
-        if (Number(row.rateInCurrency) !== rateInCurr) {
-          setValue(`items.${idx}.rateInCurrency`, rateInCurr, { shouldDirty: true });
-        }
-        if (Number(row.amountInCurrency) !== amtInCurr) {
-          setValue(`items.${idx}.amountInCurrency`, amtInCurr, { shouldDirty: true });
-        }
-      }
-      net += amt;
+    let sgstTotal = 0;
+    let cgstTotal = 0;
+    let igstTotal = 0;
+    derivedItems.forEach((d) => {
+      net += d.amount;
+      sgstTotal += d.sgstAmount;
+      cgstTotal += d.cgstAmount;
+      igstTotal += d.igstAmount;
     });
-    if (Number(getValues("netAmount")) !== net) {
-      setValue("netAmount", net, { shouldDirty: true });
-    }
-    setValue("amountInWords", net > 0 ? numberToWords(net) : "", { shouldDirty: true });
-  }, [watchItems, watchExchangeRate, setValue, getValues]);
-
-  // ---- Auto-calculate tax details ----
-  useEffect(() => {
-    if (!watchItems?.length) return;
-    let sgstTotal = 0, cgstTotal = 0, igstTotal = 0;
-    watchItems.forEach((row) => {
-      const amt = Number(row.amount) || 0;
-      const sgstR = Number(row.sgstRate || (row.taxType === "SGST" ? Number(row.taxPercentage) / 2 : 0));
-      const cgstR = Number(row.cgstRate || (row.taxType === "SGST" ? Number(row.taxPercentage) / 2 : 0));
-      const igstR = Number(row.igstRate || (row.taxType === "IGST" ? Number(row.taxPercentage) : 0));
-      sgstTotal += (amt * sgstR) / 100;
-      cgstTotal += (amt * cgstR) / 100;
-      igstTotal += (amt * igstR) / 100;
-    });
-    const existing = getValues("taxDetails") || [];
-    const first = existing[0] || getDefaultTaxRow();
-    const taxTotal = sgstTotal + cgstTotal + igstTotal;
-    const updated = {
-      ...first,
-      particulars: first.particulars || (watchIsIGST === "Yes" ? "IGST" : "CGST + SGST"),
-      amount: first.amount ?? taxTotal,
-      glAccountName: first.glAccountName || "",
-      sgstRate: watchIsIGST === "Yes" ? 0 : (watchItems[0] ? (Number(watchItems[0].taxPercentage) || 0) / 2 : 0),
-      sgstAmount: sgstTotal,
-      cgstRate: watchIsIGST === "Yes" ? 0 : (watchItems[0] ? (Number(watchItems[0].taxPercentage) || 0) / 2 : 0),
-      cgstAmount: cgstTotal,
-      igstRate: watchIsIGST === "Yes" ? (watchItems[0] ? Number(watchItems[0].taxPercentage) || 0 : 0) : 0,
-      igstAmount: igstTotal,
+    return {
+      net: roundHalfUp(net, 2),
+      sgstTotal: roundHalfUp(sgstTotal, 2),
+      cgstTotal: roundHalfUp(cgstTotal, 2),
+      igstTotal: roundHalfUp(igstTotal, 2),
+      taxTotal: roundHalfUp(sgstTotal + cgstTotal + igstTotal, 2),
     };
-    if (JSON.stringify(existing[0]) !== JSON.stringify(updated)) {
-      taxArray.replace([updated]);
-    }
-  }, [watchItems, watchIsIGST, taxArray, getValues]);
+  }, [derivedItems]);
 
-  // ---- Set item CGST/SGST/IGST rates based on IGST applicability ----
+  /* =========================================================
+   * One single effect that persists the derived values
+   * into RHF state so that:
+   *   - the payload (which reads from getValues) has them
+   *   - the tax summary row gets updated
+   * Only writes when values actually differ.
+   * ========================================================= */
+  const isSyncingRef = useRef(false);
+
   useEffect(() => {
-    if (!watchItems?.length) return;
-    watchItems.forEach((row, idx) => {
-      const taxPct = Number(row.taxPercentage) || 0;
-      if (watchIsIGST === "No") {
-        const split = roundHalfUp(taxPct / 2, 2);
-        if (Number(row.sgstRate) !== split) setValue(`items.${idx}.sgstRate`, split, { shouldDirty: true });
-        if (Number(row.cgstRate) !== split) setValue(`items.${idx}.cgstRate`, split, { shouldDirty: true });
-        if (Number(row.igstRate) !== 0) setValue(`items.${idx}.igstRate`, 0, { shouldDirty: true });
-      } else if (watchIsIGST === "Yes") {
-        if (Number(row.igstRate) !== taxPct) setValue(`items.${idx}.igstRate`, taxPct, { shouldDirty: true });
-        if (Number(row.sgstRate) !== 0) setValue(`items.${idx}.sgstRate`, 0, { shouldDirty: true });
-        if (Number(row.cgstRate) !== 0) setValue(`items.${idx}.cgstRate`, 0, { shouldDirty: true });
-      }
-    });
-  }, [watchItems, watchIsIGST, setValue]);
+    if (isSyncingRef.current) return;
+    isSyncingRef.current = true;
+    try {
+      (watchItems || []).forEach((row, idx) => {
+        const d = derivedItems[idx];
+        if (!d) return;
 
-  // ---- Data loading ----
+        if (Number(row?.amount) !== d.amount) {
+          setValue(`items.${idx}.amount`, d.amount, { shouldDirty: false });
+        }
+        if (Number(row?.sgstRate) !== d.sgstRate) {
+          setValue(`items.${idx}.sgstRate`, d.sgstRate, { shouldDirty: false });
+        }
+        if (Number(row?.cgstRate) !== d.cgstRate) {
+          setValue(`items.${idx}.cgstRate`, d.cgstRate, { shouldDirty: false });
+        }
+        if (Number(row?.igstRate) !== d.igstRate) {
+          setValue(`items.${idx}.igstRate`, d.igstRate, { shouldDirty: false });
+        }
+        if (Number(row?.sgstAmount) !== d.sgstAmount) {
+          setValue(`items.${idx}.sgstAmount`, d.sgstAmount, { shouldDirty: false });
+        }
+        if (Number(row?.cgstAmount) !== d.cgstAmount) {
+          setValue(`items.${idx}.cgstAmount`, d.cgstAmount, { shouldDirty: false });
+        }
+        if (Number(row?.igstAmount) !== d.igstAmount) {
+          setValue(`items.${idx}.igstAmount`, d.igstAmount, { shouldDirty: false });
+        }
+        if (Number(row?.rateInCurrency) !== d.rateInCurrency) {
+          setValue(`items.${idx}.rateInCurrency`, d.rateInCurrency, { shouldDirty: false });
+        }
+        if (Number(row?.amountInCurrency) !== d.amountInCurrency) {
+          setValue(`items.${idx}.amountInCurrency`, d.amountInCurrency, { shouldDirty: false });
+        }
+      });
+
+      if (Number(getValues("netAmount")) !== derivedTotals.net) {
+        setValue("netAmount", derivedTotals.net, { shouldDirty: false });
+      }
+      setValue(
+        "amountInWords",
+        derivedTotals.net > 0 ? numberToWords(derivedTotals.net) : "",
+        { shouldDirty: false },
+      );
+
+      // Update aggregate tax summary row
+      const existing = getValues("taxDetails") || [];
+      const first = existing[0] || getDefaultTaxRow();
+      const isIGST = watchIsIGST === "Yes";
+      const firstPct = Number(watchItems?.[0]?.taxPercentage) || 0;
+      const halfPct = roundHalfUp(firstPct / 2, 4);
+
+      const updatedTax = {
+        ...first,
+        particulars: isIGST ? "IGST" : "CGST + SGST",
+        amount: derivedTotals.taxTotal,
+        glAccountName: first.glAccountName || "",
+        sgstRate: isIGST ? 0 : halfPct,
+        sgstAmount: isIGST ? 0 : derivedTotals.sgstTotal,
+        cgstRate: isIGST ? 0 : halfPct,
+        cgstAmount: isIGST ? 0 : derivedTotals.cgstTotal,
+        igstRate: isIGST ? firstPct : 0,
+        igstAmount: isIGST ? derivedTotals.igstTotal : 0,
+      };
+
+      if (JSON.stringify(existing[0]) !== JSON.stringify(updatedTax)) {
+        taxArray.replace([updatedTax, ...existing.slice(1)]);
+      }
+    } finally {
+      isSyncingRef.current = false;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [derivedItems, derivedTotals, watchIsIGST]);
+
+  // ---- Data loading (unchanged) ----
   useEffect(() => {
     if (orgId) {
       loadPlants();
@@ -546,6 +646,7 @@ const SalesReturnForm = ({ data, onBack }) => {
       loadReturnTypes();
       loadInvoiceItems();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orgId, branchId]);
 
   useEffect(() => {
@@ -553,9 +654,9 @@ const SalesReturnForm = ({ data, onBack }) => {
       dataLoadedRef.current = data.id;
       loadSalesReturnData(data);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
 
-  // ---- Auto-fetch Doc ID for new Sales Return ----
   useEffect(() => {
     if (data?.id) return;
     let active = true;
@@ -572,7 +673,8 @@ const SalesReturnForm = ({ data, onBack }) => {
     };
     if (orgId) loadDocId();
     return () => { active = false; };
-  }, [orgId, data?.id, setValue]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgId, data?.id]);
 
   const loadPlants = useCallback(async () => {
     try {
@@ -734,16 +836,15 @@ const SalesReturnForm = ({ data, onBack }) => {
     } catch { setReturnTypeOptions([]); }
   }, [orgId]);
 
-  // ---- Load Gate Passes based on customer + invoice ref type + invoice ----
   useEffect(() => {
     if (watchCustomerId && watchInvoiceNo && watchInvoiceRefType) {
       loadGatePasses(watchCustomerId, watchInvoiceNo, watchInvoiceRefType.trim());
     } else {
       setGatePassOptions([]);
     }
-  }, [watchCustomerId, watchInvoiceNo, watchInvoiceRefType, loadGatePasses]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchCustomerId, watchInvoiceNo, watchInvoiceRefType]);
 
-  // ---- Auto-set exchange rate when a currency is selected ----
   useEffect(() => {
     if (!watchCurrency) return;
     const entry = currencyMap.current[watchCurrency];
@@ -758,7 +859,8 @@ const SalesReturnForm = ({ data, onBack }) => {
         setValue("exchangeRateId", entry.exchangeRateId, { shouldDirty: true });
       }
     }
-  }, [watchCurrency, watchExchangeRate, setValue, getValues]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchCurrency, watchExchangeRate]);
 
   const loadSalesReturnData = async (raw) => {
     setLoading(true);
@@ -816,8 +918,11 @@ const SalesReturnForm = ({ data, onBack }) => {
           amountInCurrency: it.amountInSelectedCurrency || it.amountInCurrency || 0,
           amount: it.amount || 0,
           sgstRate: it.sgstRate || 0,
+          sgstAmount: it.sgstAmount || 0,
           cgstRate: it.cgstRate || 0,
+          cgstAmount: it.cgstAmount || 0,
           igstRate: it.igstRate || 0,
+          igstAmount: it.igstAmount || 0,
         })));
       }
 
@@ -859,46 +964,77 @@ const SalesReturnForm = ({ data, onBack }) => {
   };
 
   const clearItemFields = useCallback((idx) => {
-    setValue(`items.${idx}.itemId`, "", { shouldDirty: true });
-    setValue(`items.${idx}.itemCode`, "", { shouldDirty: true });
-    setValue(`items.${idx}.itemDescription`, "", { shouldDirty: true });
-    setValue(`items.${idx}.hsnId`, "", { shouldDirty: true });
-    setValue(`items.${idx}.hsCode`, "", { shouldDirty: true });
-    setValue(`items.${idx}.unit`, "", { shouldDirty: true });
-    setValue(`items.${idx}.unitDescription`, "", { shouldDirty: true });
-    setValue(`items.${idx}.qtySold`, 0, { shouldDirty: true });
-    setValue(`items.${idx}.receivedQty`, 0, { shouldDirty: true });
-    setValue(`items.${idx}.rate`, 0, { shouldDirty: true });
-    setValue(`items.${idx}.stock`, 0, { shouldDirty: true });
-    setValue(`items.${idx}.taxType`, "", { shouldDirty: true });
-    setValue(`items.${idx}.taxPercentage`, 0, { shouldDirty: true });
-    setValue(`items.${idx}.sgstRate`, 0, { shouldDirty: true });
-    setValue(`items.${idx}.cgstRate`, 0, { shouldDirty: true });
-    setValue(`items.${idx}.igstRate`, 0, { shouldDirty: true });
-    setValue(`items.${idx}.rateInCurrency`, 0, { shouldDirty: true });
-    setValue(`items.${idx}.amountInCurrency`, 0, { shouldDirty: true });
-    setValue(`items.${idx}.amount`, 0, { shouldDirty: true });
+    const reset = (field, value) =>
+      setValue(`items.${idx}.${field}`, value, { shouldDirty: false });
+
+    reset("itemId", "");
+    reset("itemCode", "");
+    reset("itemDescription", "");
+    reset("hsnId", "");
+    reset("hsCode", "");
+    reset("unit", "");
+    reset("unitDescription", "");
+    reset("qtySold", 0);
+    reset("receivedQty", 0);
+    reset("rate", 0);
+    reset("stock", 0);
+    reset("taxType", "");
+    reset("taxPercentage", 0);
+    reset("sgstRate", 0);
+    reset("sgstAmount", 0);
+    reset("cgstRate", 0);
+    reset("cgstAmount", 0);
+    reset("igstRate", 0);
+    reset("igstAmount", 0);
+    reset("rateInCurrency", 0);
+    reset("amountInCurrency", 0);
+    reset("amount", 0);
   }, [setValue]);
 
   const applySelectedItem = useCallback((idx, item) => {
     if (!item) return;
-    setValue(`items.${idx}.itemId`, item.itemId ?? item.itemCode ?? "", { shouldDirty: true });
-    setValue(`items.${idx}.itemCode`, item.itemId ?? item.itemCode ?? "", { shouldDirty: true });
-    setValue(`items.${idx}.itemDescription`, item.itemDescription || "", { shouldDirty: true });
-    setValue(`items.${idx}.hsnId`, item.hsnId ?? "", { shouldDirty: true });
-    setValue(`items.${idx}.hsCode`, item.hsnSacCode ?? item.hsnId ?? item.hsCode ?? "", { shouldDirty: true });
-    setValue(`items.${idx}.unit`, item.unitId ?? item.unit ?? "", { shouldDirty: true });
-    setValue(`items.${idx}.unitDescription`, item.unitDescription || item.unitCode || "", { shouldDirty: true });
-    setValue(`items.${idx}.qtySold`, item.qtySold || 0, { shouldDirty: true });
-    setValue(`items.${idx}.rate`, item.newRate ?? item.rate ?? 0, { shouldDirty: true });
-    setValue(`items.${idx}.stock`, item.stock || 0, { shouldDirty: true });
-    const igst = Number(item.igstRate) > 0;
-    const taxType = igst ? "IGST" : "SGST";
-    setValue(`items.${idx}.taxType`, taxType, { shouldDirty: true });
-    setValue(`items.${idx}.taxPercentage`, item.igstRate || item.sgstRate || item.cgstRate || 0, { shouldDirty: true });
-    setValue(`items.${idx}.sgstRate`, item.sgstRate || 0, { shouldDirty: true });
-    setValue(`items.${idx}.cgstRate`, item.cgstRate || 0, { shouldDirty: true });
-    setValue(`items.${idx}.igstRate`, item.igstRate || 0, { shouldDirty: true });
+    const set = (field, value) =>
+      setValue(`items.${idx}.${field}`, value, { shouldDirty: false });
+
+    set("itemId", item.itemId ?? item.itemCode ?? "");
+    set("itemCode", item.itemId ?? item.itemCode ?? "");
+    set("itemDescription", item.itemDescription || "");
+    set("hsnId", item.hsnId ?? "");
+    set("hsCode", item.hsnSacCode ?? item.hsnId ?? item.hsCode ?? "");
+    set("unit", item.unitId ?? item.unit ?? "");
+    set("unitDescription", item.unitDescription || item.unitCode || "");
+    set("qtySold", item.qtySold || 0);
+    set("rate", item.newRate ?? item.rate ?? 0);
+    set("stock", item.stock || 0);
+
+    // Fix: derive the total tax % correctly
+    let taxPct = 0;
+    if (Number(item.igstRate) > 0) {
+      taxPct = Number(item.igstRate);
+    } else if (Number(item.sgstRate) > 0 && Number(item.cgstRate) > 0) {
+      // sgstRate + cgstRate = total tax %
+      taxPct = Number(item.sgstRate) + Number(item.cgstRate);
+    } else if (Number(item.taxPercentage) > 0) {
+      taxPct = Number(item.taxPercentage);
+    }
+
+    const taxType = Number(item.igstRate) > 0 ? "IGST" : "SGST";
+
+    set("taxType", taxType);
+    set("taxPercentage", taxPct);
+
+    // The rate derivation is done on the fly by `deriveRowRates`,
+    // but we can initialise here too for the UI.
+    if (taxType === "IGST") {
+      set("igstRate", taxPct);
+      set("sgstRate", 0);
+      set("cgstRate", 0);
+    } else {
+      const half = roundHalfUp(taxPct / 2, 4);
+      set("sgstRate", half);
+      set("cgstRate", half);
+      set("igstRate", 0);
+    }
   }, [setValue]);
 
   const handleItemChange = (idx, field, value) => {
@@ -917,7 +1053,6 @@ const SalesReturnForm = ({ data, onBack }) => {
   const handleAddTax = () => { taxArray.append(getDefaultTaxRow()); };
   const handleRemoveTax = (idx) => { if (taxArray.fields.length > 1) taxArray.remove(idx); };
 
-  // ---- Load items: always base list; merge invoice items per invoice ref type ----
   useEffect(() => {
     const type = (watchInvoiceRefType || "").trim().toLowerCase();
     const isWith = type.includes("with");
@@ -928,6 +1063,7 @@ const SalesReturnForm = ({ data, onBack }) => {
       setItemOptions(baseItemOptions.current);
       setItemMap(baseItemMap.current);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watchInvoiceRefType, watchInvoiceNo, loadInvoiceSpecificItems]);
 
   // ---- Validation ----
@@ -953,10 +1089,34 @@ const SalesReturnForm = ({ data, onBack }) => {
   };
 
   const onSubmit = async (formData) => {
-    if (!validate()) return;
+    if (savingRef.current) return;
+    savingRef.current = true;
+
+    if (!validate()) {
+      savingRef.current = false;
+      return;
+    }
+
     setSaving(true);
     const isUpdate = Boolean(data?.id);
     const financialYear = localStorage.getItem("finYear") || new Date().getFullYear().toString();
+
+    // 🔑 Use the freshly-derived values so we don't rely on possibly-stale form state.
+    const itemsForPayload = (formData.items || []).map((item, idx) => {
+      const d = derivedItems[idx] || {};
+      return {
+        ...item,
+        amount: d.amount ?? item.amount ?? 0,
+        sgstRate: d.sgstRate ?? item.sgstRate ?? 0,
+        cgstRate: d.cgstRate ?? item.cgstRate ?? 0,
+        igstRate: d.igstRate ?? item.igstRate ?? 0,
+        sgstAmount: d.sgstAmount ?? item.sgstAmount ?? 0,
+        cgstAmount: d.cgstAmount ?? item.cgstAmount ?? 0,
+        igstAmount: d.igstAmount ?? item.igstAmount ?? 0,
+        rateInCurrency: d.rateInCurrency ?? item.rateInCurrency ?? 0,
+        amountInCurrency: d.amountInCurrency ?? item.amountInCurrency ?? 0,
+      };
+    });
 
     const payload = {
       active: true,
@@ -983,7 +1143,7 @@ const SalesReturnForm = ({ data, onBack }) => {
       cancelRemarks: "",
       createdBy: usersId || "admin",
       updatedBy: usersId || "admin",
-      salesReturnDetails: (formData.items || [])
+      salesReturnDetails: itemsForPayload
         .filter((r) => r.itemCode)
         .map((item) => ({
           item: Number(item.itemId ?? item.itemCode) || 0,
@@ -998,16 +1158,16 @@ const SalesReturnForm = ({ data, onBack }) => {
           rateInSelectedCurrency: Number(item.rateInCurrency) || 0,
           amountInSelectedCurrency: Number(item.amountInCurrency) || 0,
           sgstRate: Number(item.sgstRate) || 0,
-          sgstAmount: 0,
+          sgstAmount: Number(item.sgstAmount) || 0,
           cgstRate: Number(item.cgstRate) || 0,
-          cgstAmount: 0,
+          cgstAmount: Number(item.cgstAmount) || 0,
           igstRate: Number(item.igstRate) || 0,
-          igstAmount: 0,
+          igstAmount: Number(item.igstAmount) || 0,
           amount: Number(item.amount) || 0,
         })),
       salesReturnTaxDetails: (formData.taxDetails || []).map((t) => ({
         particulars: t.particulars || "",
-        amount: Number(t.amount ?? t.sgstAmount + t.cgstAmount + t.igstAmount) || 0,
+        amount: Number(t.amount ?? (Number(t.sgstAmount) + Number(t.cgstAmount) + Number(t.igstAmount))) || 0,
         glAccountName: t.glAccountName || "",
       })),
     };
@@ -1024,10 +1184,11 @@ const SalesReturnForm = ({ data, onBack }) => {
       } else {
         addToast(response?.message || "Something went wrong", "error");
       }
-    } catch (err) {
+    } catch {
       addToast("Failed to save Sales Return", "error");
     } finally {
       setSaving(false);
+      savingRef.current = false;
     }
   };
 
@@ -1039,7 +1200,6 @@ const SalesReturnForm = ({ data, onBack }) => {
     );
   }
 
-  // ---- Render header ----
   const renderHeader = () => (
     <div className={fieldGrid}>
       <SelectField control={control} name="plantId" label="Plant ID" options={plantOptions} required errors={errors} />
@@ -1052,7 +1212,7 @@ const SalesReturnForm = ({ data, onBack }) => {
       <SelectField control={control} name="locationId" label="Location ID" options={locationOptions} required errors={errors} />
       <SelectField control={control} name="invoiceRefType" label="Invoice Ref. Type" options={INVOICE_REF_TYPES} required errors={errors} />
       <SelectField control={control} name="invoiceNo" label="Invoice No" options={invoiceOptions} errors={errors} />
-      <InputField control={control} name="invoiceDate" label="Invoice Date" type="date" errors={errors} readOnly />
+      <InputField control={control} name="invoiceDate" label="Invoice Date" type="date" errors={errors} />
       <SelectField control={control} name="gatePassNo" label="Gate Pass No" options={gatePassOptions} required errors={errors} />
       <SelectField control={control} name="returnType" label="Return Type" options={returnTypeOptions} required errors={errors} />
       <SelectField control={control} name="currency" label="Currency" options={currencyOptions} required errors={errors} disabled={Boolean(watchCustomerId) && currencyOptions.length === 0} />
@@ -1068,7 +1228,6 @@ const SalesReturnForm = ({ data, onBack }) => {
     </div>
   );
 
-  // ---- Tab 1: Return Items ----
   const renderReturnDetailsTab = () => {
     const showSGST = watchIsIGST !== "Yes";
     const showIGST = watchIsIGST === "Yes";
@@ -1089,43 +1248,60 @@ const SalesReturnForm = ({ data, onBack }) => {
         <TableWrapper>
           <TableHead headers={headers} />
           <tbody>
-            {itemsArray.fields.map((field, index) => (
-              <TableRow key={field.id} index={index} onRemove={() => handleRemoveItem(index)} disabled={itemsArray.fields.length <= 1}>
-                <SelectCell control={control} name={`items.${index}.itemCode`} options={itemOptions} errors={errors} onChange={(v) => handleItemChange(index, "itemCode", v)} />
-                <InputCell control={control} name={`items.${index}.itemDescription`} readOnly errors={errors} />
-                <InputCell control={control} name={`items.${index}.hsCode`} errors={errors} />
-                <InputCell control={control} name={`items.${index}.taxPercentage`} type="number" step="0.01" placeholder="0.00" errors={errors} readOnly />
-                <InputCell control={control} name={`items.${index}.unitDescription`} readOnly errors={errors} />
-                <InputCell control={control} name={`items.${index}.stock`} type="number" step="0.001" errors={errors} />
-                <InputCell control={control} name={`items.${index}.qtySold`} type="number" errors={errors} />
-                <InputCell control={control} name={`items.${index}.receivedQty`} type="number" step="0.001" errors={errors} />
-                <InputCell control={control} name={`items.${index}.rate`} type="number" step="0.01" errors={errors} />
-                <InputCell control={control} name={`items.${index}.rateInCurrency`} type="number" step="0.01" readOnly errors={errors} />
-                <InputCell control={control} name={`items.${index}.amountInCurrency`} type="number" step="0.01" readOnly errors={errors} />
-                <InputCell control={control} name={`items.${index}.amount`} type="number" step="0.01" readOnly errors={errors} />
-                {showSGST && (
-                  <>
-                    <InputCell control={control} name={`items.${index}.sgstRate`} type="number" step="0.0001" readOnly errors={errors} />
-                    <InputCell control={control} name={`items.${index}.sgstAmount`} type="number" step="0.01" readOnly errors={errors} />
-                    <InputCell control={control} name={`items.${index}.cgstRate`} type="number" step="0.0001" readOnly errors={errors} />
-                    <InputCell control={control} name={`items.${index}.cgstAmount`} type="number" step="0.01" readOnly errors={errors} />
-                  </>
-                )}
-                {showIGST && (
-                  <>
-                    <InputCell control={control} name={`items.${index}.igstRate`} type="number" step="0.0001" readOnly errors={errors} />
-                    <InputCell control={control} name={`items.${index}.igstAmount`} type="number" step="0.01" readOnly errors={errors} />
-                  </>
-                )}
-              </TableRow>
-            ))}
+            {itemsArray.fields.map((field, index) => {
+              const d = derivedItems[index] || {};
+              return (
+                <TableRow key={field.id} index={index} onRemove={() => handleRemoveItem(index)} disabled={itemsArray.fields.length <= 1}>
+                  <SelectCell control={control} name={`items.${index}.itemCode`} options={itemOptions} errors={errors} onChange={(v) => handleItemChange(index, "itemCode", v)} />
+                  <InputCell control={control} name={`items.${index}.itemDescription`} readOnly errors={errors} />
+                  <InputCell control={control} name={`items.${index}.hsCode`} errors={errors} />
+                  <InputCell control={control} name={`items.${index}.taxPercentage`} type="number" step="0.01" placeholder="0.00" errors={errors} readOnly />
+                  <InputCell control={control} name={`items.${index}.unitDescription`} readOnly errors={errors} />
+                  <InputCell control={control} name={`items.${index}.stock`} type="number" step="0.001" errors={errors} />
+                  <InputCell control={control} name={`items.${index}.qtySold`} type="number" errors={errors} />
+                  <InputCell control={control} name={`items.${index}.receivedQty`} type="number" step="0.001" errors={errors} />
+                  <InputCell control={control} name={`items.${index}.rate`} type="number" step="0.01" errors={errors} />
+                  <InputCell
+                    control={control}
+                    name={`items.${index}.rateInCurrency`}
+                    type="number" step="0.01" readOnly errors={errors}
+                    overrideValue={d.rateInCurrency}
+                  />
+                  <InputCell
+                    control={control}
+                    name={`items.${index}.amountInCurrency`}
+                    type="number" step="0.01" readOnly errors={errors}
+                    overrideValue={d.amountInCurrency}
+                  />
+                  <InputCell
+                    control={control}
+                    name={`items.${index}.amount`}
+                    type="number" step="0.01" readOnly errors={errors}
+                    overrideValue={d.amount}
+                  />
+                  {showSGST && (
+                    <>
+                      <InputCell control={control} name={`items.${index}.sgstRate`} type="number" step="0.0001" readOnly errors={errors} overrideValue={d.sgstRate} />
+                      <InputCell control={control} name={`items.${index}.sgstAmount`} type="number" step="0.01" readOnly errors={errors} overrideValue={d.sgstAmount} />
+                      <InputCell control={control} name={`items.${index}.cgstRate`} type="number" step="0.0001" readOnly errors={errors} overrideValue={d.cgstRate} />
+                      <InputCell control={control} name={`items.${index}.cgstAmount`} type="number" step="0.01" readOnly errors={errors} overrideValue={d.cgstAmount} />
+                    </>
+                  )}
+                  {showIGST && (
+                    <>
+                      <InputCell control={control} name={`items.${index}.igstRate`} type="number" step="0.0001" readOnly errors={errors} overrideValue={d.igstRate} />
+                      <InputCell control={control} name={`items.${index}.igstAmount`} type="number" step="0.01" readOnly errors={errors} overrideValue={d.igstAmount} />
+                    </>
+                  )}
+                </TableRow>
+              );
+            })}
           </tbody>
         </TableWrapper>
       </div>
     );
   };
 
-  // ---- Tab 2: Tax Detail ----
   const renderTaxDetailTab = () => (
     <div className="pt-2 space-y-2">
       <div className="flex items-center justify-end">
@@ -1133,7 +1309,7 @@ const SalesReturnForm = ({ data, onBack }) => {
           <Plus size={12} />
         </button>
       </div>
-        <TableWrapper>
+      <TableWrapper>
         <TableHead headers={["S.No", "Particulars", "Amount", "GL Account", "SGST Rate", "SGST Amount", "CGST Rate", "CGST Amount", "IGST Rate", "IGST Amount", "Action"]} />
         <tbody>
           {taxArray.fields.map((field, index) => (
@@ -1154,7 +1330,6 @@ const SalesReturnForm = ({ data, onBack }) => {
     </div>
   );
 
-  // ---- Tab 3: Charges Summary ----
   const renderChargesSummaryTab = () => (
     <div className="pt-2">
       <div className={subTabFieldGrid}>
@@ -1221,10 +1396,20 @@ const SalesReturnForm = ({ data, onBack }) => {
         </section>
 
         <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
-          <button onClick={onBack} disabled={saving} className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors">
+          <button
+            type="button"
+            onClick={onBack}
+            disabled={saving}
+            className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+          >
             <X className="h-3 w-3" /> Cancel
           </button>
-          <button onClick={handleSubmit(onSubmit)} disabled={saving} className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors">
+          <button
+            type="button"
+            onClick={handleSubmit(onSubmit)}
+            disabled={saving}
+            className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+          >
             <Save className="h-3 w-3" /> {saving ? "Saving..." : data ? "Update" : "Save"}
           </button>
         </div>

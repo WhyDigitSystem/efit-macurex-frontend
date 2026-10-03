@@ -194,10 +194,10 @@ const TableHead = ({ headers }) => (
         <th
           key={i}
           className={`p-2 whitespace-nowrap ${i === 0
-            ? "w-8 text-center"
-            : i === headers.length - 1
-              ? "w-20 text-left"
-              : "text-left"
+              ? "w-8 text-center"
+              : i === headers.length - 1
+                ? "w-20 text-left"
+                : "text-left"
             } text-gray-700 dark:text-gray-200 text-[10px] font-medium`}
         >
           {h}
@@ -209,7 +209,9 @@ const TableHead = ({ headers }) => (
 
 const TableRow = ({ children, index, onRemove, disabled, showDelete = true }) => (
   <tr className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-    <td className="p-2 text-center font-medium dark:text-white text-[10px]">{index + 1}</td>
+    <td className="p-2 text-center font-medium dark:text-white text-[10px]">
+      {index + 1}
+    </td>
     {children}
     {showDelete && (
       <td className="p-2 text-center">
@@ -218,8 +220,8 @@ const TableRow = ({ children, index, onRemove, disabled, showDelete = true }) =>
           onClick={onRemove}
           disabled={disabled}
           className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
-            ? "bg-gray-400 cursor-not-allowed"
-            : "bg-red-600 hover:bg-red-700"
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-red-600 hover:bg-red-700"
             }`}
         >
           <Trash2 size={10} />
@@ -229,7 +231,15 @@ const TableRow = ({ children, index, onRemove, disabled, showDelete = true }) =>
   </tr>
 );
 
-const SelectCell = ({ control, name, options, required, errors, onChange, disabled }) => {
+const SelectCell = ({
+  control,
+  name,
+  options,
+  required,
+  errors,
+  onChange,
+  disabled,
+}) => {
   const getError = () => {
     const parts = name.split(".");
     let error = errors;
@@ -451,9 +461,11 @@ const StockTransferChallanForm = ({ data, onBack }) => {
   const [activeTab, setActiveTab] = useState("itemDetails");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [generatingDocId, setGeneratingDocId] = useState(false);
   const isUpdatingRef = useRef(false);
   const loadedChallanIdRef = useRef(null);
-  // const dataLoadedRef = useRef(false);
+  const docIdGeneratedRef = useRef(false);      // 👈 guard for doc-id gen
+  const savingRef = useRef(false);              // 👈 synchronous double-save lock
 
   const LIST_OF_VALUES_GROUPS = {
     TYPE: "Stock Transfer Challan Type",
@@ -476,36 +488,27 @@ const StockTransferChallanForm = ({ data, onBack }) => {
     if (data) {
       const record = data;
       base.plantId = record.branch?.id ?? record.plantId ?? "";
-      base.docId = record.docId || `STCH${String(Date.now()).slice(-6)}`;
-
-      // IMPORTANT: Type should be the ID from types object
+      base.docId = record.docId || "";
       base.type = record.types?.id ?? record.type ?? "";
-
       base.transferDate = fmtDate(record.docDate || record.transferDate);
       base.customerId = record.customer?.customerId ?? record.customerId ?? "";
       base.customerName = record.customer?.customerName || record.customerName || "";
       base.locationId = record.location?.id ?? record.locationId ?? "";
       base.timeOfTransfer = record.timeOfTranfer || record.timeOfTransfer || dayjs().format("HH:mm");
-
-      // IMPORTANT: Stock Posting
       base.stockPosting = record.stockPosting || "";
-
       base.noOfPackages = record.noOfPackages || "";
       base.partyGstState = record.customer?.gstState || record.partyGstState || "";
       base.otherPackages = record.otherPackages || "";
       base.isIgstApplicable = record.customer?.igstApplicable === true ? "Yes" : "No";
-
-      // IMPORTANT: Import Local
       base.importLocal = record.importLocal || "";
-
       base.gstinNo = record.customer?.gstNo || record.gstinNo || "";
       base.taxCode = record.taxCode || "";
       base.active = record.active === "Active" || record.active !== false;
 
-      // Item Details with all fields properly mapped
       base.itemDetails = record.stockTransferChallanDetailsResponseDTO?.length
-        ? record.stockTransferChallanDetailsResponseDTO.map(item => {
-          const amount = item.totalAssessableValue || (item.quantity * item.rate) || 0;
+        ? record.stockTransferChallanDetailsResponseDTO.map((item) => {
+          const amount =
+            item.totalAssessableValue || item.quantity * item.rate || 0;
           return {
             itemCode: item.item?.id != null ? String(item.item.id) : "",
             itemDescription: item.item?.itemDescription || "",
@@ -528,19 +531,17 @@ const StockTransferChallanForm = ({ data, onBack }) => {
         })
         : [getDefaultItemRow()];
 
-      // Tax Details
       base.taxDetails = record.stockTransferChallanTaxDetailsResponseDTO?.length
-        ? record.stockTransferChallanTaxDetailsResponseDTO.map(item => ({
+        ? record.stockTransferChallanTaxDetailsResponseDTO.map((item) => ({
           particulars: item.particularsDesc || item.particulars || "",
           acceptedQtyAmount: item.acceptQtyAmount || "",
           revisedAmount: item.revisedAmoount || "",
-          isSystemRow: ['Gross Amount', 'IGST', 'CGST', 'SGST'].includes(
-            item.particularsDesc || item.particulars || ""
+          isSystemRow: ["Gross Amount", "IGST", "CGST", "SGST"].includes(
+            item.particularsDesc || item.particulars || "",
           ),
         }))
         : [getDefaultTaxRow()];
 
-      // Terms
       base.totalInsurance = record.totalInsurance || "";
       base.totalFreight = record.totalFreight || "";
       base.totalAssessableValueHeader = record.totalAssVal || "";
@@ -597,7 +598,7 @@ const StockTransferChallanForm = ({ data, onBack }) => {
           (res || []).map((p) => ({
             value: p.id,
             label: p.plantName || p.plantId || p.id,
-          }))
+          })),
         );
       } else {
         const res = await branchAPI.getBranchByOrgId(orgId);
@@ -605,7 +606,7 @@ const StockTransferChallanForm = ({ data, onBack }) => {
           (res || []).map((b) => ({
             value: b.id,
             label: b.branchName || b.branchCode || b.id,
-          }))
+          })),
         );
       }
     } catch (error) {
@@ -617,7 +618,6 @@ const StockTransferChallanForm = ({ data, onBack }) => {
   const loadCustomers = useCallback(async () => {
     try {
       const res = await stockTransferChallanAPI.getCustomerByOrgId(orgId, branch);
-
       setCustomerOptions(
         (res || []).map((c) => ({
           value: c.id,
@@ -627,7 +627,7 @@ const StockTransferChallanForm = ({ data, onBack }) => {
           partyGSTState: c.gstState?.stateName || "",
           isIGSTApplicable: c.gstApplicable || false,
           gstnNo: c.gstNo || "",
-        }))
+        })),
       );
     } catch (error) {
       console.error("Failed to load customer options:", error);
@@ -637,22 +637,15 @@ const StockTransferChallanForm = ({ data, onBack }) => {
 
   const loadItems = useCallback(async () => {
     try {
-      const res = await stockTransferChallanAPI.getItemDetails(
-        orgId,
-        branch
-      );
-
+      const res = await stockTransferChallanAPI.getItemDetails(orgId, branch);
       const map = {};
-
       const options = (res || []).map((it) => {
         map[String(it.id)] = it;
-
         return {
           value: String(it.id),
           label: it.itemCode,
         };
       });
-
       setItemOptions(options);
       setItemMap(map);
     } catch (error) {
@@ -669,7 +662,7 @@ const StockTransferChallanForm = ({ data, onBack }) => {
         (res || []).map((u) => ({
           value: u.id,
           label: u.unitId,
-        }))
+        })),
       );
     } catch (error) {
       console.error("Failed to load unit options:", error);
@@ -684,7 +677,7 @@ const StockTransferChallanForm = ({ data, onBack }) => {
         (res || []).map((l) => ({
           value: l.id,
           label: l.locationName || l.locationCode || l.id,
-        }))
+        })),
       );
     } catch (error) {
       console.error("Failed to load location options:", error);
@@ -699,7 +692,7 @@ const StockTransferChallanForm = ({ data, onBack }) => {
         (res || []).map((s) => ({
           value: s.id,
           label: s.stateName || s.stateCode || s.id,
-        }))
+        })),
       );
     } catch (error) {
       console.error("Failed to load state options:", error);
@@ -714,7 +707,7 @@ const StockTransferChallanForm = ({ data, onBack }) => {
         (res || []).map((b) => ({
           value: b.id,
           label: b.bank,
-        }))
+        })),
       );
     } catch (error) {
       console.error("Failed to load bank options:", error);
@@ -742,17 +735,16 @@ const StockTransferChallanForm = ({ data, onBack }) => {
               items = response.listValues;
             }
 
-            result[key] = items.map(item => ({
+            result[key] = items.map((item) => ({
               value: item.id || item.value,
               label: item.valuesDescription || item.label || item.name,
               ...item,
             }));
-
           } catch (err) {
             console.error(`${group} failed`, err);
             result[key] = [];
           }
-        })
+        }),
       );
 
       setListOfValuesData(result);
@@ -760,6 +752,38 @@ const StockTransferChallanForm = ({ data, onBack }) => {
       console.error("Error loading ListOfValues:", err);
     }
   }, [orgId]);
+
+  /* ---------------- Generate DocId ---------------- */
+
+  const generateDocId = useCallback(async () => {
+    // Skip if editing an existing record
+    if (data?.id) return;
+    // Skip if already generated or in flight
+    if (docIdGeneratedRef.current || generatingDocId) return;
+    if (!orgId) return;
+
+    docIdGeneratedRef.current = true;
+    setGeneratingDocId(true);
+
+    try {
+      const financialYear = new Date().getFullYear().toString();
+      const docId = await stockTransferChallanAPI.getStockTransferChallanDocId(
+        financialYear,
+        orgId,
+      );
+
+      if (docId) {
+        setValue("docId", docId, { shouldDirty: false });
+      } else {
+        addToast("Failed to generate Doc ID", "error");
+      }
+    } catch (error) {
+      console.error("Error generating Doc ID:", error);
+      addToast("Failed to generate Doc ID", "error");
+    } finally {
+      setGeneratingDocId(false);
+    }
+  }, [data?.id, orgId, generatingDocId, setValue, addToast]);
 
   useEffect(() => {
     if (orgId) {
@@ -780,135 +804,149 @@ const StockTransferChallanForm = ({ data, onBack }) => {
     loadUnits,
     loadLocations,
     loadStates,
+    loadBanks,
     loadListOfValuesData,
   ]);
 
+  /* Trigger doc-id generation on mount (only for new records) */
+  useEffect(() => {
+    if (!data?.id && orgId) {
+      generateDocId();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.id, orgId]);
+
   // ===================== Load Data for Edit =====================
 
-  const loadChallanData = useCallback(async (challanId) => {
-    if (!challanId) return;
+  const loadChallanData = useCallback(
+    async (challanId) => {
+      if (!challanId) return;
 
-    // Prevent the same ID from being requested multiple times
-    if (loadedChallanIdRef.current === challanId) {
-      return;
-    }
-
-    loadedChallanIdRef.current = challanId;
-    setLoading(true);
-
-    try {
-      const response = await stockTransferChallanAPI.getStockTransferChallanById(challanId);
-      console.log("Stock Transfer Challan Data:", response);
-
-      if (response) {
-        const challan = response;
-
-        // =========================
-        // Header fields
-        // =========================
-
-        setValue("plantId", challan.branch?.id || challan.plantId || "");
-        setValue("docId", challan.docId || "");
-        setValue("type", challan.types?.id || challan.type || "");
-        setValue("transferDate", challan.docDate || challan.date || "");
-        setValue("customerId", challan.customer?.customerId || challan.customerId || "");
-        setValue("customerName", challan.customer?.customerName || challan.customerName || "");
-        setValue("partyGstState", challan.customer?.gstState || challan.partyGstState || "");
-        setValue("gstinNo", challan.customer?.gstNo || challan.gstinNo || "");
-        setValue("isIgstApplicable", challan.customer?.igstApplicable === true ? "Yes" : "No");
-        setValue("locationId", challan.location?.id || challan.locationId || "");
-        setValue("timeOfTransfer", challan.timeOfTranfer || challan.timeOfTransfer || "");
-        setValue("stockPosting", challan.stockPosting || "");
-        setValue("noOfPackages", challan.noOfPackages || "");
-        setValue("otherPackages", challan.otherPackages || "");
-        setValue("importLocal", challan.importLocal || "");
-        setValue("active", challan.active === "Active" || challan.active !== false);
-
-        // =========================
-        // Terms and Conditions
-        // =========================
-
-        setValue("totalInsurance", challan.totalInsurance || "");
-        setValue("totalFreight", challan.totalFreight || "");
-        setValue("totalAssessableValueHeader", challan.totalAssVal || "");
-        setValue("modeOfTransport", challan.modeOfTransport || "");
-        setValue("salesTax", challan.salesTax || "");
-        setValue("grossAmount", challan.grossAmount || "");
-        setValue("amountInWords", challan.amountInWords || "");
-        setValue("deliveryTo", challan.deliverTo || "");
-        setValue("paymentTerms", challan.paymentTerms || "");
-        setValue("narration", challan.narration || "");
-
-        // =========================
-        // Item Details - FIXED
-        // =========================
-        if (challan.stockTransferChallanDetailsResponseDTO?.length > 0) {
-          const details = challan.stockTransferChallanDetailsResponseDTO.map((item) => {
-            // Get the itemCode from the nested item object
-            const itemCode =
-              item.item?.id != null
-                ? String(item.item.id)
-                : "";
-            // Calculate amount from quantity * rate if totalAssessableValue is not available
-            const amount = item.totalAssessableValue || (item.quantity * item.rate) || 0;
-
-            return {
-              itemCode: itemCode,
-              itemDescription: item.item?.itemDescription || "",
-              hsnSacCode: item.hsnCode || "",
-              taxType: item.taxType || "SGST",
-              taxPerc: item.taxPercentage || "",
-              unit: item.item?.unit?.id || item.unit || "",
-              stock: item.stock || "",
-              qty: item.quantity || "",
-              rate: item.rate || "",
-              // IMPORTANT: Set amount from totalAssessableValue or calculate it
-              totalAssessableValue: amount,
-              amount: amount,
-              sgstRate: item.sgstRate || "",
-              sgstAmount: item.sgstAmount || "",
-              cgstRate: item.cgstRate || "",
-              cgstAmount: item.cgstAmount || "",
-              igstRate: item.igstRate || "",
-              igstAmount: item.igstAmount || "",
-            };
-          });
-          itemDetailsArray.replace(details);
-        }
-
-        // =========================
-        // Tax Details
-        // =========================
-
-        if (challan.stockTransferChallanTaxDetailsResponseDTO?.length > 0) {
-          const taxDetails = challan.stockTransferChallanTaxDetailsResponseDTO.map((item) => ({
-            particulars: item.particularsDesc || item.particulars || "",
-            acceptedQtyAmount: item.acceptQtyAmount || "",
-            revisedAmount: item.revisedAmoount || "",
-            isSystemRow: ["Gross Amount", "IGST", "CGST", "SGST"].includes(
-              item.particularsDesc || item.particulars || ""
-            ),
-          }));
-          taxDetailsArray.replace(taxDetails);
-        }
-
-        addToast("Stock Transfer Challan loaded successfully", "success");
-      } else {
-        loadedChallanIdRef.current = null;
-        addToast("Failed to load Stock Transfer Challan data", "error");
+      if (loadedChallanIdRef.current === challanId) {
+        return;
       }
-    } catch (error) {
-      loadedChallanIdRef.current = null;
-      console.error("Error loading challan:", error);
-      addToast("Failed to load Stock Transfer Challan data", "error");
-    } finally {
-      setLoading(false);
-    }
-  }, [setValue, itemDetailsArray, taxDetailsArray, addToast]);
+
+      loadedChallanIdRef.current = challanId;
+      setLoading(true);
+
+      try {
+        const response =
+          await stockTransferChallanAPI.getStockTransferChallanById(challanId);
+
+        if (response) {
+          const challan = response;
+
+          setValue("plantId", challan.branch?.id || challan.plantId || "");
+          setValue("docId", challan.docId || "");
+          setValue("type", challan.types?.id || challan.type || "");
+          setValue("transferDate", challan.docDate || challan.date || "");
+          setValue(
+            "customerId",
+            challan.customer?.customerId || challan.customerId || "",
+          );
+          setValue(
+            "customerName",
+            challan.customer?.customerName || challan.customerName || "",
+          );
+          setValue(
+            "partyGstState",
+            challan.customer?.gstState || challan.partyGstState || "",
+          );
+          setValue("gstinNo", challan.customer?.gstNo || challan.gstinNo || "");
+          setValue(
+            "isIgstApplicable",
+            challan.customer?.igstApplicable === true ? "Yes" : "No",
+          );
+          setValue(
+            "locationId",
+            challan.location?.id || challan.locationId || "",
+          );
+          setValue(
+            "timeOfTransfer",
+            challan.timeOfTranfer || challan.timeOfTransfer || "",
+          );
+          setValue("stockPosting", challan.stockPosting || "");
+          setValue("noOfPackages", challan.noOfPackages || "");
+          setValue("otherPackages", challan.otherPackages || "");
+          setValue("importLocal", challan.importLocal || "");
+          setValue(
+            "active",
+            challan.active === "Active" || challan.active !== false,
+          );
+
+          setValue("totalInsurance", challan.totalInsurance || "");
+          setValue("totalFreight", challan.totalFreight || "");
+          setValue("totalAssessableValueHeader", challan.totalAssVal || "");
+          setValue("modeOfTransport", challan.modeOfTransport || "");
+          setValue("salesTax", challan.salesTax || "");
+          setValue("grossAmount", challan.grossAmount || "");
+          setValue("amountInWords", challan.amountInWords || "");
+          setValue("deliveryTo", challan.deliverTo || "");
+          setValue("paymentTerms", challan.paymentTerms || "");
+          setValue("narration", challan.narration || "");
+
+          if (challan.stockTransferChallanDetailsResponseDTO?.length > 0) {
+            const details =
+              challan.stockTransferChallanDetailsResponseDTO.map((item) => {
+                const itemCode =
+                  item.item?.id != null ? String(item.item.id) : "";
+                const amount =
+                  item.totalAssessableValue || item.quantity * item.rate || 0;
+
+                return {
+                  itemCode: itemCode,
+                  itemDescription: item.item?.itemDescription || "",
+                  hsnSacCode: item.hsnCode || "",
+                  taxType: item.taxType || "SGST",
+                  taxPerc: item.taxPercentage || "",
+                  unit: item.item?.unit?.id || item.unit || "",
+                  stock: item.stock || "",
+                  qty: item.quantity || "",
+                  rate: item.rate || "",
+                  totalAssessableValue: amount,
+                  amount: amount,
+                  sgstRate: item.sgstRate || "",
+                  sgstAmount: item.sgstAmount || "",
+                  cgstRate: item.cgstRate || "",
+                  cgstAmount: item.cgstAmount || "",
+                  igstRate: item.igstRate || "",
+                  igstAmount: item.igstAmount || "",
+                };
+              });
+            itemDetailsArray.replace(details);
+          }
+
+          if (challan.stockTransferChallanTaxDetailsResponseDTO?.length > 0) {
+            const taxDetails =
+              challan.stockTransferChallanTaxDetailsResponseDTO.map((item) => ({
+                particulars: item.particularsDesc || item.particulars || "",
+                acceptedQtyAmount: item.acceptQtyAmount || "",
+                revisedAmount: item.revisedAmoount || "",
+                isSystemRow: ["Gross Amount", "IGST", "CGST", "SGST"].includes(
+                  item.particularsDesc || item.particulars || "",
+                ),
+              }));
+            taxDetailsArray.replace(taxDetails);
+          }
+
+          addToast("Stock Transfer Challan loaded successfully", "success");
+        } else {
+          loadedChallanIdRef.current = null;
+          addToast("Failed to load Stock Transfer Challan data", "error");
+        }
+      } catch (error) {
+        loadedChallanIdRef.current = null;
+        console.error("Error loading challan:", error);
+        addToast("Failed to load Stock Transfer Challan data", "error");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [setValue, itemDetailsArray, taxDetailsArray, addToast],
+  );
 
   useEffect(() => {
     if (!data?.id) return;
-
     loadChallanData(data.id);
   }, [data?.id, loadChallanData]);
 
@@ -920,67 +958,33 @@ const StockTransferChallanForm = ({ data, onBack }) => {
     if (field === "itemCode") {
       const item = itemMap[String(value)];
 
-      console.log("Selected Item:", item);
-
       if (item) {
-        setValue(
-          `itemDetails.${idx}.itemDescription`,
-          item.itemDescription || "",
-          { shouldDirty: true }
-        );
-
-        setValue(
-          `itemDetails.${idx}.hsnSacCode`,
-          item.hsn || "",
-          { shouldDirty: true }
-        );
-
+        setValue(`itemDetails.${idx}.itemDescription`, item.itemDescription || "", {
+          shouldDirty: true,
+        });
+        setValue(`itemDetails.${idx}.hsnSacCode`, item.hsn || "", {
+          shouldDirty: true,
+        });
         setValue(
           `itemDetails.${idx}.unit`,
           item.unitmasterId || item.unit || "",
-          { shouldDirty: true }
+          { shouldDirty: true },
         );
+        setValue(`itemDetails.${idx}.taxPerc`, item.rate || "", {
+          shouldDirty: true,
+        });
+        setValue(`itemDetails.${idx}.sgstRate`, item.sgst || 0, {
+          shouldDirty: true,
+        });
+        setValue(`itemDetails.${idx}.cgstRate`, item.cgst || 0, {
+          shouldDirty: true,
+        });
+        setValue(`itemDetails.${idx}.igstRate`, item.igst || 0, {
+          shouldDirty: true,
+        });
 
-        setValue(
-          `itemDetails.${idx}.taxPerc`,
-          item.rate || "",
-          { shouldDirty: true }
-        );
-
-        setValue(
-          `itemDetails.${idx}.sgstRate`,
-          item.sgst || 0,
-          { shouldDirty: true }
-        );
-
-        setValue(
-          `itemDetails.${idx}.cgstRate`,
-          item.cgst || 0,
-          { shouldDirty: true }
-        );
-
-        setValue(
-          `itemDetails.${idx}.igstRate`,
-          item.igst || 0,
-          { shouldDirty: true }
-        );
-
-        setValue(
-          `itemDetails.${idx}.taxPerc`,
-          item.rate || 0,
-          { shouldDirty: true }
-        );
-
-        const taxType =
-          isIgstApplicable === "Yes"
-            ? "IGST"
-            : "SGST";
-
-        setValue(
-          `itemDetails.${idx}.taxType`,
-          taxType,
-          { shouldDirty: true }
-        );
+        const taxType = isIgstApplicable === "Yes" ? "IGST" : "SGST";
+        setValue(`itemDetails.${idx}.taxType`, taxType, { shouldDirty: true });
 
         recalcRow(idx);
       }
@@ -1006,22 +1010,32 @@ const StockTransferChallanForm = ({ data, onBack }) => {
       const igstR = parseFloat(row.igstRate) || 0;
 
       const assessable = qty * rate;
-      setValue(`itemDetails.${idx}.totalAssessableValue`, assessable || "", { shouldDirty: true });
-      setValue(`itemDetails.${idx}.amount`, assessable || "", { shouldDirty: true });
+      setValue(`itemDetails.${idx}.totalAssessableValue`, assessable || "", {
+        shouldDirty: true,
+      });
+      setValue(`itemDetails.${idx}.amount`, assessable || "", {
+        shouldDirty: true,
+      });
 
-      // Calculate tax amounts based on tax type
-      const taxType = row.taxType || (isIgstApplicable === "Yes" ? "IGST" : "SGST");
+      const taxType =
+        row.taxType || (isIgstApplicable === "Yes" ? "IGST" : "SGST");
 
       if (taxType === "IGST") {
         const igstAmount = (assessable * igstR) / 100;
-        setValue(`itemDetails.${idx}.igstAmount`, igstAmount || "", { shouldDirty: true });
+        setValue(`itemDetails.${idx}.igstAmount`, igstAmount || "", {
+          shouldDirty: true,
+        });
         setValue(`itemDetails.${idx}.sgstAmount`, "", { shouldDirty: true });
         setValue(`itemDetails.${idx}.cgstAmount`, "", { shouldDirty: true });
       } else {
         const sgstAmount = (assessable * sgstR) / 100;
         const cgstAmount = (assessable * cgstR) / 100;
-        setValue(`itemDetails.${idx}.sgstAmount`, sgstAmount || "", { shouldDirty: true });
-        setValue(`itemDetails.${idx}.cgstAmount`, cgstAmount || "", { shouldDirty: true });
+        setValue(`itemDetails.${idx}.sgstAmount`, sgstAmount || "", {
+          shouldDirty: true,
+        });
+        setValue(`itemDetails.${idx}.cgstAmount`, cgstAmount || "", {
+          shouldDirty: true,
+        });
         setValue(`itemDetails.${idx}.igstAmount`, "", { shouldDirty: true });
       }
     } finally {
@@ -1029,25 +1043,29 @@ const StockTransferChallanForm = ({ data, onBack }) => {
     }
   };
 
-  // Calculate Tax Details - similar to ProformaInvoice
   const calculateTaxDetails = useCallback(() => {
     if (!watchItems?.length) return;
 
     const contractDetails = watchItems || [];
-    const totalAmount = contractDetails.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+    const totalAmount = contractDetails.reduce(
+      (sum, item) => sum + (Number(item.amount) || 0),
+      0,
+    );
 
     const taxType = isIgstApplicable === "Yes" ? "IGST" : "SGST";
 
-    let sgstTotal = 0, cgstTotal = 0, igstTotal = 0;
+    let sgstTotal = 0,
+      cgstTotal = 0,
+      igstTotal = 0;
 
-    contractDetails.forEach(item => {
+    contractDetails.forEach((item) => {
       sgstTotal += Number(item.sgstAmount) || 0;
       cgstTotal += Number(item.cgstAmount) || 0;
       igstTotal += Number(item.igstAmount) || 0;
     });
 
-    const existingTaxDetails = getValues('taxDetails') || [];
-    const userAddedRows = existingTaxDetails.filter(item => !item.isSystemRow);
+    const existingTaxDetails = getValues("taxDetails") || [];
+    const userAddedRows = existingTaxDetails.filter((item) => !item.isSystemRow);
 
     const systemRows = [];
 
@@ -1055,7 +1073,7 @@ const StockTransferChallanForm = ({ data, onBack }) => {
       particulars: "Gross Amount",
       acceptedQtyAmount: totalAmount,
       revisedAmount: totalAmount,
-      isSystemRow: true
+      isSystemRow: true,
     });
 
     if (taxType === "IGST") {
@@ -1063,27 +1081,25 @@ const StockTransferChallanForm = ({ data, onBack }) => {
         particulars: "IGST",
         acceptedQtyAmount: igstTotal,
         revisedAmount: igstTotal,
-        isSystemRow: true
+        isSystemRow: true,
       });
     } else {
       systemRows.push({
         particulars: "SGST",
         acceptedQtyAmount: sgstTotal,
         revisedAmount: sgstTotal,
-        isSystemRow: true
+        isSystemRow: true,
       });
       systemRows.push({
         particulars: "CGST",
         acceptedQtyAmount: cgstTotal,
         revisedAmount: cgstTotal,
-        isSystemRow: true
+        isSystemRow: true,
       });
     }
 
     const allTaxEntries = [...systemRows, ...userAddedRows];
-
     const currentRows = getValues("taxDetails") || [];
-
     const hasChanged =
       JSON.stringify(currentRows) !== JSON.stringify(allTaxEntries);
 
@@ -1091,11 +1107,14 @@ const StockTransferChallanForm = ({ data, onBack }) => {
       taxDetailsArray.replace(allTaxEntries);
     }
 
-    // Update header totals
     const grand = totalAmount + sgstTotal + cgstTotal + igstTotal;
-    setValue("totalAssessableValueHeader", totalAmount || "", { shouldDirty: true });
+    setValue("totalAssessableValueHeader", totalAmount || "", {
+      shouldDirty: true,
+    });
     setValue("grossAmount", grand || "", { shouldDirty: true });
-    setValue("amountInWords", grand ? numberToWords(grand) : "", { shouldDirty: true });
+    setValue("amountInWords", grand ? numberToWords(grand) : "", {
+      shouldDirty: true,
+    });
   }, [watchItems, getValues, isIgstApplicable, taxDetailsArray, setValue]);
 
   useEffect(() => {
@@ -1120,17 +1139,17 @@ const StockTransferChallanForm = ({ data, onBack }) => {
       particulars: "",
       acceptedQtyAmount: "",
       revisedAmount: "",
-      isSystemRow: false
+      isSystemRow: false,
     };
     taxDetailsArray.append(newItem);
   };
 
   const handleRemoveTax = (index) => {
-    const currentTaxDetails = getValues('taxDetails') || [];
+    const currentTaxDetails = getValues("taxDetails") || [];
     const isSystemRow = currentTaxDetails[index]?.isSystemRow;
 
     if (isSystemRow) {
-      addToast('Cannot delete system calculated rows', 'error');
+      addToast("Cannot delete system calculated rows", "error");
       return;
     }
 
@@ -1152,14 +1171,15 @@ const StockTransferChallanForm = ({ data, onBack }) => {
     if (!watch("customerId")) fundErrors.push("Customer");
     if (!watch("partyGstState")) fundErrors.push("Party GST State");
 
-    // Validate item details
     const items = watch("itemDetails") || [];
     items.forEach((item, index) => {
       if (!item.itemCode) fundErrors.push(`Item ${index + 1}: Item Code`);
       if (!item.hsnSacCode) fundErrors.push(`Item ${index + 1}: HSN/SAC Code`);
       if (!item.taxType) fundErrors.push(`Item ${index + 1}: Tax Type`);
-      if (!item.qty || Number(item.qty) <= 0) fundErrors.push(`Item ${index + 1}: Qty`);
-      if (!item.rate || Number(item.rate) <= 0) fundErrors.push(`Item ${index + 1}: Rate`);
+      if (!item.qty || Number(item.qty) <= 0)
+        fundErrors.push(`Item ${index + 1}: Qty`);
+      if (!item.rate || Number(item.rate) <= 0)
+        fundErrors.push(`Item ${index + 1}: Rate`);
     });
 
     if (fundErrors.length) {
@@ -1170,24 +1190,45 @@ const StockTransferChallanForm = ({ data, onBack }) => {
   };
 
   const onSubmit = async (formData) => {
-    if (!validate()) return;
+    // 👇 Synchronous lock — prevents double submission even before React
+    //    updates the `saving` state on the next render.
+    if (savingRef.current) return;
+    savingRef.current = true;
+
+    if (!validate()) {
+      savingRef.current = false;
+      return;
+    }
 
     setSaving(true);
     const isUpdate = Boolean(data?.id);
 
-    // Calculate totals
     const items = formData.itemDetails || [];
-    const totalAssessable = items.reduce((sum, r) => sum + (parseFloat(r.totalAssessableValue) || 0), 0);
-    const gross = items.reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0);
-    const sgstTotal = items.reduce((sum, r) => sum + (parseFloat(r.sgstAmount) || 0), 0);
-    const cgstTotal = items.reduce((sum, r) => sum + (parseFloat(r.cgstAmount) || 0), 0);
-    const igstTotal = items.reduce((sum, r) => sum + (parseFloat(r.igstAmount) || 0), 0);
+    const totalAssessable = items.reduce(
+      (sum, r) => sum + (parseFloat(r.totalAssessableValue) || 0),
+      0,
+    );
+    const gross = items.reduce(
+      (sum, r) => sum + (parseFloat(r.amount) || 0),
+      0,
+    );
+    const sgstTotal = items.reduce(
+      (sum, r) => sum + (parseFloat(r.sgstAmount) || 0),
+      0,
+    );
+    const cgstTotal = items.reduce(
+      (sum, r) => sum + (parseFloat(r.cgstAmount) || 0),
+      0,
+    );
+    const igstTotal = items.reduce(
+      (sum, r) => sum + (parseFloat(r.igstAmount) || 0),
+      0,
+    );
 
-    // Get particulars ID from listOfValuesData
     const getParticularId = (label) => {
       if (!label) return 0;
       const allOptions = listOfValuesData.PARTICULARS || [];
-      const found = allOptions.find(option => option.label === label);
+      const found = allOptions.find((option) => option.label === label);
       return found ? found.value : 0;
     };
 
@@ -1196,12 +1237,14 @@ const StockTransferChallanForm = ({ data, onBack }) => {
       orgId: orgId,
       branch: branch,
       active: formData.active !== false,
-      amountInWords: numberToWords(gross + sgstTotal + cgstTotal + igstTotal) || "",
+      amountInWords:
+        numberToWords(gross + sgstTotal + cgstTotal + igstTotal) || "",
       cancelRemarks: "",
       createdBy: usersId || "admin",
       customer: formData.customerId ? parseInt(formData.customerId) : 0,
       date: formData.transferDate || "",
       deliverTo: formData.deliveryTo || "",
+      docId: formData.docId || "",
       financialYear: new Date().getFullYear().toString(),
       grossAmount: gross + sgstTotal + cgstTotal + igstTotal || 0,
       importLocal: formData.importLocal || "",
@@ -1220,25 +1263,24 @@ const StockTransferChallanForm = ({ data, onBack }) => {
       totalInsurance: parseFloat(formData.totalInsurance) || 0,
       types: formData.type ? parseInt(formData.type) : 0,
 
-      // Stock Transfer Challan Details (Item Details)
       stockTransferChallanDetailsDTO: (formData.itemDetails || [])
         .filter((r) => r.itemCode?.trim())
         .map((item) => {
-          // Determine tax type
-          const taxType = item.taxType || (formData.isIgstApplicable === "Yes" ? "IGST" : "SGST");
+          const taxType =
+            item.taxType ||
+            (formData.isIgstApplicable === "Yes" ? "IGST" : "SGST");
           const isIGST = taxType === "IGST";
 
           return {
-            // For IGST, send cgstRate and sgstRate as 0
-            cgstRate: isIGST ? 0 : (parseFloat(item.cgstRate) || 0),
+            cgstRate: isIGST ? 0 : parseFloat(item.cgstRate) || 0,
             hsnCode: item.hsnSacCode || "",
-            // For IGST, send igstRate value; for SGST, send 0
-            igstRate: isIGST ? (parseFloat(item.igstRate) || 0) : 0,
-            item: itemMap[item.itemCode]?.id ? parseInt(itemMap[item.itemCode].id) : 0,
+            igstRate: isIGST ? parseFloat(item.igstRate) || 0 : 0,
+            item: itemMap[item.itemCode]?.id
+              ? parseInt(itemMap[item.itemCode].id)
+              : 0,
             quantity: parseFloat(item.qty) || 0,
             rate: parseFloat(item.rate) || 0,
-            // For IGST, send sgstRate as 0; for SGST, send the actual value
-            sgstRate: isIGST ? 0 : (parseFloat(item.sgstRate) || 0),
+            sgstRate: isIGST ? 0 : parseFloat(item.sgstRate) || 0,
             stock: item.stock || "",
             taxPercentage: item.taxPerc ? String(item.taxPerc) : "0",
             taxType: taxType,
@@ -1246,9 +1288,13 @@ const StockTransferChallanForm = ({ data, onBack }) => {
           };
         }),
 
-      // Stock Transfer Challan Tax Details
       stockTransferChallanTaxDetailsDTO: (formData.taxDetails || [])
-        .filter((r) => r.particulars?.trim() || parseFloat(r.acceptedQtyAmount) > 0 || parseFloat(r.revisedAmount) > 0)
+        .filter(
+          (r) =>
+            r.particulars?.trim() ||
+            parseFloat(r.acceptedQtyAmount) > 0 ||
+            parseFloat(r.revisedAmount) > 0,
+        )
         .map((item) => ({
           acceptQtyAmount: parseFloat(item.acceptedQtyAmount) || 0,
           particulars: item.particulars || "",
@@ -1257,7 +1303,6 @@ const StockTransferChallanForm = ({ data, onBack }) => {
         })),
     };
 
-    // If updating, keep the id, otherwise remove it
     if (!isUpdate) {
       delete payload.id;
     }
@@ -1273,7 +1318,7 @@ const StockTransferChallanForm = ({ data, onBack }) => {
           (isUpdate
             ? "Stock Transfer Challan updated successfully!"
             : "Stock Transfer Challan created successfully!"),
-          "success"
+          "success",
         );
         onBack?.();
       } else {
@@ -1283,7 +1328,7 @@ const StockTransferChallanForm = ({ data, onBack }) => {
           response?.message ||
           response?.paramObjectsMap?.message ||
           "Failed to save Stock Transfer Challan.",
-          "error"
+          "error",
         );
       }
     } catch (err) {
@@ -1294,13 +1339,14 @@ const StockTransferChallanForm = ({ data, onBack }) => {
           err.response.data.statusMessage ||
           err.response.data.error ||
           JSON.stringify(err.response.data),
-          "error"
+          "error",
         );
       } else {
         addToast("Something went wrong.", "error");
       }
     } finally {
       setSaving(false);
+      savingRef.current = false; // 👈 release the lock
     }
   };
 
@@ -1324,6 +1370,7 @@ const StockTransferChallanForm = ({ data, onBack }) => {
         label="Doc ID"
         required
         errors={errors}
+        placeholder={generatingDocId ? "Generating..." : ""}
       />
 
       <SelectField
@@ -1352,18 +1399,25 @@ const StockTransferChallanForm = ({ data, onBack }) => {
         required
         errors={errors}
         onChange={(value) => {
-          const customer = customerOptions.find((c) => String(c.value) === String(value));
-          console.log("Selected Customer:", customer);
-          setValue("customerName", customer?.customerName || "", { shouldDirty: true });
-          setValue("partyGstState", customer?.partyGSTState || "", { shouldDirty: true });
+          const customer = customerOptions.find(
+            (c) => String(c.value) === String(value),
+          );
+          setValue("customerName", customer?.customerName || "", {
+            shouldDirty: true,
+          });
+          setValue("partyGstState", customer?.partyGSTState || "", {
+            shouldDirty: true,
+          });
           setValue("gstinNo", customer?.gstnNo || "", { shouldDirty: true });
-          const igstValue = customer?.isIGSTApplicable === true ? "Yes" : "No";
+          const igstValue =
+            customer?.isIGSTApplicable === true ? "Yes" : "No";
           setValue("isIgstApplicable", igstValue, { shouldDirty: true });
 
-          // Update tax type for all existing rows based on IGST applicability
           itemDetailsArray.fields.forEach((_, index) => {
             const taxType = igstValue === "Yes" ? "IGST" : "SGST";
-            setValue(`itemDetails.${index}.taxType`, taxType, { shouldDirty: true });
+            setValue(`itemDetails.${index}.taxType`, taxType, {
+              shouldDirty: true,
+            });
           });
         }}
         placeholder="Select"
@@ -1459,11 +1513,9 @@ const StockTransferChallanForm = ({ data, onBack }) => {
   );
 
   const renderItemDetailsTab = () => {
-    // Determine if we should show SGST/CGST or IGST columns
     const showSGST = isIgstApplicable === "No";
     const showIGST = isIgstApplicable === "Yes";
 
-    // Build headers based on tax type
     const baseHeaders = [
       "S.No",
       "Item Code *",
@@ -1478,7 +1530,12 @@ const StockTransferChallanForm = ({ data, onBack }) => {
       "Total Assessable Value",
     ];
 
-    const sgstHeaders = ["SGST Rate", "SGST Amount", "CGST Rate", "CGST Amount"];
+    const sgstHeaders = [
+      "SGST Rate",
+      "SGST Amount",
+      "CGST Rate",
+      "CGST Amount",
+    ];
     const igstHeaders = ["IGST Rate", "IGST Amount"];
 
     let taxHeaders = [];
@@ -1520,7 +1577,9 @@ const StockTransferChallanForm = ({ data, onBack }) => {
                     name={`itemDetails.${index}.itemCode`}
                     options={itemOptions}
                     errors={errors}
-                    onChange={(v) => handleItemChange(index, "itemCode", v, row)}
+                    onChange={(v) =>
+                      handleItemChange(index, "itemCode", v, row)
+                    }
                   />
                   <InputCell
                     control={control}
@@ -1576,7 +1635,9 @@ const StockTransferChallanForm = ({ data, onBack }) => {
                     placeholder="0.000"
                     required
                     errors={errors}
-                    onChange={(e) => handleItemChange(index, "qty", e.target.value, row)}
+                    onChange={(e) =>
+                      handleItemChange(index, "qty", e.target.value, row)
+                    }
                   />
                   <InputCell
                     control={control}
@@ -1586,7 +1647,9 @@ const StockTransferChallanForm = ({ data, onBack }) => {
                     placeholder="0.00"
                     required
                     errors={errors}
-                    onChange={(e) => handleItemChange(index, "rate", e.target.value, row)}
+                    onChange={(e) =>
+                      handleItemChange(index, "rate", e.target.value, row)
+                    }
                   />
                   <InputCell
                     control={control}
@@ -1598,7 +1661,6 @@ const StockTransferChallanForm = ({ data, onBack }) => {
                     errors={errors}
                   />
 
-                  {/* Conditionally render SGST/CGST or IGST columns */}
                   {showSGST && (
                     <>
                       <InputCell
@@ -1672,11 +1734,8 @@ const StockTransferChallanForm = ({ data, onBack }) => {
   };
 
   const renderTaxDetailsTab = () => {
-    // Get all available options from listOfValuesData
     const allOptions = listOfValuesData.PARTICULARS || [];
-
-    // Get system option labels
-    const systemOptionLabels = ['Gross Amount', 'IGST', 'CGST', 'SGST'];
+    const systemOptionLabels = ["Gross Amount", "IGST", "CGST", "SGST"];
 
     const headers = [
       "S.No",
@@ -1704,17 +1763,17 @@ const StockTransferChallanForm = ({ data, onBack }) => {
             {taxDetailsArray.fields.map((field, index) => {
               const isSystemRow = getValues(`taxDetails.${index}.isSystemRow`);
               const particulars = getValues(`taxDetails.${index}.particulars`);
-              const isReadOnly = isSystemRow || systemOptionLabels.includes(particulars);
+              const isReadOnly =
+                isSystemRow || systemOptionLabels.includes(particulars);
 
-              // For system rows, only show their specific value
-              // For user rows, show all options except system ones
               let availableOptions = [];
               if (isSystemRow) {
-                availableOptions = [{ label: particulars, value: particulars }];
+                availableOptions = [
+                  { label: particulars, value: particulars },
+                ];
               } else {
-                // Filter out system options for user rows
-                availableOptions = allOptions.filter(option =>
-                  !systemOptionLabels.includes(option.label)
+                availableOptions = allOptions.filter(
+                  (option) => !systemOptionLabels.includes(option.label),
                 );
               }
 
@@ -1732,7 +1791,10 @@ const StockTransferChallanForm = ({ data, onBack }) => {
                       render={({ field }) => (
                         <select
                           {...field}
-                          className={`${controlClasses} ${isReadOnly ? 'bg-gray-100 dark:bg-gray-700 cursor-not-allowed' : ''}`}
+                          className={`${controlClasses} ${isReadOnly
+                              ? "bg-gray-100 dark:bg-gray-700 cursor-not-allowed"
+                              : ""
+                            }`}
                           disabled={isReadOnly}
                           onChange={(e) => {
                             field.onChange(e.target.value);
@@ -1741,7 +1803,10 @@ const StockTransferChallanForm = ({ data, onBack }) => {
                         >
                           <option value="">Select Particulars</option>
                           {availableOptions.map((option) => (
-                            <option key={option.value || option.label} value={option.label}>
+                            <option
+                              key={option.value || option.label}
+                              value={option.label}
+                            >
                               {option.label}
                             </option>
                           ))}
@@ -1759,7 +1824,10 @@ const StockTransferChallanForm = ({ data, onBack }) => {
                           type="number"
                           step="0.01"
                           placeholder="0.00"
-                          className={`${controlClasses} text-right ${isReadOnly ? 'bg-gray-100 dark:bg-gray-700 cursor-not-allowed' : ''}`}
+                          className={`${controlClasses} text-right ${isReadOnly
+                              ? "bg-gray-100 dark:bg-gray-700 cursor-not-allowed"
+                              : ""
+                            }`}
                           disabled={isReadOnly}
                           value={field.value || 0}
                           onChange={(e) => {
@@ -1779,7 +1847,10 @@ const StockTransferChallanForm = ({ data, onBack }) => {
                           type="number"
                           step="0.01"
                           placeholder="0.00"
-                          className={`${controlClasses} text-right ${isReadOnly ? 'bg-gray-100 dark:bg-gray-700 cursor-not-allowed' : ''}`}
+                          className={`${controlClasses} text-right ${isReadOnly
+                              ? "bg-gray-100 dark:bg-gray-700 cursor-not-allowed"
+                              : ""
+                            }`}
                           disabled={isReadOnly}
                           value={field.value || 0}
                           onChange={(e) => {
@@ -1910,7 +1981,9 @@ const StockTransferChallanForm = ({ data, onBack }) => {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500 dark:text-gray-400">Loading Stock Transfer Challan...</div>
+        <div className="text-gray-500 dark:text-gray-400">
+          Loading Stock Transfer Challan...
+        </div>
       </div>
     );
   }
@@ -1957,8 +2030,8 @@ const StockTransferChallanForm = ({ data, onBack }) => {
               type="button"
               onClick={() => setActiveTab("itemDetails")}
               className={`px-4 py-1 text-xs font-semibold rounded-t ${activeTab === "itemDetails"
-                ? "bg-blue-600 text-white"
-                : "text-gray-600 dark:text-gray-300"
+                  ? "bg-blue-600 text-white"
+                  : "text-gray-600 dark:text-gray-300"
                 }`}
             >
               Item Details
@@ -1967,8 +2040,8 @@ const StockTransferChallanForm = ({ data, onBack }) => {
               type="button"
               onClick={() => setActiveTab("taxDetails")}
               className={`px-4 py-1 text-xs font-semibold rounded-t ${activeTab === "taxDetails"
-                ? "bg-blue-600 text-white"
-                : "text-gray-600 dark:text-gray-300"
+                  ? "bg-blue-600 text-white"
+                  : "text-gray-600 dark:text-gray-300"
                 }`}
             >
               Tax Details
@@ -1977,8 +2050,8 @@ const StockTransferChallanForm = ({ data, onBack }) => {
               type="button"
               onClick={() => setActiveTab("terms")}
               className={`px-4 py-1 text-xs font-semibold rounded-t ${activeTab === "terms"
-                ? "bg-blue-600 text-white"
-                : "text-gray-600 dark:text-gray-300"
+                  ? "bg-blue-600 text-white"
+                  : "text-gray-600 dark:text-gray-300"
                 }`}
             >
               Terms And Conditions
@@ -1993,6 +2066,7 @@ const StockTransferChallanForm = ({ data, onBack }) => {
         {/* Buttons */}
         <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
           <button
+            type="button"
             onClick={onBack}
             disabled={saving || isSubmitting}
             className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
@@ -2002,6 +2076,7 @@ const StockTransferChallanForm = ({ data, onBack }) => {
           </button>
 
           <button
+            type="button"
             onClick={handleSubmit(onSubmit)}
             disabled={saving || isSubmitting}
             className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"

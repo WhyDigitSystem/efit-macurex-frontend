@@ -27,8 +27,8 @@ const SalesContractList = ({ onAddNew, onEdit, onBack }) => {
         // Transform the data for display
         const transformedData = salesContracts.map(item => ({
           id: item.id,
-          contractNo: item.customerContractNo || "-",
-          contractDate: item.contractDate || "-",
+          contractNo: item.docId || "-",
+          contractDate: item.docDate || "-",
           branchName: item.branch?.branchName || "-",
           belongsTo: item.belongsTo || "-",
           contractType: item.contractType || "-",

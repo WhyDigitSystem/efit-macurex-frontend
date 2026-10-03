@@ -1,7 +1,6 @@
 import apiClient from "../apiClient";
 
 const stockTransferChallanAPI = {
-
     getCustomerByOrgId: async (orgId, branch) => {
         try {
             const res = await apiClient.get(
@@ -26,7 +25,6 @@ const stockTransferChallanAPI = {
         }
     },
 
-    // Get Stock Transfer Challan by Organization ID and Branch
     getStockTransferChallanByOrgId: async (orgId, branch) => {
         try {
             const res = await apiClient.get(
@@ -39,13 +37,11 @@ const stockTransferChallanAPI = {
         }
     },
 
-    // Get Stock Transfer Challan by ID
     getStockTransferChallanById: async (id) => {
         try {
             const res = await apiClient.get(
                 `/api/dev/getStockTransferChallanById?id=${id}`,
             );
-            // When fetching by ID, it returns a single object (not an array)
             return res?.paramObjectsMap?.stockTransferChallanResponseDTO || null;
         } catch (error) {
             console.error("Error fetching stock transfer challan by ID:", error);
@@ -53,7 +49,23 @@ const stockTransferChallanAPI = {
         }
     },
 
-    // Create / Update Stock Transfer Challan
+    // 👇 NEW — Get Stock Transfer Challan DocId
+    getStockTransferChallanDocId: async (financialYear, orgId) => {
+        try {
+            const res = await apiClient.get(
+                `/api/dev/getStockTransferChallanDocId?financialYear=${financialYear}&orgId=${orgId}`,
+            );
+            return (
+                res?.paramObjectsMap?.["StockTransferChallan DocId"] ||
+                res?.paramObjectsMap?.stockTransferChallanDocId ||
+                null
+            );
+        } catch (error) {
+            console.error("Error fetching stock transfer challan docId:", error);
+            throw error;
+        }
+    },
+
     createUpdate: async (payload) => {
         try {
             const res = await apiClient.post(

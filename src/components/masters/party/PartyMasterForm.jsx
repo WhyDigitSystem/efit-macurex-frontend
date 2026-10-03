@@ -10,6 +10,7 @@ import itemAPI from "../../../api/itemAPI";
 import partyMasterAPI from "../../../api/partyMasterAPI";
 import { departmentAPI } from "../../../api/departmentAPI";
 import gstStateApi from "../../../api/gstStateApi";
+import currencyAPI from "../../../api/currencyAPI";
 
 /* ---------------------------------------------------------------------------- */
 /* Shared design tokens                                                        */
@@ -171,7 +172,7 @@ const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
 );
 
 /* ---------------------------------------------------------------------------- */
-/* Hardcoded options (for fields not in ListOfValues)                           */
+/* Hardcoded options                                                           */
 
 const YES_NO = [
   { value: "YES", label: "YES" },
@@ -180,7 +181,7 @@ const YES_NO = [
 
 const SALUTATIONS = [
   { value: "M/s.", label: "M/s." },
-  { value: "Mr.", label: "Mr." }
+  { value: "Mr.", label: "Mr." },
 ];
 
 const PARTY_TYPE = [
@@ -275,6 +276,7 @@ const emptyGeneralInfo = () => ({
   effFrom: "",
   range: "",
   remarks: "",
+  currency: "", // 👈 NEW
 });
 
 const emptySupplierDetails = () => ({
@@ -340,7 +342,7 @@ const CHILD_TABS = [
   { key: "addressBook", label: "Address Book" },
   { key: "supplierDetails", label: "Supplier Details" },
   { key: "salesPurchase", label: "Sales/Purchase/S.C./L.C Item" },
-  { key: "shippingAddress", label: "Shipping Address Details" }
+  { key: "shippingAddress", label: "Shipping Address Details" },
 ];
 
 /* ---------------------------------------------------------------------------- */
@@ -370,6 +372,7 @@ const PartyMasterForm = ({ data, onBack }) => {
   const [itemData, setItemData] = useState([]);
   const [buyerData, setBuyerData] = useState([]);
   const [departmentData, setDepartmentData] = useState([]);
+  const [currencyData, setCurrencyData] = useState([]); // 👈 NEW
 
   const [general, setGeneral] = useState({
     ...emptyGeneralInfo(),
@@ -385,17 +388,16 @@ const PartyMasterForm = ({ data, onBack }) => {
   });
   const [bank, setBank] = useState({ ...emptyBankDetails(), ...data?.bank });
 
-  // Party Category filtered options
   const partyCategoryOptions = listOfValuesData.partyCategory || [];
 
   const partyCategory2Options = partyCategoryOptions.filter(
-    option => !general.partyCategories.includes(String(option.value))
+    (option) => !general.partyCategories.includes(String(option.value)),
   );
 
   const partyCategory3Options = partyCategoryOptions.filter(
-    option =>
+    (option) =>
       !general.partyCategories.includes(String(option.value)) &&
-      String(option.value) !== String(general.partyCategories2)
+      String(option.value) !== String(general.partyCategories2),
   );
 
   const [contactRows, setContactRows] = useState(
@@ -408,11 +410,10 @@ const PartyMasterForm = ({ data, onBack }) => {
     data?.items?.length ? data.items : [emptyItemRow()],
   );
 
-  // ListOfValues groups mapping
   const LIST_OF_VALUES_GROUPS = {
     partyCategory: "Party Category",
     supplierCategory: "Supplier Category",
-    belongsToData: "Belongs To"
+    belongsToData: "Belongs To",
   };
 
   // Load data on mount
@@ -427,6 +428,7 @@ const PartyMasterForm = ({ data, onBack }) => {
     loadItems();
     loadBuyerDetails();
     loadDepartments();
+    loadCurrencies(); // 👈 NEW
   }, []);
 
   useEffect(() => {
@@ -439,11 +441,9 @@ const PartyMasterForm = ({ data, onBack }) => {
     setIsLoading(true);
     try {
       const response = await partyMasterAPI.getPartyById(id);
-      // The response has the customer data inside paramObjectsMap.customer
       const partyData = response?.paramObjectsMap?.customer;
 
       if (partyData) {
-        console.log("Fetched party data:", partyData);
         const formData = mapApiResponseToForm(partyData);
         setGeneral(formData.general);
         setSupplier(formData.supplier);
@@ -455,14 +455,14 @@ const PartyMasterForm = ({ data, onBack }) => {
       } else {
         setToastMessage({
           type: "error",
-          message: "Party data not found"
+          message: "Party data not found",
         });
       }
     } catch (error) {
       console.error("Error fetching party data:", error);
       setToastMessage({
         type: "error",
-        message: "Failed to load party data for editing"
+        message: "Failed to load party data for editing",
       });
     } finally {
       setIsLoading(false);
@@ -470,14 +470,14 @@ const PartyMasterForm = ({ data, onBack }) => {
   };
 
   const mapApiResponseToForm = (apiData) => {
-    // Helper to get nested object id
-    const getId = (obj) => obj?.id ? String(obj.id) : "";
+    const getId = (obj) => (obj?.id ? String(obj.id) : "");
 
     return {
       general: {
         id: apiData.id || 0,
-        // Party Categories - using the id from the nested objects
-        partyCategories: apiData.customerCategory?.id ? [String(apiData.customerCategory.id)] : [],
+        partyCategories: apiData.customerCategory?.id
+          ? [String(apiData.customerCategory.id)]
+          : [],
         partyCategories2: getId(apiData.customerCategory1),
         partyCategories3: getId(apiData.customerCategory2),
         salutation: apiData.salutation || "",
@@ -533,6 +533,8 @@ const PartyMasterForm = ({ data, onBack }) => {
         effFrom: apiData.effectiveFrom || "",
         range: apiData.range || "",
         remarks: apiData.remarks || "",
+        // 👇 Currency: read from nested object (same shape as the API's currencyVO)
+        currency: getId(apiData.currency),
       },
       supplier: {
         dateOfApproval: apiData.dateOfApproval || "",
@@ -544,15 +546,22 @@ const PartyMasterForm = ({ data, onBack }) => {
         scopeOfSupply: apiData.scopeOfSupply || "",
         basisOfApproval: apiData.basisOfApproval || "",
       },
-      shipping: apiData.customerShippingDetails?.length > 0 ? {
-        addressLine1: apiData.customerShippingDetails[0].shippingAddress || "",
-        addressLine2: "",
-        addressLine3: "",
-        city: getId(apiData.customerShippingDetails[0].shippingCity),
-        pincode: apiData.customerShippingDetails[0].shippingPincode || "",
-        state: getId(apiData.customerShippingDetails[0].shippingState),
-        country: getId(apiData.customerShippingDetails[0].shippingCountry),
-      } : emptyShippingAddress(),
+      shipping:
+        apiData.customerShippingDetails?.length > 0
+          ? {
+            addressLine1:
+              apiData.customerShippingDetails[0].shippingAddress || "",
+            addressLine2: "",
+            addressLine3: "",
+            city: getId(apiData.customerShippingDetails[0].shippingCity),
+            pincode:
+              apiData.customerShippingDetails[0].shippingPincode || "",
+            state: getId(apiData.customerShippingDetails[0].shippingState),
+            country: getId(
+              apiData.customerShippingDetails[0].shippingCountry,
+            ),
+          }
+          : emptyShippingAddress(),
       bank: {
         bankName: apiData.bankName || "",
         bankAccountNo: apiData.bankAccountNo || "",
@@ -560,42 +569,44 @@ const PartyMasterForm = ({ data, onBack }) => {
         branch: "",
         ifscSwiftCode: apiData.ifscCode || "",
       },
-      contactWhom: apiData.customerContactDetails?.length > 0
-        ? apiData.customerContactDetails.map(contact => ({
-          purpose: getId(contact.purpose),
-          contactName: contact.contactName || "",
-          designation: contact.designation || "",
-          phone: contact.phone || "",
-          fax: "",
-          email: contact.email || "",
-          webSite: contact.website || "",
-        }))
-        : [emptyContactRow()],
-      items: apiData.customerItemDetails?.length > 0
-        ? apiData.customerItemDetails.map(item => ({
-          itemCode: item.item?.id ? String(item.item.id) : "",
-          itemDescription: item.item?.itemDescription || "",
-          unit: item.item?.unit?.unitId || "",
-        }))
-        : [emptyItemRow()],
-      // Address Book - mapping shipping address types
-      addressBook: apiData.customerShippingDetails?.length > 0
-        ? apiData.customerShippingDetails.map(shipping => ({
-          type: shipping.shippingAddressType || "",
-          name: "",
-          address: shipping.shippingAddress || "",
-          phone: "",
-          fax: "",
-          email: "",
-        }))
-        : [emptyAddressBookRow()],
+      contactWhom:
+        apiData.customerContactDetails?.length > 0
+          ? apiData.customerContactDetails.map((contact) => ({
+            purpose: getId(contact.purpose),
+            contactName: contact.contactName || "",
+            designation: contact.designation || "",
+            phone: contact.phone || "",
+            fax: "",
+            email: contact.email || "",
+            webSite: contact.website || "",
+          }))
+          : [emptyContactRow()],
+      items:
+        apiData.customerItemDetails?.length > 0
+          ? apiData.customerItemDetails.map((item) => ({
+            itemCode: item.item?.id ? String(item.item.id) : "",
+            itemDescription: item.item?.itemDescription || "",
+            unit: item.item?.unit?.unitId || "",
+          }))
+          : [emptyItemRow()],
+      addressBook:
+        apiData.customerShippingDetails?.length > 0
+          ? apiData.customerShippingDetails.map((shipping) => ({
+            type: shipping.shippingAddressType || "",
+            name: "",
+            address: shipping.shippingAddress || "",
+            phone: "",
+            fax: "",
+            email: "",
+          }))
+          : [emptyAddressBookRow()],
     };
   };
 
   const loadBranches = useCallback(async () => {
     try {
       const response = await branchAPI.getBranchByOrgId(orgId);
-      const options = (response || []).map(branch => ({
+      const options = (response || []).map((branch) => ({
         value: branch.id,
         label: branch.branchName,
       }));
@@ -609,7 +620,7 @@ const PartyMasterForm = ({ data, onBack }) => {
   const loadZones = useCallback(async () => {
     try {
       const response = await salesZoneAPI.getSalesZoneByOrgId(orgId, branch);
-      const options = (response || []).map(branch => ({
+      const options = (response || []).map((branch) => ({
         value: branch.id,
         label: branch.zoneId,
       }));
@@ -623,7 +634,7 @@ const PartyMasterForm = ({ data, onBack }) => {
   const loadGstStates = useCallback(async () => {
     try {
       const response = await gstStateApi.getGstStateList(branch, orgId);
-      const options = (response || []).map(state => ({
+      const options = (response || []).map((state) => ({
         value: state.id,
         label: state.stateName,
         stateCode: state.stateCode,
@@ -639,7 +650,7 @@ const PartyMasterForm = ({ data, onBack }) => {
   const loadStates = useCallback(async () => {
     try {
       const response = await stateAPI.getStates(orgId);
-      const options = (response || []).map(state => ({
+      const options = (response || []).map((state) => ({
         value: state.id,
         label: state.stateName,
         stateCode: state.stateCode,
@@ -655,7 +666,7 @@ const PartyMasterForm = ({ data, onBack }) => {
   const loadCities = useCallback(async () => {
     try {
       const response = await cityAPI.getCities(orgId);
-      const options = (response || []).map(state => ({
+      const options = (response || []).map((state) => ({
         value: state.id,
         label: state.cityName,
       }));
@@ -669,7 +680,7 @@ const PartyMasterForm = ({ data, onBack }) => {
   const loadCountries = useCallback(async () => {
     try {
       const response = await countryAPI.getCountries(orgId);
-      const options = (response || []).map(state => ({
+      const options = (response || []).map((state) => ({
         value: state.id,
         label: state.countryName,
       }));
@@ -683,7 +694,7 @@ const PartyMasterForm = ({ data, onBack }) => {
   const loadItems = useCallback(async () => {
     try {
       const response = await itemAPI.getItems(orgId, branch);
-      const options = (response || []).map(item => ({
+      const options = (response || []).map((item) => ({
         value: item.id,
         label: item.itemCode,
         itemDescription: item.itemDescription,
@@ -699,7 +710,7 @@ const PartyMasterForm = ({ data, onBack }) => {
   const loadBuyerDetails = useCallback(async () => {
     try {
       const response = await partyMasterAPI.getBuyerDetails(orgId, branch);
-      const options = (response || []).map(item => ({
+      const options = (response || []).map((item) => ({
         value: item.employeeId,
         label: item.employeeName,
       }));
@@ -714,7 +725,7 @@ const PartyMasterForm = ({ data, onBack }) => {
     try {
       const response = await departmentAPI.getAllDepartments(orgId);
       const departments = response?.paramObjectsMap?.departmentVO || [];
-      const options = departments.map(item => ({
+      const options = departments.map((item) => ({
         value: item.id,
         label: item.departmentName,
       }));
@@ -725,6 +736,21 @@ const PartyMasterForm = ({ data, onBack }) => {
     }
   }, [orgId, branch]);
 
+  // 👇 NEW — Load currencies
+  const loadCurrencies = useCallback(async () => {
+    try {
+      const response = await currencyAPI.getCurrencies(orgId);
+      const options = (response || []).map((item) => ({
+        value: item.id,
+        label: item.currency || item.mainCurrency || item.id,
+      }));
+      setCurrencyData(options);
+    } catch (error) {
+      console.error("Failed to load currencies:", error);
+      setCurrencyData([]);
+    }
+  }, [orgId]);
+
   const loadListOfValuesData = async () => {
     try {
       const result = {};
@@ -732,10 +758,13 @@ const PartyMasterForm = ({ data, onBack }) => {
       await Promise.all(
         Object.entries(LIST_OF_VALUES_GROUPS).map(async ([key, group]) => {
           try {
-            const response = await listOfValuesAPI.getListValuesGroup(group, orgId);
+            const response = await listOfValuesAPI.getListValuesGroup(
+              group,
+              orgId,
+            );
 
             result[key] = Array.isArray(response)
-              ? response.map(item => ({
+              ? response.map((item) => ({
                 value: item.id,
                 label: item.valuesDescription,
                 ...item,
@@ -745,14 +774,13 @@ const PartyMasterForm = ({ data, onBack }) => {
             console.error(`${group} failed`, err);
             result[key] = [];
           }
-        })
+        }),
       );
 
       setListOfValuesData(result);
       setSupplierCategoryData(result.supplierCategory || []);
       setIfGroupData(result.ifGroupName || []);
       setBelongsToData(result.belongsToData || []);
-
     } catch (err) {
       console.error("Error loading ListOfValues:", err);
     }
@@ -768,15 +796,15 @@ const PartyMasterForm = ({ data, onBack }) => {
     const { name, value } = e.target;
 
     if (fieldErrors[name]) {
-      setFieldErrors(prev => ({ ...prev, [name]: "" }));
+      setFieldErrors((prev) => ({ ...prev, [name]: "" }));
     }
 
     if (name === "gstState") {
       const selectedState = gstStateData.find(
-        state => String(state.value) === String(value)
+        (state) => String(state.value) === String(value),
       );
 
-      setGeneral(prev => ({
+      setGeneral((prev) => ({
         ...prev,
         gstState: value,
         gstStateCode: selectedState?.stateCode || "",
@@ -786,7 +814,7 @@ const PartyMasterForm = ({ data, onBack }) => {
       return;
     }
 
-    setGeneral(prev => ({
+    setGeneral((prev) => ({
       ...prev,
       [name]: value,
     }));
@@ -794,7 +822,7 @@ const PartyMasterForm = ({ data, onBack }) => {
 
   const handleItemChange = (index, value) => {
     const selectedItem = itemData.find(
-      item => String(item.value) === String(value)
+      (item) => String(item.value) === String(value),
     );
 
     const newRows = [...itemRows];
@@ -875,15 +903,25 @@ const PartyMasterForm = ({ data, onBack }) => {
       creditPeriod: supplier.creditPeriod ? Number(supplier.creditPeriod) : 0,
       cstNo: general.cstNo || "",
 
+      // 👇 NEW — Currency
+      primaryCurrency: general.currency ? Number(general.currency) : 0,
+
       // Customer Categories
-      customerCategory: general.partyCategories.length > 0 ? Number(general.partyCategories[0]) : 0,
-      customerCategory1: general.supplierCategory ? Number(general.supplierCategory) : 0,
-      customerCategory2: general.partyCategories3 ? Number(general.partyCategories3) : 0,
+      customerCategory:
+        general.partyCategories.length > 0
+          ? Number(general.partyCategories[0])
+          : 0,
+      customerCategory1: general.supplierCategory
+        ? Number(general.supplierCategory)
+        : 0,
+      customerCategory2: general.partyCategories3
+        ? Number(general.partyCategories3)
+        : 0,
 
       // Customer Contact Details
       customerContactDetails: contactRows
-        .filter(row => row.contactName || row.purpose)
-        .map(row => ({
+        .filter((row) => row.contactName || row.purpose)
+        .map((row) => ({
           contactName: row.contactName || "",
           designation: row.designation || "",
           email: row.email || "",
@@ -894,8 +932,8 @@ const PartyMasterForm = ({ data, onBack }) => {
 
       // Customer Item Details
       customerItemDetailsDTO: itemRows
-        .filter(row => row.itemCode)
-        .map(row => ({
+        .filter((row) => row.itemCode)
+        .map((row) => ({
           itemId: Number(row.itemCode),
         })),
 
@@ -905,21 +943,22 @@ const PartyMasterForm = ({ data, onBack }) => {
       customerCode: general.vendorCustomerId || "",
 
       // Customer Shipping Details
-      customerShippingDetails: [{
-        shippingAddress: shipping.addressLine1 || "",
-        shippingAddressType: addressBookRows.length > 0 ? addressBookRows[0].type : "",
-        shippingCity: shipping.city ? Number(shipping.city) : 0,
-        shippingCountry: shipping.country ? Number(shipping.country) : 0,
-        shippingPincode: shipping.pincode || "",
-        shippingState: shipping.state ? Number(shipping.state) : 0,
-      }],
+      customerShippingDetails: [
+        {
+          shippingAddress: shipping.addressLine1 || "",
+          shippingAddressType:
+            addressBookRows.length > 0 ? addressBookRows[0].type : "",
+          shippingCity: shipping.city ? Number(shipping.city) : 0,
+          shippingCountry: shipping.country ? Number(shipping.country) : 0,
+          shippingPincode: shipping.pincode || "",
+          shippingState: shipping.state ? Number(shipping.state) : 0,
+        },
+      ],
 
       customerType: general.partyType || "",
 
       // Dates
       dateOfApproval: supplier.dateOfApproval || "",
-      // docDate: general.date || "",
-      // docId: general.vendorCustomerId || "",
 
       // ECC Details
       eccNo: general.eccNo || "",
@@ -949,11 +988,17 @@ const PartyMasterForm = ({ data, onBack }) => {
       isoStatus: supplier.isoCertificationStatus || "",
       kstNo: general.kstNo || "",
       orgId: Number(orgId),
-      overDueInterest: general.overDueIntPct ? Number(general.overDueIntPct) : 0,
+      overDueInterest: general.overDueIntPct
+        ? Number(general.overDueIntPct)
+        : 0,
 
       // Party Credit
-      partyCreditLimit: general.partyCreditLimit ? Number(general.partyCreditLimit) : 0,
-      partyCreditPeriod: general.partyCreditPeriod ? Number(general.partyCreditPeriod) : 0,
+      partyCreditLimit: general.partyCreditLimit
+        ? Number(general.partyCreditLimit)
+        : 0,
+      partyCreditPeriod: general.partyCreditPeriod
+        ? Number(general.partyCreditPeriod)
+        : 0,
       paymentMode: bank.modeOfPayment || "",
       phone: general.phone || "",
       pincode: general.pincode || "",
@@ -966,7 +1011,9 @@ const PartyMasterForm = ({ data, onBack }) => {
       salutation: general.salutation || "",
       scopeOfSupply: supplier.scopeOfSupply || "",
       state: general.state ? Number(general.state) : 0,
-      supplierType: general.supplierCategory ? Number(general.supplierCategory) : 0,
+      supplierType: general.supplierCategory
+        ? Number(general.supplierCategory)
+        : 0,
       tradeName: general.tradeName || "",
       typeExtentOfControl: supplier.typeExtentOfControl || "",
       customerCompanyCode: general.vendorCode || "",
@@ -975,15 +1022,18 @@ const PartyMasterForm = ({ data, onBack }) => {
     };
 
     // Clean up empty/undefined values
-    Object.keys(payload).forEach(key => {
-      if (payload[key] === undefined || payload[key] === null || payload[key] === "") {
+    Object.keys(payload).forEach((key) => {
+      if (
+        payload[key] === undefined ||
+        payload[key] === null ||
+        payload[key] === ""
+      ) {
         if (key !== "id" && key !== "orgId" && key !== "branch") {
           delete payload[key];
         }
       }
     });
 
-    // Remove id if it's 0 (new record)
     if (payload.id === 0) {
       delete payload.id;
     }
@@ -1007,7 +1057,9 @@ const PartyMasterForm = ({ data, onBack }) => {
       if (response?.status === true) {
         setToastMessage({
           type: "success",
-          message: data?.id ? "Party Updated Successfully!" : "Party Saved Successfully!"
+          message: data?.id
+            ? "Party Updated Successfully!"
+            : "Party Saved Successfully!",
         });
 
         setTimeout(() => {
@@ -1016,28 +1068,29 @@ const PartyMasterForm = ({ data, onBack }) => {
       } else {
         setToastMessage({
           type: "error",
-          message: response?.message || "Failed to save party"
+          message: response?.message || "Failed to save party",
         });
       }
     } catch (error) {
       console.error("Error saving party:", error);
       setToastMessage({
         type: "error",
-        message: error.message || "Error saving party"
+        message: error.message || "Error saving party",
       });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Show loading state
   if (isLoading) {
     return (
       <div className="p-2 max-w-7xl relative">
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600 dark:text-gray-400">Loading party data...</p>
+            <p className="mt-4 text-gray-600 dark:text-gray-400">
+              Loading party data...
+            </p>
           </div>
         </div>
       </div>
@@ -1048,10 +1101,12 @@ const PartyMasterForm = ({ data, onBack }) => {
     <div className="p-2 max-w-7xl">
       {/* Toast Message */}
       {toastMessage && (
-        <div className={`mb-3 p-3 rounded-lg ${toastMessage.type === "success"
-          ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-600 dark:text-green-400"
-          : "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400"
-          }`}>
+        <div
+          className={`mb-3 p-3 rounded-lg ${toastMessage.type === "success"
+              ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-600 dark:text-green-400"
+              : "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400"
+            }`}
+        >
           {toastMessage.message}
         </div>
       )}
@@ -1072,7 +1127,7 @@ const PartyMasterForm = ({ data, onBack }) => {
 
       {/* Main Card */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
-        {/* ---------------- Party Details (always visible) ---------------- */}
+        {/* ---------------- Party Details ---------------- */}
         <div>
           <SectionHeader>Party Details</SectionHeader>
           <div className={fieldGrid}>
@@ -1086,24 +1141,6 @@ const PartyMasterForm = ({ data, onBack }) => {
               options={listOfValuesData.partyCategory || []}
               required
             />
-            {/* <Field
-              type="select"
-              label="Party Category"
-              name="partyCategories2"
-              value={general.partyCategories2}
-              onChange={handleGeneralChange}
-              error={fieldErrors.partyCategories2}
-              options={partyCategory2Options}
-            />
-            <Field
-              type="select"
-              label="Party Category"
-              name="partyCategories3"
-              value={general.partyCategories3}
-              onChange={handleGeneralChange}
-              error={fieldErrors.partyCategories3}
-              options={partyCategory3Options}
-            /> */}
 
             <Field
               type="select"
@@ -1125,6 +1162,17 @@ const PartyMasterForm = ({ data, onBack }) => {
               error={fieldErrors.plantId}
               options={plantData}
               required
+            />
+
+            {/* 👇 NEW — Currency */}
+            <Field
+              type="select"
+              label="Currency"
+              name="currency"
+              value={general.currency}
+              onChange={handleGeneralChange}
+              error={fieldErrors.currency}
+              options={currencyData}
             />
 
             <Field
@@ -1353,7 +1401,7 @@ const PartyMasterForm = ({ data, onBack }) => {
             <Field
               label="GST State ID"
               name="gstStateId"
-               disabled={true}
+              disabled={true}
               value={general.gstStateId}
               readOnly
             />
@@ -1373,7 +1421,6 @@ const PartyMasterForm = ({ data, onBack }) => {
 
         {/* ---------------- Tabs Section ---------------- */}
         <section className="mt-4 bg-white dark:bg-gray-800">
-          {/* Tabs Header */}
           <div className="flex flex-wrap items-center border-b border-gray-200 dark:border-gray-700 mb-3">
             <div className="flex flex-wrap">
               {CHILD_TABS.map((tab) => (
@@ -1382,8 +1429,8 @@ const PartyMasterForm = ({ data, onBack }) => {
                   type="button"
                   onClick={() => setActiveChildTab(tab.key)}
                   className={`px-3 py-1.5 text-xs font-medium whitespace-nowrap border-b-2 transition-colors ${activeChildTab === tab.key
-                    ? "border-blue-600 text-blue-600 dark:text-blue-400"
-                    : "border-transparent text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
+                      ? "border-blue-600 text-blue-600 dark:text-blue-400"
+                      : "border-transparent text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
                     }`}
                 >
                   {tab.label}
@@ -1392,7 +1439,6 @@ const PartyMasterForm = ({ data, onBack }) => {
             </div>
           </div>
 
-          {/* Tab Content */}
           <div className="mt-2">
             {activeChildTab === "generalInfo" && (
               <div className={fieldGrid}>
@@ -1622,8 +1668,13 @@ const PartyMasterForm = ({ data, onBack }) => {
                     </thead>
                     <tbody>
                       {contactRows.map((row, idx) => (
-                        <tr key={idx} className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-                          <td className="p-1 text-center font-medium dark:text-white">{idx + 1}</td>
+                        <tr
+                          key={idx}
+                          className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"
+                        >
+                          <td className="p-1 text-center font-medium dark:text-white">
+                            {idx + 1}
+                          </td>
                           <td className="p-1 align-top">
                             <select
                               value={row.purpose}
@@ -1636,7 +1687,9 @@ const PartyMasterForm = ({ data, onBack }) => {
                             >
                               <option value="">-- Select --</option>
                               {departmentData.map((opt) => (
-                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                <option key={opt.value} value={opt.value}>
+                                  {opt.label}
+                                </option>
                               ))}
                             </select>
                           </td>
@@ -1717,13 +1770,15 @@ const PartyMasterForm = ({ data, onBack }) => {
                               type="button"
                               onClick={() => {
                                 if (contactRows.length > 1) {
-                                  setContactRows(contactRows.filter((_, i) => i !== idx));
+                                  setContactRows(
+                                    contactRows.filter((_, i) => i !== idx),
+                                  );
                                 }
                               }}
                               disabled={contactRows.length <= 1}
                               className={`h-5 w-5 rounded text-white flex items-center justify-center ${contactRows.length <= 1
-                                ? "bg-gray-400 cursor-not-allowed"
-                                : "bg-red-600 hover:bg-red-700"
+                                  ? "bg-gray-400 cursor-not-allowed"
+                                  : "bg-red-600 hover:bg-red-700"
                                 }`}
                             >
                               <Trash2 size={10} />
@@ -1743,7 +1798,10 @@ const PartyMasterForm = ({ data, onBack }) => {
                   <button
                     type="button"
                     onClick={() => {
-                      setAddressBookRows((prev) => [...prev, emptyAddressBookRow()]);
+                      setAddressBookRows((prev) => [
+                        ...prev,
+                        emptyAddressBookRow(),
+                      ]);
                     }}
                     className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
                   >
@@ -1767,8 +1825,13 @@ const PartyMasterForm = ({ data, onBack }) => {
                     </thead>
                     <tbody>
                       {addressBookRows.map((row, idx) => (
-                        <tr key={idx} className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-                          <td className="p-1 text-center font-medium dark:text-white">{idx + 1}</td>
+                        <tr
+                          key={idx}
+                          className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"
+                        >
+                          <td className="p-1 text-center font-medium dark:text-white">
+                            {idx + 1}
+                          </td>
                           <td className="p-1 align-top">
                             <select
                               value={row.type}
@@ -1781,7 +1844,9 @@ const PartyMasterForm = ({ data, onBack }) => {
                             >
                               <option value="">-- Select --</option>
                               {ADDRESS_TYPES.map((opt) => (
-                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                <option key={opt.value} value={opt.value}>
+                                  {opt.label}
+                                </option>
                               ))}
                             </select>
                           </td>
@@ -1850,13 +1915,15 @@ const PartyMasterForm = ({ data, onBack }) => {
                               type="button"
                               onClick={() => {
                                 if (addressBookRows.length > 1) {
-                                  setAddressBookRows(addressBookRows.filter((_, i) => i !== idx));
+                                  setAddressBookRows(
+                                    addressBookRows.filter((_, i) => i !== idx),
+                                  );
                                 }
                               }}
                               disabled={addressBookRows.length <= 1}
                               className={`h-5 w-5 rounded text-white flex items-center justify-center ${addressBookRows.length <= 1
-                                ? "bg-gray-400 cursor-not-allowed"
-                                : "bg-red-600 hover:bg-red-700"
+                                  ? "bg-gray-400 cursor-not-allowed"
+                                  : "bg-red-600 hover:bg-red-700"
                                 }`}
                             >
                               <Trash2 size={10} />
@@ -1959,12 +2026,19 @@ const PartyMasterForm = ({ data, onBack }) => {
                     </thead>
                     <tbody>
                       {itemRows.map((row, idx) => (
-                        <tr key={idx} className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-                          <td className="p-1 text-center font-medium dark:text-white">{idx + 1}</td>
+                        <tr
+                          key={idx}
+                          className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"
+                        >
+                          <td className="p-1 text-center font-medium dark:text-white">
+                            {idx + 1}
+                          </td>
                           <td className="p-1 align-top">
                             <select
                               value={row.itemCode}
-                              onChange={(e) => handleItemChange(idx, e.target.value)}
+                              onChange={(e) =>
+                                handleItemChange(idx, e.target.value)
+                              }
                               className="w-full h-8 px-2 rounded border text-xs bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
                             >
                               <option value="">Select Item</option>
@@ -1996,13 +2070,15 @@ const PartyMasterForm = ({ data, onBack }) => {
                               type="button"
                               onClick={() => {
                                 if (itemRows.length > 1) {
-                                  setItemRows(itemRows.filter((_, i) => i !== idx));
+                                  setItemRows(
+                                    itemRows.filter((_, i) => i !== idx),
+                                  );
                                 }
                               }}
                               disabled={itemRows.length <= 1}
                               className={`h-5 w-5 rounded text-white flex items-center justify-center ${itemRows.length <= 1
-                                ? "bg-gray-400 cursor-not-allowed"
-                                : "bg-red-600 hover:bg-red-700"
+                                  ? "bg-gray-400 cursor-not-allowed"
+                                  : "bg-red-600 hover:bg-red-700"
                                 }`}
                             >
                               <Trash2 size={10} />

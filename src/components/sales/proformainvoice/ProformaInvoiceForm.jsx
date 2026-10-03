@@ -180,10 +180,10 @@ const TableHead = ({ headers }) => (
         <th
           key={i}
           className={`p-2 whitespace-nowrap ${i === 0
-            ? "w-8 text-center"
-            : i === headers.length - 1
-              ? "w-20 text-left"
-              : "text-left"
+              ? "w-8 text-center"
+              : i === headers.length - 1
+                ? "w-20 text-left"
+                : "text-left"
             } text-gray-700 dark:text-gray-200 text-[10px] font-medium`}
         >
           {h}
@@ -195,7 +195,9 @@ const TableHead = ({ headers }) => (
 
 const TableRow = ({ children, index, onRemove, disabled, showDelete = true }) => (
   <tr className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-    <td className="p-2 text-center font-medium dark:text-white text-[10px]">{index + 1}</td>
+    <td className="p-2 text-center font-medium dark:text-white text-[10px]">
+      {index + 1}
+    </td>
     {children}
     {showDelete && (
       <td className="p-2 text-center">
@@ -204,8 +206,8 @@ const TableRow = ({ children, index, onRemove, disabled, showDelete = true }) =>
           onClick={onRemove}
           disabled={disabled}
           className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
-            ? "bg-gray-400 cursor-not-allowed"
-            : "bg-red-600 hover:bg-red-700"
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-red-600 hover:bg-red-700"
             }`}
         >
           <Trash2 size={10} />
@@ -449,8 +451,11 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
   const [activeTab, setActiveTab] = useState("salesContract");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [generatingDocId, setGeneratingDocId] = useState(false);
   const isUpdatingRef = useRef(false);
   const dataLoadedRef = useRef(false);
+  const docIdGeneratedRef = useRef(false);
+  const savingRef = useRef(false);
 
   // Lookup data states
   const [plantOptions, setPlantOptions] = useState([]);
@@ -484,8 +489,11 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
       base.refNo = data.refNo || "";
       base.poDate = fmtDate(data.poDate);
       base.isIGSTApplicable =
-        data.isIGSTApplicable === true ? "Yes" :
-          data.isIGSTApplicable === false ? "No" : data.isIGSTApplicable || "No";
+        data.isIGSTApplicable === true
+          ? "Yes"
+          : data.isIGSTApplicable === false
+            ? "No"
+            : data.isIGSTApplicable || "No";
       base.refDate = fmtDate(data.refDate);
       base.locationId = data.locationId?.id ?? data.locationId ?? "";
       base.gstnNo = data.gstnNo || "";
@@ -543,127 +551,134 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
 
   // ===================== Load Data for Edit =====================
 
-  const loadProformaInvoiceData = useCallback(async (invoiceId) => {
-    if (!invoiceId) return;
+  const loadProformaInvoiceData = useCallback(
+    async (invoiceId) => {
+      if (!invoiceId) return;
 
-    setLoading(true);
-    try {
-      const response = await proformaInvoiceAPI.getProformaInvoiceById(invoiceId);
-      console.log("Proforma Invoice Data:", response);
+      setLoading(true);
+      try {
+        const response =
+          await proformaInvoiceAPI.getProformaInvoiceById(invoiceId);
 
-      if (response) {
-        const invoice = response;
+        if (response) {
+          const invoice = response;
 
-        // Map the response data to form fields
-        setValue("plant", invoice.branch?.id || "");
-        setValue("invoiceNo", invoice.docId || "");
-        setValue("invoiceDate", invoice.docDate || "");
-        setValue("customerId", invoice.customer?.id || "");
-        setValue("customerName", invoice.customer?.customerName || "");
-        setValue("belongsTo", invoice.belongsTo || "");
-        setValue("customerCode", invoice.customer?.customerCode || "");
-        setValue("poNo", invoice.purchaseOrderNo || "");
-        setValue("partyGSTState", invoice.customer?.state || "");
-        setValue("refNo", invoice.refNo || "");
-        setValue("poDate", invoice.purchaseOrderDate || "");
-        setValue("isIGSTApplicable", invoice.customer.gstApproval || "No");
-        setValue("refDate", invoice.refDate || "");
-        setValue("locationId", invoice.location?.id || "");
-        setValue("gstnNo", invoice.customer?.customerGstNo || "");
-        setValue("kindAttention", invoice.kindAttention || "");
-        setValue("designation", invoice.designation || "");
-        setValue("timeOfIssue", invoice.timeOfIssue || "");
-        setValue("bankName", invoice.bankName?.id || "");
-        setValue("date", invoice.docDate || "");
-        setValue("timeOfRemoval", invoice.timeOfRemoval || "");
+          setValue("plant", invoice.branch?.id || "");
+          setValue("invoiceNo", invoice.docId || "");
+          setValue("invoiceDate", invoice.docDate || "");
+          setValue("customerId", invoice.customer?.id || "");
+          setValue("customerName", invoice.customer?.customerName || "");
+          setValue("belongsTo", invoice.belongsTo || "");
+          setValue("customerCode", invoice.customer?.customerCode || "");
+          setValue("poNo", invoice.purchaseOrderNo || "");
+          setValue("partyGSTState", invoice.customer?.state || "");
+          setValue("refNo", invoice.refNo || "");
+          setValue("poDate", invoice.purchaseOrderDate || "");
+          setValue("isIGSTApplicable", invoice.customer.gstApproval || "No");
+          setValue("refDate", invoice.refDate || "");
+          setValue("locationId", invoice.location?.id || "");
+          setValue("gstnNo", invoice.customer?.customerGstNo || "");
+          setValue("kindAttention", invoice.kindAttention || "");
+          setValue("designation", invoice.designation || "");
+          setValue("timeOfIssue", invoice.timeOfIssue || "");
+          setValue("bankName", invoice.bankName?.id || "");
+          setValue("date", invoice.docDate || "");
+          setValue("timeOfRemoval", invoice.timeOfRemoval || "");
 
-        // Terms and Conditions
-        setValue("termsAndConditions.insurance", invoice.insurance === 1 ? "Yes" : "No");
-        setValue("termsAndConditions.freight", invoice.freight === 1 ? "Yes" : "No");
-        setValue("termsAndConditions.noOfPkg", invoice.noOfPkg || "");
-        setValue("termsAndConditions.pkgType", invoice.pkgType || "");
-        setValue("termsAndConditions.modeOfTransport", invoice.modeOfTransport || "");
-        setValue("termsAndConditions.rateOfDuty", invoice.rateOfDuty || "");
-        setValue("termsAndConditions.tariffNo", invoice.tariffNo || "");
-        setValue("termsAndConditions.basicValue", invoice.basicValue || "");
-        setValue("termsAndConditions.grossAmount", invoice.grossAmount || "");
-        setValue("termsAndConditions.amountInWords", invoice.amountInWords || "");
-        setValue("termsAndConditions.deliveryTo", invoice.deliveryTo || "");
-        setValue("termsAndConditions.paymentTerms", invoice.paymentTerms || "");
-        setValue("termsAndConditions.paymentPercentage", invoice.paymentPercentage || "");
-        setValue("termsAndConditions.narration", invoice.narration || "");
+          setValue(
+            "termsAndConditions.insurance",
+            invoice.insurance === 1 ? "Yes" : "No",
+          );
+          setValue(
+            "termsAndConditions.freight",
+            invoice.freight === 1 ? "Yes" : "No",
+          );
+          setValue("termsAndConditions.noOfPkg", invoice.noOfPkg || "");
+          setValue("termsAndConditions.pkgType", invoice.pkgType || "");
+          setValue(
+            "termsAndConditions.modeOfTransport",
+            invoice.modeOfTransport || "",
+          );
+          setValue("termsAndConditions.rateOfDuty", invoice.rateOfDuty || "");
+          setValue("termsAndConditions.tariffNo", invoice.tariffNo || "");
+          setValue("termsAndConditions.basicValue", invoice.basicValue || "");
+          setValue("termsAndConditions.grossAmount", invoice.grossAmount || "");
+          setValue(
+            "termsAndConditions.amountInWords",
+            invoice.amountInWords || "",
+          );
+          setValue("termsAndConditions.deliveryTo", invoice.deliveryTo || "");
+          setValue(
+            "termsAndConditions.paymentTerms",
+            invoice.paymentTerms || "",
+          );
+          setValue(
+            "termsAndConditions.paymentPercentage",
+            invoice.paymentPercentage || "",
+          );
+          setValue("termsAndConditions.narration", invoice.narration || "");
 
-        // Product Details
-        if (invoice.proformaInvoiceDetailsResponseDTO?.length > 0) {
-          const details = invoice.proformaInvoiceDetailsResponseDTO.map(item => ({
-            // IMPORTANT: select value must be item.id, not itemCode
-            itemCode: item.item?.id || "",
+          if (invoice.proformaInvoiceDetailsResponseDTO?.length > 0) {
+            // 👇 IMPORTANT: Cast itemCode to String() so it's always a string
+            const details = invoice.proformaInvoiceDetailsResponseDTO.map(
+              (item) => ({
+                itemCode:
+                  item.item?.id != null ? String(item.item.id) : "",
+                customerPartNo: item.item?.customerPoNo || "",
+                itemDescription: item.item?.itemDescription || "",
+                hsCode: item.hsnCode || "",
+                taxType: item.taxType || "",
+                taxPercentage: item.taxPercentage || "",
+                dispatchQty: item.despatchQty || "",
+                unit: item.item?.unit?.id || "",
+                orderRate: item.orderRate || "",
+                amount: item.amount || "",
+                sgstRate: item.sgstRate || "",
+                sgstAmount: item.sgstAmount || "",
+                cgstRate: item.cgstRate || "",
+                cgstAmount: item.cgstAmount || "",
+                igstRate: item.igstRate || "",
+                igstAmount: item.igstAmount || "",
+              }),
+            );
+            salesContractArray.replace(details);
+          }
 
-            customerPartNo: item.item?.customerPoNo || "",
+          if (invoice.proformaInvoiceTaxDetailsResponseDTO?.length > 0) {
+            const taxDetails = invoice.proformaInvoiceTaxDetailsResponseDTO.map(
+              (item) => ({
+                particulars: item.particulars || "",
+                amount: item.amount || 0,
+                isSystemRow: ["Gross Amount", "IGST", "CGST", "SGST"].includes(
+                  item.particulars || "",
+                ),
+                postFin: "",
+              }),
+            );
+            taxDetailsArray.replace(taxDetails);
+          }
 
-            itemDescription: item.item?.itemDescription || "",
-
-            hsCode: item.hsnCode || "",
-
-            taxType: item.taxType || "",
-
-            taxPercentage: item.taxPercentage || "",
-
-            dispatchQty: item.despatchQty || "",
-
-            unit: item.item?.unit?.id || "",
-
-            orderRate: item.orderRate || "",
-
-            amount: item.amount || "",
-
-            sgstRate: item.sgstRate || "",
-            sgstAmount: item.sgstAmount || "",
-
-            cgstRate: item.cgstRate || "",
-            cgstAmount: item.cgstAmount || "",
-
-            igstRate: item.igstRate || "",
-            igstAmount: item.igstAmount || "",
-          }));
-          salesContractArray.replace(details);
+          addToast("Proforma Invoice loaded successfully", "success");
+        } else {
+          addToast("Failed to load Proforma Invoice data", "error");
         }
-
-        // Tax Details
-        if (invoice.proformaInvoiceTaxDetailsResponseDTO?.length > 0) {
-          const taxDetails = invoice.proformaInvoiceTaxDetailsResponseDTO.map(item => ({
-            particulars: item.particulars || "",
-            amount: item.amount || 0,
-            isSystemRow: ['Gross Amount', 'IGST', 'CGST', 'SGST'].includes(item.particulars || ""),
-            postFin: "",
-          }));
-          taxDetailsArray.replace(taxDetails);
-        }
-
-        addToast("Proforma Invoice loaded successfully", "success");
-      } else {
+      } catch (error) {
+        console.error("Error loading proforma invoice:", error);
         addToast("Failed to load Proforma Invoice data", "error");
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      console.error("Error loading proforma invoice:", error);
-      addToast("Failed to load Proforma Invoice data", "error");
-    } finally {
-      setLoading(false);
-    }
-  }, [setValue, salesContractArray, taxDetailsArray, addToast]);
+    },
+    [setValue, salesContractArray, taxDetailsArray, addToast],
+  );
 
   useEffect(() => {
     const invoiceId = data?.id;
 
     if (!invoiceId) return;
-
-    // Prevent multiple API calls for the same invoice
-    if (dataLoadedRef.current === invoiceId) {
-      return;
-    }
+    if (dataLoadedRef.current === invoiceId) return;
 
     dataLoadedRef.current = invoiceId;
-
     loadProformaInvoiceData(invoiceId);
   }, [data?.id, loadProformaInvoiceData]);
 
@@ -677,7 +692,7 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
           (res || []).map((p) => ({
             value: p.id,
             label: p.plantName || p.plantId || p.id,
-          }))
+          })),
         );
       } else {
         const res = await branchAPI.getBranchByOrgId(orgId);
@@ -685,7 +700,7 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
           (res || []).map((b) => ({
             value: b.id,
             label: b.branchName || b.branchCode || b.id,
-          }))
+          })),
         );
       }
     } catch (error) {
@@ -696,13 +711,14 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
 
   const loadLocation = useCallback(async () => {
     try {
-      const response = await locationMasterAPI.getLocationMasterByOrgId(orgId, branch);
-      console.log("Loaded Locations:", response);
-      const options = (response || []).map(location => ({
+      const response = await locationMasterAPI.getLocationMasterByOrgId(
+        orgId,
+        branch,
+      );
+      const options = (response || []).map((location) => ({
         value: location.id,
         label: location.locationName,
       }));
-      console.log("Normalized Location Options:", options);
       setLocationData(options);
     } catch (error) {
       console.error("Failed to load locations:", error);
@@ -713,7 +729,6 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
   const loadCustomers = useCallback(async () => {
     try {
       const res = await partyMasterAPI.getPartyByOrgId(orgId, branch);
-      console.log("Loaded Customers:", res);
       setCustomerOptions(
         (res || []).map((c) => ({
           value: c.id,
@@ -723,7 +738,7 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
           partyGSTState: c.gstState?.stateName || "",
           isIGSTApplicable: c.gstApplicable || false,
           gstnNo: c.gstNo || "",
-        }))
+        })),
       );
     } catch (error) {
       console.error("Failed to load customer options:", error);
@@ -735,9 +750,11 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
     try {
       const res = await itemAPI.getItems(orgId, branch);
       const map = {};
+      // 👇 Force `value` to a string so <select> and form state stay consistent
       const options = (res || []).map((it) => {
-        map[it.id] = it;
-        return { value: it.id, label: it.itemCode };
+        const id = String(it.id);
+        map[id] = it;
+        return { value: id, label: it.itemCode };
       });
       setItemOptions(options);
       setItemMap(map);
@@ -755,7 +772,7 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
         (res || []).map((u) => ({
           value: u.id,
           label: u.unitId,
-        }))
+        })),
       );
     } catch (error) {
       console.error("Failed to load unit options:", error);
@@ -765,12 +782,15 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
 
   const loadLocations = useCallback(async () => {
     try {
-      const res = await locationMasterAPI.getLocationMasterByOrgId(orgId, branch);
+      const res = await locationMasterAPI.getLocationMasterByOrgId(
+        orgId,
+        branch,
+      );
       setLocationOptions(
         (res || []).map((l) => ({
           value: l.id,
           label: l.locationName || l.locationCode || l.id,
-        }))
+        })),
       );
     } catch (error) {
       console.error("Failed to load location options:", error);
@@ -785,7 +805,7 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
         (res || []).map((s) => ({
           value: s.id,
           label: s.stateName || s.stateCode || s.id,
-        }))
+        })),
       );
     } catch (error) {
       console.error("Failed to load state options:", error);
@@ -800,7 +820,7 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
         (res || []).map((b) => ({
           value: b.id,
           label: b.bank,
-        }))
+        })),
       );
     } catch (error) {
       console.error("Failed to load bank options:", error);
@@ -815,7 +835,7 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
         (res || []).map((e) => ({
           value: e.id,
           label: e.employeeName || e.name || e.id,
-        }))
+        })),
       );
     } catch (error) {
       console.error("Failed to load employee options:", error);
@@ -830,7 +850,10 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
       await Promise.all(
         Object.entries(LIST_OF_VALUES_GROUPS).map(async ([key, group]) => {
           try {
-            const response = await listOfValuesAPI.getListValuesGroup(group, orgId);
+            const response = await listOfValuesAPI.getListValuesGroup(
+              group,
+              orgId,
+            );
 
             let items = [];
             if (response?.paramObjectsMap?.listValues) {
@@ -843,17 +866,16 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
               items = response.listValues;
             }
 
-            result[key] = items.map(item => ({
+            result[key] = items.map((item) => ({
               value: item.id || item.value,
               label: item.valuesDescription || item.label || item.name,
               ...item,
             }));
-
           } catch (err) {
             console.error(`${group} failed`, err);
             result[key] = [];
           }
-        })
+        }),
       );
 
       setListOfValuesData(result);
@@ -861,6 +883,36 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
       console.error("Error loading ListOfValues:", err);
     }
   }, [orgId]);
+
+  /* ---------------- Generate DocId ---------------- */
+
+  const generateDocId = useCallback(async () => {
+    if (data?.id) return;
+    if (docIdGeneratedRef.current || generatingDocId) return;
+    if (!orgId) return;
+
+    docIdGeneratedRef.current = true;
+    setGeneratingDocId(true);
+
+    try {
+      const financialYear = new Date().getFullYear().toString();
+      const docId = await proformaInvoiceAPI.getProformaInvoiceDocId(
+        financialYear,
+        orgId,
+      );
+
+      if (docId) {
+        setValue("invoiceNo", docId, { shouldDirty: false });
+      } else {
+        addToast("Failed to generate Invoice No", "error");
+      }
+    } catch (error) {
+      console.error("Error generating Invoice No:", error);
+      addToast("Failed to generate Invoice No", "error");
+    } finally {
+      setGeneratingDocId(false);
+    }
+  }, [data?.id, orgId, generatingDocId, setValue, addToast]);
 
   useEffect(() => {
     if (orgId) {
@@ -889,45 +941,60 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
     loadListOfValuesData,
   ]);
 
+  useEffect(() => {
+    if (!data?.id && orgId) {
+      generateDocId();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.id, orgId]);
+
   // ===================== API Calls =====================
 
-  const fetchTaxValue = useCallback(async (hsnCode) => {
-    if (!hsnCode || !orgId) return null;
+  const fetchTaxValue = useCallback(
+    async (hsnCode) => {
+      if (!hsnCode || !orgId) return null;
 
-    try {
-      const response = await proformaInvoiceAPI.getTaxValue(hsnCode, orgId);
-      console.log("Tax API Response:", response);
+      try {
+        const response = await proformaInvoiceAPI.getTaxValue(hsnCode, orgId);
 
-      if (response?.status && response?.paramObjectsMap?.mapp?.length > 0) {
-        const taxData = response.paramObjectsMap.mapp[0];
-        return {
-          taxPercentage: taxData.taxPercentage || 0,
-          sgst: taxData.sgst || 0,
-          cgst: taxData.cgst || 0,
-          igst: taxData.igst || 0,
-        };
+        if (response?.status && response?.paramObjectsMap?.mapp?.length > 0) {
+          const taxData = response.paramObjectsMap.mapp[0];
+          return {
+            taxPercentage: taxData.taxPercentage || 0,
+            sgst: taxData.sgst || 0,
+            cgst: taxData.cgst || 0,
+            igst: taxData.igst || 0,
+          };
+        }
+        return null;
+      } catch (error) {
+        console.error("Failed to fetch tax value:", error);
+        return null;
       }
-      return null;
-    } catch (error) {
-      console.error("Failed to fetch tax value:", error);
-      return null;
-    }
-  }, [orgId]);
+    },
+    [orgId],
+  );
 
   // ===================== Handlers =====================
 
   const handleCustomerChange = (id) => {
-    const customer = customerOptions.find((c) => String(c.value) === String(id));
-    console.log("Selected Customer:", customer);
+    const customer = customerOptions.find(
+      (c) => String(c.value) === String(id),
+    );
     setValue("customerId", id, { shouldDirty: true });
-    setValue("customerName", customer?.customerName || "", { shouldDirty: true });
-    setValue("customerCode", customer?.customerCode || "", { shouldDirty: true });
-    setValue("partyGSTState", customer?.partyGSTState || "", { shouldDirty: true });
+    setValue("customerName", customer?.customerName || "", {
+      shouldDirty: true,
+    });
+    setValue("customerCode", customer?.customerCode || "", {
+      shouldDirty: true,
+    });
+    setValue("partyGSTState", customer?.partyGSTState || "", {
+      shouldDirty: true,
+    });
     const igstValue = customer?.isIGSTApplicable === true ? "Yes" : "No";
     setValue("isIGSTApplicable", igstValue, { shouldDirty: true });
     setValue("gstnNo", customer?.gstnNo || "", { shouldDirty: true });
 
-    // Update tax type for all rows based on IGST applicability
     salesContractArray.fields.forEach((_, index) => {
       const taxType = igstValue === "Yes" ? "IGST" : "SGST";
       setValue(`salesContractDetails.${index}.taxType`, taxType);
@@ -940,28 +1007,47 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
     });
 
     if (field === "itemCode") {
-      const item = itemMap[value];
-      setValue(`salesContractDetails.${idx}.itemDescription`, item?.itemDescription || "", { shouldDirty: true });
+      // 👇 Force string lookup for itemMap (keys are strings)
+      const item = itemMap[String(value)];
+      setValue(
+        `salesContractDetails.${idx}.itemDescription`,
+        item?.itemDescription || "",
+        { shouldDirty: true },
+      );
 
-      // Get HSN code from item
       const hsnCode = item?.itemHsn?.hsnCode || "";
-      setValue(`salesContractDetails.${idx}.hsCode`, hsnCode, { shouldDirty: true });
-      setValue(`salesContractDetails.${idx}.unit`, item?.primaryUnits?.id || "", { shouldDirty: true });
+      setValue(`salesContractDetails.${idx}.hsCode`, hsnCode, {
+        shouldDirty: true,
+      });
+      setValue(
+        `salesContractDetails.${idx}.unit`,
+        item?.primaryUnits?.id || "",
+        { shouldDirty: true },
+      );
 
-      // Set tax type based on IGST applicability
       const taxType = isIGSTApplicable === "Yes" ? "IGST" : "SGST";
-      setValue(`salesContractDetails.${idx}.taxType`, taxType, { shouldDirty: true });
+      setValue(`salesContractDetails.${idx}.taxType`, taxType, {
+        shouldDirty: true,
+      });
 
-      // Fetch tax values if HSN code exists
       if (hsnCode) {
-        fetchTaxValue(hsnCode).then(taxData => {
+        fetchTaxValue(hsnCode).then((taxData) => {
           if (taxData) {
-            setValue(`salesContractDetails.${idx}.taxPercentage`, taxData.taxPercentage, { shouldDirty: true });
-            setValue(`salesContractDetails.${idx}.sgstRate`, taxData.sgst, { shouldDirty: true });
-            setValue(`salesContractDetails.${idx}.cgstRate`, taxData.cgst, { shouldDirty: true });
-            setValue(`salesContractDetails.${idx}.igstRate`, taxData.igst, { shouldDirty: true });
+            setValue(
+              `salesContractDetails.${idx}.taxPercentage`,
+              taxData.taxPercentage,
+              { shouldDirty: true },
+            );
+            setValue(`salesContractDetails.${idx}.sgstRate`, taxData.sgst, {
+              shouldDirty: true,
+            });
+            setValue(`salesContractDetails.${idx}.cgstRate`, taxData.cgst, {
+              shouldDirty: true,
+            });
+            setValue(`salesContractDetails.${idx}.igstRate`, taxData.igst, {
+              shouldDirty: true,
+            });
 
-            // Recalculate amounts with new tax rates
             recalcRow(idx);
           }
         });
@@ -970,17 +1056,28 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
   };
 
   const handleHSNChange = async (idx, hsnCode) => {
-    setValue(`salesContractDetails.${idx}.hsCode`, hsnCode, { shouldDirty: true });
+    setValue(`salesContractDetails.${idx}.hsCode`, hsnCode, {
+      shouldDirty: true,
+    });
 
     if (hsnCode) {
       const taxData = await fetchTaxValue(hsnCode);
       if (taxData) {
-        setValue(`salesContractDetails.${idx}.taxPercentage`, taxData.taxPercentage, { shouldDirty: true });
-        setValue(`salesContractDetails.${idx}.sgstRate`, taxData.sgst, { shouldDirty: true });
-        setValue(`salesContractDetails.${idx}.cgstRate`, taxData.cgst, { shouldDirty: true });
-        setValue(`salesContractDetails.${idx}.igstRate`, taxData.igst, { shouldDirty: true });
+        setValue(
+          `salesContractDetails.${idx}.taxPercentage`,
+          taxData.taxPercentage,
+          { shouldDirty: true },
+        );
+        setValue(`salesContractDetails.${idx}.sgstRate`, taxData.sgst, {
+          shouldDirty: true,
+        });
+        setValue(`salesContractDetails.${idx}.cgstRate`, taxData.cgst, {
+          shouldDirty: true,
+        });
+        setValue(`salesContractDetails.${idx}.igstRate`, taxData.igst, {
+          shouldDirty: true,
+        });
 
-        // Recalculate amounts with new tax rates
         recalcRow(idx);
       }
     }
@@ -997,29 +1094,48 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
       const dispatchQty = parseFloat(row.dispatchQty) || 0;
       const orderRate = parseFloat(row.orderRate) || 0;
 
-      // Calculate amount (Dispatch Qty * Order Rate)
       const amount = dispatchQty * orderRate;
-      setValue(`salesContractDetails.${idx}.amount`, amount ? amount.toFixed(2) : "", { shouldDirty: true });
+      setValue(
+        `salesContractDetails.${idx}.amount`,
+        amount ? amount.toFixed(2) : "",
+        { shouldDirty: true },
+      );
 
-      // Calculate tax amounts based on tax type
-      const taxType = row.taxType || (isIGSTApplicable === "Yes" ? "IGST" : "SGST");
+      const taxType =
+        row.taxType || (isIGSTApplicable === "Yes" ? "IGST" : "SGST");
 
       if (taxType === "IGST") {
         const igstRate = parseFloat(row.igstRate) || 0;
         const igstAmount = (amount * igstRate) / 100;
-        setValue(`salesContractDetails.${idx}.igstAmount`, igstAmount ? igstAmount.toFixed(2) : "", { shouldDirty: true });
-        // Clear SGST/CGST amounts
-        setValue(`salesContractDetails.${idx}.sgstAmount`, "", { shouldDirty: true });
-        setValue(`salesContractDetails.${idx}.cgstAmount`, "", { shouldDirty: true });
+        setValue(
+          `salesContractDetails.${idx}.igstAmount`,
+          igstAmount ? igstAmount.toFixed(2) : "",
+          { shouldDirty: true },
+        );
+        setValue(`salesContractDetails.${idx}.sgstAmount`, "", {
+          shouldDirty: true,
+        });
+        setValue(`salesContractDetails.${idx}.cgstAmount`, "", {
+          shouldDirty: true,
+        });
       } else {
         const sgstRate = parseFloat(row.sgstRate) || 0;
         const cgstRate = parseFloat(row.cgstRate) || 0;
         const sgstAmount = (amount * sgstRate) / 100;
         const cgstAmount = (amount * cgstRate) / 100;
-        setValue(`salesContractDetails.${idx}.sgstAmount`, sgstAmount ? sgstAmount.toFixed(2) : "", { shouldDirty: true });
-        setValue(`salesContractDetails.${idx}.cgstAmount`, cgstAmount ? cgstAmount.toFixed(2) : "", { shouldDirty: true });
-        // Clear IGST amount
-        setValue(`salesContractDetails.${idx}.igstAmount`, "", { shouldDirty: true });
+        setValue(
+          `salesContractDetails.${idx}.sgstAmount`,
+          sgstAmount ? sgstAmount.toFixed(2) : "",
+          { shouldDirty: true },
+        );
+        setValue(
+          `salesContractDetails.${idx}.cgstAmount`,
+          cgstAmount ? cgstAmount.toFixed(2) : "",
+          { shouldDirty: true },
+        );
+        setValue(`salesContractDetails.${idx}.igstAmount`, "", {
+          shouldDirty: true,
+        });
       }
     } finally {
       isUpdatingRef.current = false;
@@ -1030,20 +1146,25 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
     if (!watchSalesRows?.length) return;
 
     const contractDetails = watchSalesRows || [];
-    const totalAmount = contractDetails.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+    const totalAmount = contractDetails.reduce(
+      (sum, item) => sum + (Number(item.amount) || 0),
+      0,
+    );
 
     const taxType = isIGSTApplicable === "Yes" ? "IGST" : "SGST";
 
-    let sgstTotal = 0, cgstTotal = 0, igstTotal = 0;
+    let sgstTotal = 0,
+      cgstTotal = 0,
+      igstTotal = 0;
 
-    contractDetails.forEach(item => {
+    contractDetails.forEach((item) => {
       sgstTotal += Number(item.sgstAmount) || 0;
       cgstTotal += Number(item.cgstAmount) || 0;
       igstTotal += Number(item.igstAmount) || 0;
     });
 
-    const existingTaxDetails = getValues('taxDetails') || [];
-    const userAddedRows = existingTaxDetails.filter(item => !item.isSystemRow);
+    const existingTaxDetails = getValues("taxDetails") || [];
+    const userAddedRows = existingTaxDetails.filter((item) => !item.isSystemRow);
 
     const systemRows = [];
 
@@ -1051,7 +1172,7 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
       particulars: "Gross Amount",
       amount: totalAmount,
       isSystemRow: true,
-      postFin: ""
+      postFin: "",
     });
 
     if (taxType === "IGST") {
@@ -1059,27 +1180,25 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
         particulars: "IGST",
         amount: igstTotal,
         isSystemRow: true,
-        postFin: ""
+        postFin: "",
       });
     } else {
       systemRows.push({
         particulars: "SGST",
         amount: sgstTotal,
         isSystemRow: true,
-        postFin: ""
+        postFin: "",
       });
       systemRows.push({
         particulars: "CGST",
         amount: cgstTotal,
         isSystemRow: true,
-        postFin: ""
+        postFin: "",
       });
     }
 
     const allTaxEntries = [...systemRows, ...userAddedRows];
-
     const currentRows = getValues("taxDetails") || [];
-
     const hasChanged =
       JSON.stringify(currentRows) !== JSON.stringify(allTaxEntries);
 
@@ -1087,12 +1206,23 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
       taxDetailsArray.replace(allTaxEntries);
     }
 
-    // Set Basic Value as total of all amounts
-    setValue("termsAndConditions.basicValue", totalAmount ? totalAmount.toFixed(2) : "", { shouldDirty: true });
+    setValue(
+      "termsAndConditions.basicValue",
+      totalAmount ? totalAmount.toFixed(2) : "",
+      { shouldDirty: true },
+    );
 
     const grand = totalAmount + sgstTotal + cgstTotal + igstTotal;
-    setValue("termsAndConditions.grossAmount", grand ? grand.toFixed(2) : "", { shouldDirty: true });
-    setValue("termsAndConditions.amountInWords", grand ? numberToWords(grand) : "", { shouldDirty: true });
+    setValue(
+      "termsAndConditions.grossAmount",
+      grand ? grand.toFixed(2) : "",
+      { shouldDirty: true },
+    );
+    setValue(
+      "termsAndConditions.amountInWords",
+      grand ? numberToWords(grand) : "",
+      { shouldDirty: true },
+    );
   }, [watchSalesRows, getValues, isIGSTApplicable, taxDetailsArray, setValue]);
 
   useEffect(() => {
@@ -1100,9 +1230,7 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
   }, [watchSalesRows, calculateTaxDetails]);
 
   const handleAddItem = () => {
-    const idx = salesContractArray.fields.length;
     const newRow = getDefaultSalesRow();
-    // Set tax type based on IGST applicability
     newRow.taxType = isIGSTApplicable === "Yes" ? "IGST" : "SGST";
     salesContractArray.append(newRow);
   };
@@ -1116,17 +1244,17 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
       particulars: "",
       amount: 0.0,
       postFin: "",
-      isSystemRow: false
+      isSystemRow: false,
     };
     taxDetailsArray.append(newItem);
   };
 
   const handleRemoveTax = (index) => {
-    const currentTaxDetails = getValues('taxDetails') || [];
+    const currentTaxDetails = getValues("taxDetails") || [];
     const isSystemRow = currentTaxDetails[index]?.isSystemRow;
 
     if (isSystemRow) {
-      addToast('Cannot delete system calculated rows', 'error');
+      addToast("Cannot delete system calculated rows", "error");
       return;
     }
 
@@ -1137,8 +1265,6 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
       }, 100);
     }
   };
-
-  // ===================== Validation & Save =====================
 
   // ===================== Validation & Save =====================
 
@@ -1153,12 +1279,18 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
   };
 
   const onSubmit = async (formData) => {
-    if (!validate()) return;
+    // 👇 Synchronous lock — prevents double submission
+    if (savingRef.current) return;
+    savingRef.current = true;
+
+    if (!validate()) {
+      savingRef.current = false;
+      return;
+    }
 
     setSaving(true);
     const isUpdate = Boolean(data?.id);
 
-    // Format date for API
     const formatDateForAPI = (dateString) => {
       if (!dateString) return null;
       try {
@@ -1172,7 +1304,6 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
       }
     };
 
-    // Build the payload according to the API structure
     const payload = {
       active: true,
       bankName: formData.bankName ? parseInt(formData.bankName) : 0,
@@ -1183,6 +1314,7 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
       customer: formData.customerId ? parseInt(formData.customerId) : 0,
       deliveryTo: formData.termsAndConditions?.deliveryTo || "",
       designation: formData.designation || "",
+      docId: formData.invoiceNo || "",
       financialYear: new Date().getFullYear().toString(),
       freight: formData.termsAndConditions?.freight === "Yes" ? 1 : 0,
       id: isUpdate ? parseInt(data.id) : 0,
@@ -1203,27 +1335,30 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
       refDate: formatDateForAPI(formData.refDate) || "",
       refNo: formData.refNo || "",
       tariffNo: formData.termsAndConditions?.tariffNo || "",
-      // Proforma Invoice Details (Product Details)
+      // 👇 FIX: Use String(...) before .trim() so numeric itemCode doesn't throw
       proformaInvoiceDetailsDTO: (formData.salesContractDetails || [])
-        .filter((r) => r.itemCode?.trim())
+        .filter((r) => String(r.itemCode ?? "").trim() !== "")
         .map((item) => ({
           despatchQty: parseFloat(item.dispatchQty) || 0,
           hsnCode: item.hsCode || "",
-          item: itemMap[item.itemCode]?.id ? parseInt(itemMap[item.itemCode].id) : 0,
+          // 👇 Force string lookup
+          item: itemMap[String(item.itemCode)]?.id
+            ? parseInt(itemMap[String(item.itemCode)].id)
+            : 0,
           orderRate: parseFloat(item.orderRate) || 0,
           taxPercentage: parseFloat(item.taxPercentage) || 0,
           taxType: item.taxType || "SGST",
         })),
-      // Proforma Invoice Tax Details
       proformaInvoiceTaxDetailsDTO: (formData.taxDetails || [])
-        .filter((r) => r.particulars?.trim() || parseFloat(r.amount) > 0)
+        .filter(
+          (r) => String(r.particulars ?? "").trim() !== "" || parseFloat(r.amount) > 0,
+        )
         .map((item) => ({
           amount: parseFloat(item.amount) || 0,
           particulars: item.particulars || "",
         })),
     };
 
-    // If updating, keep the id, otherwise remove it
     if (!isUpdate) {
       delete payload.id;
     }
@@ -1231,7 +1366,8 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
     console.log("Saving Proforma Invoice Payload:", payload);
 
     try {
-      const response = await proformaInvoiceAPI.createUpdateProformaInvoice(payload);
+      const response =
+        await proformaInvoiceAPI.createUpdateProformaInvoice(payload);
 
       if (response?.status) {
         addToast(
@@ -1239,7 +1375,7 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
           (isUpdate
             ? "Proforma Invoice updated successfully!"
             : "Proforma Invoice created successfully!"),
-          "success"
+          "success",
         );
         onBack?.();
       } else {
@@ -1249,7 +1385,7 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
           response?.message ||
           response?.paramObjectsMap?.message ||
           "Failed to save Proforma Invoice.",
-          "error"
+          "error",
         );
       }
     } catch (err) {
@@ -1260,13 +1396,14 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
           err.response.data.statusMessage ||
           err.response.data.error ||
           JSON.stringify(err.response.data),
-          "error"
+          "error",
         );
       } else {
         addToast("Something went wrong.", "error");
       }
     } finally {
       setSaving(false);
+      savingRef.current = false; // 👈 release the lock
     }
   };
 
@@ -1288,7 +1425,7 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
         control={control}
         name="invoiceNo"
         label="Invoice No"
-        placeholder="Auto"
+        placeholder={generatingDocId ? "Generating..." : "Auto"}
         readOnly={!data}
         errors={errors}
       />
@@ -1449,11 +1586,9 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
   );
 
   const renderSalesTab = () => {
-    // Determine if we should show SGST/CGST or IGST columns
     const showSGST = isIGSTApplicable === "No";
     const showIGST = isIGSTApplicable === "Yes";
 
-    // Build headers based on tax type
     const baseHeaders = [
       "S.No",
       "Item Code *",
@@ -1468,7 +1603,12 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
       "Amount",
     ];
 
-    const sgstHeaders = ["SGST Rate", "SGST Amount", "CGST Rate", "CGST Amount"];
+    const sgstHeaders = [
+      "SGST Rate",
+      "SGST Amount",
+      "CGST Rate",
+      "CGST Amount",
+    ];
     const igstHeaders = ["IGST Rate", "IGST Amount"];
 
     let taxHeaders = [];
@@ -1580,7 +1720,6 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
                   errors={errors}
                 />
 
-                {/* Conditionally render SGST/CGST or IGST columns */}
                 {showSGST && (
                   <>
                     <InputCell
@@ -1653,11 +1792,8 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
   };
 
   const renderTaxTab = () => {
-    // Get all available options from listOfValuesData
     const allOptions = listOfValuesData.PARTICULARS || [];
-
-    // Get system option labels
-    const systemOptionLabels = ['Gross Amount', 'IGST', 'CGST', 'SGST'];
+    const systemOptionLabels = ["Gross Amount", "IGST", "CGST", "SGST"];
 
     return (
       <div className="pt-2 space-y-2">
@@ -1677,17 +1813,17 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
             {taxDetailsArray.fields.map((field, index) => {
               const isSystemRow = getValues(`taxDetails.${index}.isSystemRow`);
               const particulars = getValues(`taxDetails.${index}.particulars`);
-              const isReadOnly = isSystemRow || systemOptionLabels.includes(particulars);
+              const isReadOnly =
+                isSystemRow || systemOptionLabels.includes(particulars);
 
-              // For system rows, only show their specific value
-              // For user rows, show all options except system ones
               let availableOptions = [];
               if (isSystemRow) {
-                availableOptions = [{ label: particulars, value: particulars }];
+                availableOptions = [
+                  { label: particulars, value: particulars },
+                ];
               } else {
-                // Filter out system options for user rows
-                availableOptions = allOptions.filter(option =>
-                  !systemOptionLabels.includes(option.label)
+                availableOptions = allOptions.filter(
+                  (option) => !systemOptionLabels.includes(option.label),
                 );
               }
 
@@ -1705,7 +1841,10 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
                       render={({ field }) => (
                         <select
                           {...field}
-                          className={`${controlClasses} ${isReadOnly ? 'bg-gray-100 dark:bg-gray-700 cursor-not-allowed' : ''}`}
+                          className={`${controlClasses} ${isReadOnly
+                              ? "bg-gray-100 dark:bg-gray-700 cursor-not-allowed"
+                              : ""
+                            }`}
                           disabled={isReadOnly}
                           onChange={(e) => {
                             field.onChange(e.target.value);
@@ -1714,7 +1853,10 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
                         >
                           <option value="">Select Particulars</option>
                           {availableOptions.map((option) => (
-                            <option key={option.value || option.label} value={option.label}>
+                            <option
+                              key={option.value || option.label}
+                              value={option.label}
+                            >
                               {option.label}
                             </option>
                           ))}
@@ -1732,7 +1874,10 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
                           type="number"
                           step="0.01"
                           placeholder="0.00"
-                          className={`${controlClasses} text-right ${isReadOnly ? 'bg-gray-100 dark:bg-gray-700 cursor-not-allowed' : ''}`}
+                          className={`${controlClasses} text-right ${isReadOnly
+                              ? "bg-gray-100 dark:bg-gray-700 cursor-not-allowed"
+                              : ""
+                            }`}
                           disabled={isReadOnly}
                           value={field.value || 0}
                           onChange={(e) => {
@@ -1909,8 +2054,8 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
               type="button"
               onClick={() => setActiveTab("salesContract")}
               className={`px-4 py-1 text-xs font-semibold rounded-t ${activeTab === "salesContract"
-                ? "bg-blue-600 text-white"
-                : "text-gray-600 dark:text-gray-300"
+                  ? "bg-blue-600 text-white"
+                  : "text-gray-600 dark:text-gray-300"
                 }`}
             >
               Product Details
@@ -1919,8 +2064,8 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
               type="button"
               onClick={() => setActiveTab("taxDetails")}
               className={`px-4 py-1 text-xs font-semibold rounded-t ${activeTab === "taxDetails"
-                ? "bg-blue-600 text-white"
-                : "text-gray-600 dark:text-gray-300"
+                  ? "bg-blue-600 text-white"
+                  : "text-gray-600 dark:text-gray-300"
                 }`}
             >
               Tax Details
@@ -1929,8 +2074,8 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
               type="button"
               onClick={() => setActiveTab("termsAndConditions")}
               className={`px-4 py-1 text-xs font-semibold rounded-t ${activeTab === "termsAndConditions"
-                ? "bg-blue-600 text-white"
-                : "text-gray-600 dark:text-gray-300"
+                  ? "bg-blue-600 text-white"
+                  : "text-gray-600 dark:text-gray-300"
                 }`}
             >
               Terms And Conditions
@@ -1945,6 +2090,7 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
         {/* Buttons */}
         <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
           <button
+            type="button"
             onClick={onBack}
             disabled={saving || isSubmitting}
             className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
@@ -1954,6 +2100,7 @@ const ProformaInvoiceForm = ({ data, onBack }) => {
           </button>
 
           <button
+            type="button"
             onClick={handleSubmit(onSubmit)}
             disabled={saving || isSubmitting}
             className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"

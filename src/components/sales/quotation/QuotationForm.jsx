@@ -231,8 +231,8 @@ const TableRow = ({
           onClick={onRemove}
           disabled={disabled}
           className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
-              ? "bg-gray-400 cursor-not-allowed"
-              : "bg-red-600 hover:bg-red-700"
+            ? "bg-gray-400 cursor-not-allowed"
+            : "bg-red-600 hover:bg-red-700"
             }`}
         >
           <Trash2 size={10} />
@@ -331,8 +331,8 @@ const InputCell = ({
             disabled={disabled}
             value={value !== undefined ? value : field.value}
             className={`${controlClasses} ${errorMessage ? "border-red-500 focus:border-red-500" : ""} ${disabled
-                ? "bg-gray-100 dark:bg-gray-700 cursor-not-allowed"
-                : ""
+              ? "bg-gray-100 dark:bg-gray-700 cursor-not-allowed"
+              : ""
               }`}
             onChange={(e) => {
               field.onChange(e);
@@ -356,6 +356,7 @@ const InputCell = ({
 // Main Component
 const QuotationForm = ({ data, onBack }) => {
   const [orgId] = useState(localStorage.getItem("orgId"));
+  const [finYear] = useState(localStorage.getItem("finYear"));
   const [branch] = useState(localStorage.getItem("branchId"));
   const [userId] = useState(localStorage.getItem("userId"));
   const [activeChildTab, setActiveChildTab] = useState("quotationItems");
@@ -408,10 +409,19 @@ const QuotationForm = ({ data, onBack }) => {
   const watchQuotationItems = watch("quotationItems");
   const watchTaxDetails = watch("taxDetails");
 
-  const grossAmount = (watchQuotationItems || []).reduce(
-    (sum, item) => sum + (Number(item.quotAmount) || 0),
-    0,
-  );
+  const grossAmount = (watchQuotationItems || []).reduce((sum, item) => {
+    const qtyOffered = Number(item?.qtyOffered) || 0;
+    const basicPrice = Number(item?.basicPrice) || 0;
+    const discPercent = Number(item?.discPercent) || 0;
+
+    const gross = qtyOffered * basicPrice;
+    const discount = (gross * discPercent) / 100;
+    const quotationAmount = gross - discount;
+
+    return sum + quotationAmount;
+  }, 0);
+
+  const finalGrossAmount = Number(grossAmount.toFixed(2));
 
   const LIST_OF_VALUES_GROUPS = {
     PARTICULARS: "Particulars",
@@ -495,31 +505,53 @@ const QuotationForm = ({ data, onBack }) => {
       const basicPrice = Number(row?.basicPrice) || 0;
       const discPercent = Number(row?.discPercent) || 0;
 
-      // Gross line amount = Qty Offered × Basic Price
-      const grossLineAmount = qtyOffered * basicPrice;
+      // 1. Gross Amount
+      const grossAmount = qtyOffered * basicPrice;
 
-      // Discount Amount = Gross × Disc% / 100
-      const discountAmount = (grossLineAmount * discPercent) / 100;
+      // 2. Discount Amount
+      const discountAmount =
+        (grossAmount * discPercent) / 100;
 
-      // Quot Amount = Gross − Discount
-      const quotAmount = grossLineAmount - discountAmount;
+      // 3. Quotation Amount
+      const quotAmount =
+        grossAmount - discountAmount;
 
-      const roundedDiscount = Number(discountAmount.toFixed(2));
-      const roundedQuot = Number(quotAmount.toFixed(2));
+      const finalDiscountAmount = Number(
+        discountAmount.toFixed(2)
+      );
 
-      // Only update if value changed to avoid infinite loops
-      if (Number(row?.discountAmount || 0) !== roundedDiscount) {
+      const finalQuotAmount = Number(
+        quotAmount.toFixed(2)
+      );
+
+      // Update Discount Amount
+      if (
+        Number(row?.discountAmount || 0) !==
+        finalDiscountAmount
+      ) {
         setValue(
           `quotationItems.${index}.discountAmount`,
-          roundedDiscount,
-          { shouldDirty: true },
+          finalDiscountAmount,
+          {
+            shouldDirty: true,
+            shouldValidate: false,
+          }
         );
       }
 
-      if (Number(row?.quotAmount || 0) !== roundedQuot) {
-        setValue(`quotationItems.${index}.quotAmount`, roundedQuot, {
-          shouldDirty: true,
-        });
+      // Update Quot. Amount
+      if (
+        Number(row?.quotAmount || 0) !==
+        finalQuotAmount
+      ) {
+        setValue(
+          `quotationItems.${index}.quotAmount`,
+          finalQuotAmount,
+          {
+            shouldDirty: true,
+            shouldValidate: false,
+          }
+        );
       }
     });
   }, [watchQuotationItems, setValue]);
@@ -529,16 +561,37 @@ const QuotationForm = ({ data, onBack }) => {
 
     const grossOption = listOfValuesData.PARTICULARS?.find(
       (item) =>
-        item.label?.toUpperCase() === "GROSS AMOUNT" ||
-        item.valuesDescription?.toUpperCase() === "GROSS AMOUNT",
+        String(item.label || "").trim().toUpperCase() === "GROSS AMOUNT" ||
+        String(item.valuesDescription || "").trim().toUpperCase() ===
+        "GROSS AMOUNT"
     );
 
-    if (grossOption) {
-      setValue("taxDetails.0.particulars", grossOption.value);
-    }
+    if (!grossOption) return;
 
-    setValue("taxDetails.0.amount", grossAmount.toFixed(2));
-  }, [grossAmount, listOfValuesData, setValue]);
+    // Set Particulars
+    setValue(
+      "taxDetails.0.particulars",
+      grossOption.value,
+      {
+        shouldDirty: false,
+      }
+    );
+
+    // Set calculated Gross Amount
+    setValue(
+      "taxDetails.0.amount",
+      finalGrossAmount,
+      {
+        shouldDirty: false,
+        shouldValidate: false,
+      }
+    );
+  }, [
+    finalGrossAmount,
+    listOfValuesData,
+    taxDetailsArray.fields.length,
+    setValue,
+  ]);
 
   useEffect(() => {
     const freightOption = listOfValuesData.PARTICULARS?.find(
@@ -951,7 +1004,7 @@ const QuotationForm = ({ data, onBack }) => {
         enquiryControl: "",
         enquiryDate: formatDateForAPI(formData.enquiryDate) || "",
         enquiryNo: formData.enquiryNo || "",
-        financialYear: "",
+        financialYear: parseInt(finYear),
         freight: Number(formData.chargesSummary?.freight || 0),
         freightBy: formData.chargesSummary?.freightBy || "",
         kindAttention: formData.kindAttention || "",
@@ -1248,8 +1301,8 @@ const QuotationForm = ({ data, onBack }) => {
                   type="button"
                   onClick={() => setActiveChildTab(tab)}
                   className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${activeChildTab === tab
-                      ? "bg-blue-600 text-white"
-                      : "text-gray-600 dark:text-gray-300"
+                    ? "bg-blue-600 text-white"
+                    : "text-gray-600 dark:text-gray-300"
                     }`}
                 >
                   {tab === "pdfAttachment"
@@ -1289,7 +1342,6 @@ const QuotationForm = ({ data, onBack }) => {
                   "Disc.%",
                   "Discount Amount",
                   "Quot. Amount",
-                  "Qty",
                   "Currency Name",
                   <>
                     Date <span className="text-red-500">*</span>
@@ -1399,7 +1451,6 @@ const QuotationForm = ({ data, onBack }) => {
                         placeholder="Disc.%"
                         errors={errors}
                       />
-                      {/* Auto-calculated: Discount Amount (read-only) */}
                       <InputCell
                         control={control}
                         name={`quotationItems.${index}.discountAmount`}
@@ -1411,7 +1462,6 @@ const QuotationForm = ({ data, onBack }) => {
                         disabled
                       />
 
-                      {/* Auto-calculated: Quot. Amount (read-only) */}
                       <InputCell
                         control={control}
                         name={`quotationItems.${index}.quotAmount`}
@@ -1421,14 +1471,6 @@ const QuotationForm = ({ data, onBack }) => {
                         errors={errors}
                         value={quotAmount}
                         disabled
-                      />
-                      <InputCell
-                        control={control}
-                        name={`quotationItems.${index}.qty`}
-                        type="number"
-                        step="0.01"
-                        placeholder="Qty"
-                        errors={errors}
                       />
                       <SelectCell
                         control={control}
@@ -1475,7 +1517,11 @@ const QuotationForm = ({ data, onBack }) => {
                       name={`taxDetails.${index}.amount`}
                       type="number"
                       step="0.01"
-                      value={index === 0 ? grossAmount : undefined}
+                      value={
+                        index === 0
+                          ? finalGrossAmount
+                          : undefined
+                      }
                       errors={errors}
                       onChange={(e) => {
                         const rows = getValues("taxDetails");
@@ -1485,11 +1531,13 @@ const QuotationForm = ({ data, onBack }) => {
                             i === index
                               ? Number(e.target.value || 0)
                               : Number(row.amount || 0);
+
                           const freightOption =
                             listOfValuesData.PARTICULARS?.find(
                               (item) =>
-                                item.valuesDescription?.toUpperCase() ===
-                                "FREIGHT",
+                                String(item.valuesDescription || "")
+                                  .trim()
+                                  .toUpperCase() === "FREIGHT"
                             );
 
                           return String(row.particulars) ===
@@ -1539,6 +1587,7 @@ const QuotationForm = ({ data, onBack }) => {
                 name="chargesSummary.totalAmount"
                 label="Total Amount"
                 type="number"
+                value={grossAmount}
                 disabled
                 errors={errors}
               />

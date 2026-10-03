@@ -63,7 +63,7 @@ const TransportBillList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   }, [refreshTrigger, loadData]);
 
   const columns = [
-    { key: "docNo", label: "Doc No", accessor: "docNo", type: "text", noWrap: true },
+    { key: "docId", label: "Doc No", accessor: "docId", type: "text", noWrap: true },
     { key: "docDate", label: "Doc Date", accessor: "docDate", type: "date", noWrap: true },
     {
       key: "transportName",

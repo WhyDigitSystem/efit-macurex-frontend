@@ -10,7 +10,7 @@ import {
   ClipboardPaste,
   TableProperties,
 } from "lucide-react";
-import { useCallback, useEffect, useState, useRef } from "react";
+import React, { useCallback, useEffect, useState, useRef } from "react";
 import { useForm, Controller, useFieldArray } from "react-hook-form";
 import branchAPI from "../../../api/branchAPI";
 import salesContractAPI from "../../../api/Sales/salesContract";
@@ -19,6 +19,7 @@ import currencyAPI from "../../../api/currencyAPI";
 import { useToast } from "../../Toast/ToastContext";
 import { formatDateForDisplay } from "../../../utils/dateFormatter";
 import docTypeMappingAPI from "../../../api/docTypeMappingAPI";
+
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
   "bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 " +
@@ -81,7 +82,6 @@ const getDefaultValues = () => ({
       igstRate: 0,
       igstAmount: 0,
       currencyName: "",
-      // Hidden fields for IDs
       _itemId: "",
       _unitMasterId: "",
       _gstRateMasterId: "",
@@ -128,6 +128,8 @@ const SELECT_OPTIONS = {
   yesNo: ["Yes", "No"],
 };
 
+/* ------------------------- Helper Components ------------------------- */
+
 const SelectField = ({
   control,
   name,
@@ -142,15 +144,11 @@ const SelectField = ({
     const parts = name.split(".");
     let error = errors;
     for (const part of parts) {
-      if (error && error[part]) {
-        error = error[part];
-      } else {
-        return null;
-      }
+      if (error && error[part]) error = error[part];
+      else return null;
     }
     return error?.message;
   };
-
   const errorMessage = getError();
 
   return (
@@ -165,12 +163,11 @@ const SelectField = ({
         render={({ field }) => (
           <select
             {...field}
-            className={`${controlClasses} ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
+            className={`${controlClasses} ${errorMessage ? "border-red-500 focus:border-red-500" : ""
+              }`}
             onChange={(e) => {
               field.onChange(e);
-              if (onChange) {
-                onChange(e.target.value);
-              }
+              if (onChange) onChange(e.target.value);
             }}
             disabled={disabled}
           >
@@ -208,15 +205,11 @@ const InputField = ({
     const parts = name.split(".");
     let error = errors;
     for (const part of parts) {
-      if (error && error[part]) {
-        error = error[part];
-      } else {
-        return null;
-      }
+      if (error && error[part]) error = error[part];
+      else return null;
     }
     return error?.message;
   };
-
   const errorMessage = getError();
 
   return (
@@ -227,17 +220,14 @@ const InputField = ({
       <Controller
         name={name}
         control={control}
-        rules={{
-          ...(required && {
-            required: `${label} is required`,
-          }),
-        }}
+        rules={{ ...(required && { required: `${label} is required` }) }}
         render={({ field }) => (
           <input
             {...field}
             type={type}
             step={step}
-            className={`${controlClasses} ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
+            className={`${controlClasses} ${errorMessage ? "border-red-500 focus:border-red-500" : ""
+              }`}
             placeholder={placeholder}
             disabled={disabled}
           />
@@ -262,7 +252,8 @@ const TableHead = ({ headers }) => (
       {headers.map((h, i) => (
         <th
           key={i}
-          className={`p-1 ${i === 0 ? "w-8 text-center" : "text-left"} dark:text-white whitespace-nowrap text-[10px]`}
+          className={`p-1 ${i === 0 ? "w-8 text-center" : "text-left"
+            } dark:text-white whitespace-nowrap text-[10px]`}
         >
           {h}
         </th>
@@ -271,13 +262,7 @@ const TableHead = ({ headers }) => (
   </thead>
 );
 
-const TableRow = ({
-  children,
-  index,
-  onRemove,
-  disabled,
-  showDelete = true,
-}) => (
+const TableRow = ({ children, index, onRemove, disabled, showDelete = true }) => (
   <tr className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
     <td className="p-1 text-center font-medium dark:text-white text-[10px]">
       {index + 1}
@@ -289,11 +274,10 @@ const TableRow = ({
           type="button"
           onClick={onRemove}
           disabled={disabled}
-          className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-            disabled
+          className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
               ? "bg-gray-400 cursor-not-allowed"
               : "bg-red-600 hover:bg-red-700"
-          }`}
+            }`}
         >
           <Trash2 size={10} />
         </button>
@@ -315,15 +299,11 @@ const SelectCell = ({
     const parts = name.split(".");
     let error = errors;
     for (const part of parts) {
-      if (error && error[part]) {
-        error = error[part];
-      } else {
-        return null;
-      }
+      if (error && error[part]) error = error[part];
+      else return null;
     }
     return error?.message;
   };
-
   const errorMessage = getError();
 
   return (
@@ -335,12 +315,11 @@ const SelectCell = ({
         render={({ field }) => (
           <select
             {...field}
-            className={`${controlClasses} h-7 text-[10px] ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
+            className={`${controlClasses} h-7 text-[10px] ${errorMessage ? "border-red-500 focus:border-red-500" : ""
+              }`}
             onChange={(e) => {
               field.onChange(e);
-              if (onChange) {
-                onChange(e.target.value);
-              }
+              if (onChange) onChange(e.target.value);
             }}
             disabled={disabled}
           >
@@ -381,15 +360,11 @@ const InputCell = ({
     const parts = name.split(".");
     let error = errors;
     for (const part of parts) {
-      if (error && error[part]) {
-        error = error[part];
-      } else {
-        return null;
-      }
+      if (error && error[part]) error = error[part];
+      else return null;
     }
     return error?.message;
   };
-
   const errorMessage = getError();
 
   return (
@@ -403,14 +378,13 @@ const InputCell = ({
             {...field}
             type={type}
             step={step}
-            className={`${controlClasses} h-7 text-[10px] ${align === "right" ? "text-right" : ""} ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
+            className={`${controlClasses} h-7 text-[10px] ${align === "right" ? "text-right" : ""
+              } ${errorMessage ? "border-red-500 focus:border-red-500" : ""}`}
             placeholder={placeholder}
             disabled={disabled}
             onChange={(e) => {
               field.onChange(e);
-              if (onChange) {
-                onChange(e);
-              }
+              if (onChange) onChange(e);
             }}
           />
         )}
@@ -429,15 +403,11 @@ const FileUploadCell = ({ control, name, errors }) => {
     const parts = name.split(".");
     let error = errors;
     for (const part of parts) {
-      if (error && error[part]) {
-        error = error[part];
-      } else {
-        return null;
-      }
+      if (error && error[part]) error = error[part];
+      else return null;
     }
     return error?.message;
   };
-
   const errorMessage = getError();
   const [fileName, setFileName] = useState("");
 
@@ -449,11 +419,10 @@ const FileUploadCell = ({ control, name, errors }) => {
         render={({ field: { onChange, value } }) => (
           <div className="relative">
             <div
-              className={`border-2 border-dashed rounded-md p-2 text-center cursor-pointer transition-colors ${
-                errorMessage
+              className={`border-2 border-dashed rounded-md p-2 text-center cursor-pointer transition-colors ${errorMessage
                   ? "border-red-500 bg-red-50 dark:bg-red-900/20"
                   : "border-gray-300 dark:border-gray-600 hover:border-blue-500 dark:hover:border-blue-400"
-              }`}
+                }`}
               onDragOver={(e) => {
                 e.preventDefault();
                 e.currentTarget.classList.add(
@@ -529,7 +498,10 @@ const FileUploadCell = ({ control, name, errors }) => {
   );
 };
 
-// Main Component
+/* ------------------------------------------------------------------ */
+/* Main Component                                                      */
+/* ------------------------------------------------------------------ */
+
 const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
   const [orgId] = useState(localStorage.getItem("orgId"));
   const [branchId] = useState(localStorage.getItem("branchId"));
@@ -577,51 +549,20 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
     name: "attachedPOCopy",
   });
 
-  // Watch for changes
   const customerId = watch("customerId");
   const contactType = watch("contactType");
   const quotNo = watch("quotNo");
   const withQuotation = watch("withQuotation");
   const isIGSTApplicable = watch("isESTApplicable");
-  const salesContractDetails = watch("salesContractDetails");
+  const watchSalesContractDetails = watch("salesContractDetails") || [];
 
-  // Check if contact type is "Direct"
   const isDirectContact = contactType === "Direct";
 
-  const isTaxFieldDisabled = useCallback(
-    (rowIndex, fieldName) => {
-      const rowTaxType =
-        getValues(`salesContractDetails.${rowIndex}.taxType`) ||
-        (isIGSTApplicable === "Yes" ? "IGST" : "SGST");
+  // 👇 Hide Quot. No. and Quot. Date for Direct / With Quotation = No
+  const showQuotationFields = !isDirectContact && withQuotation !== "No";
 
-      if (rowTaxType === "IGST") {
-        return fieldName.includes("sgst") || fieldName.includes("cgst");
-      } else if (rowTaxType === "SGST") {
-        return fieldName.includes("igst");
-      }
-      return false;
-    },
-    [getValues, isIGSTApplicable],
-  );
-
-  const shouldShowColumn = useCallback(
-    (rowIndex, columnType) => {
-      const rowTaxType =
-        getValues(`salesContractDetails.${rowIndex}.taxType`) ||
-        (isIGSTApplicable === "Yes" ? "IGST" : "SGST");
-
-      if (columnType === "igst") {
-        return rowTaxType === "IGST";
-      } else if (columnType === "sgst" || columnType === "cgst") {
-        return rowTaxType === "SGST";
-      }
-      return true;
-    },
-    [getValues, isIGSTApplicable],
-  );
-
+  /* ---------------------- Tax calculations ---------------------- */
   const calculateTaxDetails = useCallback(() => {
-    console.log("calculateTaxDetails called");
     const contractDetails = getValues("salesContractDetails") || [];
 
     const totalAmount = contractDetails.reduce(
@@ -674,9 +615,7 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
     }
 
     const allTaxEntries = [...systemRows, ...userAddedRows];
-
     const currentRows = getValues("taxDetails") || [];
-
     const hasChanged =
       JSON.stringify(currentRows) !== JSON.stringify(allTaxEntries);
 
@@ -698,7 +637,6 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
   const calculateRowCalculation = useCallback(
     (index) => {
       if (isUpdatingRef.current) return;
-
       isUpdatingRef.current = true;
 
       try {
@@ -726,7 +664,6 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
           const selectedItem = itemOptions.find(
             (i) => String(i.itemCode) === String(itemCode),
           );
-
           if (selectedItem) {
             sgstRate = Number(selectedItem.sgst) || 0;
             cgstRate = Number(selectedItem.cgst) || 0;
@@ -760,11 +697,9 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
           discountAmount,
         );
         updateField(`salesContractDetails.${index}.amount`, amount);
-
         updateField(`salesContractDetails.${index}.sgstRate`, sgstRate);
         updateField(`salesContractDetails.${index}.cgstRate`, cgstRate);
         updateField(`salesContractDetails.${index}.igstRate`, igstRate);
-
         updateField(`salesContractDetails.${index}.sgstAmount`, sgstAmount);
         updateField(`salesContractDetails.${index}.cgstAmount`, cgstAmount);
         updateField(`salesContractDetails.${index}.igstAmount`, igstAmount);
@@ -777,16 +712,19 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
     [getValues, setValue, itemOptions, isIGSTApplicable, calculateTaxDetails],
   );
 
+  /* ---------------------- Populate Form ---------------------- */
   const populateFormData = useCallback(
     (contractData) => {
-      console.log("Populating form from raw data:", contractData);
       if (!contractData) return;
 
       try {
         setValue("plantId", contractData.branch?.id || "");
-        setValue("custContactNo", contractData.customerContractNo || "");
         setValue("belongsTo", contractData.belongsTo || "");
-        setValue("date", contractData.contractDate || "");
+        // 👇 contractDate first, fallback to docDate
+        setValue(
+          "date",
+          contractData.contractDate || contractData.docDate || "",
+        );
         setValue("contactType", contractData.contractType || "");
         setValue("withQuotation", contractData.withQuotation || "");
         setValue("invoiceType", contractData.invoiceType || "");
@@ -805,6 +743,14 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
         );
         setValue("gstNo", contractData.customer?.gstnNo || "");
         setValue("customerType", contractData.customer?.customerType || "");
+
+        // 👇 THE FIX — docId goes into contractNo
+        setValue("contractNo", contractData.docId || "");
+        // custContactNo is a different field
+        setValue(
+          "custContactNo",
+          contractData.customerContractNo || "",
+        );
 
         setValue("chargesSummary.totalAmount", contractData.totalAmount || 0);
         setValue(
@@ -891,12 +837,10 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
   const loadSalesContractData = useCallback(
     async (contractId) => {
       if (!contractId) return;
-
       setLoading(true);
       try {
         const response =
           await salesContractAPI.getSalesContractById(contractId);
-        console.log("Sales Contract Data:", response);
 
         if (response?.status && response?.paramObjectsMap?.salesContract) {
           const contract = response.paramObjectsMap.salesContract;
@@ -918,7 +862,6 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
   const loadListOfValuesData = async () => {
     try {
       const result = {};
-
       await Promise.all(
         Object.entries(LIST_OF_VALUES_GROUPS).map(async ([key, group]) => {
           try {
@@ -949,22 +892,19 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
           }
         }),
       );
-
       setListOfValuesData(result);
 
       if (salesContractArray.fields.length > 0) {
-        setTimeout(() => {
-          calculateTaxDetails();
-        }, 200);
+        setTimeout(() => calculateTaxDetails(), 200);
       }
     } catch (err) {
       console.error("Error loading ListOfValues:", err);
     }
   };
 
+  /* ---------------- Number-to-words helpers ---------------- */
   const numberToWords = (num) => {
     if (num === 0) return "Zero";
-
     const ones = [
       "",
       "One",
@@ -1019,10 +959,8 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
 
     const convertNumber = (num) => {
       if (num === 0) return "";
-
       let word = "";
       let index = 0;
-
       while (num > 0) {
         if (num % 1000 !== 0) {
           word =
@@ -1049,20 +987,18 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
 
   const formatCurrencyInWords = (amount) => {
     if (!amount || amount === 0) return "Zero";
-
     const roundedAmount = Math.round(amount * 100) / 100;
     const words = numberToWords(roundedAmount);
-
     return words
       .split(" ")
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
       .join(" ");
   };
 
+  /* ---------------------- Watchers / Effects ---------------------- */
   useEffect(() => {
     const subscription = watch((value, { name }) => {
       if (!name || isUpdatingRef.current) return;
-
       if (!name.startsWith("salesContractDetails.")) return;
 
       const parts = name.split(".");
@@ -1078,7 +1014,6 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
       ];
 
       if (!triggerFields.includes(field)) return;
-
       calculateRowCalculation(index);
     });
 
@@ -1087,17 +1022,14 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
 
   useEffect(() => {
     if (dataLoadedRef.current) return;
-
     loadBranches();
     loadCurrencies();
     loadListOfValuesData();
 
     if (isEditMode && data) {
       if (data.id) {
-        console.log("Loading sales contract by ID:", data.id);
         loadSalesContractData(data.id);
       } else {
-        console.log("Populating form from raw data:", data);
         populateFormData(data);
       }
     }
@@ -1137,7 +1069,6 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
     }
   }, [quotNo, withQuotation, orgId, branchId]);
 
-  // Auto-fill customer details when customerId changes
   useEffect(() => {
     if (customerId && customerOptions.length > 0) {
       const customer = customerOptions.find(
@@ -1158,7 +1089,6 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
     }
   }, [customerId, customerOptions, setValue]);
 
-  // Auto-fill quotation date when quotNo changes
   useEffect(() => {
     if (quotNo && quotationOptions.length > 0 && !isDirectContact) {
       const selectedQuotation = quotationOptions.find(
@@ -1170,18 +1100,13 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
     }
   }, [quotNo, quotationOptions, setValue, isDirectContact]);
 
-  // Set tax type based on IGST applicability
   useEffect(() => {
     const taxType = isIGSTApplicable === "Yes" ? "IGST" : "SGST";
-
     salesContractArray.fields.forEach((_, index) => {
       setValue(`salesContractDetails.${index}.taxType`, taxType);
     });
-
     if (salesContractArray.fields.length > 0) {
-      setTimeout(() => {
-        calculateTaxDetails();
-      }, 100);
+      setTimeout(() => calculateTaxDetails(), 100);
     }
   }, [
     isIGSTApplicable,
@@ -1190,23 +1115,22 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
     calculateTaxDetails,
   ]);
 
+  /* ---------------------- Doc Number generation ---------------------- */
   const [generatingDocId, setGeneratingDocId] = useState(false);
+
   useEffect(() => {
-    // Don't regenerate the contract number while editing
+    // Skip if editing an existing record
     if (isEditMode && data?.id) return;
+    // 👇 Skip if a contractNo is already loaded (e.g., from API)
+    if (getValues("contractNo")) return;
 
     const generateContractNo = async () => {
       setGeneratingDocId(true);
-      setValue("contractNo", "");
 
       try {
         const storedOrgId = localStorage.getItem("orgId");
         const storedBranchId = localStorage.getItem("branchId");
-
-        if (!storedOrgId || !storedBranchId) {
-          console.error("OrgId or BranchId not found in localStorage");
-          return;
-        }
+        if (!storedOrgId || !storedBranchId) return;
 
         const mappingList =
           await docTypeMappingAPI.getDocumentTypeMappingByOrgId(
@@ -1220,9 +1144,6 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
         );
 
         if (!contractDetail) {
-          console.error(
-            "Sales Contract document mapping not found for screenCode SAC",
-          );
           addToast(
             "No document type mapping found for Sales Contract (SAC)",
             "error",
@@ -1236,10 +1157,9 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
           screenCode: contractDetail.screenCode,
         });
 
-        if (docId) {
+        // Only set if still empty (avoid clobbering a loaded value)
+        if (docId && !getValues("contractNo")) {
           setValue("contractNo", docId);
-        } else {
-          addToast("Failed to generate Contract No", "error");
         }
       } catch (error) {
         console.error("Error generating sales contract number:", error);
@@ -1250,9 +1170,9 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
     };
 
     generateContractNo();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEditMode, data]);
 
+  /* ---------------------- Lookup loaders ---------------------- */
   const loadBranches = useCallback(async () => {
     try {
       const response = await branchAPI.getBranchByOrgId(orgId);
@@ -1284,25 +1204,15 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
   const loadCustomers = useCallback(
     async (contactTypeParam) => {
       const effectiveContactType = contactTypeParam || contactType;
-
-      if (!orgId || !branchId || !effectiveContactType) {
-        console.log("Cannot load customers - missing params:", {
-          orgId,
-          branchId,
-          effectiveContactType,
-        });
-        return;
-      }
+      if (!orgId || !branchId || !effectiveContactType) return;
 
       setLoadingCustomer(true);
-
       try {
         const response = await salesContractAPI.getCustomerDropdown(
           orgId,
           branchId,
           effectiveContactType,
         );
-
         if (response?.status && response?.paramObjectsMap?.customers) {
           setCustomerOptions(response.paramObjectsMap.customers);
         } else {
@@ -1319,17 +1229,13 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
   );
 
   const loadQuotations = useCallback(async () => {
-    if (!orgId || !branchId || !customerId || !contactType) {
-      return;
-    }
+    if (!orgId || !branchId || !customerId || !contactType) return;
 
     setLoadingQuotation(true);
-
     try {
       const customer = customerOptions.find(
         (c) => String(c.customerId) === String(customerId),
       );
-
       const customerCode = customer?.customerCode || "";
       const recId = isEditMode && data?.recId ? data.recId : 0;
       const oldQuotationNo =
@@ -1366,10 +1272,8 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
   ]);
 
   const loadQuotationItems = useCallback(
-    async (quotationNo) => {
-      if (!orgId || !branchId || !quotationNo) {
-        return;
-      }
+    async (quotationNoParam) => {
+      if (!orgId || !branchId || !quotationNoParam) return;
 
       setLoadingItems(true);
 
@@ -1377,7 +1281,7 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
         const response = await salesContractAPI.getQuotationItems(
           orgId,
           branchId,
-          quotationNo,
+          quotationNoParam,
         );
 
         if (response?.status && response?.paramObjectsMap?.items) {
@@ -1387,6 +1291,13 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
           if (items.length > 0 && salesContractArray.fields.length === 1) {
             const firstItem = items[0];
             const taxType = isIGSTApplicable === "Yes" ? "IGST" : "SGST";
+
+            const cgstRate = Number(firstItem.cgst) || 0;
+            const sgstRate = Number(firstItem.sgst) || 0;
+            const igstRate = Number(firstItem.igst) || 0;
+            const totalTaxRate =
+              taxType === "IGST" ? igstRate : cgstRate + sgstRate;
+            const quotationRate = Number(firstItem.quotationRate) || 0;
 
             isUpdatingRef.current = true;
 
@@ -1405,24 +1316,10 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
             );
             setValue("salesContractDetails.0.unit", firstItem.unitId || "");
             setValue("salesContractDetails.0.taxType", taxType);
-
-            setValue(
-              "salesContractDetails.0.sgstRate",
-              Number(firstItem.sgst) || 0,
-            );
-            setValue(
-              "salesContractDetails.0.cgstRate",
-              Number(firstItem.cgst) || 0,
-            );
-            setValue(
-              "salesContractDetails.0.igstRate",
-              Number(firstItem.igst) || 0,
-            );
-
-            setValue(
-              "salesContractDetails.0.taxRs",
-              Number(firstItem.rate) || 0,
-            );
+            setValue("salesContractDetails.0.sgstRate", sgstRate);
+            setValue("salesContractDetails.0.cgstRate", cgstRate);
+            setValue("salesContractDetails.0.igstRate", igstRate);
+            setValue("salesContractDetails.0.taxRs", totalTaxRate);
 
             setValue("salesContractDetails.0._itemId", firstItem.itemId || "");
             setValue(
@@ -1434,14 +1331,20 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
               firstItem.gstRateMasterId || "",
             );
 
+            // 👇 Quot. Rate from quotationRate
+            setValue("salesContractDetails.0.quotRate", quotationRate);
+            // 👇 Order Rate defaults to quotationRate
+            setValue("salesContractDetails.0.orderRate", quotationRate);
+            // 👇 Qty from API
             setValue(
-              "salesContractDetails.0.quotRate",
-              Number(firstItem.rate) || 0,
+              "salesContractDetails.0.qty",
+              Number(firstItem.qty) || 0,
             );
 
             setTimeout(() => {
               isUpdatingRef.current = false;
-              const qty = Number(getValues(`salesContractDetails.0.qty`)) || 0;
+              const qty =
+                Number(getValues(`salesContractDetails.0.qty`)) || 0;
               const orderRate =
                 Number(getValues(`salesContractDetails.0.orderRate`)) || 0;
               const discountPercent =
@@ -1455,10 +1358,6 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
 
               setValue(`salesContractDetails.0.discountAmount`, discountAmount);
               setValue(`salesContractDetails.0.amount`, amount);
-
-              const sgstRate = Number(firstItem.sgst) || 0;
-              const cgstRate = Number(firstItem.cgst) || 0;
-              const igstRate = Number(firstItem.igst) || 0;
 
               let sgstAmount = 0,
                 cgstAmount = 0,
@@ -1474,9 +1373,7 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
               setValue(`salesContractDetails.0.cgstAmount`, cgstAmount);
               setValue(`salesContractDetails.0.igstAmount`, igstAmount);
 
-              setTimeout(() => {
-                calculateTaxDetails();
-              }, 100);
+              setTimeout(() => calculateTaxDetails(), 100);
             }, 100);
           }
         } else {
@@ -1501,21 +1398,15 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
   );
 
   const loadFinishedGoodsItems = useCallback(async () => {
-    if (!orgId || !branchId) {
-      return;
-    }
-
+    if (!orgId || !branchId) return;
     setLoadingItems(true);
-
     try {
       const response = await salesContractAPI.getFinishedGoodsItems(
         orgId,
         branchId,
       );
-
       if (response?.status && response?.paramObjectsMap?.items) {
-        const items = response.paramObjectsMap.items;
-        setItemOptions(items);
+        setItemOptions(response.paramObjectsMap.items);
       } else {
         setItemOptions([]);
       }
@@ -1534,6 +1425,14 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
       );
 
       if (selectedItem) {
+        const taxType = isIGSTApplicable === "Yes" ? "IGST" : "SGST";
+        const cgstRate = Number(selectedItem.cgst) || 0;
+        const sgstRate = Number(selectedItem.sgst) || 0;
+        const igstRate = Number(selectedItem.igst) || 0;
+        const totalTaxRate =
+          taxType === "IGST" ? igstRate : cgstRate + sgstRate;
+        const quotationRate = Number(selectedItem.quotationRate) || 0;
+
         isUpdatingRef.current = true;
 
         setValue(
@@ -1557,18 +1456,10 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
           selectedItem.unitId || "",
         );
 
-        const sgstRate = Number(selectedItem.sgst) || 0;
-        const cgstRate = Number(selectedItem.cgst) || 0;
-        const igstRate = Number(selectedItem.igst) || 0;
-
         setValue(`salesContractDetails.${index}.sgstRate`, sgstRate);
         setValue(`salesContractDetails.${index}.cgstRate`, cgstRate);
         setValue(`salesContractDetails.${index}.igstRate`, igstRate);
-
-        setValue(
-          `salesContractDetails.${index}.taxRs`,
-          Number(selectedItem.rate) || 0,
-        );
+        setValue(`salesContractDetails.${index}.taxRs`, totalTaxRate);
 
         setValue(
           `salesContractDetails.${index}._itemId`,
@@ -1583,12 +1474,18 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
           selectedItem.gstRateMasterId || "",
         );
 
-        setValue(
-          `salesContractDetails.${index}.quotRate`,
-          Number(selectedItem.rate) || 0,
-        );
+        // 👇 Quot. Rate
+        setValue(`salesContractDetails.${index}.quotRate`, quotationRate);
+        // 👇 Order Rate defaults to quotation rate
+        setValue(`salesContractDetails.${index}.orderRate`, quotationRate);
+        // 👇 Qty from API if present
+        if (selectedItem.qty !== undefined && selectedItem.qty !== null) {
+          setValue(
+            `salesContractDetails.${index}.qty`,
+            Number(selectedItem.qty) || 0,
+          );
+        }
 
-        const taxType = isIGSTApplicable === "Yes" ? "IGST" : "SGST";
         setValue(`salesContractDetails.${index}.taxType`, taxType);
 
         setTimeout(() => {
@@ -1626,9 +1523,7 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
           setValue(`salesContractDetails.${index}.cgstAmount`, cgstAmount);
           setValue(`salesContractDetails.${index}.igstAmount`, igstAmount);
 
-          setTimeout(() => {
-            calculateTaxDetails();
-          }, 100);
+          setTimeout(() => calculateTaxDetails(), 100);
         }, 100);
       }
     },
@@ -1640,19 +1535,15 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
     if (arrayName === "salesContract") {
       const newItem = defaultValues.salesContractDetails[0] || {};
       salesContractArray.append(newItem);
-      setTimeout(() => {
-        calculateTaxDetails();
-      }, 100);
+      setTimeout(() => calculateTaxDetails(), 100);
     } else if (arrayName === "taxDetails") {
-      const newItem = {
+      taxDetailsArray.append({
         particulars: "",
         amount: 0.0,
         isSystemRow: false,
-      };
-      taxDetailsArray.append(newItem);
+      });
     } else if (arrayName === "attachedPOCopy") {
-      const newItem = defaultValues.attachedPOCopy[0] || {};
-      attachedPOCopyArray.append(newItem);
+      attachedPOCopyArray.append(defaultValues.attachedPOCopy[0] || {});
     }
   };
 
@@ -1660,24 +1551,17 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
     if (arrayName === "salesContract") {
       if (salesContractArray.fields.length > 1) {
         salesContractArray.remove(index);
-        setTimeout(() => {
-          calculateTaxDetails();
-        }, 100);
+        setTimeout(() => calculateTaxDetails(), 100);
       }
     } else if (arrayName === "taxDetails") {
       const currentTaxDetails = getValues("taxDetails") || [];
       const isSystemRow = currentTaxDetails[index]?.isSystemRow;
-
       if (isSystemRow) {
         alert("Cannot delete system calculated rows");
         return;
       }
-
       taxDetailsArray.remove(index);
-
-      setTimeout(() => {
-        calculateTaxDetails();
-      }, 100);
+      setTimeout(() => calculateTaxDetails(), 100);
     } else if (arrayName === "attachedPOCopy") {
       if (attachedPOCopyArray.fields.length > 1) {
         attachedPOCopyArray.remove(index);
@@ -1730,9 +1614,7 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
             setValue(`salesContractDetails.${index}.cgstAmount`, cgstAmount);
             setValue(`salesContractDetails.${index}.igstAmount`, igstAmount);
 
-            setTimeout(() => {
-              calculateTaxDetails();
-            }, 100);
+            setTimeout(() => calculateTaxDetails(), 100);
           }
         }
 
@@ -1744,6 +1626,7 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
     [setValue, getValues, itemOptions, calculateTaxDetails],
   );
 
+  /* ------------------------------ Submit ------------------------------ */
   const onSubmit = async (formData) => {
     setSaving(true);
     try {
@@ -1755,7 +1638,7 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
           const month = String(date.getMonth() + 1).padStart(2, "0");
           const day = String(date.getDate()).padStart(2, "0");
           return `${year}-${month}-${day}`;
-        } catch (e) {
+        } catch {
           return null;
         }
       };
@@ -1780,7 +1663,10 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
         createdBy: localStorage.getItem("userId") || "admin",
         customer: parseInt(formData.customerId) || 0,
         customerContractNo: formData.custContactNo || "",
+        // 👇 Send the docId back as contractNo (and docId) so the API
+        //    knows which record to update.
         contractNo: formData.contractNo || "",
+        docId: formData.contractNo || "",
         customerPoDate: formatDateForAPI(formData.customerPODate) || "",
         customerPoNo: formData.customerPONo || "",
         details: (formData.salesContractDetails || []).map((item) => ({
@@ -1824,12 +1710,10 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
       }
 
       const formDataToSend = new FormData();
-
-      const salesContractDataJSON = JSON.stringify(salesContractData);
-      const salesContractDataBlob = new Blob([salesContractDataJSON], {
-        type: "application/json",
-      });
-
+      const salesContractDataBlob = new Blob(
+        [JSON.stringify(salesContractData)],
+        { type: "application/json" },
+      );
       formDataToSend.append(
         "salesContract",
         salesContractDataBlob,
@@ -1837,10 +1721,9 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
       );
 
       const pdfAttachments = watch("attachedPOCopy");
-      if (pdfAttachments && pdfAttachments.length > 0) {
+      if (pdfAttachments?.length) {
         for (let i = 0; i < pdfAttachments.length; i++) {
           const attachment = pdfAttachments[i]?.pdfAttached;
-
           if (
             attachment &&
             typeof attachment === "object" &&
@@ -1848,24 +1731,12 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
             "size" in attachment
           ) {
             formDataToSend.append("files", attachment, attachment.name);
-          } else if (
-            attachment &&
-            typeof attachment === "object" &&
-            attachment.filePath
-          ) {
-            console.log("Existing file:", attachment.filePath);
-          } else if (attachment && typeof attachment === "string") {
-            console.log("Existing file path:", attachment);
           }
         }
       }
 
-      console.log("Sending sales contract data:", salesContractData);
-
       const response =
         await salesContractAPI.createUpdateSalesContract(formDataToSend);
-
-      console.log("Full API Response:", response);
 
       const isSuccess =
         response?.status === true ||
@@ -1893,11 +1764,12 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
       }
     } catch (error) {
       console.error("Error saving sales contract:", error);
-      const errorMessage =
+      addToast(
         error?.response?.data?.message ||
         error?.message ||
-        "Failed to save sales contract. Please try again.";
-      addToast(errorMessage, "error");
+        "Failed to save sales contract. Please try again.",
+        "error",
+      );
     } finally {
       setSaving(false);
     }
@@ -1913,8 +1785,7 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
     );
   }
 
-  console.log("SalesContractForm Render");
-
+  /* ------------------------------ Render ------------------------------ */
   return (
     <div className="p-2 max-w-7xl relative">
       {/* Header */}
@@ -1942,14 +1813,6 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
             required
             errors={errors}
           />
-          {/* <InputField
-            control={control}
-            name="custContactNo"
-            label="Cust. Contact No."
-            placeholder="Enter contact number"
-            required
-            errors={errors}
-          /> */}
           <InputField
             control={control}
             name="contractNo"
@@ -2034,30 +1897,32 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
             errors={errors}
             disabled={!!selectedCustomer}
           />
-          <SelectField
-            control={control}
-            name="quotNo"
-            label="Quot. No."
-            options={quotationOptions.map((q) => ({
-              value: q.quotationNo,
-              label: `${q.quotationNo} - ${formatDateForDisplay(q.quotationDate)}`,
-            }))}
-            errors={errors}
-            disabled={
-              isDirectContact ||
-              !customerId ||
-              loadingQuotation ||
-              withQuotation === "No"
-            }
-          />
-          <InputField
-            control={control}
-            type="date"
-            name="quotDate"
-            label="Quot. Date"
-            errors={errors}
-            disabled={isDirectContact || !customerId || withQuotation === "No"}
-          />
+
+          {/* 👇 Quot. No. & Quot. Date — hidden for Direct / With Quotation = No */}
+          {showQuotationFields && (
+            <>
+              <SelectField
+                control={control}
+                name="quotNo"
+                label="Quot. No."
+                options={quotationOptions.map((q) => ({
+                  value: q.quotationNo,
+                  label: `${q.quotationNo} - ${formatDateForDisplay(q.quotationDate)}`,
+                }))}
+                errors={errors}
+                disabled={!customerId || loadingQuotation}
+              />
+              <InputField
+                control={control}
+                type="date"
+                name="quotDate"
+                label="Quot. Date"
+                errors={errors}
+                disabled={!customerId}
+              />
+            </>
+          )}
+
           <InputField
             control={control}
             name="address"
@@ -2127,56 +1992,30 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
           />
         </div>
 
-        {/* Tabs Section */}
+        {/* Tabs */}
         <section className="mt-0 bg-white dark:bg-gray-800">
           <div className="flex items-center border-b border-gray-200 dark:border-gray-700 mb-2">
-            <button
-              type="button"
-              onClick={() => setActiveTab("salesContract")}
-              className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${
-                activeTab === "salesContract"
-                  ? "bg-blue-600 text-white"
-                  : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-              }`}
-            >
-              Contract Detail
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("taxDetails")}
-              className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${
-                activeTab === "taxDetails"
-                  ? "bg-blue-600 text-white"
-                  : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-              }`}
-            >
-              Tax Details
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("chargesSummary")}
-              className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${
-                activeTab === "chargesSummary"
-                  ? "bg-blue-600 text-white"
-                  : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-              }`}
-            >
-              Charges Summary
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("attachedPOCopy")}
-              className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${
-                activeTab === "attachedPOCopy"
-                  ? "bg-blue-600 text-white"
-                  : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-              }`}
-            >
-              Attached PO Copy
-            </button>
+            {[
+              { key: "salesContract", label: "Contract Detail" },
+              { key: "taxDetails", label: "Tax Details" },
+              { key: "chargesSummary", label: "Charges Summary" },
+              { key: "attachedPOCopy", label: "Attached PO Copy" },
+            ].map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setActiveTab(t.key)}
+                className={`px-4 py-1 text-xs font-semibold rounded-t capitalize ${activeTab === t.key
+                    ? "bg-blue-600 text-white"
+                    : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  }`}
+              >
+                {t.label}
+              </button>
+            ))}
           </div>
 
-          {/* Tab 1: Sales Contract Detail */}
+          {/* Tab 1: Contract Detail */}
           {activeTab === "salesContract" && (
             <div className="space-y-1">
               <div className="flex items-center justify-end mb-2">
@@ -2241,56 +2080,37 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
                       <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]">
                         Amount
                       </th>
-                      {/* Conditionally show/hide columns based on tax type */}
                       {salesContractArray.fields.map((field, idx) => {
                         const rowTaxType =
                           getValues(`salesContractDetails.${idx}.taxType`) ||
                           (isIGSTApplicable === "Yes" ? "IGST" : "SGST");
                         if (rowTaxType === "SGST") {
                           return (
-                            <>
-                              <th
-                                key={`sgst-rate-${idx}`}
-                                className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[90px]"
-                              >
+                            <React.Fragment key={`sgst-cols-${idx}`}>
+                              <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[90px]">
                                 SGST Rate
                               </th>
-                              <th
-                                key={`sgst-amount-${idx}`}
-                                className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]"
-                              >
+                              <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]">
                                 SGST Amount
                               </th>
-                              <th
-                                key={`cgst-rate-${idx}`}
-                                className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[90px]"
-                              >
+                              <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[90px]">
                                 CGST Rate
                               </th>
-                              <th
-                                key={`cgst-amount-${idx}`}
-                                className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]"
-                              >
+                              <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]">
                                 CGST Amount
                               </th>
-                            </>
+                            </React.Fragment>
                           );
                         } else if (rowTaxType === "IGST") {
                           return (
-                            <>
-                              <th
-                                key={`igst-rate-${idx}`}
-                                className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[90px]"
-                              >
+                            <React.Fragment key={`igst-cols-${idx}`}>
+                              <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[90px]">
                                 IGST Rate
                               </th>
-                              <th
-                                key={`igst-amount-${idx}`}
-                                className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]"
-                              >
+                              <th className="p-1.5 text-left dark:text-white whitespace-nowrap text-[10px] font-medium min-w-[100px]">
                                 IGST Amount
                               </th>
-                            </>
+                            </React.Fragment>
                           );
                         }
                         return null;
@@ -2322,7 +2142,7 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
                               control={control}
                               name={`salesContractDetails.${index}.itemCode`}
                               options={itemOptions.map((item) => ({
-                                value: item.itemCode, // Use itemCode as the value for display
+                                value: item.itemCode,
                                 label: `${item.itemCode} - ${item.itemDescription}`,
                               }))}
                               required
@@ -2413,6 +2233,8 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
                               errors={errors}
                             />
                           </td>
+
+                          {/* 👇 Quot. Rate — read-only, from API */}
                           <td className="p-0.5 align-top min-w-[90px]">
                             <InputCell
                               control={control}
@@ -2421,8 +2243,11 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
                               step="0.01"
                               placeholder="0.00"
                               errors={errors}
+                              disabled
                             />
                           </td>
+
+                          {/* 👇 Order Rate — editable */}
                           <td className="p-0.5 align-top min-w-[90px]">
                             <InputCell
                               control={control}
@@ -2434,6 +2259,7 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
                               errors={errors}
                             />
                           </td>
+
                           <td className="p-0.5 align-top min-w-[90px]">
                             <InputCell
                               control={control}
@@ -2483,7 +2309,6 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
                               disabled
                             />
                           </td>
-                          {/* Conditionally render tax columns based on tax type */}
                           {rowTaxType === "SGST" ? (
                             <>
                               <td className="p-0.5 align-top min-w-[90px]">
@@ -2562,7 +2387,6 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
                               control={control}
                               name={`salesContractDetails.${index}.currencyName`}
                               options={currencyData}
-                              placeholder="Currency"
                               errors={errors}
                             />
                           </td>
@@ -2573,11 +2397,10 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
                                 handleRemoveItem("salesContract", index)
                               }
                               disabled={salesContractArray.fields.length <= 1}
-                              className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-                                salesContractArray.fields.length <= 1
+                              className={`h-5 w-5 rounded text-white flex items-center justify-center ${salesContractArray.fields.length <= 1
                                   ? "bg-gray-400 cursor-not-allowed"
                                   : "bg-red-600 hover:bg-red-700"
-                              }`}
+                                }`}
                             >
                               <Trash2 size={10} />
                             </button>
@@ -2622,18 +2445,13 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
                         particulars,
                       );
 
-                    // Get all available options from listOfValuesData
                     const allOptions = listOfValuesData.PARTICULARS || [];
-
-                    // For system rows, only show their specific value
-                    // For user rows, show all options except system ones
                     let availableOptions = [];
                     if (isSystemRow) {
                       availableOptions = [
                         { label: particulars, value: particulars },
                       ];
                     } else {
-                      // Filter out system options for user rows
                       availableOptions = allOptions.filter(
                         (option) =>
                           !["Gross Amount", "IGST", "CGST", "SGST"].includes(
@@ -2654,39 +2472,30 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
                           <Controller
                             name={`taxDetails.${index}.particulars`}
                             control={control}
-                            render={({ field }) => {
-                              // Log current value for debugging
-                              console.log(
-                                `Row ${index} - Current value:`,
-                                field.value,
-                              );
-                              console.log(
-                                `Row ${index} - Available options:`,
-                                availableOptions,
-                              );
-
-                              return (
-                                <select
-                                  {...field}
-                                  className={`${controlClasses} h-8 text-xs ${isReadOnly ? "bg-gray-100 dark:bg-gray-700 cursor-not-allowed" : ""}`}
-                                  disabled={isReadOnly}
-                                  onChange={(e) => {
-                                    field.onChange(e.target.value);
-                                  }}
-                                  value={field.value || ""}
-                                >
-                                  <option value="">Select Particulars</option>
-                                  {availableOptions.map((option) => (
-                                    <option
-                                      key={option.value || option.label}
-                                      value={option.label}
-                                    >
-                                      {option.label}
-                                    </option>
-                                  ))}
-                                </select>
-                              );
-                            }}
+                            render={({ field }) => (
+                              <select
+                                {...field}
+                                className={`${controlClasses} h-8 text-xs ${isReadOnly
+                                    ? "bg-gray-100 dark:bg-gray-700 cursor-not-allowed"
+                                    : ""
+                                  }`}
+                                disabled={isReadOnly}
+                                onChange={(e) =>
+                                  field.onChange(e.target.value)
+                                }
+                                value={field.value || ""}
+                              >
+                                <option value="">Select Particulars</option>
+                                {availableOptions.map((option) => (
+                                  <option
+                                    key={option.value || option.label}
+                                    value={option.label}
+                                  >
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
                           />
                         </td>
                         <td className="p-1 align-top">
@@ -2699,14 +2508,17 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
                                 type="number"
                                 step="0.01"
                                 placeholder="0.00"
-                                className={`${controlClasses} h-8 text-xs text-right ${isReadOnly ? "bg-gray-100 dark:bg-gray-700 cursor-not-allowed" : ""}`}
+                                className={`${controlClasses} h-8 text-xs text-right ${isReadOnly
+                                    ? "bg-gray-100 dark:bg-gray-700 cursor-not-allowed"
+                                    : ""
+                                  }`}
                                 disabled={isReadOnly}
                                 value={field.value || 0}
-                                onChange={(e) => {
+                                onChange={(e) =>
                                   field.onChange(
                                     parseFloat(e.target.value) || 0,
-                                  );
-                                }}
+                                  )
+                                }
                               />
                             )}
                           />
@@ -2714,15 +2526,14 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
                         <td className="p-1 text-center">
                           <button
                             type="button"
-                            onClick={() => {
-                              handleRemoveItem("taxDetails", index);
-                            }}
+                            onClick={() =>
+                              handleRemoveItem("taxDetails", index)
+                            }
                             disabled={isSystemRow}
-                            className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-                              isSystemRow
+                            className={`h-5 w-5 rounded text-white flex items-center justify-center ${isSystemRow
                                 ? "bg-gray-400 cursor-not-allowed"
                                 : "bg-red-600 hover:bg-red-700"
-                            }`}
+                              }`}
                           >
                             <Trash2 size={10} />
                           </button>
@@ -2754,7 +2565,6 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
                   )}
                 />
               </div>
-
               <div className="col-span-4">
                 <label className={labelClasses}>Amount In Words</label>
                 <Controller
@@ -2770,7 +2580,6 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
                   )}
                 />
               </div>
-
               <div className="col-span-1">
                 <label className={labelClasses}>
                   Payment Terms <span className="text-red-500">*</span>
@@ -2782,18 +2591,15 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
                   render={({ field }) => (
                     <input
                       {...field}
-                      className={`${controlClasses} ${errors?.chargesSummary?.paymentTerms ? "border-red-500 focus:border-red-500" : ""}`}
+                      className={`${controlClasses} ${errors?.chargesSummary?.paymentTerms
+                          ? "border-red-500 focus:border-red-500"
+                          : ""
+                        }`}
                       placeholder="Enter payment terms"
                     />
                   )}
                 />
-                {errors?.chargesSummary?.paymentTerms && (
-                  <p className="text-red-500 text-[11px] mt-1">
-                    {errors.chargesSummary.paymentTerms.message}
-                  </p>
-                )}
               </div>
-
               <div className="col-span-2">
                 <label className={labelClasses}>Price Terms</label>
                 <Controller
@@ -2808,7 +2614,6 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
                   )}
                 />
               </div>
-
               <div className="col-span-2">
                 <label className={labelClasses}>Terms</label>
                 <Controller
@@ -2823,7 +2628,6 @@ const SalesContractForm = ({ data, onBack, isEditMode = false }) => {
                   )}
                 />
               </div>
-
               <div className="col-span-5 mt-2">
                 <label className={labelClasses}>Note</label>
                 <Controller

@@ -1,5 +1,5 @@
 import { ArrowLeft, Save, X, Plus, Trash2, Search, Check } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useToast } from "../../Toast/ToastContext";
 import despatchInstructionAPI from "../../../api/Sales/despatchInstructionAPI";
 import branchAPI from "../../../api/branchAPI";
@@ -7,6 +7,7 @@ import partyMasterAPI from "../../../api/partyMasterAPI";
 import locationMasterAPI from "../../../api/locationMasterAPI";
 import itemAPI from "../../../api/itemAPI";
 import unitMasterAPI from "../../../api/unitAPI";
+import docTypeMappingAPI from "../../../api/docTypeMappingAPI";
 
 /* ---------------------------------------------------------------------------- */
 /* Shared design tokens                                                        */
@@ -67,6 +68,7 @@ const Field = ({
   options,
   className = "",
   disabled = false,
+  placeholder = "",
 }) => {
   if (type === "select") {
     return (
@@ -75,7 +77,6 @@ const Field = ({
           {label}
           {required && <span className="text-red-500"> *</span>}
         </label>
-
         <select
           name={name}
           value={value}
@@ -90,7 +91,6 @@ const Field = ({
             </option>
           ))}
         </select>
-
         {error && (
           <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
             {error}
@@ -107,7 +107,6 @@ const Field = ({
           {label}
           {required && <span className="text-red-500"> *</span>}
         </label>
-
         <textarea
           name={name}
           value={value}
@@ -123,7 +122,6 @@ const Field = ({
             "dark:focus:ring-blue-400 dark:focus:border-blue-400"
           }
         />
-
         {error && (
           <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
             {error}
@@ -139,16 +137,15 @@ const Field = ({
         {label}
         {required && <span className="text-red-500"> *</span>}
       </label>
-
       <input
         type={type}
         name={name}
         value={value}
         onChange={onChange}
         disabled={disabled}
+        placeholder={placeholder}
         className={`${controlClasses} ${error ? controlErrClasses : ""}`}
       />
-
       {error && (
         <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
           {error}
@@ -174,7 +171,6 @@ const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
       <X className="h-3 w-3" />
       Cancel
     </button>
-
     <button
       onClick={onSave}
       disabled={isSubmitting}
@@ -282,7 +278,13 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
             return (
               <td className="p-2 align-top" key={col.key}>
                 <input
-                  type={col.type === "number" ? "number" : col.type === "date" ? "date" : "text"}
+                  type={
+                    col.type === "number"
+                      ? "number"
+                      : col.type === "date"
+                        ? "date"
+                        : "text"
+                  }
                   value={row[col.key] || ""}
                   readOnly={col.readOnly}
                   onChange={(e) => onCellChange(idx, col.key, e.target.value)}
@@ -298,140 +300,6 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
     </tbody>
   </TableWrapper>
 );
-
-const FillGridModal = ({ isOpen, onClose, items, onSelectItems }) => {
-  const [selectedItems, setSelectedItems] = useState([]);
-
-  useEffect(() => {
-    if (!isOpen) {
-      setSelectedItems([]);
-    }
-  }, [isOpen]);
-
-  const handleToggleSelect = (item) => {
-    setSelectedItems(prev => {
-      const isSelected = prev.some(i =>
-        (i.itemId || i.id) === (item.itemId || item.id)
-      );
-      if (isSelected) {
-        return prev.filter(i =>
-          (i.itemId || i.id) !== (item.itemId || item.id)
-        );
-      } else {
-        return [...prev, item];
-      }
-    });
-  };
-
-  const handleSelectAll = () => {
-    if (selectedItems.length === items.length) {
-      setSelectedItems([]);
-    } else {
-      setSelectedItems([...items]);
-    }
-  };
-
-  const handleConfirmSelection = () => {
-    if (selectedItems.length > 0) {
-      onSelectItems(selectedItems);
-      setSelectedItems([]);
-    }
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 dark:bg-opacity-75">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-5xl w-full max-h-[85vh] flex flex-col">
-        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
-            Select Items
-          </h3>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-          >
-            <X className="h-5 w-5 text-gray-500 dark:text-gray-400" />
-          </button>
-        </div>
-        <div className="flex-1 overflow-auto p-4">
-          <TableWrapper>
-            <TableHead headers={["#", "Select", "Item Code", "Item Description", "Unit", "SO No"]} />
-            <tbody>
-              {items.map((item, idx) => {
-                const isSelected = selectedItems.some(i =>
-                  (i.itemId || i.id) === (item.itemId || item.id)
-                );
-                return (
-                  <tr
-                    key={idx}
-                    className={`border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''
-                      }`}
-                  >
-                    <td className="p-2 text-center text-gray-900 dark:text-gray-100">{idx + 1}</td>
-                    <td className="p-2 text-center">
-                      <button
-                        onClick={() => handleToggleSelect(item)}
-                        className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${isSelected
-                          ? 'bg-blue-600 border-blue-600 hover:bg-blue-700'
-                          : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-500 hover:border-blue-500'
-                          }`}
-                      >
-                        {isSelected && <Check className="h-3 w-3 text-white" />}
-                      </button>
-                    </td>
-                    <td className="p-2 text-gray-900 dark:text-gray-100">{item.itemCode || item.itemId || item.id}</td>
-                    <td className="p-2 text-gray-900 dark:text-gray-100">{item.itemDescription}</td>
-                    <td className="p-2 text-gray-900 dark:text-gray-100">{item.unit}</td>
-                    <td className="p-2 text-gray-900 dark:text-gray-100">{item.soNoContractNo || item.soNo}</td>
-                  </tr>
-                );
-              })}
-              {items.length === 0 && (
-                <tr>
-                  <td colSpan="6" className="p-4 text-center text-gray-500 dark:text-gray-400">
-                    No items available
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </TableWrapper>
-        </div>
-        <div className="flex items-center justify-between p-4 border-t border-gray-200 dark:border-gray-700">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleSelectAll}
-              className="px-3 py-1.5 text-xs text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
-            >
-              {selectedItems.length === items.length ? 'Deselect All' : 'Select All'}
-            </button>
-            <span className="text-xs text-gray-500 dark:text-gray-400">
-              {selectedItems.length} item{selectedItems.length !== 1 ? 's' : ''} selected
-            </span>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={onClose}
-              className="px-4 py-1.5 text-xs text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleConfirmSelection}
-              disabled={selectedItems.length === 0}
-              className={`px-4 py-1.5 text-xs text-white rounded transition-colors ${selectedItems.length > 0
-                ? 'bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500'
-                : 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed'
-                }`}
-            >
-              Add Selected ({selectedItems.length})
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 const MODE_OF_TRANSPORT = ["By Air", "By Express", "By Road", "By Train"];
 const PACKAGE_TYPES = ["Carton Box", "Wooden Box", "Pallet", "Crate", "Drum"];
@@ -459,7 +327,8 @@ const emptyDispatchItemRow = () => ({
   descQty: "",
   noOfPackage: "",
   packageType: "",
-  unit: "",
+  unit: "",       // 👈 display string, e.g., "KG"
+  unitId: 0,      // 👈 NEW — numeric id used in the payload
 });
 
 const emptyTermsConditions = () => ({
@@ -475,22 +344,20 @@ const todayStr = () => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
 
-const autoDispatchNo = () =>
-  `DI-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, "0")}${String(new Date().getDate()).padStart(2, "0")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
-
 /* ---------------------------------------------------------------------------- */
 
 const DispatchForm = ({ data, onBack }) => {
   const [orgId] = useState(Number(localStorage.getItem("orgId")) || 0);
+  const [finYear] = useState(Number(localStorage.getItem("finYear")) || 0);
   const [branchId] = useState(Number(localStorage.getItem("branchId")) || 0);
   const { addToast } = useToast();
 
   const [activeChildTab, setActiveChildTab] = useState("dispatchDetails");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
+  const [generatingDocId, setGeneratingDocId] = useState(false);
 
   // Modal state
-  const [isFillGridModalOpen, setIsFillGridModalOpen] = useState(false);
   const [fillGridItems, setFillGridItems] = useState([]);
   const [selectedRowIndex, setSelectedRowIndex] = useState(null);
 
@@ -513,9 +380,14 @@ const DispatchForm = ({ data, onBack }) => {
   const [originalLocation, setOriginalLocation] = useState("");
   const [originalOrderContracts, setOriginalOrderContracts] = useState([]);
 
+  // 👇 Ref to remember the last (customer, branch, monthYear) tuple that
+  //    triggered a schedule load. Prevents needless re-fetches when the user
+  //    is actively selecting (which changes schduleDate via dlvdate).
+  const lastScheduleFetchKeyRef = useRef("");
+
   const [header, setHeader] = useState(() => ({
     branch: data?.branch?.id ?? data?.branch ?? "",
-    diNo: data?.docId || data?.diNo || (data ? "" : autoDispatchNo()),
+    diNo: data?.docId || data?.diNo || "",
     customer: data?.customer?.id ?? data?.customer ?? "",
     partyName: data?.customer?.customerName ?? data?.customerName ?? "",
     schduleNo: data?.schduleNo || data?.scheduleNo || "",
@@ -542,24 +414,33 @@ const DispatchForm = ({ data, onBack }) => {
       setOriginalLocation(data?.location?.id ?? data?.location ?? "");
       if (data?.despatchInstDetailsResponseDTO) {
         setOriginalOrderContracts(
-          data.despatchInstDetailsResponseDTO.map(d => d.ordAccpContrNo || "")
+          data.despatchInstDetailsResponseDTO.map(
+            (d) => d.ordAccpContrNo || "",
+          ),
         );
       }
     }
   }, [data]);
 
   const [dispatchItemRows, setDispatchItemRows] = useState(
-    data?.despatchInstDetailsResponseDTO?.length || data?.despatchInstructionDetailsDTO?.length
-      ? (data?.despatchInstDetailsResponseDTO || data?.despatchInstructionDetailsDTO || []).map((d) => ({
+    data?.despatchInstDetailsResponseDTO?.length ||
+      data?.despatchInstructionDetailsDTO?.length
+      ? (
+        data?.despatchInstDetailsResponseDTO ||
+        data?.despatchInstructionDetailsDTO ||
+        []
+      ).map((d) => ({
         ...emptyDispatchItemRow(),
         ...d,
         item: d.item?.id || d.item || "",
-        itemDescription: d.item?.itemDescription || d.itemDescription || "",
         itemCode: d.item?.itemCode || "",
+        itemDescription: d.item?.itemDescription || d.itemDescription || "",
         schduleMonth: d.schduleMonth || "",
         scheduleMonthName: d.schduleMonth || "",
         ordAccpContrNo: d.ordAccpContrNo || "",
         orderAccepCustomerContractNo: d.ordAccpContrNo || "",
+        // 👇 FIX — read pdi from the API response and store as pdiNo
+        pdiNo: d.pdi || d.pdiNo || "",
         pdiDate: d.pdiDate || todayStr(),
         pendingQty: d.pendingQty || "",
         availableQty: d.availableQty || "",
@@ -567,7 +448,16 @@ const DispatchForm = ({ data, onBack }) => {
         descQty: d.descQty || "",
         noOfPackage: d.noOfPackage || "",
         packageType: d.packageType || "",
-        unit: d.unit?.id || d.unit || "",
+        unit:
+          d.item?.unit?.unitId ||
+          d.item?.unit?.primaryUnit ||
+          d.item?.unit?.unitDescription ||
+          d.unit?.primaryUnit ||
+          d.unit?.unitId ||
+          d.unit?.unitDescription ||
+          (typeof d.unit === "string" ? d.unit : "") ||
+          "",
+        unitId: d.item?.unit?.id || d.unitId || d.unit?.id || 0,
       }))
       : [{ ...emptyDispatchItemRow(), pdiDate: todayStr() }],
   );
@@ -600,7 +490,7 @@ const DispatchForm = ({ data, onBack }) => {
       const map = {};
       const opts = (res || []).map((c) => {
         map[c.id] = c;
-        return { value: c.id, label: c.vendorCode || c.docId || c.id };
+        return { value: c.id, label: c.customerCode || c.docId || c.id };
       });
       setPartyOptions(opts);
       setPartyMap(map);
@@ -634,8 +524,22 @@ const DispatchForm = ({ data, onBack }) => {
       const res = await itemAPI.getItems(orgId, branchId);
       const map = {};
       const opts = (res || []).map((it) => {
-        map[it.id] = it;
-        return { value: it.id, label: it.itemCode || it.id };
+        const id = String(it.id);                  // 👈 string key
+        map[id] = {
+          ...it,
+          // 👇 normalise the unit into a string on the mapped object
+          unitCode:
+            it.primaryUnits?.primaryUnit ||
+            it.sellingUnit?.primaryUnit ||
+            it.purchaseUnit?.primaryUnit ||
+            "",
+          unitId:
+            it.primaryUnits?.id ||
+            it.sellingUnit?.id ||
+            it.purchaseUnit?.id ||
+            0,
+        };
+        return { value: id, label: it.itemCode || id };
       });
       setItemOptions(opts);
       setItemMap(map);
@@ -668,26 +572,15 @@ const DispatchForm = ({ data, onBack }) => {
       }
 
       try {
-        console.log("Calling Schedule Month API with:", {
-          branchId,
-          dlvNo,
-          itemId,
-          orgId,
-          existingMonth,
-        });
-
         const response = await despatchInstructionAPI.getScheduleMonth(
           branchId,
           dlvNo,
           itemId,
-          orgId
+          orgId,
         );
 
-        console.log("Schedule Month Response:", response);
-
         if (response && response.status) {
-          const months =
-            response.paramObjectsMap?.scheduleMonthList || [];
+          const months = response.paramObjectsMap?.scheduleMonthList || [];
 
           const map = {};
 
@@ -709,20 +602,14 @@ const DispatchForm = ({ data, onBack }) => {
           setScheduleMonthOptions(opts);
           setScheduleMonthMap(map);
 
-          // ------------------------------------------
-          // EDIT MODE - Restore existing month
-          // ------------------------------------------
           if (rowIndex !== undefined && existingMonth) {
             const existingMonthValue = String(existingMonth);
 
             const matchingOpt = opts.find(
               (opt) =>
                 String(opt.label) === existingMonthValue ||
-                String(opt.value) === existingMonthValue
+                String(opt.value) === existingMonthValue,
             );
-
-            console.log("Existing Month:", existingMonth);
-            console.log("Matching Month:", matchingOpt);
 
             if (matchingOpt) {
               setDispatchItemRows((prev) =>
@@ -734,7 +621,7 @@ const DispatchForm = ({ data, onBack }) => {
                     schduleMonth: matchingOpt.value,
                     scheduleMonthName: matchingOpt.label,
                   };
-                })
+                }),
               );
             }
           }
@@ -748,10 +635,9 @@ const DispatchForm = ({ data, onBack }) => {
         setScheduleMonthMap({});
       }
     },
-    [orgId]
+    [orgId],
   );
 
-  // Load Planned Quantity
   const loadPlannedQty = useCallback(
     async (branchId, itemId, rowIndex) => {
       if (!branchId || !itemId) {
@@ -759,19 +645,11 @@ const DispatchForm = ({ data, onBack }) => {
       }
 
       try {
-        console.log("Calling Planned Quantity API with:", {
-          branchId,
-          itemId,
-          orgId,
-        });
-
         const response = await despatchInstructionAPI.getPlannedQty(
           branchId,
           itemId,
-          orgId
+          orgId,
         );
-
-        console.log("Planned Quantity Response:", response);
 
         if (response && response.status) {
           const plannedQty = response.paramObjectsMap?.plannedQty || 0;
@@ -786,7 +664,7 @@ const DispatchForm = ({ data, onBack }) => {
                   };
                 }
                 return row;
-              })
+              }),
             );
           }
         }
@@ -794,217 +672,283 @@ const DispatchForm = ({ data, onBack }) => {
         console.error("Failed to load planned quantity:", error);
       }
     },
-    [orgId]
+    [orgId],
   );
 
-  // Load order/contract numbers when schedule is selected
-  const loadOrderContracts = useCallback(async (customerId, branchId, scheduleId) => {
-    if (!customerId || !branchId || !scheduleId) {
-      setOrderContractOptions([]);
-      setOrderContractMap({});
-      return;
-    }
+  const loadOrderContracts = useCallback(
+    async (customerId, branchId, scheduleId) => {
+      if (!customerId || !branchId || !scheduleId) {
+        setOrderContractOptions([]);
+        setOrderContractMap({});
+        return;
+      }
 
-    try {
-      console.log("Calling Order Contract API with:", { customerId, branchId, scheduleId, orgId });
+      try {
+        const response =
+          await despatchInstructionAPI.getOrderAndSalesContractDropdown(
+            branchId,
+            customerId,
+            orgId,
+          );
 
-      const response = await despatchInstructionAPI.getOrderAndSalesContractDropdown(
-        branchId,
-        customerId,
-        orgId
-      );
+        if (response && response.status) {
+          const contracts = response.paramObjectsMap?.salesContractList || [];
+          const map = {};
+          const opts = contracts.map((c) => {
+            map[c.id] = c;
+            return {
+              value: c.id,
+              label: c.orderAccepCustomerContractNo || c.id,
+              date: c.date,
+            };
+          });
 
-      console.log("Order Contract Response:", response);
-
-      if (response && response.status) {
-        const contracts = response.paramObjectsMap?.salesContractList || [];
-        const map = {};
-        const opts = contracts.map((c) => {
-          map[c.id] = c;
-          return {
-            value: c.id,
-            label: c.orderAccepCustomerContractNo || c.id,
-            date: c.date,
-          };
-        });
-
-        // Add original order contracts if they don't exist in options
-        originalOrderContracts.forEach(contractNo => {
-          if (contractNo) {
-            const exists = opts.some(opt => opt.label === contractNo || opt.value === contractNo);
-            if (!exists) {
-              const newId = `existing-${contractNo}`;
-              map[newId] = {
-                id: newId,
-                orderAccepCustomerContractNo: contractNo,
-                date: null,
-              };
-              opts.push({
-                value: newId,
-                label: contractNo,
-                date: null,
-              });
-            }
-          }
-        });
-
-        setOrderContractOptions(opts);
-        setOrderContractMap(map);
-
-        // Update rows to match the correct contract IDs
-        setDispatchItemRows((prev) =>
-          prev.map((row) => {
-            if (row.orderAccepCustomerContractNo) {
-              const matchingOpt = opts.find(opt =>
-                opt.label === row.orderAccepCustomerContractNo ||
-                opt.value === row.orderAccepCustomerContractNo
+          originalOrderContracts.forEach((contractNo) => {
+            if (contractNo) {
+              const exists = opts.some(
+                (opt) =>
+                  opt.label === contractNo || opt.value === contractNo,
               );
-              if (matchingOpt) {
-                return {
-                  ...row,
-                  ordAccpContrNo: matchingOpt.value,
+              if (!exists) {
+                const newId = `existing-${contractNo}`;
+                map[newId] = {
+                  id: newId,
+                  orderAccepCustomerContractNo: contractNo,
+                  date: null,
                 };
+                opts.push({
+                  value: newId,
+                  label: contractNo,
+                  date: null,
+                });
               }
             }
-            return row;
-          })
-        );
-      } else {
+          });
+
+          setOrderContractOptions(opts);
+          setOrderContractMap(map);
+
+          setDispatchItemRows((prev) =>
+            prev.map((row) => {
+              if (row.orderAccepCustomerContractNo) {
+                const matchingOpt = opts.find(
+                  (opt) =>
+                    opt.label === row.orderAccepCustomerContractNo ||
+                    opt.value === row.orderAccepCustomerContractNo,
+                );
+                if (matchingOpt) {
+                  return {
+                    ...row,
+                    ordAccpContrNo: matchingOpt.value,
+                  };
+                }
+              }
+              return row;
+            }),
+          );
+        } else {
+          setOrderContractOptions([]);
+          setOrderContractMap({});
+        }
+      } catch (error) {
+        console.error("Failed to load order contracts:", error);
         setOrderContractOptions([]);
         setOrderContractMap({});
       }
-    } catch (error) {
-      console.error("Failed to load order contracts:", error);
-      setOrderContractOptions([]);
-      setOrderContractMap({});
-    }
-  }, [orgId, originalOrderContracts]);
+    },
+    [orgId, originalOrderContracts],
+  );
 
-  // Load fill grid items
-  const loadFillGridItems = useCallback(async (branchId, customerId, scheduleId) => {
-    if (!branchId || !customerId || !scheduleId) {
-      setFillGridItems([]);
-      return;
-    }
+  const loadFillGridItems = useCallback(
+    async (branchId, customerId, scheduleId) => {
+      if (!branchId || !customerId || !scheduleId) {
+        setFillGridItems([]);
+        return;
+      }
 
-    try {
-      console.log("Calling Fill Grid API with:", { branchId, customerId, scheduleId, orgId });
+      try {
+        const response = await despatchInstructionAPI.getFillGridItems(
+          branchId,
+          customerId,
+          orgId,
+          scheduleId,
+        );
 
-      const response = await despatchInstructionAPI.getFillGridItems(
-        branchId,
-        customerId,
-        orgId,
-        scheduleId
-      );
-
-      console.log("Fill Grid Response:", response);
-
-      if (response && response.status) {
-        const items = response.paramObjectsMap?.itemList || [];
-        setFillGridItems(items);
-      } else {
+        if (response && response.status) {
+          const items = response.paramObjectsMap?.itemList || [];
+          setFillGridItems(items);
+        } else {
+          setFillGridItems([]);
+        }
+      } catch (error) {
+        console.error("Failed to load fill grid items:", error);
         setFillGridItems([]);
       }
-    } catch (error) {
-      console.error("Failed to load fill grid items:", error);
-      setFillGridItems([]);
-    }
-  }, [orgId]);
+    },
+    [orgId],
+  );
 
-  // Load schedule options when customer is selected
-  const loadSchedules = useCallback(async (customerId, branchId, monthYear) => {
-    if (!customerId || !branchId || !monthYear) {
-      setScheduleOptions([]);
-      return;
-    }
+  /**
+   * 👇 loadSchedules now:
+   *   1) Accepts the current schduleNo as a "preserve" parameter.
+   *   2) Injects a synthetic option if the currently-selected value isn't in
+   *      the response — so the <select> never goes blank after a re-fetch.
+   *   3) Uses a ref to prevent duplicate fetches for the same (customer,
+   *      branch, monthYear) tuple.
+   */
+  const loadSchedules = useCallback(
+    async (customerId, branchIdParam, monthYear, preserveScheduleNo = "") => {
+      if (!customerId || !branchIdParam || !monthYear) {
+        setScheduleOptions([]);
+        return;
+      }
 
-    try {
-      console.log("Calling Schedule API with:", { customerId, branchId, monthYear, orgId });
+      const fetchKey = `${customerId}|${branchIdParam}|${monthYear}`;
+      if (lastScheduleFetchKeyRef.current === fetchKey) {
+        return; // already fetched for this tuple
+      }
+      lastScheduleFetchKeyRef.current = fetchKey;
 
-      const response = await despatchInstructionAPI.getScheduleNoDropdownForDespatchInstruction(
-        branchId,
-        customerId,
-        monthYear,
-        orgId
-      );
-
-      console.log("Schedule Response:", response);
-
-      if (response && response.status) {
-        const schedules = response.paramObjectsMap?.scheduleBalanceList || [];
-        const map = {};
-        const opts = schedules.map((s) => {
-          map[s.salesDeliveryScheduleId] = s;
-          return {
-            value: s.salesDeliveryScheduleId,
-            label: s.dlvNo,
-          };
-        });
-
-        // Add original schedule if it doesn't exist in options
-        if (originalScheduleNo) {
-          const exists = opts.some(opt => opt.label === originalScheduleNo || opt.value === originalScheduleNo);
-          if (!exists) {
-            const newId = `existing-${originalScheduleNo}`;
-            map[newId] = {
-              salesDeliveryScheduleId: newId,
-              dlvNo: originalScheduleNo,
-            };
-            opts.push({
-              value: newId,
-              label: originalScheduleNo,
-            });
-          }
-        }
-
-        setScheduleOptions(opts);
-        setScheduleMap(map);
-
-        // If we have a schedule value, try to find the matching option
-        if (originalScheduleNo) {
-          const matchingOpt = opts.find(opt =>
-            opt.label === originalScheduleNo || opt.value === originalScheduleNo
+      try {
+        const response =
+          await despatchInstructionAPI.getScheduleNoDropdownForDespatchInstruction(
+            branchIdParam,
+            customerId,
+            monthYear,
+            orgId,
           );
-          if (matchingOpt) {
-            setHeader((prev) => ({
-              ...prev,
-              schduleNo: matchingOpt.value,
-              scheduleId: matchingOpt.value,
-              selectedScheduleId: matchingOpt.value,
-            }));
+
+        if (response && response.status) {
+          const schedules = response.paramObjectsMap?.scheduleBalanceList || [];
+          const map = {};
+          const opts = schedules.map((s) => {
+            // 👇 Always key by string — the <select> emits strings
+            const id = String(s.salesDeliveryScheduleId);
+            map[id] = s;
+            return {
+              value: id,
+              label: s.dlvNo,
+            };
+          });
+
+          // 👇 Ensure currently-selected schedule is present in the list
+          if (
+            preserveScheduleNo &&
+            !opts.some(
+              (o) => String(o.value) === String(preserveScheduleNo),
+            )
+          ) {
+            const existing = scheduleMap[preserveScheduleNo];
+            const label = existing?.dlvNo || preserveScheduleNo;
+            const value = String(preserveScheduleNo);
+            map[value] = {
+              ...(existing || {}),
+              salesDeliveryScheduleId: value,
+              dlvNo: label,
+            };
+            opts.push({ value, label });
           }
+
+          // Edit mode: make sure originalScheduleNo is present too
+          if (originalScheduleNo) {
+            const exists = opts.some(
+              (o) =>
+                String(o.label) === String(originalScheduleNo) ||
+                String(o.value) === String(originalScheduleNo),
+            );
+            if (!exists) {
+              const newId = String(originalScheduleNo);
+              map[newId] = {
+                salesDeliveryScheduleId: newId,
+                dlvNo: originalScheduleNo,
+              };
+              opts.push({ value: newId, label: originalScheduleNo });
+            }
+          }
+
+          setScheduleOptions(opts);
+          setScheduleMap(map);
+
+          // Edit mode: bind header.schduleNo to the matching option value
+          if (originalScheduleNo) {
+            const matchingOpt = opts.find(
+              (opt) =>
+                String(opt.label) === String(originalScheduleNo) ||
+                String(opt.value) === String(originalScheduleNo),
+            );
+            if (matchingOpt) {
+              setHeader((prev) => {
+                if (
+                  String(prev.schduleNo) === String(matchingOpt.value) &&
+                  String(prev.selectedScheduleId) ===
+                  String(matchingOpt.value)
+                ) {
+                  return prev; // no change
+                }
+                return {
+                  ...prev,
+                  schduleNo: matchingOpt.value,
+                  scheduleId: matchingOpt.value,
+                  selectedScheduleId: matchingOpt.value,
+                };
+              });
+            }
+          }
+        } else {
+          setScheduleOptions([]);
+          setScheduleMap({});
         }
-      } else {
+      } catch (error) {
+        console.error("Failed to load schedule options:", error);
         setScheduleOptions([]);
         setScheduleMap({});
       }
-    } catch (error) {
-      console.error("Failed to load schedule options:", error);
-      setScheduleOptions([]);
-      setScheduleMap({});
-    }
-  }, [orgId, originalScheduleNo]);
+    },
+    [orgId, originalScheduleNo, scheduleMap],
+  );
 
+  /* 👇 Load schedules ONLY when customer/branch truly change (not when
+        schduleDate is auto-updated from a picked schedule) */
   useEffect(() => {
-    if (header.customer && header.branch && header.schduleDate) {
-      const date = new Date(header.schduleDate);
-      const monthYear = `${String(date.getMonth() + 1).padStart(2, "0")}-${date.getFullYear()}`;
-
-      loadSchedules(header.customer, header.branch, monthYear);
-    } else {
+    if (!header.customer || !header.branch) {
       setScheduleOptions([]);
       setScheduleMap({});
+      lastScheduleFetchKeyRef.current = "";
+      return;
     }
-  }, [header.customer, header.branch, header.schduleDate, loadSchedules]);
 
+    const date = header.schduleDate
+      ? new Date(header.schduleDate)
+      : new Date();
+    const monthYear = `${String(date.getMonth() + 1).padStart(2, "0")}-${date.getFullYear()}`;
+
+    loadSchedules(
+      header.customer,
+      header.branch,
+      monthYear,
+      header.schduleNo, // preserve current selection if any
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [header.customer, header.branch, loadSchedules]);
+
+  /* Load order contracts when schedule is picked */
   useEffect(() => {
     if (header.selectedScheduleId && header.customer && header.branch) {
-      loadOrderContracts(header.customer, header.branch, header.selectedScheduleId);
+      loadOrderContracts(
+        header.customer,
+        header.branch,
+        header.selectedScheduleId,
+      );
     } else {
       setOrderContractOptions([]);
       setOrderContractMap({});
     }
-  }, [header.selectedScheduleId, header.customer, header.branch, loadOrderContracts]);
+  }, [
+    header.selectedScheduleId,
+    header.customer,
+    header.branch,
+    loadOrderContracts,
+  ]);
 
   useEffect(() => {
     if (orgId) {
@@ -1016,6 +960,7 @@ const DispatchForm = ({ data, onBack }) => {
     }
   }, [orgId, loadPlants, loadParties, loadLocations, loadItems, loadUnits]);
 
+  /* Edit mode: load schedule months for existing rows */
   useEffect(() => {
     if (
       !data ||
@@ -1040,7 +985,7 @@ const DispatchForm = ({ data, onBack }) => {
         scheduleData.dlvNo,
         row.item,
         index,
-        row.schduleMonth
+        row.schduleMonth,
       );
     });
   }, [
@@ -1052,34 +997,107 @@ const DispatchForm = ({ data, onBack }) => {
     loadScheduleMonths,
   ]);
 
+  /* ---------------- DI Number auto-generation ---------------- */
+  useEffect(() => {
+    if (data?.id) return;
+    if (header.diNo) return;
+    if (!orgId) return;
+
+    const generateDiNo = async () => {
+      setGeneratingDocId(true);
+      try {
+        const storedOrgId = localStorage.getItem("orgId");
+        const storedBranchId = localStorage.getItem("branchId");
+
+        if (!storedOrgId || !storedBranchId) {
+          console.error("orgId or branchId missing in localStorage");
+          return;
+        }
+
+        const mappingList =
+          await docTypeMappingAPI.getDocumentTypeMappingByOrgId(
+            storedOrgId,
+            storedBranchId,
+          );
+
+        const record = mappingList?.[0];
+        const diDetail = record?.documentTypeMappingDetails?.find(
+          (d) => d.screenCode === "DI",
+        );
+
+        if (!diDetail) {
+          const fallbackFy = new Date().getFullYear().toString();
+          const docId =
+            await despatchInstructionAPI.getDespatchInstructionDocId({
+              financialYear: fallbackFy,
+              orgId: storedOrgId,
+            });
+          if (docId) {
+            setHeader((prev) => ({ ...prev, diNo: docId }));
+          } else {
+            addToast("Failed to generate DI Number");
+          }
+          return;
+        }
+
+        const docId = await despatchInstructionAPI.getDespatchInstructionDocId({
+          financialYear: diDetail.finYear,
+          orgId: diDetail.orgId || storedOrgId,
+        });
+
+        if (docId) {
+          setHeader((prev) => ({ ...prev, diNo: docId }));
+        } else {
+          addToast("Failed to generate DI Number");
+        }
+      } catch (error) {
+        console.error("Error generating DI number:", error);
+        addToast("Failed to generate DI Number");
+      } finally {
+        setGeneratingDocId(false);
+      }
+    };
+
+    generateDiNo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, orgId]);
+
   /* ---------------- Handlers ---------------- */
 
   const handleHeaderChange = (e) => {
     const { name, value } = e.target;
     if (fieldErrors[name]) setFieldErrors((prev) => ({ ...prev, [name]: "" }));
+
     setHeader((prev) => {
       const next = { ...prev, [name]: value };
 
       if (name === "customer") {
         const customerObj = partyMap[value];
-        if (customerObj) {
-          next.customer = value;
-          next.partyName = customerObj.customerName || "";
-        } else {
-          next.customer = value;
-          next.partyName = "";
-        }
+        next.customer = value;
+        next.partyName = customerObj?.customerName || "";
+        // 👇 Reset schedule-dependent state when the party changes
+        next.schduleNo = "";
+        next.scheduleId = "";
+        next.selectedScheduleId = "";
+        next.schduleDate = todayStr();
+        // Force the schedules effect to re-fetch for the new party
+        lastScheduleFetchKeyRef.current = "";
+        // Clear order contracts (they depend on customer + schedule)
+        setOrderContractOptions([]);
+        setOrderContractMap({});
       }
 
       if (name === "schduleNo") {
-        const scheduleData = scheduleMap[value];
+        // 👇 Normalise the map key to string
+        const scheduleData = scheduleMap[String(value)];
         if (scheduleData) {
-          if (scheduleData.dlvdate) {
-            next.schduleDate = scheduleData.dlvdate;
-          }
-          if (scheduleData.invoiceType) {
+          if (scheduleData.dlvdate) next.schduleDate = scheduleData.dlvdate;
+          if (scheduleData.invoiceType)
             next.invoiceType = scheduleData.invoiceType;
-          }
+          next.scheduleId = value;
+          next.selectedScheduleId = value;
+        } else {
+          // Even if map lookup fails, at least store what the user picked
           next.scheduleId = value;
           next.selectedScheduleId = value;
         }
@@ -1091,7 +1109,7 @@ const DispatchForm = ({ data, onBack }) => {
 
   const handleOrderContractChange = (e, rowIndex) => {
     const { name, value } = e.target;
-    const contractData = orderContractMap[value];
+    const contractData = orderContractMap[String(value)];
 
     setDispatchItemRows((prev) =>
       prev.map((row, idx) => {
@@ -1099,18 +1117,21 @@ const DispatchForm = ({ data, onBack }) => {
         return {
           ...row,
           [name]: value,
-          orderAccepCustomerContractNo: contractData?.orderAccepCustomerContractNo || "",
+          orderAccepCustomerContractNo:
+            contractData?.orderAccepCustomerContractNo || "",
           date: contractData?.date || row.date || "",
         };
-      })
+      }),
     );
 
-    // Open Fill Grid
     if (name === "ordAccpContrNo" && value) {
       if (header.customer && header.selectedScheduleId) {
-        loadFillGridItems(header.branch, header.customer, header.selectedScheduleId);
+        loadFillGridItems(
+          header.branch,
+          header.customer,
+          header.selectedScheduleId,
+        );
         setSelectedRowIndex(rowIndex);
-        setIsFillGridModalOpen(true);
       } else {
         addToast("Please select a schedule first");
       }
@@ -1122,15 +1143,22 @@ const DispatchForm = ({ data, onBack }) => {
 
     const currentRow = dispatchItemRows[selectedRowIndex];
     const selectedContract = orderContractMap[currentRow.ordAccpContrNo];
-    const contractNo = selectedContract?.orderAccepCustomerContractNo ||
+    const contractNo =
+      selectedContract?.orderAccepCustomerContractNo ||
       currentRow.orderAccepCustomerContractNo ||
-      currentRow.ordAccpContrNo || "";
+      currentRow.ordAccpContrNo ||
+      "";
 
     const newRows = selectedItems.map((item, index) => {
       const itemId = item.itemId || item.id;
       const itemCode = item.itemCode || "";
       const itemDescription = item.itemDescription || "";
-      const unit = item.unit || "";
+      const unit =
+        item.unit?.primaryUnit ||
+        item.unit?.unitId ||
+        item.unit?.unitDescription ||
+        (typeof item.unit === "string" ? item.unit : "") ||
+        "";
 
       if (index === 0) {
         return {
@@ -1169,7 +1197,6 @@ const DispatchForm = ({ data, onBack }) => {
       return updated;
     });
 
-    // Load schedule months and planned quantity for the first selected item
     const firstItem = selectedItems[0];
     if (firstItem && header.schduleNo) {
       const scheduleData = scheduleMap[header.schduleNo];
@@ -1180,18 +1207,16 @@ const DispatchForm = ({ data, onBack }) => {
           header.branch,
           dlvNo,
           firstItem.itemId || firstItem.id,
-          selectedRowIndex
+          selectedRowIndex,
         );
       }
 
       loadPlannedQty(
         header.branch,
         firstItem.itemId || firstItem.id,
-        selectedRowIndex
+        selectedRowIndex,
       );
     }
-
-    setIsFillGridModalOpen(false);
     setSelectedRowIndex(null);
   };
 
@@ -1207,10 +1232,7 @@ const DispatchForm = ({ data, onBack }) => {
         const scheduleData = scheduleMap[header.schduleNo];
         const dlvNo = scheduleData?.dlvNo;
 
-        if (dlvNo) {
-          loadScheduleMonths(header.branch, dlvNo, value, idx);
-        }
-
+        if (dlvNo) loadScheduleMonths(header.branch, dlvNo, value, idx);
         loadPlannedQty(header.branch, value, idx);
       }
     }
@@ -1220,18 +1242,37 @@ const DispatchForm = ({ data, onBack }) => {
         if (i !== idx) return row;
         let next = { ...row, [key]: value };
 
+        // 👇 Keep pdi and pdiNo mirrored
+        if (key === "pdiNo") next.pdi = value;
+        if (key === "pdi") next.pdiNo = value;
+
         if (key === "item") {
-          const item = itemMap[value];
+          const item = itemMap[String(value)];
           next.itemDescription = item?.itemDescription || "";
+          next.unit =
+            item?.unitCode ||
+            item?.primaryUnits?.primaryUnit ||
+            item?.sellingUnit?.primaryUnit ||
+            item?.purchaseUnit?.primaryUnit ||
+            "";
+          next.unitId =
+            item?.unitId ||
+            item?.primaryUnits?.id ||
+            item?.sellingUnit?.id ||
+            item?.purchaseUnit?.id ||
+            0;
         }
 
         return next;
-      })
+      }),
     );
   };
 
   const handleAddRow = () =>
-    setDispatchItemRows((prev) => [...prev, { ...emptyDispatchItemRow(), pdiDate: todayStr() }]);
+    setDispatchItemRows((prev) => [
+      ...prev,
+      { ...emptyDispatchItemRow(), pdiDate: todayStr() },
+    ]);
   const handleRemoveRow = (idx) =>
     setDispatchItemRows((prev) => prev.filter((_, i) => i !== idx));
 
@@ -1281,6 +1322,7 @@ const DispatchForm = ({ data, onBack }) => {
       createdBy: Number(localStorage.getItem("usersId")) || 0,
       customer: Number(header.customer) || 0,
       deliveryInstructions: header.deliveryInstructions || "",
+      docId: header.diNo || "",
       despatchInstructionDetailsDTO: dispatchItemRows
         .filter((r) => r.item && r.item !== "")
         .map((r) => {
@@ -1293,14 +1335,23 @@ const DispatchForm = ({ data, onBack }) => {
             descQty: Number(r.descQty) || 0,
             item: Number(r.item) || 0,
             noOfPackage: String(r.noOfPackage) || "",
-            ordAccpContrNo: contractData?.orderAccepCustomerContractNo || r.orderAccepCustomerContractNo || r.ordAccpContrNo || "",
+            ordAccpContrNo:
+              contractData?.orderAccepCustomerContractNo ||
+              r.orderAccepCustomerContractNo ||
+              r.ordAccpContrNo ||
+              "",
             packageType: r.packageType || "",
-            pdi: r.pdi || "",
+            // 👇 FIX — send pdiNo as `pdi` (which is what the API expects)
+            pdi: r.pdiNo || r.pdi || "",
             pdiDate: r.pdiDate || "",
             pendingQty: Number(r.pendingQty) || 0,
             plannedQty: Number(r.plannedQty) || 0,
-            schduleMonth: monthData?.monthOfSchedule || r.scheduleMonthName || r.schduleMonth || "",
-            unit: Number(r.unit) || 0,
+            schduleMonth:
+              monthData?.monthOfSchedule ||
+              r.scheduleMonthName ||
+              r.schduleMonth ||
+              "",
+            unit: Number(r.unitId) || 0,
             ...(r.id ? { id: r.id } : {}),
           };
         }),
@@ -1310,26 +1361,26 @@ const DispatchForm = ({ data, onBack }) => {
       modeOfTransport: header.modeOfTransport || "",
       netWeight: Number(header.netWeight) || 0,
       orgId: orgId,
+      financialYear: finYear,
       paymentTerms: header.paymentTerms || "",
       schduleDate: header.schduleDate || "",
       schduleNo: scheduleMap[header.schduleNo]?.dlvNo || header.schduleNo || "",
       ...(isUpdate ? { id: data.id } : {}),
-      ...(isUpdate ? { updatedBy: Number(localStorage.getItem("usersId")) } : {}),
+      ...(isUpdate
+        ? { updatedBy: Number(localStorage.getItem("usersId")) }
+        : {}),
     };
 
-    console.log("Saving payload:", JSON.stringify(payload, null, 2));
-
     try {
-      const response = await despatchInstructionAPI.createUpdateDispatch(payload);
-
-      console.log("Save response:", response);
+      const response =
+        await despatchInstructionAPI.createUpdateDispatch(payload);
 
       if (response?.status) {
         addToast(
           response?.paramObjectsMap?.message ||
           (isUpdate
             ? "Dispatch Instruction updated successfully!"
-            : "Dispatch Instruction created successfully!")
+            : "Dispatch Instruction created successfully!"),
         );
         onBack?.();
       } else {
@@ -1337,7 +1388,7 @@ const DispatchForm = ({ data, onBack }) => {
           response?.errors?.[0]?.shortMessage ||
           response?.errors?.[0]?.longMessage ||
           response?.message ||
-          "Failed to save Dispatch Instruction."
+          "Failed to save Dispatch Instruction.",
         );
       }
     } catch (err) {
@@ -1347,7 +1398,7 @@ const DispatchForm = ({ data, onBack }) => {
           err.response.data.message ||
           err.response.data.statusMessage ||
           err.response.data.error ||
-          JSON.stringify(err.response.data)
+          JSON.stringify(err.response.data),
         );
       } else {
         addToast("Something went wrong.");
@@ -1377,7 +1428,6 @@ const DispatchForm = ({ data, onBack }) => {
 
       {/* Main Card */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
-        {/* ---------------- Header Info ---------------- */}
         <div>
           <SectionHeader>Dispatch Instruction</SectionHeader>
           <div className={fieldGrid}>
@@ -1397,7 +1447,8 @@ const DispatchForm = ({ data, onBack }) => {
               value={header.diNo}
               onChange={handleHeaderChange}
               required
-              disabled={!data}
+              disabled
+              placeholder={generatingDocId ? "Generating..." : ""}
             />
             <Field
               type="date"
@@ -1464,9 +1515,7 @@ const DispatchForm = ({ data, onBack }) => {
           </div>
         </div>
 
-        {/* ---------------- Child Tabs ---------------- */}
         <section className="mt-0 bg-white dark:bg-gray-800">
-          {/* Tabs */}
           <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 mb-0">
             <div className="flex flex-wrap">
               {CHILD_TABS.map((tab) => (
@@ -1495,7 +1544,6 @@ const DispatchForm = ({ data, onBack }) => {
             )}
           </div>
 
-          {/* Dispatch Details tab */}
           {activeChildTab === "dispatchDetails" && (
             <div className="pt-3">
               <DynamicTable
@@ -1582,7 +1630,6 @@ const DispatchForm = ({ data, onBack }) => {
             </div>
           )}
 
-          {/* Terms and Conditions tab */}
           {activeChildTab === "termsConditions" && (
             <div className="pt-3">
               <div className={subTabFieldGrid}>
@@ -1642,8 +1689,7 @@ const DispatchForm = ({ data, onBack }) => {
         />
       </div>
 
-      {/* Fill Grid Modal - Enhanced with multi-select */}
-      <FillGridModal
+      {/* <FillGridModal
         isOpen={isFillGridModalOpen}
         onClose={() => {
           setIsFillGridModalOpen(false);
@@ -1651,7 +1697,7 @@ const DispatchForm = ({ data, onBack }) => {
         }}
         items={fillGridItems}
         onSelectItems={handleSelectFillGridItems}
-      />
+      /> */}
     </div>
   );
 };
