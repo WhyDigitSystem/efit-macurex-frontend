@@ -17,20 +17,47 @@ const PurchaseContractAmendmentList = ({
   const { addToast } = useToast();
 
   const orgId = Number(localStorage.getItem("orgId")) || 0;
-  const branch = Number(localStorage.getItem("branchId")) || 1000000001;
+  const branchId = Number(localStorage.getItem("branchId")) || 1000000001;
 
   const loadData = useCallback(async () => {
     if (!orgId) return;
     setLoading(true);
     try {
-      const list = await purchaseContractAmendmentAPI.getAll(orgId, branch);
-      setData(list);
+      const list = await purchaseContractAmendmentAPI.getAll(orgId, branchId);
+
+      const transformedData = (list || []).map((item) => ({
+        id: item.id,
+        amendmentNo: item.docId || "",
+        amendmentDate: item.docDate || "",
+        contractNo: item.contractNo || item.purchaseContractNumber || "",
+        contractDate: item.contractDate || "",
+        partyName: item.customer?.customerName || "",
+        partyCode: item.customer?.customerCode || "",
+        branch: item.branch?.branchName || "",
+        revisionNo: item.revisionNo ?? "",
+        active: item.active,
+        details: item.details || [],
+        attachments: item.attachments || [],
+        remarks: item.remarks || "",
+        freightType: item.freightType || "",
+        packingType: item.packingType || "",
+        insuranceAmount: item.insuranceAmount ?? "",
+        modeOfDespatch: item.modeOfDespatch || "",
+        taxDescription: item.taxDescription || "",
+        preparedBy: item.preparedBy || "",
+        authorisedBy: item.authorisedBy || "",
+        createdBy: item.createdBy || "",
+      }));
+
+      transformedData.sort((a, b) => (b.id || 0) - (a.id || 0));
+      setData(transformedData);
     } catch (error) {
       console.error("Failed to load PC amendments:", error);
+      setData([]);
     } finally {
       setLoading(false);
     }
-  }, [orgId, branch]);
+  }, [orgId, branchId]);
 
   useEffect(() => {
     loadData();
@@ -52,7 +79,6 @@ const PurchaseContractAmendmentList = ({
   };
 
   const columns = [
-    { key: "sno", label: "#", type: "text" },
     {
       key: "amendmentNo",
       label: "Amendment No",
@@ -62,7 +88,7 @@ const PurchaseContractAmendmentList = ({
     {
       key: "amendmentDate",
       label: "Amendment Date",
-      type: "text",
+      type: "date",
       accessor: (row) => row.amendmentDate || "",
     },
     {
@@ -81,7 +107,7 @@ const PurchaseContractAmendmentList = ({
       key: "revisionNo",
       label: "Revision",
       type: "text",
-      accessor: (row) => row.revisionNo || "",
+      accessor: (row) => row.revisionNo ?? "",
     },
     {
       key: "status",
@@ -105,6 +131,12 @@ const PurchaseContractAmendmentList = ({
 
   const searchFields = ["amendmentNo", "contractNo", "partyName"];
 
+  const filterOptions = [
+    { value: "all", label: "All", activeValue: "All" },
+    { value: "active", label: "Active", activeValue: "Active" },
+    { value: "inactive", label: "Inactive", activeValue: "Inactive" },
+  ];
+
   return (
     <>
       <CommonListViewTable
@@ -114,6 +146,8 @@ const PurchaseContractAmendmentList = ({
         loading={loading}
         columns={columns}
         searchFields={searchFields}
+        filterOptions={filterOptions}
+        defaultFilter="all"
         onAddNew={onAddNew}
         onEdit={onEdit}
         onBack={onBack}
