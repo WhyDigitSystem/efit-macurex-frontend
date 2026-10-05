@@ -3,7 +3,7 @@ import CommonListViewTable from "../../../utils/CommonListViewTable";
 import directPurchaseAPI from "../../../api/Purchase/directPurchaseAPI";
 import { useToast } from "../../Toast/ToastContext";
 
-const DirectPurchaseList = ({ onAddNew, onEdit, onBack }) => {
+const DirectPurchaseList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   const [itemData, setItemData] = useState([]);
   const [loading, setLoading] = useState(false);
   const { addToast } = useToast();
@@ -48,14 +48,8 @@ const DirectPurchaseList = ({ onAddNew, onEdit, onBack }) => {
       }
 
       /*
-       * Expected backend response:
-       *
-       * response
-       *   └── paramObjectsMap
-       *        └── directPurchaseVO
-       *             └── [ { ... } ]
+       * response.paramObjectsMap.directPurchaseVO -> [ { ... } ]
        */
-
       const orders = Array.isArray(response?.paramObjectsMap?.directPurchaseVO)
         ? response.paramObjectsMap.directPurchaseVO
         : [];
@@ -66,51 +60,35 @@ const DirectPurchaseList = ({ onAddNew, onEdit, onBack }) => {
         return;
       }
 
-      const transformedData = orders.map((item) => ({
-        ...item,
+      const transformedData = orders.map((item) => {
+        const branchObj =
+          item.branch && typeof item.branch === "object" ? item.branch : null;
 
-        id: item.id,
+        return {
+          /*
+           * Keep EVERYTHING from the backend untouched (including `branch`
+           * as the original object) so the edit form gets real ids.
+           */
+          ...item,
 
-        billNo: item.invNo || "",
+          id: item.id,
 
-        invNo: item.invNo || "",
+          /* display-only fields for the table */
+          billNo: item.invNo || "",
 
-        invDate: item.invDate || "",
+          plant: branchObj
+            ? branchObj.branchCode || branchObj.branchName || ""
+            : String(item.branch ?? ""),
 
-        belongsTo: item.belongsTo || "",
+          supplierName: item.supplierName || "",
 
-        branch: item.branch?.branchCode || item.branch?.branchName || "",
+          active:
+            item.active === true ||
+            String(item.active).toLowerCase() === "active",
 
-        branchCode: item.branch?.branchCode || "",
-
-        branchName: item.branch?.branchName || "",
-
-        supplierName: item.supplierName || "",
-
-        dealerType: item.dealerType || "",
-
-        suppType: item.suppType || "",
-
-        issueTo: item.issueTo || "",
-
-        financialYear: item.financialYear || "",
-
-        active:
-          item.active === true ||
-          String(item.active).toLowerCase() === "active",
-
-        activeStatus: item.active || "",
-
-        createdBy: item.createdBy || "",
-
-        cancelRemarks: item.cancelRemarks || "",
-
-        remarks: item.remarks || "",
-
-        directPurchaseCashDetailsDTO: item.directPurchaseCashDetailsDTO || [],
-
-        directPurchaseTaxDetailsDTO: item.directPurchaseTaxDetailsDTO || [],
-      }));
+          activeStatus: item.active || "",
+        };
+      });
 
       transformedData.sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
 
@@ -128,11 +106,7 @@ const DirectPurchaseList = ({ onAddNew, onEdit, onBack }) => {
 
   useEffect(() => {
     loadItems();
-  }, [loadItems]);
-
-  const handleEdit = (item) => {
-    onEdit(item);
-  };
+  }, [loadItems, refreshTrigger]);
 
   /* -------------------------------------------------------------------- */
   /* Columns                                                                */
@@ -153,9 +127,9 @@ const DirectPurchaseList = ({ onAddNew, onEdit, onBack }) => {
       type: "date",
     },
     {
-      key: "branch",
+      key: "plant",
       label: "Plant",
-      accessor: "branch",
+      accessor: "plant",
       type: "text",
     },
     {
@@ -213,6 +187,7 @@ const DirectPurchaseList = ({ onAddNew, onEdit, onBack }) => {
 
   const searchFields = [
     "billNo",
+    "plant",
     "supplierName",
     "belongsTo",
     "suppType",
@@ -262,7 +237,7 @@ const DirectPurchaseList = ({ onAddNew, onEdit, onBack }) => {
       defaultFilter="all"
       onBack={onBack}
       onAddNew={onAddNew}
-      onEdit={handleEdit}
+      onEdit={onEdit}
       onView={false}
       showSerialNumber={true}
       itemsPerPageOptions={[5, 10, 20, 50, 100]}

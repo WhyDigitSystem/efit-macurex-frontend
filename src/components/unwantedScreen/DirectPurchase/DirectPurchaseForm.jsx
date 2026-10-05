@@ -103,6 +103,46 @@ const idOf = (v, ...keys) => {
 const isYes = (v) =>
   v === true || ["true", "yes"].includes(String(v).toLowerCase());
 
+/* Converts "2026-09-01T00:00:00", "01-09-2026", "01/09/2026" -> "2026-09-01" */
+const toDateInput = (v) => {
+  const text = String(v ?? "").trim();
+
+  if (!text) return "";
+
+  if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
+
+  const dmy = text.match(/^(\d{2})[-/](\d{2})[-/](\d{4})/);
+
+  if (dmy) return `${dmy[3]}-${dmy[2]}-${dmy[1]}`;
+
+  return "";
+};
+
+/* Case-insensitive match against a list of plain string options */
+const matchOption = (value, options) => {
+  if (value === undefined || value === null || value === "") return "";
+
+  const found = options.find((o) => norm(o) === norm(value));
+
+  return found ?? String(value);
+};
+
+/*
+ * Make sure the saved value is always visible in a <select>, even if it is not
+ * (yet) one of the options (options still loading, name vs id, different case).
+ */
+const withCurrent = (options, value) => {
+  const list = options || [];
+
+  if (value === "" || value === null || value === undefined) return list;
+
+  const exists = list.some(
+    (o) => String(isObj(o) ? o.value : o) === String(value),
+  );
+
+  return exists ? list : [...list, { value, label: String(value) }];
+};
+
 /* ========================================================================= */
 /* FIELD COMPONENT                                                           */
 /* ========================================================================= */
@@ -137,12 +177,12 @@ const Field = ({
         >
           <option value="">-- Select --</option>
 
-          {(options || []).map((opt) => (
+          {withCurrent(options, value).map((opt) => (
             <option
-              key={typeof opt === "object" ? opt.value : opt}
-              value={typeof opt === "object" ? opt.value : opt}
+              key={isObj(opt) ? opt.value : opt}
+              value={isObj(opt) ? opt.value : opt}
             >
-              {typeof opt === "object" ? opt.label : opt}
+              {isObj(opt) ? opt.label : opt}
             </option>
           ))}
         </select>
@@ -281,12 +321,12 @@ const SelectCell = ({ value, onChange, options, disabled = false }) => (
     >
       <option value="">Select</option>
 
-      {(options || []).map((opt) => (
+      {withCurrent(options, value).map((opt) => (
         <option
-          key={typeof opt === "object" ? opt.value : opt}
-          value={typeof opt === "object" ? opt.value : opt}
+          key={isObj(opt) ? opt.value : opt}
+          value={isObj(opt) ? opt.value : opt}
         >
-          {typeof opt === "object" ? opt.label : opt}
+          {isObj(opt) ? opt.label : opt}
         </option>
       ))}
     </select>
@@ -566,11 +606,11 @@ const extractRecord = (response) => {
 /* Find an array on the record by exact key first, then by key pattern */
 const findArray = (d, exactKeys, regex) => {
   for (const key of exactKeys) {
-    if (Array.isArray(d[key])) return d[key];
+    if (Array.isArray(d[key]) && d[key].length) return d[key];
   }
 
   const found = Object.keys(d).find(
-    (key) => regex.test(key) && Array.isArray(d[key]),
+    (key) => regex.test(key) && Array.isArray(d[key]) && d[key].length,
   );
 
   return found ? d[found] : [];
@@ -595,6 +635,12 @@ const resolveUnitId = (unit) => {
 const mapEditData = (d, branchId, userName) => {
   const supplierObj = isObj(d.supplier) ? d.supplier : {};
 
+  /* supplier can arrive as an object, a numeric id, or a code */
+  const supplierPrimitive =
+    typeof d.supplier === "string" || typeof d.supplier === "number"
+      ? d.supplier
+      : "";
+
   const formData = {
     ...getDefaultValues(branchId, userName),
 
@@ -606,7 +652,7 @@ const mapEditData = (d, branchId, userName) => {
 
     invNo: String(pick(d.invNo, d.docNo, d.docId)),
 
-    invDate: String(pick(d.invDate, d.docDate, todayISO())),
+    invDate: toDateInput(pick(d.invDate, d.docDate)) || todayISO(),
 
     belongsTo: String(pick(d.belongsTo, "Domestic")),
 
@@ -619,6 +665,7 @@ const mapEditData = (d, branchId, userName) => {
           : "",
         supplierObj.supplierCode,
         supplierObj.customerCode,
+        supplierPrimitive,
       ),
     ),
 
@@ -628,7 +675,7 @@ const mapEditData = (d, branchId, userName) => {
 
     gstnNo: String(pick(d.gstnNo, d.gstNo, supplierObj.gstNo)),
 
-    dealerType: String(pick(d.dealerType)),
+    dealerType: matchOption(pick(d.dealerType), DEALER_TYPE_OPTIONS),
 
     issueTo: String(pick(d.issueTo)),
 
@@ -658,7 +705,9 @@ const mapEditData = (d, branchId, userName) => {
       ),
     ),
 
-    isIgstApplicable: isYes(pick(d.isIgstApplicable, d.igstApplicable))
+    isIgstApplicable: isYes(
+      pick(d.isIgstApplicable, d.igstApplicable, d.IGSTAppl, d.igstAppl),
+    )
       ? "Yes"
       : "No",
 
@@ -715,7 +764,7 @@ const mapEditData = (d, branchId, userName) => {
 
           hsnCode: String(pick(row.hsnCode, row.hsn, row.hsnSacCode)),
 
-          taxType: row.taxType || "",
+          taxType: matchOption(row.taxType, TAX_TYPE_OPTIONS),
 
           tax: pick(row.tax, row.taxPerc, row.taxPercentage),
 
@@ -757,7 +806,7 @@ const mapEditData = (d, branchId, userName) => {
 
         id: row.id ?? 0,
 
-        particulars: String(pick(row.particulars)),
+        particulars: matchOption(pick(row.particulars), PARTICULARS_OPTIONS),
 
         taxId: String(pick(row.taxId)),
 
@@ -767,7 +816,7 @@ const mapEditData = (d, branchId, userName) => {
 
         revisedAmt: pick(row.revisedAmt, row.revisedAmount),
 
-        ledgerAcName: row.ledgerAcName || "",
+        ledgerAcName: matchOption(row.ledgerAcName, LEDGER_ACCOUNT_OPTIONS),
       }))
     : [emptyTaxRow()];
 
@@ -815,8 +864,9 @@ const DirectPurchaseForm = ({ data: editData, onBack }) => {
   /* ----------------------------------------------------------------------- */
 
   /*
-   * Initial values come from the list row (fallback). In edit mode they are
-   * replaced by the getDirectPurchaseById response as soon as it arrives.
+   * The row passed in from the list seeds the form instantly.
+   * The full record is then fetched with getDirectPurchaseById (effect below),
+   * merged over the list row, and replaces this state.
    */
   const [mapped] = useState(() =>
     isEditMode ? mapEditData(editData, BRANCH_ID, USER_NAME) : null,
@@ -840,7 +890,14 @@ const DirectPurchaseForm = ({ data: editData, onBack }) => {
     mapped ? mapped.fileRows : [emptyFileRow()],
   );
 
+  /* true while getDirectPurchaseById is running (edit mode only) */
   const [loadingData, setLoadingData] = useState(isEditMode);
+
+  /*
+   * Bumped after the record is loaded so the "resolve saved values against
+   * options" effect re-runs on the freshly fetched data.
+   */
+  const [hydrationKey, setHydrationKey] = useState(0);
 
   /* ----------------------------------------------------------------------- */
   /* MASTER DATA                                                             */
@@ -886,6 +943,8 @@ const DirectPurchaseForm = ({ data: editData, onBack }) => {
           editData.id,
         );
 
+        if (cancelled) return;
+
         console.log("Get Direct Purchase By ID Response:", response);
 
         const record = extractRecord(response);
@@ -896,11 +955,23 @@ const DirectPurchaseForm = ({ data: editData, onBack }) => {
           return;
         }
 
-        console.log("Direct Purchase record:", record);
+        console.log("Direct Purchase record (raw):", record);
 
-        const result = mapEditData(record, BRANCH_ID, USER_NAME);
+        /*
+         * The by-id response may omit some fields. Fall back to the list row
+         * for anything the by-id response leaves out.
+         */
+        const nonNull = Object.fromEntries(
+          Object.entries(record).filter(
+            ([, v]) => v !== null && v !== undefined,
+          ),
+        );
 
-        if (cancelled) return;
+        const result = mapEditData(
+          { ...editData, ...nonNull },
+          BRANCH_ID,
+          USER_NAME,
+        );
 
         console.log("Mapped Direct Purchase form data:", result);
 
@@ -908,6 +979,8 @@ const DirectPurchaseForm = ({ data: editData, onBack }) => {
         setCashRows(result.cashRows);
         setTaxRows(result.taxRows);
         setFileRows(result.fileRows);
+
+        setHydrationKey((key) => key + 1);
       } catch (error) {
         console.error("Failed to load Direct Purchase by ID:", error);
 
@@ -1266,6 +1339,7 @@ const DirectPurchaseForm = ({ data: editData, onBack }) => {
   }, [
     isEditMode,
     loadingData,
+    hydrationKey,
     itemTypeOptions,
     employeeOptions,
     gstStateOptions,
@@ -1616,6 +1690,8 @@ const DirectPurchaseForm = ({ data: editData, onBack }) => {
   /* ========================================================================= */
 
   const handleSave = async () => {
+    if (loadingData) return;
+
     if (!validate()) return;
 
     setIsSubmitting(true);
@@ -1863,18 +1939,6 @@ const DirectPurchaseForm = ({ data: editData, onBack }) => {
   /* RENDER                                                                    */
   /* ========================================================================= */
 
-  if (loadingData) {
-    return (
-      <div className="p-2 max-w-7xl">
-        <div className="flex items-center justify-center h-64">
-          <div className="text-gray-500 dark:text-gray-400 text-sm">
-            Loading...
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="p-2 max-w-7xl">
       {/* TITLE */}
@@ -1904,7 +1968,14 @@ const DirectPurchaseForm = ({ data: editData, onBack }) => {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
+      <div className="relative bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
+        {/* LOADING OVERLAY (edit mode, while getDirectPurchaseById runs) */}
+        {loadingData && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-white/70 dark:bg-gray-800/70 text-xs text-gray-600 dark:text-gray-300">
+            Loading direct purchase...
+          </div>
+        )}
+
         {/* HEADER */}
         <div>
           <SectionHeader>Direct Purchase</SectionHeader>
@@ -2312,7 +2383,7 @@ const DirectPurchaseForm = ({ data: editData, onBack }) => {
           <button
             type="button"
             onClick={handleSave}
-            disabled={isSubmitting}
+            disabled={isSubmitting || loadingData}
             className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
           >
             <Save className="h-3 w-3" />
