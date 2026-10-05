@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import { generatePurchaseBillPdf } from "../../../utils/purchaseBillPdfGenerator";
 import PDFPreviewModal from "../../../utils/PDFPreviewModal";
@@ -7,20 +7,6 @@ import { useToast } from "../../Toast/ToastContext";
 
 const LOCAL = "Local";
 const IMPORT = "Import";
-
-const TYPE_TABS = [
-  { value: LOCAL, label: "Purchase Bill" },
-  { value: IMPORT, label: "Import Purchase Bill" },
-];
-
-/* ------------------------------------------------------------------ */
-/* Helpers                                                            */
-/* ------------------------------------------------------------------ */
-
-const idOf = (value) => {
-  if (value && typeof value === "object") return value.id ?? "";
-  return value ?? "";
-};
 
 const toNumber = (value, fallback = 0) => {
   const n = Number(value);
@@ -33,6 +19,14 @@ const deriveType = (row) =>
     ? IMPORT
     : LOCAL;
 
+const deriveBasicValue = (row) => {
+  if (deriveType(row) === IMPORT) {
+    return toNumber(row?.importBillChargesSummaryDTO?.[0]?.totFobValueInr);
+  }
+
+  return toNumber(row?.billChargesSummaryDTO?.[0]?.basicValue);
+};
+
 const deriveTotalAmount = (row) => {
   if (deriveType(row) === IMPORT) {
     return toNumber(row?.importBillChargesSummaryDTO?.[0]?.netAmount);
@@ -41,150 +35,246 @@ const deriveTotalAmount = (row) => {
   return toNumber(row?.billChargesSummaryDTO?.[0]?.totalAmount);
 };
 
-/* ------------------------------------------------------------------ */
-/* Columns                                                            */
-/* ------------------------------------------------------------------ */
+const deriveTotalQty = (row) => {
+  if (deriveType(row) === IMPORT) {
+    return toNumber(
+      row?.importPurchaseDetails?.reduce(
+        (sum, item) => sum + toNumber(item?.accptQty),
+        0,
+      ),
+    );
+  }
 
-const ACTIVE_COLUMN = {
-  key: "active",
-  label: "Active",
-  accessor: "active",
-  type: "status",
-  statusVariants: {
-    true: {
-      label: "Active",
-      className:
-        "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
-    },
-    false: {
-      label: "Inactive",
-      className: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+  return toNumber(row?.billChargesSummaryDTO?.[0]?.totalQty);
+};
+
+const deriveTaxAmount = (row) => {
+  if (deriveType(row) === IMPORT) {
+    return toNumber(
+      row?.importPurchaseTax?.reduce(
+        (sum, item) => sum + toNumber(item?.taxAmount),
+        0,
+      ),
+    );
+  }
+
+  const details = row?.purchaseDetails || [];
+
+  return details.reduce(
+    (sum, item) =>
+      sum +
+      toNumber(item?.sgstAmount) +
+      toNumber(item?.cgstAmount) +
+      toNumber(item?.igstAmount),
+    0,
+  );
+};
+
+const deriveTaxPercent = (row) => {
+  if (deriveType(row) === IMPORT) {
+    return toNumber(
+      row?.importPurchaseTax?.reduce(
+        (sum, item) => sum + toNumber(item?.tax),
+        0,
+      ),
+    );
+  }
+
+  const details = row?.purchaseDetails || [];
+
+  return details.reduce((sum, item) => sum + toNumber(item?.taxPercent), 0);
+};
+
+const isActive = (value) =>
+  value !== false && value !== "Inactive" && value !== "false";
+
+const COLUMNS = [
+  {
+    key: "docId",
+    label: "Doc No",
+    accessor: "docId",
+    type: "text",
+    noWrap: true,
+  },
+  {
+    key: "billType",
+    label: "Type",
+    accessor: "billType",
+    type: "text",
+    noWrap: true,
+  },
+  {
+    key: "supplierName",
+    label: "Supplier Name",
+    accessor: "supplierName",
+    type: "text",
+  },
+  {
+    key: "supplierCode",
+    label: "Supplier Code",
+    accessor: "supplierCode",
+    type: "text",
+    noWrap: true,
+  },
+  {
+    key: "belongsTo",
+    label: "Belongs To",
+    accessor: "belongsTo",
+    type: "text",
+    noWrap: true,
+  },
+  {
+    key: "docDate",
+    label: "Doc Date",
+    accessor: "docDate",
+    type: "text",
+    noWrap: true,
+  },
+  {
+    key: "grnNo",
+    label: "GRN No",
+    accessor: "grnNo",
+    type: "text",
+    noWrap: true,
+  },
+  {
+    key: "grnDate",
+    label: "GRN Date",
+    accessor: "grnDate",
+    type: "text",
+    noWrap: true,
+  },
+  {
+    key: "purchaseOrderNo",
+    label: "PO No",
+    accessor: "purchaseOrderNo",
+    type: "text",
+    noWrap: true,
+  },
+  {
+    key: "currency",
+    label: "Currency",
+    accessor: "currency",
+    type: "text",
+    noWrap: true,
+  },
+  {
+    key: "exchangeRate",
+    label: "Exchange Rate",
+    accessor: "exchangeRate",
+    type: "text",
+    align: "right",
+  },
+  {
+    key: "totalQty",
+    label: "Total Qty",
+    accessor: "totalQty",
+    type: "text",
+    align: "right",
+  },
+  {
+    key: "basicValue",
+    label: "Basic Value",
+    accessor: "basicValue",
+    type: "text",
+    align: "right",
+  },
+  {
+    key: "taxPercent",
+    label: "Tax %",
+    accessor: "taxPercent",
+    type: "text",
+    align: "right",
+  },
+  {
+    key: "taxAmount",
+    label: "Tax Amount",
+    accessor: "taxAmount",
+    type: "text",
+    align: "right",
+  },
+  {
+    key: "totalAmount",
+    label: "Total Amount",
+    accessor: "totalAmount",
+    type: "text",
+    align: "right",
+  },
+  {
+    key: "gstNo",
+    label: "GST No",
+    accessor: "gstNo",
+    type: "text",
+    noWrap: true,
+  },
+  {
+    key: "eccType",
+    label: "ECC Type",
+    accessor: "eccType",
+    type: "text",
+    noWrap: true,
+  },
+  {
+    key: "igstAppl",
+    label: "IGST",
+    accessor: "igstAppl",
+    type: "text",
+    noWrap: true,
+  },
+  {
+    key: "reverseChrg",
+    label: "Reverse Charge",
+    accessor: "reverseChrg",
+    type: "text",
+    noWrap: true,
+  },
+  {
+    key: "createdBy",
+    label: "Created By",
+    accessor: "createdBy",
+    type: "text",
+    noWrap: true,
+  },
+  {
+    key: "active",
+    label: "Active",
+    accessor: "active",
+    type: "status",
+    statusVariants: {
+      true: {
+        label: "Active",
+        className:
+          "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+      },
+      false: {
+        label: "Inactive",
+        className:
+          "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+      },
     },
   },
-};
-
-const ACTIONS_COLUMN = {
-  key: "actions",
-  label: "Actions",
-  type: "actions",
-  align: "center",
-  width: "90px",
-};
-
-const COLUMNS_BY_TYPE = {
-  [LOCAL]: [
-    {
-      key: "docId",
-      label: "Doc No",
-      accessor: "docId",
-      type: "text",
-      noWrap: true,
-    },
-    {
-      key: "supplierName",
-      label: "Supplier Name",
-      accessor: "supplierName",
-      type: "text",
-    },
-    {
-      key: "docDate",
-      label: "Doc Date",
-      accessor: "docDate",
-      type: "text",
-      noWrap: true,
-    },
-    {
-      key: "grnNo",
-      label: "GRN No",
-      accessor: "grnNo",
-      type: "text",
-      noWrap: true,
-    },
-    {
-      key: "totalAmount",
-      label: "Total Amount",
-      accessor: "totalAmount",
-      type: "text",
-      align: "right",
-    },
-    ACTIVE_COLUMN,
-    ACTIONS_COLUMN,
-  ],
-
-  [IMPORT]: [
-    {
-      key: "docId",
-      label: "Doc No",
-      accessor: "docId",
-      type: "text",
-      noWrap: true,
-    },
-    {
-      key: "supplierName",
-      label: "Supplier Name",
-      accessor: "supplierName",
-      type: "text",
-    },
-    {
-      key: "docDate",
-      label: "Doc Date",
-      accessor: "docDate",
-      type: "text",
-      noWrap: true,
-    },
-    {
-      key: "grnNo",
-      label: "GRN No",
-      accessor: "grnNo",
-      type: "text",
-      noWrap: true,
-    },
-    {
-      key: "supplierDcInvNo",
-      label: "Supp. Inv No",
-      accessor: "supplierDcInvNo",
-      type: "text",
-      noWrap: true,
-    },
-    {
-      key: "totalAmount",
-      label: "Net Amount",
-      accessor: "totalAmount",
-      type: "text",
-      align: "right",
-    },
-    ACTIVE_COLUMN,
-    ACTIONS_COLUMN,
-  ],
-};
-
-/* ------------------------------------------------------------------ */
-/* Config                                                             */
-/* ------------------------------------------------------------------ */
-
-const CONFIG_BY_TYPE = {
-  [LOCAL]: {
-    title: "Purchase Bill",
-    searchFields: ["docId", "supplierName", "grnNo"],
-    emptyMessage: "No Purchase Bills found",
-    loadingMessage: "Loading Purchase Bills...",
-    exportFileName: "Purchase_Bills",
+  {
+    key: "actions",
+    label: "Actions",
+    type: "actions",
+    align: "center",
+    width: "90px",
   },
+];
 
-  [IMPORT]: {
-    title: "Import Purchase Bill",
-    searchFields: ["docId", "supplierName", "grnNo", "supplierDcInvNo"],
-    emptyMessage: "No Import Purchase Bills found",
-    loadingMessage: "Loading Import Purchase Bills...",
-    exportFileName: "Import_Purchase_Bills",
-  },
-};
+const SEARCH_FIELDS = [
+  "docId",
+  "billType",
+  "supplierName",
+  "supplierCode",
+  "belongsTo",
+  "grnNo",
+  "purchaseOrderNo",
+  "gstNo",
+  "eccType",
+];
 
-/* ------------------------------------------------------------------ */
-/* Component                                                          */
-/* ------------------------------------------------------------------ */
-
-const PurchaseBillList = ({ type, onTypeChange, onAddNew, onEdit, onBack }) => {
+const PurchaseBillList = ({ onAddNew, onEdit, onBack }) => {
   const ORG_ID = toNumber(localStorage.getItem("orgId"));
   const BRANCH_ID = toNumber(localStorage.getItem("branchId"));
 
@@ -194,68 +284,62 @@ const PurchaseBillList = ({ type, onTypeChange, onAddNew, onEdit, onBack }) => {
   const [loading, setLoading] = useState(false);
   const [pdfPreview, setPdfPreview] = useState(null);
 
-  /*
-   * IMPORTANT:
-   * If parent does not pass type, use Local.
-   *
-   * This prevents:
-   * CONFIG_BY_TYPE[undefined]
-   * from returning undefined.
-   */
-  const activeType = type === LOCAL || type === IMPORT ? type : LOCAL;
+  const rows = useMemo(
+    () =>
+      allRows.map((row) => ({
+        id: row.id,
 
-  const config = CONFIG_BY_TYPE[activeType];
+        docId: row.docId || "",
 
-  const columns = COLUMNS_BY_TYPE[activeType] || COLUMNS_BY_TYPE[LOCAL];
+        billType: deriveType(row),
 
-  /* ---------------------------------------------------------------- */
-  /* Rows                                                             */
-  /* ---------------------------------------------------------------- */
+        supplierName: row?.supplier?.supplierName || "",
 
-  const rowsForType = allRows
-    .filter((row) => deriveType(row) === activeType)
-    .map((row) => ({
-      id: row.id,
-      docId: row.docId || "",
-      supplierName: row.supplier?.supplierName || "",
-      docDate: row.docDate || "",
-      grnNo: row.grnNo || "",
-      supplierDcInvNo: row.supplierDcInvNo || "",
-      totalAmount: deriveTotalAmount(row).toFixed(2),
-      active: row.active !== false,
+        supplierCode: row?.supplier?.supplierCode || "",
 
-      // Keep original response for Edit/PDF
-      __raw: row,
-    }));
+        belongsTo: row?.belongsTo || "",
 
-  /* ---------------------------------------------------------------- */
-  /* PDF                                                              */
-  /* ---------------------------------------------------------------- */
+        docDate: row?.docDate || "",
 
-  const handleDownload = async (rowSummary) => {
-    try {
-      const result = await generatePurchaseBillPdf(
-        rowSummary?.__raw || rowSummary,
-      );
+        grnNo: row?.grnNo || "",
 
-      if (result?.blobUrl) {
-        setPdfPreview(result);
-      } else {
-        addToast("Failed to generate PDF preview", "error");
-      }
-    } catch (error) {
-      console.error(`Error generating ${config.title} PDF:`, error);
+        grnDate: row?.grnDate || "",
 
-      addToast("Failed to generate PDF", "error");
-    }
-  };
+        purchaseOrderNo: row?.purchaseorderNo || "",
 
-  /* ---------------------------------------------------------------- */
-  /* Load Bills                                                       */
-  /* ---------------------------------------------------------------- */
+        currency: row?.currency?.currencyName || "",
+
+        exchangeRate: toNumber(row?.exchangeRate).toFixed(2),
+
+        totalQty: deriveTotalQty(row).toFixed(2),
+
+        basicValue: deriveBasicValue(row).toFixed(2),
+
+        taxPercent: deriveTaxPercent(row).toFixed(2),
+
+        taxAmount: deriveTaxAmount(row).toFixed(2),
+
+        totalAmount: deriveTotalAmount(row).toFixed(2),
+
+        gstNo: row?.supplier?.gstNo || "",
+
+        eccType: row?.supplier?.eccType || "",
+
+        igstAppl: row?.igstAppl ? "Yes" : "No",
+
+        reverseChrg: row?.reverseChrg ? "Yes" : "No",
+
+        createdBy: row?.createdBy || "",
+
+        active: isActive(row.active),
+
+        __raw: row,
+      })),
+    [allRows],
+  );
 
   const loadBills = useCallback(async () => {
-    if (!ORG_ID || !BRANCH_ID) {
+    if (!ORG_ID) {
       setAllRows([]);
       return;
     }
@@ -265,7 +349,7 @@ const PurchaseBillList = ({ type, onTypeChange, onAddNew, onEdit, onBack }) => {
     try {
       const response = await purchaseBillAPI.getPurchaseBillByOrgId(
         ORG_ID,
-        BRANCH_ID,
+        BRANCH_ID || undefined,
       );
 
       const data = response?.data ?? response;
@@ -279,14 +363,9 @@ const PurchaseBillList = ({ type, onTypeChange, onAddNew, onEdit, onBack }) => {
 
       const safeList = Array.isArray(list) ? list : [];
 
-      const sorted = [...safeList].sort((a, b) => (b?.id || 0) - (a?.id || 0));
-
-      setAllRows(sorted);
+      setAllRows([...safeList].sort((a, b) => (b?.id || 0) - (a?.id || 0)));
     } catch (error) {
-      console.error("Failed to load purchase bills:", error);
-
       setAllRows([]);
-
       addToast("Failed to load purchase bills", "error");
     } finally {
       setLoading(false);
@@ -297,47 +376,36 @@ const PurchaseBillList = ({ type, onTypeChange, onAddNew, onEdit, onBack }) => {
     loadBills();
   }, [loadBills]);
 
-  /* ---------------------------------------------------------------- */
-  /* Edit                                                             */
-  /* ---------------------------------------------------------------- */
-
   const handleEdit = (rowSummary) => {
     if (!rowSummary) return;
 
     onEdit?.(rowSummary.__raw || rowSummary);
   };
 
-  /* ---------------------------------------------------------------- */
-  /* Render                                                           */
-  /* ---------------------------------------------------------------- */
+  const handleDownload = async (rowSummary) => {
+    try {
+      const result = await generatePurchaseBillPdf(
+        rowSummary?.__raw || rowSummary,
+      );
+
+      if (result?.blobUrl) {
+        setPdfPreview(result);
+      } else {
+        addToast("Failed to generate PDF preview", "error");
+      }
+    } catch (error) {
+      addToast("Failed to generate PDF", "error");
+    }
+  };
 
   return (
     <>
-      {/* Type switcher */}
-      <div className="flex items-center border-b border-gray-200 dark:border-gray-700 mb-2">
-        {TYPE_TABS.map((tab) => (
-          <button
-            key={tab.value}
-            type="button"
-            onClick={() => onTypeChange?.(tab.value)}
-            className={`px-4 py-1.5 text-xs font-semibold rounded-t transition-colors ${
-              activeType === tab.value
-                ? "bg-blue-600 text-white"
-                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
       <CommonListViewTable
-        key={activeType}
-        title={config.title}
-        data={rowsForType}
+        title="Purchase Bill"
+        data={rows}
         loading={loading}
-        columns={columns}
-        searchFields={config.searchFields}
+        columns={COLUMNS}
+        searchFields={SEARCH_FIELDS}
         onBack={onBack}
         onAddNew={onAddNew}
         onEdit={handleEdit}
@@ -346,12 +414,12 @@ const PurchaseBillList = ({ type, onTypeChange, onAddNew, onEdit, onBack }) => {
         showSerialNumber={true}
         itemsPerPageOptions={[5, 10, 20, 50, 100]}
         defaultItemsPerPage={10}
-        emptyMessage={config.emptyMessage}
-        loadingMessage={config.loadingMessage}
+        emptyMessage="No Purchase Bills found"
+        loadingMessage="Loading Purchase Bills..."
         enableRefresh={true}
         onRefresh={loadBills}
         enableExport={true}
-        exportFileName={config.exportFileName}
+        exportFileName="Purchase_Bills"
       />
 
       {pdfPreview && (

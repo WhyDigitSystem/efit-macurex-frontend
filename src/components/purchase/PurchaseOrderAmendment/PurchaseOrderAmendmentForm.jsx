@@ -22,7 +22,7 @@ const labelClasses =
 const FREIGHT_TYPES = ["Macurex", "Supplier"];
 const PACKING_TYPES = ["Macurex", "Supplier"];
 const MODE_OF_DISPATCH = [
-  " By Road",
+  "By Road",
   "By Air",
   "By Sea",
   "By Sea/Air",
@@ -44,6 +44,7 @@ const getEmptyDetail = () => ({
   itemName: "",
   hsnSacCode: "",
   unit: "",
+  unitName: "",
   oldQty: "",
   newQty: "",
   oldRate: "",
@@ -438,17 +439,25 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
           poNo,
           orgId,
         );
-        const mapped = (response || []).map((item) => ({
+
+        // API may return the array directly or the full response object
+        const list = Array.isArray(response)
+          ? response
+          : response?.paramObjectsMap?.itemCodeDropdown || [];
+
+        const mapped = list.map((item) => ({
           value: item.id,
           label: item.itemCode || String(item.id ?? ""),
           itemCode: item.itemCode || "",
           // backend does not return a description yet; falls back to blank
-          itemDescription: item.itemDescription || item.itemName || "",
+          itemDescription:
+            item.itemDescription || item.itemName || item.description || "",
           hsnSacCode: item.hsnSacCode || "",
           unit: item.unit ?? "",
-          qty: item.qty ?? "",
-          rate: item.rate ?? "",
-          deliveryDate: item.deliveryDate || "",
+          unitDescription: item.unitDescription || "",
+          qty: item.qty ?? item.oldQty ?? "",
+          rate: item.rate ?? item.oldRate ?? "",
+          deliveryDate: item.deliveryDate || item.oldDeliveryDate || "",
         }));
 
         if (isEditMode) {
@@ -595,7 +604,7 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
       .then((listValues) => {
         setBelongsToOptions(
           (listValues || []).map((item) => ({
-            value: item.id,
+            value: item.valuesDescription,
             label: item.valuesDescription,
           })),
         );
@@ -674,6 +683,12 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
       itemName: d.item?.itemDescription || "",
       hsnSacCode: d.item?.hsnSacCode || d.item?.hsn || "",
       unit: asId(d.unit),
+      unitName:
+        (d.unit && typeof d.unit === "object"
+          ? d.unit.unitId || d.unit.description || d.unit.unitDescription
+          : "") ||
+        d.unitDescription ||
+        "",
       oldQty: d.oldQty ?? "",
       newQty: d.newQty ?? "",
       oldRate: d.oldRate ?? "",
@@ -695,6 +710,7 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
         itemDescription: it.itemDescription || "",
         hsnSacCode: it.hsn || it.hsnSacCode || "",
         unit: "",
+        unitDescription: "",
         qty: "",
         rate: "",
         deliveryDate: "",
@@ -719,6 +735,37 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
 
     dataLoadedRef.current = true;
   }, [isEditMode, data, setValue]);
+
+  // Edit mode: fill unit name from unit master if saved data had only the id
+  useEffect(() => {
+    if (!isEditMode || !unitOptions.length) return;
+    (watchDetails || []).forEach((row, i) => {
+      if (row?.unit && !row?.unitName) {
+        const u = unitOptions.find((o) => String(o.value) === String(row.unit));
+        if (u) setValue(`details.${i}.unitName`, u.label);
+      }
+    });
+  }, [isEditMode, unitOptions, watchDetails, setValue]);
+
+  // Edit mode: saved record may have null HSN / description / unit name,
+  // so backfill them from the item dropdown for the same PO
+  useEffect(() => {
+    if (!isEditMode || !itemOptions.length) return;
+    (watchDetails || []).forEach((row, i) => {
+      if (!row?.item) return;
+      const opt = itemOptions.find((o) => String(o.value) === String(row.item));
+      if (!opt) return;
+      if (!row.hsnSacCode && opt.hsnSacCode) {
+        setValue(`details.${i}.hsnSacCode`, opt.hsnSacCode);
+      }
+      if (!row.itemName && opt.itemDescription) {
+        setValue(`details.${i}.itemName`, opt.itemDescription);
+      }
+      if (!row.unitName && opt.unitDescription) {
+        setValue(`details.${i}.unitName`, opt.unitDescription);
+      }
+    });
+  }, [isEditMode, itemOptions, watchDetails, setValue]);
 
   // Amendment No (create mode)
   useEffect(() => {
@@ -804,6 +851,7 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
       setValue(`${prefix}.itemName`, "", opts);
       setValue(`${prefix}.hsnSacCode`, "", opts);
       setValue(`${prefix}.unit`, "", opts);
+      setValue(`${prefix}.unitName`, "", opts);
       setValue(`${prefix}.oldQty`, "", opts);
       setValue(`${prefix}.newQty`, "", opts);
       setValue(`${prefix}.oldRate`, "", opts);
@@ -818,7 +866,18 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
     setValue(`${prefix}.itemCode`, selected.itemCode || "", opts);
     setValue(`${prefix}.itemName`, selected.itemDescription || "", opts);
     setValue(`${prefix}.hsnSacCode`, selected.hsnSacCode || "", opts);
-    setValue(`${prefix}.unit`, selected.unit ?? "", opts);
+
+    // unit id (sent on save) + unit description (shown in the grid)
+    setValue(`${prefix}.unitName`, selected.unitDescription || "", opts);
+    setValue(
+      `${prefix}.unit`,
+      selected.unit !== null &&
+        selected.unit !== undefined &&
+        selected.unit !== ""
+        ? String(selected.unit)
+        : "",
+      opts,
+    );
 
     // current PO values become the "Old" values
     setValue(`${prefix}.oldQty`, selected.qty ?? "", opts);
@@ -970,11 +1029,6 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
   };
 
   const onSubmit = async (formData) => {
-    /*
-     * ------------------------------------------------------------
-     * VALIDATE DETAILS
-     * ------------------------------------------------------------
-     */
     const validDetails = (formData.details || []).filter(
       (detail) =>
         detail?.item !== "" &&
@@ -984,329 +1038,106 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
 
     if (!validDetails.length) {
       addToast("Add at least one PO detail item", "warning");
-
       setActiveTab("poDetail");
-
       return;
     }
 
-    /*
-     * ------------------------------------------------------------
-     * START SAVING
-     * ------------------------------------------------------------
-     */
     setSaving(true);
 
     try {
       const isUpdate = Boolean(data?.id);
 
-      /*
-       * ----------------------------------------------------------
-       * HEADER VALUES
-       * ----------------------------------------------------------
-       */
-
       const branch = Number(formData.branch || branchId);
-
       const customer = Number(formData.customer || 0);
-
       const currency = Number(currencyIdRef.current || 0);
-
       const exchangeRate = Number(formData.exchangeRate || 0);
-
-      /*
-       * ----------------------------------------------------------
-       * REQUIRED VALIDATIONS
-       * ----------------------------------------------------------
-       */
 
       if (!branch) {
         addToast("Branch is required", "warning");
-
-        setSaving(false);
         return;
       }
 
       if (!customer) {
         addToast("Customer is required", "warning");
-
-        setSaving(false);
         return;
       }
 
       if (!formData.poNo) {
         addToast("Purchase Order No is required", "warning");
-
-        setSaving(false);
         return;
       }
 
       if (!formData.amendmentNo) {
         addToast("Amendment No is required", "warning");
-
-        setSaving(false);
         return;
       }
 
       if (!formData.amendmentDate) {
         addToast("Amendment Date is required", "warning");
-
-        setSaving(false);
         return;
       }
 
-      /*
-       * ----------------------------------------------------------
-       * PURCHASE ORDER AMENDMENT DTO
-       * ----------------------------------------------------------
-       */
+      const financialYear =
+        localStorage.getItem("finYear") || String(new Date().getFullYear());
 
       const poAmendmentData = {
-        /*
-         * ID ONLY FOR UPDATE
-         */
-        ...(isUpdate
-          ? {
-              id: Number(data.id),
-            }
-          : {}),
+        ...(isUpdate ? { id: Number(data.id) } : {}),
 
-        /*
-         * ACTIVE
-         */
         active: formData.active !== false,
-
-        /*
-         * BELONGS TO
-         */
         belongsTo: formData.belongsTo || "Purchase",
-
-        /*
-         * BRANCH
-         */
         branch,
-
-        /*
-         * IMPORTANT:
-         *
-         * Your screen calls this:
-         *
-         * amendmentNo
-         *
-         * Backend amendment DTO needs the document ID.
-         */
         docId: formData.amendmentNo || "",
-
-        /*
-         * IMPORTANT:
-         *
-         * Your screen calls this:
-         *
-         * amendmentDate
-         *
-         * Backend amendment DTO needs document date.
-         */
         docDate: formData.amendmentDate || null,
-
-        /*
-         * CANCEL REMARKS
-         */
         cancelRemarks: data?.cancelRemarks || "",
-
-        /*
-         * CREATED BY
-         */
         createdBy:
           (isUpdate ? data?.createdBy : null) ||
           localStorage.getItem("usersId") ||
           loginUserName ||
           "SYSTEM",
-
-        /*
-         * CURRENCY
-         */
         currency,
-
-        /*
-         * CUSTOMER
-         */
         customer,
-
-        /*
-         * EXCHANGE RATE
-         */
         exchangeRate,
-
-        /*
-         * FREIGHT
-         */
+        financialYear,
         freightType: formData.freightType || "",
-
-        /*
-         * INSURANCE
-         */
         insuranceAmount: Number(formData.insuranceAmount || 0),
-
-        /*
-         * MODE OF DESPATCH
-         */
         modeOfDespatch: formData.modeOfDespatch || "",
-
-        /*
-         * ORGANIZATION
-         */
         orgId,
-
-        /*
-         * PACKING
-         */
         packingType: formData.packingType || "",
-
-        /*
-         * PURCHASE ORDER NUMBER
-         *
-         * IMPORTANT:
-         * Backend expects:
-         *
-         * purchaseordernumber
-         */
         purchaseordernumber: formData.poNo || "",
-
-        /*
-         * REFERENCE NUMBER
-         */
         refNo: formData.refNo || "",
-
-        /*
-         * REFERENCE DATE
-         */
         refDate: formData.refDate || null,
-
-        /*
-         * REMARKS
-         */
         remarks: formData.remarks || "",
-
-        /*
-         * REVISION NUMBER
-         */
         revisionNo: Number(formData.revisionNo || 1),
-
-        /*
-         * TAX DESCRIPTION
-         */
         taxDescription: formData.taxDescription || "",
 
-        /*
-         * --------------------------------------------------------
-         * DETAILS
-         * --------------------------------------------------------
-         */
         details: validDetails.map((item) => ({
-          /*
-           * Existing detail ID
-           * only during update.
-           */
-          ...(item.id
-            ? {
-                id: Number(item.id),
-              }
-            : {}),
-
-          /*
-           * ITEM
-           */
+          ...(item.id ? { id: Number(item.id) } : {}),
           item: Number(item.item),
-
-          /*
-           * UNIT
-           */
           unit:
             item.unit !== null && item.unit !== undefined && item.unit !== ""
               ? Number(item.unit)
               : null,
-
-          /*
-           * OLD QUANTITY
-           */
           oldQty: Number(item.oldQty || 0),
-
-          /*
-           * NEW QUANTITY
-           */
           newQty: Number(item.newQty || 0),
-
-          /*
-           * OLD RATE
-           */
           oldRate: Number(item.oldRate || 0),
-
-          /*
-           * NEW RATE
-           */
           newRate: Number(item.newRate || 0),
-
-          /*
-           * OLD DELIVERY DATE
-           */
           oldDeliveryDate: item.oldDeliveryDate || null,
-
-          /*
-           * NEW DELIVERY DATE
-           */
           newDeliveryDate: item.newDeliveryDate || null,
         })),
       };
 
-      /*
-       * ----------------------------------------------------------
-       * DEBUG DTO
-       * ----------------------------------------------------------
-       */
-
-      console.log("================================================");
-
-      console.log("PURCHASE ORDER AMENDMENT DTO");
-
-      console.log(JSON.stringify(poAmendmentData, null, 2));
-
-      console.log("================================================");
-
-      /*
-       * ----------------------------------------------------------
-       * CREATE MULTIPART FORM DATA
-       * ----------------------------------------------------------
-       */
-
       const formDataToSend = new FormData();
 
-      /*
-       * ----------------------------------------------------------
-       * DTO JSON BLOB
-       *
-       * IMPORTANT:
-       *
-       * Do not change this name unless
-       * backend controller uses another
-       * @RequestPart name.
-       * ----------------------------------------------------------
-       */
-
+      // Part name must match @RequestPart("purchaseOrderAmendment") exactly, including case.
       const dtoBlob = new Blob([JSON.stringify(poAmendmentData)], {
         type: "application/json",
       });
 
       formDataToSend.append(
-        "PurchaseOrderAmendmentDTO",
+        "purchaseOrderAmendment",
         dtoBlob,
         "poAmendmentDTO.json",
       );
-
-      /*
-       * ----------------------------------------------------------
-       * ATTACHMENTS
-       * ----------------------------------------------------------
-       */
 
       (formData.attachments || []).forEach((attachment) => {
         if (attachment?.file instanceof File) {
@@ -1314,56 +1145,8 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
         }
       });
 
-      /*
-       * ----------------------------------------------------------
-       * DEBUG FORMDATA
-       * ----------------------------------------------------------
-       */
-
-      console.log("================================================");
-
-      console.log("PURCHASE ORDER AMENDMENT MULTIPART DATA");
-
-      for (const [key, value] of formDataToSend.entries()) {
-        if (value instanceof File) {
-          console.log(key, "FILE:", value.name, value.type, value.size);
-        } else if (value instanceof Blob) {
-          console.log(key, "BLOB:", value.type, value.size);
-        } else {
-          console.log(key, value);
-        }
-      }
-
-      console.log("================================================");
-
-      /*
-       * ----------------------------------------------------------
-       * API CALL
-       * ----------------------------------------------------------
-       */
-
       const response =
         await purchaseOrderAmendmentAPI.createUpdate(formDataToSend);
-
-      /*
-       * ----------------------------------------------------------
-       * RESPONSE DEBUG
-       * ----------------------------------------------------------
-       */
-
-      console.log("================================================");
-
-      console.log("PURCHASE ORDER AMENDMENT RESPONSE");
-
-      console.log(response);
-
-      console.log("================================================");
-
-      /*
-       * ----------------------------------------------------------
-       * SUCCESS CHECK
-       * ----------------------------------------------------------
-       */
 
       const isSuccess =
         response?.status === true ||
@@ -1372,12 +1155,6 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
         response?.status === 200 ||
         response?.statusCode === 200 ||
         response?.statusFlag === "Ok";
-
-      /*
-       * ----------------------------------------------------------
-       * SUCCESS
-       * ----------------------------------------------------------
-       */
 
       if (isSuccess) {
         addToast(
@@ -1388,25 +1165,10 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
           "success",
         );
 
-        /*
-         * Reset form
-         */
         reset(getDefaultValues());
-
-        /*
-         * Go back to list
-         */
         onBack();
-
         return;
       }
-
-      /*
-       * ----------------------------------------------------------
-       * BACKEND RETURNED RESPONSE
-       * BUT IT WAS NOT SUCCESS
-       * ----------------------------------------------------------
-       */
 
       addToast(
         response?.message ||
@@ -1417,34 +1179,7 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
         "error",
       );
     } catch (error) {
-      /*
-       * ----------------------------------------------------------
-       * ERROR
-       * ----------------------------------------------------------
-       */
-
-      console.error("================================================");
-
-      console.error("PURCHASE ORDER AMENDMENT SAVE ERROR");
-
-      console.error("================================================");
-
-      console.error("Error:", error);
-
-      console.error("HTTP Status:", error?.response?.status);
-
-      console.error("Backend Response:", error?.response?.data);
-
-      console.error("Backend Message:", error?.response?.data?.message);
-
-      console.error("Backend Error:", error?.response?.data?.error);
-
-      console.error("================================================");
-
-      /*
-       * Try all common Spring response
-       * locations.
-       */
+      console.error("PO Amendment save error:", error?.response?.data || error);
 
       const backendMessage =
         error?.response?.data?.message ||
@@ -1458,12 +1193,6 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
 
       addToast(backendMessage, "error");
     } finally {
-      /*
-       * ----------------------------------------------------------
-       * STOP SAVING
-       * ----------------------------------------------------------
-       */
-
       setSaving(false);
     }
   };
@@ -1690,11 +1419,11 @@ const PurchaseOrderAmendmentForm = ({ data, onBack }) => {
                         readOnly
                         errors={errors}
                       />
-                      <SelectCell
+                      <InputCell
                         control={control}
-                        name={`details.${index}.unit`}
-                        options={unitOptions}
-                        disabled
+                        name={`details.${index}.unitName`}
+                        placeholder="Unit"
+                        readOnly
                         errors={errors}
                       />
                       <InputCell

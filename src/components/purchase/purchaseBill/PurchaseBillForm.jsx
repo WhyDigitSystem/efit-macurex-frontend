@@ -66,12 +66,105 @@ const idOf = (value) => {
   return value ?? "";
 };
 
+// Backend sends active as "Active" / "Inactive" (string) or true / false
+const activeOf = (value) =>
+  value !== false && value !== "Inactive" && value !== "false";
+
 // Works whether the API wrapper returns the raw envelope or an unwrapped array
 // envelope: { paramObjectsMap: { listValues: [{ id, valuesDescription }] } }
 const listValuesOf = (response) => {
   if (Array.isArray(response)) return response;
   const data = response?.data ?? response;
   return data?.paramObjectsMap?.listValues || [];
+};
+
+const isObj = (v) => v !== null && typeof v === "object";
+
+const norm = (v) =>
+  String(v ?? "")
+    .trim()
+    .toLowerCase();
+
+/* First value that is not undefined / null / "" */
+const pick = (...values) => {
+  for (const v of values) {
+    if (v !== undefined && v !== null && v !== "") return v;
+  }
+  return "";
+};
+
+const isYes = (v) =>
+  v === true || ["true", "yes"].includes(String(v).toLowerCase());
+
+/* Converts "2026-09-01T00:00:00", "01-09-2026", "01/09/2026" -> "2026-09-01" */
+const toDateInput = (v) => {
+  const text = String(v ?? "").trim();
+  if (!text) return "";
+  if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
+  const dmy = text.match(/^(\d{2})[-/](\d{2})[-/](\d{4})/);
+  if (dmy) return `${dmy[3]}-${dmy[2]}-${dmy[1]}`;
+  return "";
+};
+
+/*
+ * Make sure a saved value is always visible in a <select>, even when it is
+ * not (yet) one of the options (options still loading, already-billed GRN,
+ * name vs id ...).
+ */
+const withCurrent = (options, value) => {
+  const list = options || [];
+  if (value === "" || value === null || value === undefined) return list;
+  const exists = list.some(
+    (o) => String(isObj(o) ? o.value : o) === String(value),
+  );
+  return exists ? list : [...list, { value, label: String(value) }];
+};
+
+/* Find an array on the record by exact key first, then by key pattern */
+const findArray = (d, exactKeys, test) => {
+  for (const key of exactKeys) {
+    if (Array.isArray(d[key]) && d[key].length) return d[key];
+  }
+  const found = Object.keys(d).find(
+    (key) => test(key) && Array.isArray(d[key]) && d[key].length,
+  );
+  return found ? d[found] : [];
+};
+
+/*
+ * getPurchaseBillById returns { status, paramObjectsMap: { <someVO>: {...} } }.
+ * The key is not known for sure, so try the likely ones and otherwise take the
+ * first object / array found in paramObjectsMap.
+ */
+const billFrom = (response) => {
+  const data = response?.data ?? response;
+  const map = data?.paramObjectsMap || response?.paramObjectsMap;
+
+  if (!map) return isObj(data) && data.id ? data : null;
+
+  let record =
+    map.purchaseBillVO ??
+    map.purchaseBill ??
+    map.purchaseBillDTO ??
+    map.purchaseBillList ??
+    map.mapp ??
+    Object.values(map).find((v) => isObj(v));
+
+  if (Array.isArray(record)) record = record[0];
+
+  return isObj(record) ? record : null;
+};
+
+// Make sure an already-saved value is still selectable even if the dropdown
+// API no longer returns it (e.g. a GRN / item that is already billed).
+const withSavedOption = (options, value, label) => {
+  if (value === "" || value === null || value === undefined) return options;
+  const exists = (options || []).some(
+    (opt) => String(opt.value) === String(value),
+  );
+  return exists
+    ? options
+    : [{ value, label: label || String(value) }, ...(options || [])];
 };
 
 /* ---- Local tax grid: debit / credit ---- */
@@ -221,7 +314,7 @@ const Field = ({
           className={`${controlClasses} ${error ? "border-red-500" : ""}`}
         >
           <option value="">-- Select --</option>
-          {(options || []).map((opt) => (
+          {withCurrent(options, value).map((opt) => (
             <option
               key={typeof opt === "object" ? opt.value : opt}
               value={typeof opt === "object" ? opt.value : opt}
@@ -370,7 +463,7 @@ const SelectCell = ({ value, onChange, options, disabled = false }) => (
       className={cellInputClasses}
     >
       <option value="">Select</option>
-      {(options || []).map((opt) => (
+      {withCurrent(options, value).map((opt) => (
         <option
           key={typeof opt === "object" ? opt.value : opt}
           value={typeof opt === "object" ? opt.value : opt}
@@ -529,9 +622,10 @@ const BILL_TYPE_OPTIONS = ["Local", "Import"];
 const YES_NO = ["Yes", "No"];
 
 const STATUTORY_FORM_OPTIONS = [
-  { value: 1, label: "Form A" },
-  { value: 2, label: "Form B" },
-  { value: 3, label: "Form C" },
+  { value: 1, label: "Form-C" },
+  { value: 2, label: "Form-F" },
+  { value: 3, label: "Form-H" },
+  { value: 4, label: "NA" },
 ];
 
 // Import tax grid
@@ -573,6 +667,7 @@ const emptyLocalDetailRow = () => ({
   rateInInr: "",
   landedCostRate: "",
   additionalDuty: "",
+  exciseToPost: false,
   // computed / preview only (server recalculates authoritatively)
   shortageQty: 0,
   rateInSelectedCurrency: 0,
@@ -623,6 +718,7 @@ const emptyTaxRow = () => ({
 
 const emptyImportTaxRow = () => ({
   _rowId: ++rowSeq,
+  id: 0,
   particulars: "",
   tax: "",
   taxval1: "",
@@ -707,6 +803,315 @@ const getDefaultValues = () => ({
 });
 
 /* ========================================================================= */
+/* BUILDERS - turn a saved bill (getPurchaseBillById / list row) into state  */
+/* ========================================================================= */
+
+// Arrays are looked up by exact key first, then by key pattern, so a slightly
+// different key name in the by-id response still fills the grids.
+const localRowsOf = (d) =>
+  findArray(
+    d,
+    ["purchaseDetails", "purchaseBillDetails"],
+    (k) => /detail/i.test(k) && /purchase|bill/i.test(k) && !/import/i.test(k),
+  );
+
+const importRowsOf = (d) =>
+  findArray(
+    d,
+    ["importPurchaseDetails"],
+    (k) => /import/i.test(k) && /detail/i.test(k),
+  );
+
+const localTaxOf = (d) =>
+  findArray(d, ["taxGrid"], (k) => /tax/i.test(k) && !/import/i.test(k));
+
+const importTaxOf = (d) =>
+  findArray(
+    d,
+    ["importPurchaseTax"],
+    (k) => /import/i.test(k) && /tax/i.test(k),
+  );
+
+const localChargeOf = (d) =>
+  findArray(
+    d,
+    ["billChargesSummaryDTO"],
+    (k) => /charge/i.test(k) && !/import/i.test(k),
+  )[0];
+
+const importChargeOf = (d) =>
+  findArray(
+    d,
+    ["importBillChargesSummaryDTO"],
+    (k) => /import/i.test(k) && /charge/i.test(k),
+  )[0];
+
+const isImportBill = (d) => importRowsOf(d || {}).length > 0;
+
+// By-id record merged over the list row: by-id wins, the list row fills gaps.
+const mergeRecords = (listRow, record) => {
+  const clean = Object.fromEntries(
+    Object.entries(record || {}).filter(
+      ([, v]) =>
+        v !== null && v !== undefined && !(Array.isArray(v) && v.length === 0),
+    ),
+  );
+  return { ...(listRow || {}), ...clean };
+};
+
+const buildFormData = (bill, fallbackBranch) => {
+  const b = bill || {};
+
+  const supplierObj = isObj(b.supplier) ? b.supplier : {};
+  const supplierPrimitive = isObj(b.supplier) ? "" : b.supplier;
+
+  const gstStateObj = isObj(supplierObj.gstState)
+    ? supplierObj.gstState
+    : isObj(b.gstState)
+      ? b.gstState
+      : {};
+
+  const charge = localChargeOf(b) || {};
+  const impCharge = importChargeOf(b) || {};
+
+  return {
+    ...getDefaultValues(),
+
+    active: activeOf(b.active),
+
+    branch: String(pick(idOf(b.branch), b.branchId, fallbackBranch, "")),
+
+    billType: isImportBill(b) ? "Import" : "Local",
+
+    supplierCode: pick(
+      supplierObj.supplierId,
+      supplierObj.id,
+      supplierPrimitive,
+      typeof b.supplierCode === "string" ? b.supplierCode : "",
+    ),
+    supplierLabel: String(
+      pick(
+        supplierObj.supplierCode,
+        typeof b.supplierCode === "string" ? b.supplierCode : "",
+      ),
+    ),
+    supplierName: String(pick(b.supplierName, supplierObj.supplierName)),
+    gstnNo: String(pick(b.gstnNo, b.gstNo, supplierObj.gstNo)),
+    supplierState: String(
+      pick(b.supplierState, gstStateObj.stateName, b.gstStateName),
+    ),
+
+    belongsTo: String(pick(b.belongsTo)),
+    docDate: toDateInput(pick(b.docDate, b.invDate)) || todayISO(),
+
+    grnNo: String(pick(b.grnNo)),
+    grnDate: toDateInput(b.grnDate),
+
+    currency: String(pick(idOf(b.currency), b.currencyId)),
+    exchangeRate: b.exchangeRate ?? 1,
+
+    vendorDcNo: String(pick(b.vendorDcNo)),
+    supplierDcInvNo: String(pick(b.supplierDcInvNo)),
+    supplierDcInvDate: toDateInput(b.supplierDcInvDate),
+
+    purchaseorderNumber: String(pick(b.purchaseorderNo, b.purchaseorderNumber)),
+    purchaseorderDate: toDateInput(b.purchaseorderDate),
+    purchaseorderType: String(pick(b.purchaseorderType)),
+
+    modvatCopyReceived: isYes(b.modvatCopyReceived) ? "Yes" : "No",
+
+    excisable: isYes(b.excisable),
+    reverseChrg: isYes(pick(b.reverseChrg, b.isReverseCharge)) ? "Yes" : "No",
+    // list / by-id response key is "igstAppl"
+    igstApplicable: isYes(
+      pick(b.igstAppl, b.igstApplicable, b.isIgstApplicable),
+    )
+      ? "Yes"
+      : "No",
+
+    dealerType: typeof b.dealerType === "string" ? b.dealerType : "",
+    eccTypeCode: String(
+      pick(typeof b.eccType === "string" ? b.eccType : "", supplierObj.eccType),
+    ),
+    postingCategory: String(pick(idOf(b.postingCategory))),
+
+    voucherPostingDate: toDateInput(b.voucherPostingDate),
+    date: toDateInput(b.date),
+    dutyPerUnit: b.dutyPerUnit ?? 0,
+
+    creditAcc: String(pick(b.creditAcc)),
+    taxStructureName: String(pick(b.taxStructureName, "Import Purchases")),
+    statutoryForms: String(pick(idOf(b.statutoryForms))),
+    supplierInvValue: String(pick(b.supplierInvValue)),
+
+    financialYear: String(pick(b.financialYear, new Date().getFullYear())),
+
+    cancelRemarks: String(pick(b.cancelRemarks)),
+
+    totalFreight: charge.totalFreight ?? 0,
+    entryTaxApplicable: isYes(charge.entryTaxApplicable) ? "Yes" : "No",
+    narration: String(pick(charge.narration, impCharge.narration)),
+    paymentTerms: String(pick(charge.paymentTerms)),
+
+    totFriInsFc: impCharge.totFriInsFc ?? 0,
+    totFreInsInr: impCharge.totFreInsInr ?? 0,
+    postVoucher: isYes(impCharge.postVoucher) ? "Yes" : "No",
+
+    id: b.id,
+    createdBy: b.createdBy,
+  };
+};
+
+const buildLocalRows = (bill) => {
+  const raw = localRowsOf(bill || {});
+  if (!raw.length) return [emptyLocalDetailRow()];
+
+  return raw.map((row) => {
+    const itemObj = isObj(row.item) ? row.item : {};
+    const hsnObj = isObj(itemObj.hsn)
+      ? itemObj.hsn
+      : isObj(row.hsnCode)
+        ? row.hsnCode
+        : {};
+    const unitObj = isObj(itemObj.unit)
+      ? itemObj.unit
+      : isObj(row.unit)
+        ? row.unit
+        : {};
+
+    return {
+      ...emptyLocalDetailRow(),
+      id: row.id ?? 0,
+
+      item: isObj(row.item) ? (row.item.id ?? "") : pick(row.item, row.itemId),
+      itemCode: String(
+        pick(
+          itemObj.itemCode,
+          typeof row.itemCode === "string" ? row.itemCode : "",
+        ),
+      ),
+      itemDescription: String(
+        pick(itemObj.itemDescription, row.itemDescription, row.itemdesc),
+      ),
+
+      hsnCode: pick(hsnObj.id),
+      hsnCodeLabel: String(
+        pick(
+          hsnObj.hsn,
+          hsnObj.value,
+          typeof row.hsnCode === "string" ? row.hsnCode : "",
+        ),
+      ),
+      unit: pick(unitObj.id),
+      unitLabel: String(pick(unitObj.unitId, unitObj.value, row.unitLabel)),
+
+      taxType: String(pick(row.taxType)),
+      taxPercent: row.taxPercent ?? "",
+      cgstRate: row.cgstRate ?? "",
+      sgstRate: row.sgstRate ?? "",
+      igstRate: row.igstRate ?? "",
+
+      challanQty: row.challanQty ?? "",
+      grnReceivedQty: row.grnReceivedQty ?? "",
+      acceptedQty: row.acceptedQty ?? "",
+      rejectedQty: row.rejectedQty ?? "",
+      purchaseorderQty: row.purchaseorderQty ?? "",
+      purchaseorderRate: row.purchaseorderRate ?? "",
+      rateInInr: row.rateInInr ?? "",
+      landedCostRate: row.landedCostRate ?? "",
+      additionalDuty: row.additionalDuty ?? "",
+      exciseToPost: isYes(row.exciseToPost),
+
+      shortageQty: row.shortageQty ?? 0,
+      rateInSelectedCurrency: row.rateInSelectedCurrency ?? 0,
+      amount: row.amount ?? 0,
+      amountInSelectedCurrency: row.amountInSelectedCurrency ?? 0,
+      amountInInr: row.amountInInr ?? 0,
+      cgstAmount: row.cgstAmount ?? 0,
+      sgstAmount: row.sgstAmount ?? 0,
+      igstAmount: row.igstAmount ?? 0,
+    };
+  });
+};
+
+const buildImportRows = (bill) => {
+  const raw = importRowsOf(bill || {});
+  if (!raw.length) return [emptyImportDetailRow()];
+
+  return raw.map((row) => {
+    const itemObj = isObj(row.item) ? row.item : {};
+
+    return {
+      ...emptyImportDetailRow(),
+      id: row.id ?? 0,
+
+      item: isObj(row.item) ? (row.item.id ?? "") : pick(row.item, row.itemId),
+      itemCode: String(
+        pick(
+          itemObj.itemCode,
+          typeof row.itemCode === "string" ? row.itemCode : "",
+        ),
+      ),
+      itemDescription: String(
+        pick(itemObj.itemDescription, row.itemDescription),
+      ),
+
+      challanQty: row.challanQty ?? "",
+      grnQty: row.grnQty ?? "",
+      accptQty: row.accptQty ?? "",
+      fobRateFc: row.fobRateFc ?? "",
+      dutyAmtInr: row.dutyAmtInr ?? "",
+
+      shortageQty: row.shortageQty ?? 0,
+      fobValueFc: row.fobValueFc ?? 0,
+      fobValueInr: row.fobValueInr ?? 0,
+      valueFc: row.valueFc ?? 0,
+      valueInr: row.valueInr ?? 0,
+      landCostInr: row.landCostInr ?? 0,
+    };
+  });
+};
+
+const buildTaxRows = (bill) => {
+  const raw = localTaxOf(bill || {});
+  if (!raw.length) return [emptyTaxRow()];
+
+  return raw.map((row) => ({
+    ...emptyTaxRow(),
+    id: row.id ?? 0,
+    particulars: String(pick(row.particulars)),
+    taxPercent: pick(row.taxPercent, row.taxPerc, row.tax),
+    acceptedQtyAmount: pick(row.acceptedQtyAmount, row.acceptedAmt),
+    revisedAmount: pick(row.revisedAmount, row.revisedAmt),
+    ledgerAccount: String(pick(row.ledgerAccount, row.ledgerAcName)),
+    debitCredit: normalizeDrCr(row.debitCredit),
+    debitAmount: row.debitAmount ?? "",
+    creditAmount: row.creditAmount ?? "",
+    postToFinanceAc: isYes(row.postToFinanceAc),
+    // saved GST rows get replaced by fresh auto rows once items change
+    auto: /gst/i.test(row.particulars || ""),
+    revisedEdited: true,
+  }));
+};
+
+const buildImportTaxRows = (bill) => {
+  const raw = importTaxOf(bill || {});
+  if (!raw.length) return [emptyImportTaxRow()];
+
+  return raw.map((row) => ({
+    ...emptyImportTaxRow(),
+    id: row.id ?? 0,
+    particulars: String(pick(row.particulars)),
+    tax: row.tax ?? "",
+    taxval1: row.taxval1 ?? "",
+    taxAmount: row.taxAmount ?? "",
+    dbCr: String(pick(row.dbCr)),
+    glSubledger: String(pick(row.glSubledger)),
+    taxvalEdited: true, // respect saved Taxable Value
+  }));
+};
+
+/* ========================================================================= */
 /* COMPONENT                                                                 */
 /* ========================================================================= */
 
@@ -724,147 +1129,30 @@ const PurchaseBillForm = ({ onBack, onSave, editData }) => {
 
   /* ----------------------------------------------------------------------- */
   /* FORM STATE                                                              */
+  /* Edit mode starts from the list row so something shows immediately, then */
+  /* the full bill from getPurchaseBillById replaces it (see effect below).  */
   /* ----------------------------------------------------------------------- */
 
-  const [formData, setFormData] = useState(() => ({
-    ...getDefaultValues(),
-    branch: String(idOf(editData?.branch) || BRANCH_ID || ""),
-
-    billType: editData?.importPurchaseDetails?.length ? "Import" : "Local",
-
-    supplierCode: idOf(editData?.supplier),
-    supplierName: editData?.supplier?.supplierName || "",
-    gstnNo: editData?.supplier?.gstNo || "",
-    supplierState: editData?.supplier?.gstState?.stateName || "",
-
-    belongsTo: editData?.belongsTo || "",
-    docDate: editData?.docDate || todayISO(),
-
-    grnNo: editData?.grnNo || "",
-    grnDate: editData?.grnDate || "",
-
-    currency: idOf(editData?.currency),
-    exchangeRate: editData?.exchangeRate ?? 1,
-
-    vendorDcNo: editData?.vendorDcNo || "",
-    supplierDcInvNo: editData?.supplierDcInvNo || "",
-    supplierDcInvDate: editData?.supplierDcInvDate || "",
-
-    purchaseorderNumber:
-      editData?.purchaseorderNo || editData?.purchaseorderNumber || "",
-    purchaseorderDate: editData?.purchaseorderDate || "",
-    purchaseorderType: editData?.purchaseorderType || "",
-
-    modvatCopyReceived: editData?.modvatCopyReceived ? "Yes" : "No",
-
-    excisable: Boolean(editData?.excisable),
-    reverseChrg: editData?.reverseChrg ? "Yes" : "No",
-    // list response key is "igstAppl"
-    igstApplicable:
-      (editData?.igstAppl ?? editData?.igstApplicable) ? "Yes" : "No",
-
-    dealerType:
-      typeof editData?.dealerType === "string" ? editData.dealerType : "",
-    eccTypeCode: editData?.eccType || editData?.supplier?.eccType || "",
-    postingCategory: String(idOf(editData?.postingCategory) || ""),
-
-    creditAcc: editData?.creditAcc || "",
-    taxStructureName: editData?.taxStructureName || "Import Purchases",
-    statutoryForms: editData?.statutoryForms || "",
-    supplierInvValue: editData?.supplierInvValue || "",
-
-    financialYear: editData?.financialYear || String(new Date().getFullYear()),
-
-    cancelRemarks: editData?.cancelRemarks || "",
-
-    totalFreight: editData?.billChargesSummaryDTO?.[0]?.totalFreight ?? 0,
-    entryTaxApplicable: editData?.billChargesSummaryDTO?.[0]?.entryTaxApplicable
-      ? "Yes"
-      : "No",
-    narration:
-      editData?.billChargesSummaryDTO?.[0]?.narration ||
-      editData?.importBillChargesSummaryDTO?.[0]?.narration ||
-      "",
-    paymentTerms: editData?.billChargesSummaryDTO?.[0]?.paymentTerms || "",
-
-    totFriInsFc: editData?.importBillChargesSummaryDTO?.[0]?.totFriInsFc ?? 0,
-    totFreInsInr: editData?.importBillChargesSummaryDTO?.[0]?.totFreInsInr ?? 0,
-    postVoucher: editData?.importBillChargesSummaryDTO?.[0]?.postVoucher
-      ? "Yes"
-      : "No",
-
-    id: editData?.id,
-    createdBy: editData?.createdBy,
-  }));
+  const [formData, setFormData] = useState(() =>
+    buildFormData(isEditMode ? editData : null, BRANCH_ID),
+  );
 
   const effectiveBranchId = toInteger(formData.branch || BRANCH_ID);
 
-  const [localDetailRows, setLocalDetailRows] = useState(
-    editData?.purchaseDetails?.length
-      ? editData.purchaseDetails.map((row) => ({
-          ...emptyLocalDetailRow(),
-          id: row.id,
-          item: idOf(row.item),
-          itemCode: row.item?.itemCode || "",
-          itemDescription: row.item?.itemDescription || "",
-          hsnCode: idOf(row.item?.hsn) || row.hsnCode || "",
-          unit: idOf(row.item?.unit),
-          taxType: row.taxType || "",
-          taxPercent: row.taxPercent ?? "",
-          cgstRate: row.cgstRate ?? "",
-          sgstRate: row.sgstRate ?? "",
-          igstRate: row.igstRate ?? "",
-          challanQty: row.challanQty ?? "",
-          grnReceivedQty: row.grnReceivedQty ?? "",
-          acceptedQty: row.acceptedQty ?? "",
-          rejectedQty: row.rejectedQty ?? "",
-          purchaseorderQty: row.purchaseorderQty ?? "",
-          purchaseorderRate: row.purchaseorderRate ?? "",
-          rateInInr: row.rateInInr ?? "",
-          landedCostRate: row.landedCostRate ?? "",
-          additionalDuty: row.additionalDuty ?? "",
-        }))
-      : [emptyLocalDetailRow()],
+  const [localDetailRows, setLocalDetailRows] = useState(() =>
+    buildLocalRows(isEditMode ? editData : null),
   );
 
-  const [importDetailRows, setImportDetailRows] = useState(
-    editData?.importPurchaseDetails?.length
-      ? editData.importPurchaseDetails.map((row) => ({
-          ...emptyImportDetailRow(),
-          id: row.id,
-          item: idOf(row.item),
-          itemCode: row.item?.itemCode || "",
-          itemDescription: row.item?.itemDescription || "",
-          challanQty: row.challanQty ?? "",
-          grnQty: row.grnQty ?? "",
-          accptQty: row.accptQty ?? "",
-          fobRateFc: row.fobRateFc ?? "",
-          dutyAmtInr: row.dutyAmtInr ?? "",
-        }))
-      : [emptyImportDetailRow()],
+  const [importDetailRows, setImportDetailRows] = useState(() =>
+    buildImportRows(isEditMode ? editData : null),
   );
 
-  const [taxRows, setTaxRows] = useState(
-    editData?.taxGrid?.length
-      ? editData.taxGrid.map((row) => ({
-          ...emptyTaxRow(),
-          ...row,
-          debitCredit: normalizeDrCr(row.debitCredit),
-          // saved GST rows get replaced by fresh auto rows once items change
-          auto: /gst/i.test(row.particulars || ""),
-          revisedEdited: true,
-        }))
-      : [emptyTaxRow()],
+  const [taxRows, setTaxRows] = useState(() =>
+    buildTaxRows(isEditMode ? editData : null),
   );
 
-  const [importTaxRows, setImportTaxRows] = useState(
-    editData?.importPurchaseTax?.length
-      ? editData.importPurchaseTax.map((row) => ({
-          ...emptyImportTaxRow(),
-          ...row,
-          taxvalEdited: true, // respect saved Taxable Value
-        }))
-      : [emptyImportTaxRow()],
+  const [importTaxRows, setImportTaxRows] = useState(() =>
+    buildImportTaxRows(isEditMode ? editData : null),
   );
 
   /* ----------------------------------------------------------------------- */
@@ -883,11 +1171,79 @@ const PurchaseBillForm = ({ onBack, onSave, editData }) => {
 
   const [fieldErrors, setFieldErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loadingBill, setLoadingBill] = useState(isEditMode);
+
+  // bumped after the by-id record is applied so the resolve effect re-runs
+  const [hydrationKey, setHydrationKey] = useState(0);
   const [generatingDocId, setGeneratingDocId] = useState(false);
   const [docId, setDocId] = useState(editData?.docId || "");
 
   const isLocal = formData.billType === "Local";
   const isImport = formData.billType === "Import";
+
+  /* ========================================================================= */
+  /* EDIT MODE: LOAD FULL BILL BY ID                                           */
+  /* GET /api/purchasedeliveryschedule/getPurchaseBillById?id=...              */
+  /* ========================================================================= */
+
+  useEffect(() => {
+    if (!isEditMode) return;
+
+    let cancelled = false;
+
+    const loadBill = async () => {
+      setLoadingBill(true);
+      try {
+        const response = await purchaseBillAPI.getPurchaseBillById(editData.id);
+
+        console.log("Purchase bill by id:", response);
+
+        const record = billFrom(response);
+
+        if (cancelled) return;
+
+        if (!record) {
+          addToast(
+            "Could not read bill details, showing list data instead",
+            "error",
+          );
+          return;
+        }
+
+        console.log("Purchase bill record (raw):", record);
+
+        // by-id data wins; the list row fills anything the by-id leaves out
+        const bill = mergeRecords(editData, record);
+
+        // keep auto tax-grid sync off: saved tax rows must stay as saved
+        taxAutoEnabled.current = false;
+
+        setFormData(buildFormData(bill, BRANCH_ID));
+        setLocalDetailRows(buildLocalRows(bill));
+        setImportDetailRows(buildImportRows(bill));
+        setTaxRows(buildTaxRows(bill));
+        setImportTaxRows(buildImportTaxRows(bill));
+        setDocId(String(pick(bill.docId, editData?.docId)));
+
+        // re-run "resolve saved values against dropdown options"
+        setHydrationKey((key) => key + 1);
+      } catch (error) {
+        if (!cancelled) {
+          console.error("Failed to load purchase bill by id:", error);
+          addToast("Failed to load purchase bill details", "error");
+        }
+      } finally {
+        if (!cancelled) setLoadingBill(false);
+      }
+    };
+
+    loadBill();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditMode, editData?.id]);
 
   /* ========================================================================= */
   /* MASTER DATA LOADERS                                                       */
@@ -972,8 +1328,6 @@ const PurchaseBillForm = ({ onBack, onSave, editData }) => {
   }, [ORG_ID]);
 
   // GET /api/commonmaster/currency?orgid=... -> paramObjectsMap.currencyVO
-  // Normally the currency is auto-filled from the selected GRN, but this
-  // lets the user see/pick it manually too (e.g. before a GRN is chosen).
   const loadCurrencies = useCallback(async () => {
     try {
       if (!ORG_ID) return;
@@ -1056,8 +1410,12 @@ const PurchaseBillForm = ({ onBack, onSave, editData }) => {
 
         const list = data?.paramObjectsMap?.grnList || [];
 
+        const uniqueGrnList = Array.from(
+          new Map(list.map((grn) => [String(grn.grnNo), grn])).values(),
+        );
+
         setGrnOptions(
-          list.map((grn) => ({
+          uniqueGrnList.map((grn) => ({
             value: grn.grnNo,
             label: grn.grnNo,
 
@@ -1227,6 +1585,145 @@ const PurchaseBillForm = ({ onBack, onSave, editData }) => {
     effectiveBranchId,
   ]);
 
+  // The saved GRN / supplier must stay visible in edit mode even when the
+  // dropdown APIs no longer list them (already billed).
+  const grnSelectOptions = useMemo(
+    () => withSavedOption(grnOptions, formData.grnNo, formData.grnNo),
+    [grnOptions, formData.grnNo],
+  );
+
+  const supplierSelectOptions = useMemo(
+    () =>
+      withSavedOption(
+        supplierOptions,
+        formData.supplierCode,
+        formData.supplierLabel || String(formData.supplierCode),
+      ),
+    [supplierOptions, formData.supplierCode, formData.supplierLabel],
+  );
+
+  /* ========================================================================= */
+  /* EDIT: RESOLVE SAVED VALUES AGAINST LOADED OPTIONS                         */
+  /*                                                                           */
+  /* The saved bill may carry a code / name where the dropdown uses an id (or  */
+  /* the reverse). Match by label, swap in the option value, and fill header   */
+  /* fields that are still empty from the supplier / GRN lists. Only empty or  */
+  /* unmatched values are touched, so user edits are kept.                     */
+  /* ========================================================================= */
+
+  useEffect(() => {
+    if (!isEditMode || loadingBill) return;
+
+    setFormData((previous) => {
+      let next = previous;
+
+      const set = (field, value) => {
+        if (next === previous) next = { ...previous };
+        next[field] = value;
+      };
+
+      const resolve = (field, options, extraKeys = []) => {
+        const current = previous[field];
+
+        if (current === "" || current === null || current === undefined) return;
+        if (!options.length) return;
+        if (options.some((o) => String(o.value) === String(current))) return;
+
+        const match = options.find((o) =>
+          [o.label, ...extraKeys.map((k) => o[k])]
+            .filter(Boolean)
+            .some((text) => norm(text) === norm(current)),
+        );
+
+        if (match) set(field, match.value);
+      };
+
+      resolve("branch", branchOptions);
+      resolve("currency", currencyOptions);
+      resolve("postingCategory", postingCategoryOptions);
+      resolve("statutoryForms", STATUTORY_FORM_OPTIONS);
+
+      /* ---- Supplier: match by id, then by code / name ---- */
+      if (supplierOptions.length && previous.supplierCode !== "") {
+        const supplier =
+          supplierOptions.find(
+            (o) => String(o.value) === String(previous.supplierCode),
+          ) ||
+          supplierOptions.find(
+            (o) =>
+              (previous.supplierLabel &&
+                norm(o.supplierCode) === norm(previous.supplierLabel)) ||
+              norm(o.supplierCode) === norm(previous.supplierCode) ||
+              (previous.supplierName &&
+                norm(o.supplierName) === norm(previous.supplierName)),
+          );
+
+        if (supplier) {
+          if (String(supplier.value) !== String(previous.supplierCode)) {
+            set("supplierCode", supplier.value);
+          }
+          if (!previous.supplierName && supplier.supplierName) {
+            set("supplierName", supplier.supplierName);
+          }
+          if (!previous.gstnNo && supplier.gstNo) {
+            set("gstnNo", supplier.gstNo);
+          }
+          if (!previous.supplierState && supplier.stateName) {
+            set("supplierState", supplier.stateName);
+          }
+          if (!previous.dealerType) {
+            set(
+              "dealerType",
+              supplier.isRegistered ? "Registered" : "Unregistered",
+            );
+          }
+          if (!previous.eccTypeCode && supplier.eccType) {
+            set("eccTypeCode", supplier.eccType);
+          }
+        }
+      }
+
+      /* ---- GRN: fill header fields the saved bill left empty ---- */
+      if (grnOptions.length && previous.grnNo) {
+        const grn = grnOptions.find(
+          (o) => String(o.value) === String(previous.grnNo),
+        );
+
+        if (grn) {
+          const fillEmpty = (field, value) => {
+            if (
+              (previous[field] === "" || previous[field] === null) &&
+              value !== "" &&
+              value !== null &&
+              value !== undefined
+            ) {
+              set(field, value);
+            }
+          };
+
+          fillEmpty("grnDate", toDateInput(grn.grnDate));
+          fillEmpty("purchaseorderNumber", grn.poNo);
+          fillEmpty("purchaseorderType", grn.poType);
+          fillEmpty("vendorDcNo", grn.vendorDcNo);
+          fillEmpty("supplierDcInvNo", grn.supplierDcInvNo);
+          fillEmpty("supplierDcInvDate", toDateInput(grn.supplierDcInvDate));
+          fillEmpty("currency", grn.currency);
+        }
+      }
+
+      return next;
+    });
+  }, [
+    isEditMode,
+    loadingBill,
+    hydrationKey,
+    branchOptions,
+    currencyOptions,
+    postingCategoryOptions,
+    supplierOptions,
+    grnOptions,
+  ]);
+
   /* ========================================================================= */
   /* DOCUMENT NUMBER                                                           */
   /* ========================================================================= */
@@ -1341,9 +1838,8 @@ const PurchaseBillForm = ({ onBack, onSave, editData }) => {
           : "",
         // supplier's ECC type, e.g. "Manufacturer"
         eccTypeCode: selected?.eccType || "",
-        // Registered supplier -> IGST does NOT necessarily apply; this mirrors
-        // the same convention used on the Purchase Order form (isRegistered
-        // flag driving the IGST toggle) so behaviour stays consistent.
+        // Same convention as the Purchase Order form (isRegistered flag
+        // driving the IGST toggle) so behaviour stays consistent.
         igstApplicable: selected?.isRegistered ? "Yes" : "No",
         grnNo: "",
         grnDate: "",
@@ -1400,6 +1896,8 @@ const PurchaseBillForm = ({ onBack, onSave, editData }) => {
   const calculateLocalRow = (row, changedKey, changedValue) => {
     let updated = { ...row, [changedKey]: changedValue };
 
+    // Only a real item change pulls values from the dropdown. Recalculations
+    // pass a different key, so saved quantities are never overwritten.
     if (changedKey === "item") {
       const selectedItem = itemOptions.find(
         (item) => String(item.value) === String(changedValue),
@@ -1476,11 +1974,14 @@ const PurchaseBillForm = ({ onBack, onSave, editData }) => {
     );
   };
 
-  // Recalculate all rows if exchange rate or IGST-applicable flag changes
+  // Recalculate all rows if exchange rate or IGST-applicable flag changes.
+  // Uses a non-"item" key so quantities / rates already on the row are kept.
   useEffect(() => {
     if (!isLocal) return;
     setLocalDetailRows((prev) =>
-      prev.map((row) => calculateLocalRow(row, "item", row.item)),
+      prev.map((row) =>
+        calculateLocalRow(row, "purchaseorderQty", row.purchaseorderQty),
+      ),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.exchangeRate, formData.igstApplicable, isLocal]);
@@ -1560,7 +2061,7 @@ const PurchaseBillForm = ({ onBack, onSave, editData }) => {
   useEffect(() => {
     if (!isImport) return;
     setImportDetailRows((prev) =>
-      prev.map((row) => calculateImportRow(row, "item", row.item)),
+      prev.map((row) => calculateImportRow(row, "grnQty", row.grnQty)),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.exchangeRate, isImport]);
@@ -2012,9 +2513,8 @@ const PurchaseBillForm = ({ onBack, onSave, editData }) => {
         // Backend does not yet map dealerType/eccType onto the entity
         // (see PurchaseDeliverySchServiceImpl#createUpdatePurchaseBillVOByPurchaseBillDTO),
         // so these are informational only for now - send a safe numeric
-        // guess for dealerType and null for eccType (a string label with
-        // no id lookup available) rather than a value that could fail
-        // Jackson deserialization.
+        // guess for dealerType and null for eccType rather than a value
+        // that could fail Jackson deserialization.
         dealerType: formData.dealerType === "Registered" ? 1 : 2,
         docDate: formData.docDate || todayISO(),
         dutyPerUnit: toNumber(formData.dutyPerUnit),
@@ -2067,8 +2567,10 @@ const PurchaseBillForm = ({ onBack, onSave, editData }) => {
           "success",
         );
 
-        if (onSave)
-          onSave(response?.paramObjectsMap?.purchaseBillVO || payload);
+        onSave?.(response?.paramObjectsMap?.purchaseBillVO || payload);
+
+        // go back to the list (it reloads on mount, so the new bill shows up)
+        onBack?.();
       } else {
         const errorMessage =
           response?.paramObjectsMap?.errorMessage ||
@@ -2120,8 +2622,18 @@ const PurchaseBillForm = ({ onBack, onSave, editData }) => {
   /* GRID COLUMNS                                                              */
   /* ========================================================================= */
 
+  // keeps the saved item selectable in edit mode even if the dropdown
+  // no longer lists it
+  const itemOptionsFor = (row) =>
+    withSavedOption(itemOptions, row.item, row.itemCode);
+
   const localDetailColumns = [
-    { key: "item", label: "Item Code *", type: "select", options: itemOptions },
+    {
+      key: "item",
+      label: "Item Code *",
+      type: "select",
+      options: (row) => itemOptionsFor(row),
+    },
     {
       key: "itemDescription",
       label: "Item Description",
@@ -2228,7 +2740,12 @@ const PurchaseBillForm = ({ onBack, onSave, editData }) => {
   ];
 
   const importDetailColumns = [
-    { key: "item", label: "Item ID *", type: "select", options: itemOptions },
+    {
+      key: "item",
+      label: "Item ID *",
+      type: "select",
+      options: (row) => itemOptionsFor(row),
+    },
     {
       key: "itemDescription",
       label: "Item Description",
@@ -2350,9 +2867,21 @@ const PurchaseBillForm = ({ onBack, onSave, editData }) => {
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
           {isEditMode ? "Edit Purchase Bill" : "Add Purchase Bill"}
         </h2>
+        {loadingBill && (
+          <span className="text-[11px] text-blue-600 dark:text-blue-400">
+            Loading bill details...
+          </span>
+        )}
       </div>
 
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
+      <div className="relative bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
+        {/* LOADING OVERLAY (edit mode, while getPurchaseBillById runs) */}
+        {loadingBill && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-white/70 dark:bg-gray-800/70 text-xs text-gray-600 dark:text-gray-300">
+            Loading purchase bill...
+          </div>
+        )}
+
         {/* HEADER */}
         <div>
           <SectionHeader>
@@ -2382,6 +2911,7 @@ const PurchaseBillForm = ({ onBack, onSave, editData }) => {
               disabled
             />
 
+            {/* Type cannot change on a saved bill */}
             <Field
               type="select"
               label="Bill Type"
@@ -2389,6 +2919,7 @@ const PurchaseBillForm = ({ onBack, onSave, editData }) => {
               value={formData.billType}
               onChange={handleFieldChange}
               options={BILL_TYPE_OPTIONS}
+              disabled={isEditMode}
               required
             />
 
@@ -2398,7 +2929,11 @@ const PurchaseBillForm = ({ onBack, onSave, editData }) => {
               name="belongsTo"
               value={formData.belongsTo}
               onChange={handleFieldChange}
-              options={belongsToOptions}
+              options={withSavedOption(
+                belongsToOptions,
+                formData.belongsTo,
+                formData.belongsTo,
+              )}
             />
 
             <Field
@@ -2418,7 +2953,7 @@ const PurchaseBillForm = ({ onBack, onSave, editData }) => {
               value={formData.supplierCode}
               onChange={handleFieldChange}
               error={fieldErrors.supplierCode}
-              options={supplierOptions}
+              options={supplierSelectOptions}
               required
             />
 
@@ -2484,7 +3019,7 @@ const PurchaseBillForm = ({ onBack, onSave, editData }) => {
               value={formData.grnNo}
               onChange={handleFieldChange}
               error={fieldErrors.grnNo}
-              options={grnOptions}
+              options={grnSelectOptions}
               required
               disabled={!formData.supplierCode}
             />
@@ -2567,13 +3102,13 @@ const PurchaseBillForm = ({ onBack, onSave, editData }) => {
                   value={formData.purchaseorderDate}
                   onChange={handleFieldChange}
                 />
-                <Field
+                {/* <Field
                   label="PO Type"
                   name="purchaseorderType"
                   value={formData.purchaseorderType}
                   onChange={() => {}}
                   disabled
-                />
+                /> */}
 
                 <Field
                   label="Vendor DC No."
@@ -2997,7 +3532,7 @@ const PurchaseBillForm = ({ onBack, onSave, editData }) => {
           <button
             type="button"
             onClick={handleSave}
-            disabled={isSubmitting}
+            disabled={isSubmitting || loadingBill}
             className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
           >
             <Save className="h-3 w-3" />
