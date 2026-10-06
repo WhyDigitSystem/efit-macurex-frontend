@@ -1,5 +1,5 @@
 import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import supplierRateContractAPI from "../../../api/supplierRateContractAPI";
 import partyMasterAPI from "../../../api/partyMasterAPI";
 import itemAPI from "../../../api/itemAPI";
@@ -58,7 +58,6 @@ const labelClasses =
 const fieldGrid =
   "grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-x-4 gap-y-3 items-start";
 
-// Spacious grid used inside the child tabs so fields breathe more.
 const subTabFieldGrid =
   "grid grid-cols-[repeat(auto-fit,minmax(210px,1fr))] gap-x-5 gap-y-4 items-start";
 
@@ -176,6 +175,7 @@ const SectionHeader = ({ children }) => (
 const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
   <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
     <button
+      type="button"
       onClick={onCancel}
       disabled={isSubmitting}
       className="flex items-center gap-1 px-3 py-1.5 rounded text-xs whitespace-nowrap border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
@@ -185,6 +185,7 @@ const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
     </button>
 
     <button
+      type="button"
       onClick={onSave}
       disabled={isSubmitting}
       className="flex items-center gap-1 px-3 py-1.5 rounded text-xs whitespace-nowrap text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
@@ -211,10 +212,10 @@ const TableHead = ({ headers }) => (
         <th
           key={i}
           className={`p-2 whitespace-nowrap ${i === 0
-            ? "w-8 text-center"
-            : i === headers.length - 1
-              ? "w-20 text-left"
-              : "text-left"
+              ? "w-8 text-center"
+              : i === headers.length - 1
+                ? "w-20 text-left"
+                : "text-left"
             } dark:text-white`}
         >
           {h}
@@ -234,8 +235,8 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
         onClick={onRemove}
         disabled={disabled}
         className={`h-6 w-6 rounded text-white flex items-center justify-center ${disabled
-          ? "bg-gray-400 cursor-not-allowed"
-          : "bg-red-600 hover:bg-red-700"
+            ? "bg-gray-400 cursor-not-allowed"
+            : "bg-red-600 hover:bg-red-700"
           }`}
       >
         <Trash2 size={12} />
@@ -244,8 +245,6 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
   </tr>
 );
 
-/* Generic dynamic table. Supports text / number / textarea / select /
-   readonly columns. Options may be plain strings or { value, label } objects. */
 const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
   <TableWrapper>
     <TableHead headers={["#", ...columns.map((c) => c.label), "Action"]} />
@@ -317,8 +316,6 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
 /* Constants                                                                    */
 
 const YES_NO = ["YES", "NO"];
-const BOM_IDS = ["BOM-001", "BOM-002", "BOM-003"];
-const APPROVAL_STATUS = ["Pending", "Approved", "Rejected"];
 
 const CHILD_TABS = [
   { key: "outGoingItem", label: "Out Going Item", kind: "table" },
@@ -331,7 +328,8 @@ const emptyOutGoingItemRow = () => ({
   outgoingItemCode: "",
   outgoingItemDescription: "",
   stock: "",
-  unit: "",
+  unit: "",          // display string, e.g. "KG"
+  unitId: "",        // numeric unit id (for payload)
   fromLocation: "",
   availableStock: "",
   issueQty: "",
@@ -358,6 +356,27 @@ const nowTimeStr = () => {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 };
 
+// Safely pull the numeric unit id from a value that could be:
+//   - a number           → 1000000005
+//   - an object          → { id: 1000000005, unitId: "KG" }
+//   - undefined / null   → 0
+const extractUnitId = (unit) => {
+  if (unit == null) return 0;
+  if (typeof unit === "object") {
+    return Number(unit.id ?? unit.unitId ?? 0) || 0;
+  }
+  return Number(unit) || 0;
+};
+
+// Safely pull the display string from a unit value.
+const extractUnitLabel = (unit, fallback = "") => {
+  if (unit == null) return fallback;
+  if (typeof unit === "object") {
+    return unit.unitId || unit.unitDescription || fallback;
+  }
+  return String(unit);
+};
+
 /* ---------------------------------------------------------------------------- */
 
 const SubContractingDcForm = ({ data, onBack }) => {
@@ -366,13 +385,20 @@ const SubContractingDcForm = ({ data, onBack }) => {
   const { addToast } = useToast();
 
   const userData = JSON.parse(localStorage.getItem("userData") || "{}");
-  const orgName = (userData?.companyVO?.companyName || userData?.orgName || "").trim();
+  const orgName = (
+    userData?.companyVO?.companyName ||
+    userData?.orgName ||
+    ""
+  ).trim();
   const isMacurex = ["mecurex", "macurex"].includes(orgName.toLowerCase());
 
   const [activeChildTab, setActiveChildTab] = useState("outGoingItem");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [generatingDocId, setGeneratingDocId] = useState(false);
+
+  // Ref that marks "Doc ID has already been fetched for this mount"
+  const docIdFetchedRef = useRef(false);
 
   const [plantOptions, setPlantOptions] = useState([]);
   const [vendorOptions, setVendorOptions] = useState([]);
@@ -390,7 +416,6 @@ const SubContractingDcForm = ({ data, onBack }) => {
   const [outgoingItemMap, setOutgoingItemMap] = useState({});
   const [fromLocationOptions, setFromLocationOptions] = useState([]);
 
-  // New state for LOV and Department
   const [belongsToOptions, setBelongsToOptions] = useState([]);
   const [dcTypeOptions, setDcTypeOptions] = useState([]);
   const [departmentOptions, setDepartmentOptions] = useState([]);
@@ -438,39 +463,51 @@ const SubContractingDcForm = ({ data, onBack }) => {
   /* ---------------- Generate Document ID ---------------- */
 
   const generateDocId = useCallback(async () => {
-    // Don't generate if editing
     if (data?.id) return;
+    if (docIdFetchedRef.current) return;
+    if (generatingDocId) return;
+    if (!orgId) return;
+
+    docIdFetchedRef.current = true;
 
     setGeneratingDocId(true);
     setHeader((prev) => ({ ...prev, scDcNo: "" }));
 
     try {
       const financialYear = new Date().getFullYear().toString();
-      const response = await subContractingDCAPI.getDeliveryChallanSubcontractingDocId(
-        financialYear,
-        orgId
-      );
-      console.log("Document ID Response:", response);
+      const response =
+        await subContractingDCAPI.getDeliveryChallanSubcontractingDocId(
+          financialYear,
+          orgId,
+        );
 
       const docId = response?.paramObjectsMap?.docId || "";
       if (docId) {
         setHeader((prev) => ({ ...prev, scDcNo: docId }));
       } else {
         addToast("Failed to generate Document ID", "error");
-        // Fallback to auto-generated ID
-        const fallbackId = `SCDC-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, "0")}${String(new Date().getDate()).padStart(2, "0")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
+        const fallbackId = `SCDC-${new Date().getFullYear()}${String(
+          new Date().getMonth() + 1,
+        ).padStart(2, "0")}${String(new Date().getDate()).padStart(
+          2,
+          "0",
+        )}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
         setHeader((prev) => ({ ...prev, scDcNo: fallbackId }));
       }
     } catch (error) {
       console.error("Error generating document ID:", error);
-      // Fallback to auto-generated ID
-      const fallbackId = `SCDC-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, "0")}${String(new Date().getDate()).padStart(2, "0")}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
+      const fallbackId = `SCDC-${new Date().getFullYear()}${String(
+        new Date().getMonth() + 1,
+      ).padStart(2, "0")}${String(new Date().getDate()).padStart(
+        2,
+        "0",
+      )}-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
       setHeader((prev) => ({ ...prev, scDcNo: fallbackId }));
       addToast("Failed to generate Document ID, using fallback", "error");
     } finally {
       setGeneratingDocId(false);
     }
-  }, [data, orgId, addToast]);
+  }, [data?.id, orgId, generatingDocId, addToast]);
 
   /* ---------------- Lookup loading ---------------- */
 
@@ -499,11 +536,13 @@ const SubContractingDcForm = ({ data, onBack }) => {
     }
   }, [orgId, isMacurex]);
 
-  // Load Vendors/Customers from the new API
   const loadVendors = useCallback(async () => {
     try {
-      const res = await subContractingDCAPI.getCustomersForSupplierRateContract(branch, orgId);
-      console.log("Vendor Response:", res);
+      const res =
+        await subContractingDCAPI.getCustomersForSupplierRateContract(
+          branch,
+          orgId,
+        );
 
       const customerList = res?.paramObjectsMap?.customerList || [];
       const map = {};
@@ -532,52 +571,53 @@ const SubContractingDcForm = ({ data, onBack }) => {
     }
   }, [orgId, branch]);
 
-  // Load Job Orders based on selected Vendor
-  const loadJobOrders = useCallback(async (vendorId) => {
-    if (!vendorId) {
-      setJobOrderOptions([]);
-      setJobOrderMap({});
-      return;
-    }
+  const loadJobOrders = useCallback(
+    async (vendorId) => {
+      if (!vendorId) {
+        setJobOrderOptions([]);
+        setJobOrderMap({});
+        return;
+      }
 
-    try {
-      const res = await subContractingDCAPI.getJobOrderNoAndDateForJobOrderAmd(
-        branch,
-        vendorId,
-        orgId
-      );
-      console.log("Job Order Response:", res);
+      try {
+        const res =
+          await subContractingDCAPI.getJobOrderNoAndDateForJobOrderAmd(
+            branch,
+            vendorId,
+            orgId,
+          );
 
-      const jobOrderList = res?.paramObjectsMap?.jobOrderList || [];
-      const map = {};
-      const options = jobOrderList.map((jo) => {
-        map[jo.jobOrderNo] = {
-          id: jo.id,
-          jobOrderNo: jo.jobOrderNo,
-          jobOrderDate: jo.jobOrderDate,
-        };
-        return {
-          value: jo.jobOrderNo,
-          label: jo.jobOrderNo,
-        };
-      });
-      setJobOrderOptions(options);
-      setJobOrderMap(map);
-    } catch (error) {
-      console.error("Failed to load job order options:", error);
-      setJobOrderOptions([]);
-      setJobOrderMap({});
-    }
-  }, [orgId, branch]);
+        const jobOrderList = res?.paramObjectsMap?.jobOrderList || [];
+        const map = {};
+        const options = jobOrderList.map((jo) => {
+          map[jo.jobOrderNo] = {
+            id: jo.id,
+            jobOrderNo: jo.jobOrderNo,
+            jobOrderDate: jo.jobOrderDate,
+          };
+          return {
+            value: jo.jobOrderNo,
+            label: jo.jobOrderNo,
+          };
+        });
+        setJobOrderOptions(options);
+        setJobOrderMap(map);
+      } catch (error) {
+        console.error("Failed to load job order options:", error);
+        setJobOrderOptions([]);
+        setJobOrderMap({});
+      }
+    },
+    [orgId, branch],
+  );
 
-  // Load Party Location
   const loadPartyLocations = useCallback(async () => {
     try {
-      const res = await subContractingDCAPI.getLocationForDeliverChallanSubContract(
-        branch,
-        orgId
-      );
-      console.log("Party Location Response:", res);
+      const res =
+        await subContractingDCAPI.getLocationForDeliverChallanSubContract(
+          branch,
+          orgId,
+        );
 
       const locationList = res?.paramObjectsMap?.locationList || [];
       const options = locationList.map((loc) => ({
@@ -591,11 +631,12 @@ const SubContractingDcForm = ({ data, onBack }) => {
     }
   }, [orgId, branch]);
 
-  // Load From Location from Location Master
   const loadFromLocations = useCallback(async () => {
     try {
-      const res = await locationMasterAPI.getLocationMasterByOrgId(orgId, branch);
-      console.log("From Location Response:", res);
+      const res = await locationMasterAPI.getLocationMasterByOrgId(
+        orgId,
+        branch,
+      );
 
       const options = (res || []).map((loc) => ({
         value: loc.id,
@@ -608,83 +649,84 @@ const SubContractingDcForm = ({ data, onBack }) => {
     }
   }, [orgId, branch]);
 
-  // Load Incoming Part No and Outgoing Item details based on Job Order
-  const loadItemDetails = useCallback(async (jobOrderNo) => {
-    if (!jobOrderNo || !header.vendorId) {
-      setItemOptions([]);
-      setItemMasterMap({});
-      setOutgoingItemOptions([]);
-      setOutgoingItemMap({});
-      return;
-    }
+  /* ------------------------------------------------------------------
+   * Load item details — the API returns `unit` (string) AND `unitId`
+   * (numeric). We store BOTH so the UI can show the label and the
+   * payload can send the numeric id.
+   * ---------------------------------------------------------------- */
+  const loadItemDetails = useCallback(
+    async (jobOrderNo) => {
+      if (!jobOrderNo || !header.vendorId) {
+        setItemOptions([]);
+        setItemMasterMap({});
+        setOutgoingItemOptions([]);
+        setOutgoingItemMap({});
+        return;
+      }
 
-    try {
-      const res = await subContractingDCAPI.getItemDetailsforDeliveryChallanSubContract(
-        branch,
-        jobOrderNo,
-        orgId,
-        header.vendorId
-      );
-      console.log("Item Details Response:", res);
+      try {
+        const res =
+          await subContractingDCAPI.getItemDetailsforDeliveryChallanSubContract(
+            branch,
+            jobOrderNo,
+            orgId,
+            header.vendorId,
+          );
 
-      const itemDetails = res?.paramObjectsMap?.itemDetails || [];
+        const itemDetails = res?.paramObjectsMap?.itemDetails || [];
 
-      // Map for Incoming Part No - Store the outgoingItem ID
-      const itemMap = {};
-      const itemOpts = itemDetails.map((item) => {
-        itemMap[item.outgoingItem] = {
+        // Build the shared item map with BOTH unit (label) and unitId
+        const buildMapEntry = (item) => ({
           id: item.id,
           itemCode: item.itemCode,
           itemDescription: item.itemDescription,
-          unit: item.unit,
-          unitDescription: item.unitDescription,
+          unit: item.unit || "",                     // "KG"
+          unitId: extractUnitId(item.unitId ?? item.unit ?? 0), // 1000000005
+          unitDescription: item.unitDescription || "",
           rate: item.rate,
           contractNo: item.contractNo,
           jobOrderFor: item.jobOrderFor,
           outgoingItem: item.outgoingItem,
-        };
-        return {
-          value: item.outgoingItem, // Use outgoingItem as value
-          label: item.itemCode,
-        };
-      });
-      setItemOptions(itemOpts);
-      setItemMasterMap(itemMap);
+        });
 
-      // Map for Outgoing Item Code - Store the outgoingItem ID
-      const outMap = {};
-      const outOpts = itemDetails.map((item) => {
-        outMap[item.outgoingItem] = {
-          id: item.id,
-          itemCode: item.itemCode,
-          itemDescription: item.itemDescription,
-          unit: item.unit,
-          unitDescription: item.unitDescription,
-          rate: item.rate,
-          contractNo: item.contractNo,
-          jobOrderFor: item.jobOrderFor,
-          outgoingItem: item.outgoingItem,
-        };
-        return {
-          value: item.outgoingItem, // Use outgoingItem as value
-          label: item.itemCode,
-        };
-      });
-      setOutgoingItemOptions(outOpts);
-      setOutgoingItemMap(outMap);
+        const itemMap = {};
+        const itemOpts = itemDetails.map((item) => {
+          itemMap[item.outgoingItem] = buildMapEntry(item);
+          return {
+            value: item.outgoingItem,
+            label: item.itemCode,
+          };
+        });
+        setItemOptions(itemOpts);
+        setItemMasterMap(itemMap);
 
-    } catch (error) {
-      console.error("Failed to load item details:", error);
-      setItemOptions([]);
-      setItemMasterMap({});
-      setOutgoingItemOptions([]);
-      setOutgoingItemMap({});
-    }
-  }, [orgId, branch, header.vendorId]);
+        const outMap = {};
+        const outOpts = itemDetails.map((item) => {
+          outMap[item.outgoingItem] = buildMapEntry(item);
+          return {
+            value: item.outgoingItem,
+            label: item.itemCode,
+          };
+        });
+        setOutgoingItemOptions(outOpts);
+        setOutgoingItemMap(outMap);
+      } catch (error) {
+        console.error("Failed to load item details:", error);
+        setItemOptions([]);
+        setItemMasterMap({});
+        setOutgoingItemOptions([]);
+        setOutgoingItemMap({});
+      }
+    },
+    [orgId, branch, header.vendorId],
+  );
 
   const loadLocations = useCallback(async () => {
     try {
-      const res = await locationMasterAPI.getLocationMasterByOrgId(orgId, branch);
+      const res = await locationMasterAPI.getLocationMasterByOrgId(
+        orgId,
+        branch,
+      );
       setLocationOptions(
         (res || []).map((l) => ({
           value: l.locationName || l.id,
@@ -715,7 +757,6 @@ const SubContractingDcForm = ({ data, onBack }) => {
   const loadTransports = useCallback(async () => {
     try {
       const res = await transportAPI.getTransportByOrgId(branch, orgId);
-      console.log("Transport Response:", res);
 
       const options = (res || []).map((t) => ({
         value: t.id,
@@ -744,15 +785,17 @@ const SubContractingDcForm = ({ data, onBack }) => {
     }
   }, [orgId]);
 
-  // Load List of Values for Belongs To
   const loadBelongsTo = useCallback(async () => {
     try {
-      const res = await listOfValuesAPI.getListValuesGroup("SDS BELONGS TO", orgId);
+      const res = await listOfValuesAPI.getListValuesGroup(
+        "SDS BELONGS TO",
+        orgId,
+      );
       setBelongsToOptions(
         (res || []).map((item) => ({
           value: item.id,
           label: item.valuesDescription || item.valueDescription || item.id,
-        }))
+        })),
       );
     } catch (error) {
       console.error("Failed to load Belongs To options:", error);
@@ -760,7 +803,6 @@ const SubContractingDcForm = ({ data, onBack }) => {
     }
   }, [orgId]);
 
-  // Load List of Values for D.C Type
   const loadDcTypes = useCallback(async () => {
     try {
       const res = await listOfValuesAPI.getListValuesGroup("DC_TYPE", orgId);
@@ -768,7 +810,7 @@ const SubContractingDcForm = ({ data, onBack }) => {
         (res || []).map((item) => ({
           value: item.id,
           label: item.valuesDescription || item.valueDescription || item.id,
-        }))
+        })),
       );
     } catch (error) {
       console.error("Failed to load D.C Type options:", error);
@@ -776,7 +818,6 @@ const SubContractingDcForm = ({ data, onBack }) => {
     }
   }, [orgId]);
 
-  // Load Departments from Department API
   const loadDepartments = useCallback(async () => {
     try {
       const res = await departmentAPI.getAllDepartments(orgId);
@@ -785,7 +826,7 @@ const SubContractingDcForm = ({ data, onBack }) => {
         deptList.map((d) => ({
           value: d.id,
           label: d.departmentCode || d.departmentName || d.id,
-        }))
+        })),
       );
     } catch (error) {
       console.error("Failed to load department options:", error);
@@ -804,9 +845,9 @@ const SubContractingDcForm = ({ data, onBack }) => {
       loadFromLocations();
       loadTransports();
     }
-  }, [orgId, loadPlants, loadBelongsTo, loadDcTypes, loadDepartments, loadVendors, loadPartyLocations, loadFromLocations, loadTransports]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgId]);
 
-  // Load job orders when vendor changes
   useEffect(() => {
     if (header.vendorId) {
       loadJobOrders(header.vendorId);
@@ -816,7 +857,6 @@ const SubContractingDcForm = ({ data, onBack }) => {
     }
   }, [header.vendorId, loadJobOrders]);
 
-  // Load item details when job order changes
   useEffect(() => {
     if (header.jobOrderNo && header.vendorId) {
       loadItemDetails(header.jobOrderNo);
@@ -826,30 +866,26 @@ const SubContractingDcForm = ({ data, onBack }) => {
       setOutgoingItemOptions([]);
       setOutgoingItemMap({});
     }
-  }, [header.jobOrderNo, header.vendorId, loadItemDetails]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [header.jobOrderNo, header.vendorId]);
 
   useEffect(() => {
     if (orgId && branch) {
       loadLocations();
       loadUnits();
     }
-  }, [
-    orgId,
-    branch,
-    loadLocations,
-    loadUnits,
-  ]);
+  }, [orgId, branch, loadLocations, loadUnits]);
 
   useEffect(() => {
     if (orgId) loadEmployees();
   }, [orgId, loadEmployees]);
 
-  // Generate document ID on mount (only for new records)
   useEffect(() => {
-    if (!data?.id && orgId) {
+    if (!data?.id && orgId && !docIdFetchedRef.current) {
       generateDocId();
     }
-  }, [data, orgId, generateDocId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.id, orgId]);
 
   /* ---------------- Handlers ---------------- */
 
@@ -876,7 +912,6 @@ const SubContractingDcForm = ({ data, onBack }) => {
           next.vendorGstType = "";
           next.vendorCode = "";
         }
-        // Clear job order when vendor changes
         next.jobOrderNo = "";
         next.jobOrderDate = "";
         next.incomingPartNo = "";
@@ -890,7 +925,6 @@ const SubContractingDcForm = ({ data, onBack }) => {
         } else {
           next.jobOrderDate = "";
         }
-        // Clear item details when job order changes
         next.incomingPartNo = "";
         next.partName = "";
       }
@@ -926,15 +960,12 @@ const SubContractingDcForm = ({ data, onBack }) => {
               ...next,
               outgoingItemDescription: item.itemDescription || "",
               unit: item.unit || row.unit || "",
+              unitId: item.unitId || row.unitId || 0,   // 👈 numeric id for payload
               unitRate: item.rate || row.unitRate || "",
               contractNo: item.contractNo || row.contractNo || "",
               jobOrderFor: item.jobOrderFor || row.jobOrderFor || "",
             };
           }
-        }
-
-        if (key === "fromLocation") {
-          // You can add logic to fetch stock based on location if needed
         }
 
         if (key === "issueQty" || key === "unitRate") {
@@ -982,7 +1013,7 @@ const SubContractingDcForm = ({ data, onBack }) => {
         r.jobOrderFor &&
         r.contractNo &&
         r.outgoingItemCode &&
-        r.unit &&
+        r.unitId &&
         r.fromLocation &&
         Number(r.issueQty) > 0 &&
         Number(r.unitRate) > 0,
@@ -1002,7 +1033,6 @@ const SubContractingDcForm = ({ data, onBack }) => {
 
     const isUpdate = Boolean(data?.id);
 
-    // Prepare the payload according to the API schema
     const payload = {
       active: true,
       approvalByStores: header.approvalByStores || "",
@@ -1026,11 +1056,12 @@ const SubContractingDcForm = ({ data, onBack }) => {
           outgoingItem: Number(r.outgoingItemCode) || 0,
           remarks: r.remarks || "",
           stock: Number(r.stock) || 0,
-          unit: Number(r.unit) || 0,
+          // 👇 Send the numeric unit ID, not the display string
+          unit: Number(r.unitId) || 0,
           unitRate: Number(r.unitRate) || 0,
         })),
       financialYear: new Date().getFullYear().toString(),
-      incomingItem: Number(header.incomingPartNo) || 0, // This sends the outgoingItem ID
+      incomingItem: Number(header.incomingPartNo) || 0,
       jobOrderNo: header.jobOrderNo || "",
       orgId: orgId,
       partyLocation: Number(header.partyLocation) || 0,
@@ -1044,7 +1075,6 @@ const SubContractingDcForm = ({ data, onBack }) => {
       vendor: Number(header.vendorId) || 0,
     };
 
-    // Add ID only if updating
     if (isUpdate) {
       payload.id = data.id;
     }
@@ -1053,9 +1083,9 @@ const SubContractingDcForm = ({ data, onBack }) => {
 
     try {
       const response =
-        await subContractingDCAPI.createUpdateDeliveryChallanSubcontracting(payload);
-
-      console.log("API Response:", response);
+        await subContractingDCAPI.createUpdateDeliveryChallanSubcontracting(
+          payload,
+        );
 
       if (response?.status) {
         addToast(
@@ -1063,7 +1093,7 @@ const SubContractingDcForm = ({ data, onBack }) => {
           (isUpdate
             ? "Sub Contracting DC updated successfully!"
             : "Sub Contracting DC created successfully!"),
-          "success"
+          "success",
         );
         onBack?.();
       } else {
@@ -1077,7 +1107,8 @@ const SubContractingDcForm = ({ data, onBack }) => {
     } catch (err) {
       console.error("Save Sub Contracting DC Error:", err);
       if (err.response?.data) {
-        const errorMsg = err.response.data.message ||
+        const errorMsg =
+          err.response.data.message ||
           err.response.data.statusMessage ||
           err.response.data.error ||
           JSON.stringify(err.response.data);
@@ -1092,10 +1123,13 @@ const SubContractingDcForm = ({ data, onBack }) => {
 
   const activeTabMeta = CHILD_TABS.find((t) => t.key === activeChildTab);
 
-  // If data is provided (edit mode), populate the form
+  /* ------------------------------------------------------------------
+   * Populate the form when editing.
+   * Each detail row is mapped to (unit, unitId) — handling all three
+   * shapes the backend might return for `unit`.
+   * ---------------------------------------------------------------- */
   useEffect(() => {
     if (data?.id) {
-      // Populate header fields
       setHeader({
         plantId: data.plantId || data.branch || "",
         scDcNo: data.scDcNo || data.docId || "",
@@ -1128,7 +1162,6 @@ const SubContractingDcForm = ({ data, onBack }) => {
         active: data.active !== false,
       });
 
-      // Populate outgoing items
       if (data.details && data.details.length > 0) {
         const items = data.details.map((detail) => ({
           jobOrderFor: detail.jobOrderFor || "",
@@ -1136,7 +1169,12 @@ const SubContractingDcForm = ({ data, onBack }) => {
           outgoingItemCode: detail.outgoingItem || "",
           outgoingItemDescription: detail.outgoingItemDescription || "",
           stock: detail.stock || "",
-          unit: detail.unit || "",
+          // unit might be a string ("KG") or an object ({ id, unitId })
+          unit: extractUnitLabel(detail.unit, detail.unitDescription || ""),
+          unitId: extractUnitId(
+            detail.unitId ??
+            (typeof detail.unit === "object" ? detail.unit?.id : detail.unit),
+          ),
           fromLocation: detail.fromLocation || "",
           availableStock: detail.availableStock || "",
           issueQty: detail.issueQty || "",
@@ -1147,7 +1185,6 @@ const SubContractingDcForm = ({ data, onBack }) => {
         setOutGoingItemRows(items);
       }
 
-      // Populate summary
       if (data.summary) {
         setSummary({
           summaryNotes: data.summary.summaryNotes || "",
@@ -1176,7 +1213,6 @@ const SubContractingDcForm = ({ data, onBack }) => {
 
       {/* Main Card */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
-        {/* ---------------- Header Info ---------------- */}
         <div>
           <SectionHeader>D.C For Sub Contracting</SectionHeader>
           <div className={fieldGrid}>
@@ -1343,9 +1379,8 @@ const SubContractingDcForm = ({ data, onBack }) => {
           </div>
         </div>
 
-        {/* ---------------- Child Tabs ---------------- */}
+        {/* Child Tabs */}
         <section className="mt-0 bg-white dark:bg-gray-800">
-          {/* Tabs */}
           <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 mb-0">
             <div className="flex flex-wrap">
               {CHILD_TABS.map((tab) => (
@@ -1354,8 +1389,8 @@ const SubContractingDcForm = ({ data, onBack }) => {
                   type="button"
                   onClick={() => setActiveChildTab(tab.key)}
                   className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${activeChildTab === tab.key
-                    ? "bg-blue-600 text-white"
-                    : "text-gray-600 dark:text-gray-300"
+                      ? "bg-blue-600 text-white"
+                      : "text-gray-600 dark:text-gray-300"
                     }`}
                 >
                   {tab.label}
@@ -1374,7 +1409,6 @@ const SubContractingDcForm = ({ data, onBack }) => {
             )}
           </div>
 
-          {/* Out Going Item tab */}
           {activeChildTab === "outGoingItem" && (
             <div className="pt-3">
               <DynamicTable
@@ -1402,6 +1436,7 @@ const SubContractingDcForm = ({ data, onBack }) => {
                   {
                     key: "unit",
                     label: "Unit",
+                    readOnly: true,
                   },
                   {
                     key: "fromLocation",
@@ -1434,7 +1469,6 @@ const SubContractingDcForm = ({ data, onBack }) => {
             </div>
           )}
 
-          {/* Contracting Summary tab */}
           {activeChildTab === "contractingSummary" && (
             <div className="pt-3">
               <div className={subTabFieldGrid}>

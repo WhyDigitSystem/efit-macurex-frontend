@@ -1,5 +1,5 @@
 import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import dcForCapitalItemsAPI from "../../../api/dcForCapitalItemsAPI";
 import locationMasterAPI from "../../../api/locationMasterAPI";
 import branchAPI from "../../../api/branchAPI";
@@ -52,7 +52,6 @@ const labelClasses =
 const fieldGrid =
   "grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-x-4 gap-y-3 items-start";
 
-// Spacious grid used inside the child tabs so fields breathe more.
 const subTabFieldGrid =
   "grid grid-cols-[repeat(auto-fit,minmax(210px,1fr))] gap-x-5 gap-y-4 items-start";
 
@@ -170,6 +169,7 @@ const SectionHeader = ({ children }) => (
 const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
   <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
     <button
+      type="button"
       onClick={onCancel}
       disabled={isSubmitting}
       className="flex items-center gap-1 px-3 py-1.5 rounded text-xs whitespace-nowrap border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
@@ -179,6 +179,7 @@ const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
     </button>
 
     <button
+      type="button"
       onClick={onSave}
       disabled={isSubmitting}
       className="flex items-center gap-1 px-3 py-1.5 rounded text-xs whitespace-nowrap text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
@@ -204,13 +205,12 @@ const TableHead = ({ headers }) => (
       {headers.map((h, i) => (
         <th
           key={i}
-          className={`p-2 whitespace-nowrap ${
-            i === 0
+          className={`p-2 whitespace-nowrap ${i === 0
               ? "w-8 text-center"
               : i === headers.length - 1
                 ? "w-20 text-left"
                 : "text-left"
-          } dark:text-white`}
+            } dark:text-white`}
         >
           {h}
         </th>
@@ -228,11 +228,10 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
         type="button"
         onClick={onRemove}
         disabled={disabled}
-        className={`h-6 w-6 rounded text-white flex items-center justify-center ${
-          disabled
+        className={`h-6 w-6 rounded text-white flex items-center justify-center ${disabled
             ? "bg-gray-400 cursor-not-allowed"
             : "bg-red-600 hover:bg-red-700"
-        }`}
+          }`}
       >
         <Trash2 size={12} />
       </button>
@@ -240,8 +239,6 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
   </tr>
 );
 
-/* Generic dynamic table. Supports text / number / textarea / select /
-   readonly columns. Options may be plain strings or { value, label } objects. */
 const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
   <TableWrapper>
     <TableHead headers={["#", ...columns.map((c) => c.label), "Action"]} />
@@ -310,7 +307,7 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
 );
 
 /* ---------------------------------------------------------------------------- */
-/* Static options (only ones that truly have no backend source)                */
+/* Static options                                                              */
 
 const YES_NO = ["Yes", "No"];
 const APPROVAL_STATUS = ["Pending", "Approved", "Rejected"];
@@ -321,12 +318,12 @@ const CHILD_TABS = [
 ];
 
 const emptyOutGoingItemRow = () => ({
-  outgoingItemCode: "", // holds the item's numeric id (select value); itemCode is shown as the label
+  outgoingItemCode: "",
   outgoingItemDescription: "",
   stock: "",
-  unit: "", // display-only unit code text, e.g. "KG"
-  unitId: "", // numeric unit id sent to the backend as "unit"
-  fromLocation: "", // numeric location id
+  unit: "",
+  unitId: "",
+  fromLocation: "",
   availableStock: "",
   issueQty: "",
   unitRate: "",
@@ -352,6 +349,20 @@ const toInt = (n) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+// Extract a numeric id from either a nested object or a primitive
+const idOf = (v) => {
+  if (v == null) return "";
+  if (typeof v === "object") return v.id ?? "";
+  return v;
+};
+
+// Extract employeeId from either a nested object or a primitive
+const empIdOf = (v) => {
+  if (v == null) return "";
+  if (typeof v === "object") return v.employeeId ?? v.id ?? "";
+  return v;
+};
+
 /* ---------------------------------------------------------------------------- */
 
 const DcForCapitalItemsForm = ({ data, onBack }) => {
@@ -368,13 +379,15 @@ const DcForCapitalItemsForm = ({ data, onBack }) => {
   const isMacurex = ["mecurex", "macurex"].includes(orgName.toLowerCase());
 
   const financialYear = String(new Date().getFullYear());
-
   const isEditMode = Boolean(data?.id);
 
   const [activeChildTab, setActiveChildTab] = useState("outGoingItem");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [generatingDocId, setGeneratingDocId] = useState(false);
+
+  // Guard so docId is only fetched once per mount for new records
+  const docIdFetchedRef = useRef(false);
 
   const [plantOptions, setPlantOptions] = useState([]);
   const [vendorOptions, setVendorOptions] = useState([]);
@@ -387,36 +400,40 @@ const DcForCapitalItemsForm = ({ data, onBack }) => {
   const [departmentOptions, setDepartmentOptions] = useState([]);
   const [dcTypeOptions, setDcTypeOptions] = useState([]);
 
-  const [header, setHeader] = useState(() => ({
-    plantId: data?.plantId || "",
-    dcCiNo: data?.dcCiNo || "",
-    scDcDate: data?.scDcDate || todayStr(),
-    belongsTo: data?.belongsTo || "",
-    department: data?.department || "",
-    vendorId: data?.vendorId || "",
-    vendorName: data?.vendorName || "",
-    partyLocation: data?.partyLocation || "",
-    indentNo: data?.indentNo || "",
-    transportName: data?.transportName || "",
-    vehicleNo: data?.vehicleNo || "",
-    dcType: data?.dcType || "",
-    approvalByStores: data?.approvalByStores || "Yes",
-    preparedBy: data?.preparedBy || "",
-    approvedBy: data?.approvedBy || "",
-    remarks: data?.remarks || "",
-    cancelRemarks: data?.cancelRemarks || "",
-    active: data?.active !== false,
-  }));
-
-  const [outGoingItemRows, setOutGoingItemRows] = useState(
-    data?.outGoingItems?.length ? data.outGoingItems : [emptyOutGoingItemRow()],
-  );
-  const [summary, setSummary] = useState({
-    ...emptySummary(),
-    ...data?.summary,
+  /* ------------------------------------------------------------------
+   * Header state — starts EMPTY.
+   * Edit-mode values are filled by the useEffect([data]) below.
+   * ---------------------------------------------------------------- */
+  const [header, setHeader] = useState({
+    plantId: "",
+    dcCiNo: "",
+    scDcDate: todayStr(),
+    belongsTo: "",
+    department: "",
+    vendorId: "",
+    vendorName: "",
+    partyLocation: "",
+    indentNo: "",
+    transportName: "",
+    vehicleNo: "",
+    dcType: "",
+    approvalByStores: "Yes",
+    preparedBy: "",
+    approvedBy: "",
+    remarks: "",
+    cancelRemarks: "",
+    active: true,
   });
 
-  /* ---------------- Lookup loading ---------------- */
+  const [outGoingItemRows, setOutGoingItemRows] = useState([
+    emptyOutGoingItemRow(),
+  ]);
+
+  const [summary, setSummary] = useState(emptySummary());
+
+  /* ===================================================================
+   * Lookup loaders
+   * =================================================================== */
 
   const loadPlants = useCallback(async () => {
     try {
@@ -443,7 +460,6 @@ const DcForCapitalItemsForm = ({ data, onBack }) => {
     }
   }, [orgId, isMacurex]);
 
-  // Vendor Id shows customerCode; Vendor Name is auto-filled from customerName.
   const loadVendors = useCallback(async () => {
     try {
       const list =
@@ -467,7 +483,6 @@ const DcForCapitalItemsForm = ({ data, onBack }) => {
     }
   }, [orgId, branch]);
 
-  // Indent No dropdown, using docId as the visible/selected value.
   const loadIndents = useCallback(async () => {
     try {
       const list = await dcForCapitalItemsAPI.getPurchaseIndentByOrgId(
@@ -486,9 +501,6 @@ const DcForCapitalItemsForm = ({ data, onBack }) => {
     }
   }, [orgId, branch]);
 
-  // "customerLocation" (Party Location) and "fromLocation" in the item table
-  // both need the numeric location id in the payload, so id is the value and
-  // the location name is just the label shown to the user.
   const loadLocations = useCallback(async () => {
     try {
       const res = await locationMasterAPI.getLocationMasterByOrgId(
@@ -507,9 +519,6 @@ const DcForCapitalItemsForm = ({ data, onBack }) => {
     }
   }, [orgId, branch]);
 
-  // Outgoing Item Code / Description / Unit all come from this one API.
-  // "outgoingItem" in the payload needs the numeric item id, so that's the
-  // select value; itemCode is shown as the label.
   const loadItems = useCallback(async () => {
     try {
       const list = await dcForCapitalItemsAPI.getItemDetailsForSalesReturn(
@@ -530,7 +539,6 @@ const DcForCapitalItemsForm = ({ data, onBack }) => {
     }
   }, [orgId, branch]);
 
-  // "preparedBy" / "approvedBy" need the numeric employee id in the payload.
   const loadEmployees = useCallback(async () => {
     try {
       const res = await employeeAPI.getEmployeeByOrgId(orgId);
@@ -553,18 +561,14 @@ const DcForCapitalItemsForm = ({ data, onBack }) => {
         orgId,
       );
       setBelongsToOptions(
-        list.map((item) => ({
-          value:
+        list.map((item) => {
+          const v =
             item.valuesDescription ||
             item.valueDescription ||
             item.description ||
-            "",
-          label:
-            item.valuesDescription ||
-            item.valueDescription ||
-            item.description ||
-            "",
-        })),
+            "";
+          return { value: v, label: v };
+        }),
       );
     } catch (error) {
       console.error("Failed to load Belongs To values:", error);
@@ -602,18 +606,14 @@ const DcForCapitalItemsForm = ({ data, onBack }) => {
         orgId,
       );
       setDcTypeOptions(
-        list.map((item) => ({
-          value:
+        list.map((item) => {
+          const v =
             item.valuesDescription ||
             item.valueDescription ||
             item.description ||
-            "",
-          label:
-            item.valuesDescription ||
-            item.valueDescription ||
-            item.description ||
-            "",
-        })),
+            "";
+          return { value: v, label: v };
+        }),
       );
     } catch (error) {
       console.error("Failed to load D.C Type values:", error);
@@ -643,11 +643,14 @@ const DcForCapitalItemsForm = ({ data, onBack }) => {
     }
   }, [orgId, loadEmployees, loadBelongsTo, loadDepartments, loadDcTypes]);
 
-  /* ---------------- Auto-generated DC CI No ---------------- */
-
+  /* ===================================================================
+   * Auto-generated DC CI No (create mode only)
+   * =================================================================== */
   useEffect(() => {
     if (isEditMode || !orgId) return;
+    if (docIdFetchedRef.current) return;
 
+    docIdFetchedRef.current = true;
     let cancelled = false;
 
     const generateDocId = async () => {
@@ -679,7 +682,106 @@ const DcForCapitalItemsForm = ({ data, onBack }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEditMode, orgId]);
 
-  /* ---------------- Handlers ---------------- */
+  /* ===================================================================
+   * Populate the form when editing.
+   * Handles BOTH raw API shape AND normalized list-row shape.
+   * =================================================================== */
+  useEffect(() => {
+    if (!data?.id) return;
+
+    /* ---------------- Header ---------------- */
+    setHeader({
+      // Plant — normalized `plantId` OR raw `branch.id`
+      plantId: data.plantId ?? idOf(data.branch) ?? "",
+
+      // Doc id / date — normalized OR raw
+      dcCiNo: data.dcCiNo || data.docId || "",
+      scDcDate: data.scDcDate || data.docDate || todayStr(),
+
+      belongsTo: data.belongsTo || "",
+
+      // Department — normalized `departmentId` OR raw `department.id`
+      department: data.departmentId ?? idOf(data.department) ?? "",
+
+      // Vendor — normalized `vendorId` OR raw `vendor.id`
+      vendorId: data.vendorId ?? idOf(data.vendor) ?? "",
+      vendorName: data.vendorName || data.vendor?.customerName || "",
+
+      // Party location — normalized `partyLocation` OR raw `customerLocation.id`
+      partyLocation: data.partyLocation ?? idOf(data.customerLocation) ?? "",
+
+      indentNo: data.indentNo || "",
+      transportName: data.transportName || "",
+      vehicleNo: data.vehicleNo || "",
+      dcType: data.dcType || "",
+      approvalByStores: data.approvalByStores || "Yes",
+
+      // Employees — normalized id OR raw `preparedBy.employeeId`
+      preparedBy: empIdOf(data.preparedBy),
+      approvedBy: empIdOf(data.approvedBy),
+
+      remarks: data.remarks || "",
+      cancelRemarks: data.cancelRemarks || "",
+      active:
+        data.active === true ||
+        data.active === "Active" ||
+        data.active === undefined,
+    });
+
+    /* ---------------- Item rows ---------------- */
+    const detailsSrc = Array.isArray(data.details)
+      ? data.details
+      : Array.isArray(data.outGoingItems)
+        ? data.outGoingItems
+        : [];
+
+    if (detailsSrc.length > 0) {
+      setOutGoingItemRows(
+        detailsSrc.map((d) => {
+          const outgoing = d.outgoingItem || {};
+          const unitObj = d.unit || outgoing.unit || {};
+
+          return {
+            // Select value → numeric item id
+            outgoingItemCode: d.outgoingItemCode ?? idOf(outgoing) ?? "",
+            outgoingItemDescription:
+              d.outgoingItemDescription || outgoing.itemDescription || "",
+            stock: d.stock ?? "",
+            // Display string (e.g. "KG")
+            unit:
+              (typeof d.unit === "object" ? d.unit.unitId : d.unit) ||
+              unitObj.unitId ||
+              "",
+            // Numeric id for the payload
+            unitId: d.unitId ?? idOf(unitObj) ?? "",
+            // Select value → numeric location id
+            fromLocation: d.fromLocation ?? idOf(d.fromLocation) ?? "",
+            availableStock: d.availableStock ?? "",
+            issueQty: d.issueQty ?? "",
+            unitRate: d.unitRate ?? "",
+            amount: d.amount ?? "",
+            remarks: d.remarks || "",
+          };
+        }),
+      );
+    } else {
+      setOutGoingItemRows([emptyOutGoingItemRow()]);
+    }
+
+    /* ---------------- Summary ---------------- */
+    if (data.summary) {
+      setSummary({
+        summaryNotes: data.summary.summaryNotes || "",
+        approvalStatus: data.summary.approvalStatus || "",
+        additionalComments: data.summary.additionalComments || "",
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
+
+  /* ===================================================================
+   * Handlers
+   * =================================================================== */
 
   const handleHeaderChange = (e) => {
     const { name, value } = e.target;
@@ -730,78 +832,44 @@ const DcForCapitalItemsForm = ({ data, onBack }) => {
 
   const handleAddRow = () =>
     setOutGoingItemRows((prev) => [...prev, emptyOutGoingItemRow()]);
+
   const handleRemoveRow = (idx) =>
     setOutGoingItemRows((prev) =>
       prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx),
     );
 
-  /* ---------------- Validation & Save ---------------- */
+  /* ===================================================================
+   * Validation & Save
+   * =================================================================== */
 
   const validate = () => {
     const errors = {};
 
-    if (!header.plantId) {
-      errors.plantId = "Plant is required";
-    }
-
-    if (!header.dcCiNo?.trim()) {
-      errors.dcCiNo = "DC CI No is required";
-    }
-
-    if (!header.scDcDate) {
-      errors.scDcDate = "SC DC Date is required";
-    }
-
-    if (!header.belongsTo) {
-      errors.belongsTo = "Belongs To is required";
-    }
-
-    if (!header.department) {
-      errors.department = "Department is required";
-    }
-
-    if (!header.vendorId) {
-      errors.vendorId = "Vendor Id is required";
-    }
-
-    if (!header.vendorName?.trim()) {
+    if (!header.plantId) errors.plantId = "Plant is required";
+    if (!header.dcCiNo?.trim()) errors.dcCiNo = "DC CI No is required";
+    if (!header.scDcDate) errors.scDcDate = "SC DC Date is required";
+    if (!header.belongsTo) errors.belongsTo = "Belongs To is required";
+    if (!header.department) errors.department = "Department is required";
+    if (!header.vendorId) errors.vendorId = "Vendor Id is required";
+    if (!header.vendorName?.trim())
       errors.vendorName = "Vendor Name is required";
-    }
-
-    if (!header.partyLocation) {
+    if (!header.partyLocation)
       errors.partyLocation = "Party Location is required";
-    }
-
-    if (!header.indentNo) {
-      errors.indentNo = "Indent No is required";
-    }
-
-    if (!header.dcType) {
-      errors.dcType = "D.C Type is required";
-    }
-
-    if (!header.approvalByStores) {
+    if (!header.indentNo) errors.indentNo = "Indent No is required";
+    if (!header.dcType) errors.dcType = "D.C Type is required";
+    if (!header.approvalByStores)
       errors.approvalByStores = "Approval By Stores is required";
-    }
+    if (!header.preparedBy) errors.preparedBy = "Prepared By is required";
+    if (!header.approvedBy) errors.approvedBy = "Approved By is required";
 
-    if (!header.preparedBy) {
-      errors.preparedBy = "Prepared By is required";
-    }
-
-    if (!header.approvedBy) {
-      errors.approvedBy = "Approved By is required";
-    }
-
-    // Validate item rows
-    const hasValidRow = outGoingItemRows.some((r) => {
-      return (
+    const hasValidRow = outGoingItemRows.some(
+      (r) =>
         r.outgoingItemCode &&
         r.unit &&
         r.fromLocation &&
         toNum(r.issueQty) > 0 &&
-        toNum(r.unitRate) > 0
-      );
-    });
+        toNum(r.unitRate) > 0,
+    );
 
     if (!hasValidRow) {
       errors.outGoingItems =
@@ -810,17 +878,8 @@ const DcForCapitalItemsForm = ({ data, onBack }) => {
 
     setFieldErrors(errors);
 
-    // IMPORTANT:
-    // Show the validation error immediately instead of making it
-    // look like Save is doing nothing.
     if (Object.keys(errors).length > 0) {
-      const firstError = Object.values(errors)[0];
-      addToast(firstError, "error");
-
-      console.log("DC Capital Items Validation Errors:", errors);
-      console.log("Current Header:", header);
-      console.log("Current Item Rows:", outGoingItemRows);
-
+      addToast(Object.values(errors)[0], "error");
       return false;
     }
 
@@ -828,25 +887,9 @@ const DcForCapitalItemsForm = ({ data, onBack }) => {
   };
 
   const handleSave = async () => {
-    console.log("========== DC CAPITAL ITEMS SAVE CLICKED ==========");
-
-    console.log("orgId:", orgId);
-    console.log("branch:", branch);
-    console.log("header:", header);
-    console.log("outGoingItemRows:", outGoingItemRows);
-
-    // Stop if validation fails
-    const isValid = validate();
-
-    console.log("Validation result:", isValid);
-
-    if (!isValid) {
-      console.log("SAVE STOPPED BECAUSE VALIDATION FAILED");
-      return;
-    }
+    if (!validate()) return;
 
     setIsSubmitting(true);
-
     const isUpdate = Boolean(data?.id);
 
     const details = outGoingItemRows
@@ -865,24 +908,19 @@ const DcForCapitalItemsForm = ({ data, onBack }) => {
 
     const payload = {
       ...(isUpdate && data?.id ? { id: data.id } : {}),
-
       active: header.active,
       approvalByStores: header.approvalByStores || "",
       approvedBy: toInt(header.approvedBy),
       belongsTo: header.belongsTo || "",
       branch: toInt(branch),
       cancelRemarks: header.cancelRemarks || "",
-
       createdBy: isUpdate
         ? data?.createdBy || localStorage.getItem("usersId") || "SYSTEM"
         : localStorage.getItem("usersId") || "SYSTEM",
-
       customerLocation: toInt(header.partyLocation),
       dcType: header.dcType || "",
       department: toInt(header.department),
-
       details,
-
       financialYear,
       indentNo: header.indentNo || "",
       orgId: toInt(orgId),
@@ -893,9 +931,7 @@ const DcForCapitalItemsForm = ({ data, onBack }) => {
       vendor: toInt(header.vendorId),
     };
 
-    console.log("========== FINAL DC CAPITAL ITEMS PAYLOAD ==========");
-
-    console.log(JSON.stringify(payload, null, 2));
+    console.log("Saving DC Capital Items Payload:", payload);
 
     try {
       const response =
@@ -903,69 +939,42 @@ const DcForCapitalItemsForm = ({ data, onBack }) => {
           payload,
         );
 
-      console.log("========== DC CAPITAL ITEMS API RESPONSE ==========");
+      const success =
+        response?.status === true ||
+        String(response?.status).toLowerCase() === "true";
 
-      console.log(response);
-
-      if (response?.status === true) {
+      if (success) {
         addToast(
           response?.paramObjectsMap?.message ||
-            (isUpdate
-              ? "DC For Capital Items updated successfully!"
-              : "DC For Capital Items created successfully!"),
+          (isUpdate
+            ? "DC For Capital Items updated successfully!"
+            : "DC For Capital Items created successfully!"),
           "success",
         );
-
         onBack?.();
-
         return;
       }
-
-      // Some APIs return status as a string
-      if (String(response?.status).toLowerCase() === "true") {
-        addToast(
-          response?.paramObjectsMap?.message ||
-            (isUpdate
-              ? "DC For Capital Items updated successfully!"
-              : "DC For Capital Items created successfully!"),
-          "success",
-        );
-
-        onBack?.();
-
-        return;
-      }
-
-      console.error("API returned unsuccessful response:", response);
 
       addToast(
         response?.errors?.[0]?.shortMessage ||
-          response?.errors?.[0]?.longMessage ||
-          response?.statusMessage ||
-          response?.message ||
-          "Failed to save DC For Capital Items.",
+        response?.errors?.[0]?.longMessage ||
+        response?.statusMessage ||
+        response?.message ||
+        "Failed to save DC For Capital Items.",
         "error",
       );
     } catch (err) {
-      console.error("========== DC CAPITAL ITEMS SAVE ERROR ==========");
-
-      console.error(err);
-
-      console.error("Response:", err?.response);
-      console.error("Response data:", err?.response?.data);
-      console.error("Response status:", err?.response?.status);
-
+      console.error("Save DC Capital Items Error:", err);
       const errorData = err?.response?.data;
-
       addToast(
         errorData?.errors?.[0]?.shortMessage ||
-          errorData?.errors?.[0]?.longMessage ||
-          errorData?.message ||
-          errorData?.statusMessage ||
-          errorData?.error ||
-          (typeof errorData === "string"
-            ? errorData
-            : "Something went wrong while saving DC For Capital Items."),
+        errorData?.errors?.[0]?.longMessage ||
+        errorData?.message ||
+        errorData?.statusMessage ||
+        errorData?.error ||
+        (typeof errorData === "string"
+          ? errorData
+          : "Something went wrong while saving DC For Capital Items."),
         "error",
       );
     } finally {
@@ -975,6 +984,9 @@ const DcForCapitalItemsForm = ({ data, onBack }) => {
 
   const activeTabMeta = CHILD_TABS.find((t) => t.key === activeChildTab);
 
+  /* ===================================================================
+   * Render
+   * =================================================================== */
   return (
     <div className="w-full p-2">
       {/* Header */}
@@ -993,7 +1005,6 @@ const DcForCapitalItemsForm = ({ data, onBack }) => {
 
       {/* Main Card */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
-        {/* ---------------- Header Info ---------------- */}
         <div>
           <SectionHeader>DC For Capital Items</SectionHeader>
           <div className={fieldGrid}>
@@ -1011,7 +1022,7 @@ const DcForCapitalItemsForm = ({ data, onBack }) => {
               label="DC CI No"
               name="dcCiNo"
               value={generatingDocId ? "Generating..." : header.dcCiNo}
-              onChange={() => {}}
+              onChange={() => { }}
               error={fieldErrors.dcCiNo}
               required
               disabled
@@ -1147,9 +1158,8 @@ const DcForCapitalItemsForm = ({ data, onBack }) => {
           </div>
         </div>
 
-        {/* ---------------- Child Tabs ---------------- */}
+        {/* Child Tabs */}
         <section className="mt-0 bg-white dark:bg-gray-800">
-          {/* Tabs */}
           <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 mb-0">
             <div className="flex flex-wrap">
               {CHILD_TABS.map((tab) => (
@@ -1157,11 +1167,10 @@ const DcForCapitalItemsForm = ({ data, onBack }) => {
                   key={tab.key}
                   type="button"
                   onClick={() => setActiveChildTab(tab.key)}
-                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${
-                    activeChildTab === tab.key
+                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${activeChildTab === tab.key
                       ? "bg-blue-600 text-white"
                       : "text-gray-600 dark:text-gray-300"
-                  }`}
+                    }`}
                 >
                   {tab.label}
                 </button>
@@ -1179,7 +1188,6 @@ const DcForCapitalItemsForm = ({ data, onBack }) => {
             )}
           </div>
 
-          {/* Out Going Item tab */}
           {activeChildTab === "outGoingItem" && (
             <div className="pt-3">
               <DynamicTable
@@ -1233,7 +1241,6 @@ const DcForCapitalItemsForm = ({ data, onBack }) => {
             </div>
           )}
 
-          {/* Contracting Summary tab */}
           {activeChildTab === "contractingSummary" && (
             <div className="pt-3">
               <div className={subTabFieldGrid}>

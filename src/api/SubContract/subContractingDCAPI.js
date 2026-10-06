@@ -4,7 +4,7 @@ const subContractingDCAPI = {
     // Create or Update Delivery Challan Subcontracting
     createUpdateDeliveryChallanSubcontracting: async (payload) => {
         try {
-            const response = await apiClient.post(
+            const response = await apiClient.put(
                 `/api/subContract/createUpdateDeliveryChallanSubcontracting`,
                 payload,
                 {

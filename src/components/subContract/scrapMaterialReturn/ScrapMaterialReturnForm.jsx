@@ -160,6 +160,7 @@ const SectionHeader = ({ children }) => (
 const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
   <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
     <button
+      type="button"
       onClick={onCancel}
       disabled={isSubmitting}
       className="flex items-center gap-1 px-3 py-1.5 rounded text-xs whitespace-nowrap border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
@@ -169,6 +170,7 @@ const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
     </button>
 
     <button
+      type="button"
       onClick={onSave}
       disabled={isSubmitting}
       className="flex items-center gap-1 px-3 py-1.5 rounded text-xs whitespace-nowrap text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
@@ -194,13 +196,12 @@ const TableHead = ({ headers }) => (
       {headers.map((h, i) => (
         <th
           key={i}
-          className={`p-1 whitespace-nowrap ${
-            i === 0
+          className={`p-1 whitespace-nowrap ${i === 0
               ? "w-8 text-center"
               : i === headers.length - 1
                 ? "w-20 text-left"
                 : "text-left"
-          } dark:text-white`}
+            } dark:text-white`}
         >
           {h}
         </th>
@@ -218,11 +219,10 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
         type="button"
         onClick={onRemove}
         disabled={disabled}
-        className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-          disabled
+        className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
             ? "bg-gray-400 cursor-not-allowed"
             : "bg-red-600 hover:bg-red-700"
-        }`}
+          }`}
       >
         <Trash2 size={10} />
       </button>
@@ -314,7 +314,6 @@ const todayStr = () => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
 
-// Financial year starts in April: Sep 2026 -> "2026", Feb 2027 -> "2026"
 const getFinancialYear = () => {
   const d = new Date();
   return String(d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1);
@@ -322,19 +321,22 @@ const getFinancialYear = () => {
 
 const toNum = (v) => (v === "" || v == null ? 0 : Number(v));
 
-// Accepts either a plain id or a nested { id } object from the backend
-const idOf = (v) => (v && typeof v === "object" ? (v.id ?? "") : (v ?? ""));
+// Accepts either a plain id/number/string or a nested { id } object
+const idOf = (v) => {
+  if (v == null) return "";
+  if (typeof v === "object") return String(v.id ?? "");
+  return String(v);
+};
 
-// Backend detail row -> form row. Key names are a best guess; adjust once
-// you have a real saved record.
+// Backend detail row -> form row
 const mapDetailToRow = (d) => ({
   id: d.id,
-  itemCode: String(idOf(d.item ?? d.itemId)),
-  itemDescription: d.itemDescription || d.item?.itemDescription || "",
-  unit: String(idOf(d.unit ?? d.unitId)),
+  itemCode: idOf(d.item ?? d.itemId),
+  itemDescription: d.item?.itemDescription || d.itemDescription || "",
+  unit: idOf(d.unit ?? d.unitId),
   availableStock: d.availableStock ?? "",
-  recRejQty: d.recQty ?? d.recRejQty ?? "",
-  costRate: d.costRate ?? "",
+  recRejQty: d.recQty ?? d.recRejQty ?? d.receivedQty ?? "",
+  costRate: d.costRate ?? d.rate ?? "",
   amount: d.amount ?? "",
   note: d.note || "",
 });
@@ -360,7 +362,7 @@ const ScrapMaterialReturnForm = ({ data, onBack }) => {
 
   const [plantOptions, setPlantOptions] = useState([]);
   const [entryForOptions, setEntryForOptions] = useState([]);
-  const [vendorList, setVendorList] = useState([]); // raw, for name lookup
+  const [vendorList, setVendorList] = useState([]);
   const [vendorOptions, setVendorOptions] = useState([]);
   const [vendorLocationOptions, setVendorLocationOptions] = useState([]);
   const [locationOptions, setLocationOptions] = useState([]);
@@ -368,11 +370,14 @@ const ScrapMaterialReturnForm = ({ data, onBack }) => {
   const [unitOptions, setUnitOptions] = useState([]);
   const [itemMasterMap, setItemMasterMap] = useState({});
 
+  /* ------------------------------------------------------------------
+   * Header state — always extract nested ids via idOf()
+   * ---------------------------------------------------------------- */
   const [header, setHeader] = useState(() => ({
-    plantId: data?.branch || branch || "",
+    plantId: idOf(data?.branch) || String(branch) || "",
     entryFor: idOf(data?.entryFor),
     vendorId: idOf(data?.vendorId),
-    vendorName: data?.vendorName || "",
+    vendorName: data?.vendorId?.customerName || data?.vendorName || "",
     vendorLocation: idOf(data?.vendorLocation),
     toLocation: idOf(data?.toLocation),
     entryType: data?.entryType || "",
@@ -380,10 +385,14 @@ const ScrapMaterialReturnForm = ({ data, onBack }) => {
     docDate: data?.documentDate || data?.docDate || "",
     docId: data?.docId || "",
     date: data?.date || todayStr(),
-    active: data?.active !== false,
+    active: (data?.active ?? "Active") === "Active",
   }));
 
+  /* ------------------------------------------------------------------
+   * Detail rows — read the ACTUAL API key
+   * ---------------------------------------------------------------- */
   const initialDetails =
+    data?.scrapMaterialReturnRejectionDetailsResponseDTO ||
     data?.scrapMaterialReturnRejectionDetailsVO ||
     data?.scrapMaterialReturnRejectionDetailsDTO ||
     data?.scrapDetails ||
@@ -412,7 +421,7 @@ const ScrapMaterialReturnForm = ({ data, onBack }) => {
         const res = await locationMasterAPI.getPlants(orgId);
         setPlantOptions(
           (res || []).map((p) => ({
-            value: p.id,
+            value: String(p.id),
             label: p.plantName || p.plantId || p.id,
           })),
         );
@@ -420,7 +429,7 @@ const ScrapMaterialReturnForm = ({ data, onBack }) => {
         const res = await branchAPI.getBranchByOrgId(orgId);
         setPlantOptions(
           (res || []).map((b) => ({
-            value: b.id,
+            value: String(b.id),
             label: b.branchName || b.id,
           })),
         );
@@ -463,7 +472,7 @@ const ScrapMaterialReturnForm = ({ data, onBack }) => {
       setLocationOptions(
         res.map((l) => ({
           value: String(l.id),
-          label: `${l.locationId} - ${l.locationName}`,
+          label: `${l.locationId || ""} - ${l.locationName || ""}`.trim(),
         })),
       );
     } catch (error) {
@@ -481,7 +490,7 @@ const ScrapMaterialReturnForm = ({ data, onBack }) => {
       setVendorLocationOptions(
         res.map((l) => ({
           value: String(l.id),
-          label: `${l.locationId} - ${l.locationName}`,
+          label: `${l.locationId || ""} - ${l.locationName || ""}`.trim(),
         })),
       );
     } catch (error) {
@@ -522,7 +531,6 @@ const ScrapMaterialReturnForm = ({ data, onBack }) => {
     }
   }, [orgId, branch]);
 
-  // Doc Id is generated by the server for new records only
   const loadDocId = useCallback(async () => {
     if (data?.id) return;
     try {
@@ -562,14 +570,17 @@ const ScrapMaterialReturnForm = ({ data, onBack }) => {
     loadUnits,
   ]);
 
-  // When editing, fill Vendor Name once the vendor list has loaded
+  // If editing and Vendor Name wasn't in the record, look it up from vendorList
   useEffect(() => {
     if (header.vendorId && !header.vendorName && vendorList.length) {
       const vendor = vendorList.find(
         (v) => String(v.id) === String(header.vendorId),
       );
       if (vendor) {
-        setHeader((prev) => ({ ...prev, vendorName: vendor.supplierName }));
+        setHeader((prev) => ({
+          ...prev,
+          vendorName: vendor.supplierName || vendor.customerName || "",
+        }));
       }
     }
   }, [vendorList, header.vendorId, header.vendorName]);
@@ -583,7 +594,8 @@ const ScrapMaterialReturnForm = ({ data, onBack }) => {
       const next = { ...prev, [name]: value };
       if (name === "vendorId") {
         const vendor = vendorList.find((v) => String(v.id) === String(value));
-        next.vendorName = vendor?.supplierName || "";
+        next.vendorName =
+          vendor?.supplierName || vendor?.customerName || "";
       }
       return next;
     });
@@ -616,7 +628,6 @@ const ScrapMaterialReturnForm = ({ data, onBack }) => {
           };
         }
 
-        // Amount = Rec/Rej Qty x Cost Rate
         if (key === "recRejQty" || key === "costRate") {
           const qty = parseFloat(next.recRejQty) || 0;
           const rate = parseFloat(next.costRate) || 0;
@@ -705,18 +716,18 @@ const ScrapMaterialReturnForm = ({ data, onBack }) => {
       if (response?.status) {
         addToast(
           response?.paramObjectsMap?.message ||
-            (isUpdate
-              ? "Scrap/Material Return record updated successfully!"
-              : "Scrap/Material Return record created successfully!"),
+          (isUpdate
+            ? "Scrap/Material Return record updated successfully!"
+            : "Scrap/Material Return record created successfully!"),
         );
         onBack?.();
       } else {
         addToast(
           response?.errors?.[0]?.shortMessage ||
-            response?.errors?.[0]?.longMessage ||
-            response?.paramObjectsMap?.errorMessage ||
-            response?.message ||
-            "Failed to save Scrap/Material Return record.",
+          response?.errors?.[0]?.longMessage ||
+          response?.paramObjectsMap?.errorMessage ||
+          response?.message ||
+          "Failed to save Scrap/Material Return record.",
         );
       }
     } catch (err) {
@@ -724,9 +735,9 @@ const ScrapMaterialReturnForm = ({ data, onBack }) => {
       if (err.response?.data) {
         addToast(
           err.response.data.message ||
-            err.response.data.statusMessage ||
-            err.response.data.error ||
-            JSON.stringify(err.response.data),
+          err.response.data.statusMessage ||
+          err.response.data.error ||
+          JSON.stringify(err.response.data),
         );
       } else {
         addToast("Something went wrong.");
@@ -869,11 +880,10 @@ const ScrapMaterialReturnForm = ({ data, onBack }) => {
                   key={tab.key}
                   type="button"
                   onClick={() => setActiveChildTab(tab.key)}
-                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${
-                    activeChildTab === tab.key
+                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${activeChildTab === tab.key
                       ? "bg-blue-600 text-white"
                       : "text-gray-600 dark:text-gray-300"
-                  }`}
+                    }`}
                 >
                   {tab.label}
                 </button>
@@ -916,7 +926,6 @@ const ScrapMaterialReturnForm = ({ data, onBack }) => {
                   {
                     key: "availableStock",
                     label: "Available Stock",
-                    readOnly: true,
                   },
                   { key: "recRejQty", label: "Rec/Rej Qty" },
                   { key: "costRate", label: "Cost Rate" },

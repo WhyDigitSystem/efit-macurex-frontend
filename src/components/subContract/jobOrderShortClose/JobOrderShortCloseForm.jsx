@@ -1013,14 +1013,6 @@ const JobOrderShortCloseForm = ({ data, onBack }) => {
             />
 
             <Field
-              label="GRN No"
-              name="grnNo"
-              value={header.grnNo}
-              onChange={handleHeaderChange}
-              disabled
-            />
-
-            <Field
               label="Short Close No"
               name="shortCloseNo"
               value={generatingDocId ? "Generating..." : header.shortCloseNo}

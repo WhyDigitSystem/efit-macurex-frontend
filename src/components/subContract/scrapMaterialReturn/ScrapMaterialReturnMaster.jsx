@@ -7,7 +7,7 @@ import { toast } from "../../../utils/toast";
 
 const ScrapMaterialReturnMaster = () => {
   const navigate = useNavigate();
-  const [view, setView] = useState("list"); // "list" | "form"
+  const [view, setView] = useState("list");
   const [editData, setEditData] = useState(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
@@ -16,13 +16,17 @@ const ScrapMaterialReturnMaster = () => {
     setView("form");
   };
 
-  // Pencil icon -> fetch the record by id (falls back to the list row)
   const handleEdit = useCallback(async (row) => {
     try {
-      const fresh = await scrapMaterialReturnAPI.getScrapMaterialReturnById(
-        row.id,
-      );
-      setEditData(fresh || row);
+      const raw = await scrapMaterialReturnAPI.getScrapMaterialReturnById(row.id);
+      // 👇 Unwrap the nested VO — the API returns
+      //    { statusFlag, status, paramObjectsMap: { scrapMaterialReturnRejectionVO: {...} } }
+      const vo =
+        raw?.paramObjectsMap?.scrapMaterialReturnRejectionVO ||
+        raw?.scrapMaterialReturnRejectionVO ||
+        raw ||
+        row;
+      setEditData(vo);
       setView("form");
     } catch (error) {
       console.error("Failed to fetch scrap/material return for edit:", error);

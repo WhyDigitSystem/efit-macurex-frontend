@@ -10,7 +10,14 @@ import {
   Eye,
   File as FileIcon,
 } from "lucide-react";
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import subContractingGrnAPI from "../../../api/Inventory/subContractingGrnAPI";
 import branchAPI from "../../../api/branchAPI";
@@ -18,25 +25,6 @@ import locationMasterAPI from "../../../api/locationMasterAPI";
 import listOfValuesAPI from "../../../api/listOfValuesAPI";
 import { departmentAPI } from "../../../api/departmentAPI";
 import { useToast } from "../../Toast/ToastContext";
-
-/* =============================================================================
-   ASSUMPTIONS — flagged up front since these weren't in the field mapping you
-   gave (no API named for them), but the DTO needs a value for each:
-
-   Plant ID: branchAPI.getBranchByOrgId (same source used by every other form)
-   Belongs To: listOfValuesAPI.getListValuesGroup("BELONGS TO", orgId)
-   Department: departmentAPI.getAllDepartments
-   Vendor Location: DTO wants a numeric location-master id, but
-     getCustomerForSupplierRateContract's "address" is free text — so this is
-     a real select from locationMasterAPI, not a read-only auto-fill.
-   Tax Type: no source given; defaults to "GST", plain text entry.
-   Tax Code: dropped entirely — it isn't part of the create/update DTO.
-   Item Type / Available Stock / Rate (consumption row): not present in the
-     BOM lookup's response, so these stay manual-entry fields.
-   Invoice Copy: no upload API named — file is captured client-side and only
-     the file name is sent in the payload, matching how attachments are
-     handled elsewhere until a dedicated upload endpoint is wired in.
-============================================================================= */
 
 /* ---------------------------------------------------------------------------- */
 /* Shared design tokens                                                        */
@@ -143,7 +131,10 @@ const Field = ({
               ? "h-[30px] py-0 leading-none resize-y "
               : "py-1.5 leading-snug resize-none ") +
             "bg-white dark:bg-gray-900 " +
-            `${error ? controlErrClasses : "border-gray-300 dark:border-gray-600"} ` +
+            `${error
+              ? controlErrClasses
+              : "border-gray-300 dark:border-gray-600"
+            } ` +
             "text-gray-900 dark:text-gray-100 " +
             "placeholder-gray-400 dark:placeholder-gray-500 " +
             "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
@@ -226,7 +217,10 @@ const TableHead = ({ headers }) => (
   <thead className="bg-gray-100 dark:bg-gray-700">
     <tr>
       {headers.map((h, i) => (
-        <th key={i} className="p-2 whitespace-nowrap text-left dark:text-white">
+        <th
+          key={i}
+          className="p-2 whitespace-nowrap text-left dark:text-white"
+        >
           {h}
         </th>
       ))}
@@ -260,26 +254,50 @@ const DynamicTable = ({
                 {col.type === "select" ? (
                   <select
                     value={row[col.key] ?? ""}
-                    onChange={(e) => onCellChange(idx, col.key, e.target.value)}
-                    className={`${cellInputClasses} ${isError ? cellErrClasses : ""}`}
+                    onChange={(e) =>
+                      onCellChange(idx, col.key, e.target.value)
+                    }
+                    className={`${cellInputClasses} ${isError ? cellErrClasses : ""
+                      } ${col.readOnly ? "bg-gray-100 dark:bg-gray-800 cursor-not-allowed" : ""}`}
+                    disabled={col.readOnly}
                   >
                     <option value="">-- Select --</option>
-                    {(col.options || []).map((opt) => (
-                      <option key={opt.value ?? opt} value={opt.value ?? opt}>
-                        {opt.label ?? opt}
-                      </option>
-                    ))}
+                    {(col.options || []).map((opt) => {
+                      const val =
+                        typeof opt === "object" ? opt.value : opt;
+                      const lab =
+                        typeof opt === "object" ? opt.label : opt;
+                      return (
+                        <option key={val} value={lab}>
+                          {lab}
+                        </option>
+                      );
+                    })}
+                    {/* keep current value visible even if not in options */}
+                    {row[col.key] &&
+                      !(col.options || []).some((o) =>
+                        typeof o === "object"
+                          ? o.label === row[col.key]
+                          : o === row[col.key]
+                      ) && (
+                        <option value={row[col.key]}>
+                          {row[col.key]}
+                        </option>
+                      )}
                   </select>
                 ) : (
                   <input
                     type={col.type === "number" ? "number" : "text"}
                     value={row[col.key] ?? ""}
                     readOnly={col.readOnly}
-                    onChange={(e) => onCellChange(idx, col.key, e.target.value)}
+                    onChange={(e) =>
+                      onCellChange(idx, col.key, e.target.value)
+                    }
                     className={
                       col.readOnly
                         ? cellReadOnlyClasses
-                        : `${cellInputClasses} ${isError ? cellErrClasses : ""}`
+                        : `${cellInputClasses} ${isError ? cellErrClasses : ""
+                        }`
                     }
                   />
                 )}
@@ -289,12 +307,11 @@ const DynamicTable = ({
               <button
                 type="button"
                 onClick={() => onRemoveRow(idx)}
-                disabled={rows.length <= 1}
-                className={`h-6 w-6 rounded text-white flex items-center justify-center ${
-                  rows.length <= 1
+                disabled={row.isSystemRow}
+                className={`h-6 w-6 rounded text-white flex items-center justify-center ${row.isSystemRow
                     ? "bg-gray-400 cursor-not-allowed"
                     : "bg-red-600 hover:bg-red-700"
-                }`}
+                  }`}
               >
                 <Trash2 size={12} />
               </button>
@@ -306,56 +323,7 @@ const DynamicTable = ({
   </TableWrapper>
 );
 
-/* File upload cell: drag-and-drop or click-to-upload, shown inline inside a
-   table row (matches the upload format used across the app). */
-const UploadCell = ({ file, onFileChange }) => {
-  const inputRef = useRef(null);
-  const [dragOver, setDragOver] = useState(false);
-
-  const displayName =
-    file instanceof File ? file.name : file?.name || "Click or drop a file";
-
-  return (
-    <td className="p-3 align-top">
-      <div
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragOver(true);
-        }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setDragOver(false);
-          const f = e.dataTransfer.files?.[0];
-          if (f) onFileChange(f);
-        }}
-        onClick={() => inputRef.current?.click()}
-        className={`flex items-center gap-2 rounded-md border-2 border-dashed px-3 py-2 cursor-pointer transition-colors ${
-          dragOver
-            ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
-            : "border-gray-300 dark:border-gray-600 hover:border-blue-400"
-        }`}
-      >
-        <UploadCloud className="h-3.5 w-3.5 text-gray-400 dark:text-gray-500 shrink-0" />
-        <span className="text-[11px] text-gray-500 dark:text-gray-400 truncate">
-          {displayName}
-        </span>
-      </div>
-
-      <input
-        ref={inputRef}
-        type="file"
-        className="hidden"
-        onChange={(e) => {
-          if (e.target.files?.[0]) onFileChange(e.target.files[0]);
-          e.target.value = "";
-        }}
-      />
-    </td>
-  );
-};
-
-/* Attachment table (upload-only columns) */
+/* Attachment table */
 const AttachmentTable = ({ rows, onFileSelect, onRemoveRow, onView }) => (
   <TableWrapper>
     <TableHead headers={["#", "File Name", "Attachment", "View", "Action"]} />
@@ -415,7 +383,7 @@ const AttachmentTable = ({ rows, onFileSelect, onRemoveRow, onView }) => (
 );
 
 /* ---------------------------------------------------------------------------- */
-/* Static options that have no backend source                                  */
+/* Static options                                                              */
 
 const YES_NO = ["Yes", "No"];
 const ITEM_TYPES = [
@@ -423,6 +391,13 @@ const ITEM_TYPES = [
   "SEMI FINISHED",
   "FINISHED GOOD",
   "PACKING MATERIAL",
+];
+
+const SYSTEM_PARTICULARS = [
+  "Gross Amount",
+  "SGST",
+  "CGST",
+  "IGST",
 ];
 
 /* ---------------------------------------------------------------------------- */
@@ -478,7 +453,11 @@ const emptyDetailRow = () => ({
   consumption: [],
 });
 
-const emptyTaxRow = () => ({ particulars: "", taxAmount: "" });
+const emptyTaxRow = () => ({
+  particulars: "",
+  taxAmount: "",
+  isSystemRow: false,
+});
 
 const emptyAttachmentRow = () => ({
   id: 0,
@@ -493,6 +472,7 @@ const todayStr = () => {
   const pad = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
+
 const nowTime = () => {
   const d = new Date();
   const pad = (n) => String(n).padStart(2, "0");
@@ -506,21 +486,13 @@ const toInt = (n) => {
 };
 const round2 = (n) => Math.round((toNum(n) + Number.EPSILON) * 100) / 100;
 
-/* When editing, the lookups (gate passes, schedules, items, BOM) only return
-   currently available entries, so the saved value may not be in the list.
-   This keeps the saved value visible in its dropdown. */
 const withCurrent = (options, current, label) =>
   current && !options.some((o) => String(o.value) === String(current))
     ? [{ value: current, label: label ?? current }, ...options]
     : options;
 
 /* ---------------------------------------------------------------------------- */
-/* Calculations — from the formulas you gave:
-   Pending Qty = Job Order Qty − Gate Pass Qty
-   Excess Qty  = Received Qty − Gate Pass Qty (only if Received > Gate Pass)
-   Amount      = Job Order Rate × Accepted Qty
-   Consumed Qty (child) = BOM Qty × Job Order Qty (of the parent row)
-   Amount (child)       = Consumed Qty × Rate                                */
+/* Calculations                                                                */
 
 const recomputeDetailRow = (row) => {
   const jobOrderQty = toNum(row.jobOrderQty);
@@ -530,7 +502,8 @@ const recomputeDetailRow = (row) => {
   const jobOrderRate = toNum(row.jobOrderRate);
 
   const pendingQty = jobOrderQty - gatePassQty;
-  const excessQty = receivedQty > gatePassQty ? receivedQty - gatePassQty : 0;
+  const excessQty =
+    receivedQty > gatePassQty ? receivedQty - gatePassQty : 0;
   const amount = jobOrderRate * acceptedQty;
 
   const sgstAmount = round2((amount * toNum(row.sgstRate)) / 100);
@@ -539,7 +512,11 @@ const recomputeDetailRow = (row) => {
 
   const consumption = (row.consumption || []).map((c) => {
     const consumedQty = round2(toNum(c.bomQty) * jobOrderQty);
-    return { ...c, consumedQty, amount: round2(consumedQty * toNum(c.rate)) };
+    return {
+      ...c,
+      consumedQty,
+      amount: round2(consumedQty * toNum(c.rate)),
+    };
   });
 
   return {
@@ -575,6 +552,25 @@ const buildConsumptionRowFromBom = (bom, jobOrderQty) => {
   };
 };
 
+/* Column visibility based on IGST applicability */
+const taxColumnVisibility = (isIGSTAppl) =>
+  isIGSTAppl
+    ? { showIGST: true, showSGST: false, showCGST: false }
+    : { showIGST: false, showSGST: true, showCGST: true };
+
+const filterTaxColumns = (columns, isIGSTAppl) => {
+  const { showIGST, showSGST, showCGST } = taxColumnVisibility(isIGSTAppl);
+  return columns.filter((c) => {
+    if ((c.key === "igstRate" || c.key === "igstAmount") && !showIGST)
+      return false;
+    if ((c.key === "sgstRate" || c.key === "sgstAmount") && !showSGST)
+      return false;
+    if ((c.key === "cgstRate" || c.key === "cgstAmount") && !showCGST)
+      return false;
+    return true;
+  });
+};
+
 /* ---------------------------------------------------------------------------- */
 
 const CHILD_TABS = [
@@ -608,9 +604,8 @@ const SubContractingGrnForm = ({ data, onBack }) => {
   const [itemOptions, setItemOptions] = useState([]);
   const [itemMasterMap, setItemMasterMap] = useState({});
   const [bomOptionsByItem, setBomOptionsByItem] = useState({});
+  const [particularsOptions, setParticularsOptions] = useState([]);
 
-  // Header — accepts the raw GET-by-id shape directly (nested branch/vendor/
-  // department/location/serviceName/sacCode objects) as well as a flat one.
   const [header, setHeader] = useState(() => ({
     plantId: data?.plantId ?? data?.branch?.id ?? branch ?? "",
     scGrnNo: data?.scGrnNo ?? data?.docId ?? "",
@@ -620,7 +615,8 @@ const SubContractingGrnForm = ({ data, onBack }) => {
     vendorId: data?.vendorId ?? data?.vendor?.customerId ?? "",
     vendorName: data?.vendorName ?? data?.vendor?.customerName ?? "",
     gstState: data?.gstState ?? data?.vendor?.gstState ?? "",
-    vendorLocation: data?.vendorLocation?.id ?? data?.vendorLocation ?? "",
+    vendorLocation:
+      data?.vendorLocation?.id ?? data?.vendorLocation ?? "",
     isIGSTAppl: data?.isIGSTAppl ?? data?.vendor?.igstApplicable ?? false,
     gatePassNo: data?.gatePassNo || "",
     gstnNo: data?.gstnNo ?? data?.vendor?.gstNo ?? "",
@@ -650,7 +646,6 @@ const SubContractingGrnForm = ({ data, onBack }) => {
       recomputeDetailRow({
         ...emptyDetailRow(),
         itemId: d.incomingItem?.id ?? d.incomingItem ?? "",
-        // saved key so the item dropdown shows the saved item on edit
         optionKey: d.incomingItem?.id ? `saved-${d.incomingItem.id}` : "",
         itemCode: d.incomingItem?.itemCode || "",
         itemDescription: d.incomingItem?.itemDescription || "",
@@ -689,29 +684,36 @@ const SubContractingGrnForm = ({ data, onBack }) => {
           rate: c.rate ?? "",
           amount: c.amount ?? "",
         })),
-      }),
+      })
     );
   });
 
   const [taxDetailRows, setTaxDetailRows] = useState(
     data?.taxDetails?.length
       ? data.taxDetails.map((t) => ({
-          particulars: t.particulars || "",
-          taxAmount: t.taxAmount ?? "",
-        }))
-      : [emptyTaxRow()],
+        particulars: t.particulars || "",
+        taxAmount: t.taxAmount ?? "",
+        isSystemRow: SYSTEM_PARTICULARS.includes(t.particulars || ""),
+      }))
+      : [
+        {
+          ...emptyTaxRow(),
+          particulars: "Gross Amount",
+          isSystemRow: true,
+        },
+      ]
   );
 
   const [attachmentRows, setAttachmentRows] = useState(
     data?.attachments?.length
       ? data.attachments.map((a) => ({
-          id: a.id,
-          name: a.name || a.fileName || "",
-          file: null,
-          filePath: a.filePath || "",
-          isExisting: true,
-        }))
-      : [emptyAttachmentRow()],
+        id: a.id,
+        name: a.name || a.fileName || "",
+        file: null,
+        filePath: a.filePath || "",
+        isExisting: true,
+      }))
+      : [emptyAttachmentRow()]
   );
 
   /* ---------------- Lookup loading ---------------- */
@@ -723,7 +725,7 @@ const SubContractingGrnForm = ({ data, onBack }) => {
         (res || []).map((b) => ({
           value: b.id,
           label: b.branchName || `Branch ${b.id}`,
-        })),
+        }))
       );
     } catch (error) {
       console.error("Failed to load plant options:", error);
@@ -733,7 +735,10 @@ const SubContractingGrnForm = ({ data, onBack }) => {
 
   const loadBelongsTo = useCallback(async () => {
     try {
-      const res = await listOfValuesAPI.getListValuesGroup("BELONGS TO", orgId);
+      const res = await listOfValuesAPI.getListValuesGroup(
+        "BELONGS TO",
+        orgId
+      );
       const list = Array.isArray(res) ? res : res?.listValues || [];
       setBelongsToOptions(
         list.map((item) => ({
@@ -747,7 +752,7 @@ const SubContractingGrnForm = ({ data, onBack }) => {
             item.valueDescription ||
             item.description ||
             "",
-        })),
+        }))
       );
     } catch (error) {
       console.error("Failed to load Belongs To values:", error);
@@ -767,7 +772,7 @@ const SubContractingGrnForm = ({ data, onBack }) => {
         list.map((d) => ({
           value: d.id,
           label: d.departmentName || d.name || `Dept ${d.id}`,
-        })),
+        }))
       );
     } catch (error) {
       console.error("Failed to load departments:", error);
@@ -775,17 +780,42 @@ const SubContractingGrnForm = ({ data, onBack }) => {
     }
   }, [orgId]);
 
+  const loadParticulars = useCallback(async () => {
+    try {
+      const res = await listOfValuesAPI.getListValuesGroup(
+        "PARTICULARS",
+        orgId
+      );
+      const list = Array.isArray(res) ? res : res?.listValues || [];
+      setParticularsOptions(
+        list
+          .map((item) => ({
+            value: item.id || item.value,
+            label:
+              item.valuesDescription ||
+              item.label ||
+              item.name ||
+              "",
+          }))
+          .filter((o) => o.label)
+      );
+    } catch (error) {
+      console.error("Failed to load Particulars values:", error);
+      setParticularsOptions([]);
+    }
+  }, [orgId]);
+
   const loadLocations = useCallback(async () => {
     try {
       const res = await locationMasterAPI.getLocationMasterByOrgId(
         orgId,
-        branch,
+        branch
       );
       setLocationOptions(
         (res || []).map((l) => ({
           value: l.id,
           label: l.locationName || `Location ${l.id}`,
-        })),
+        }))
       );
     } catch (error) {
       console.error("Failed to load location options:", error);
@@ -798,7 +828,7 @@ const SubContractingGrnForm = ({ data, onBack }) => {
       const list =
         await subContractingGrnAPI.getCustomerForSupplierRateContract(
           branch,
-          orgId,
+          orgId
         );
       setVendorOptions(
         (list || []).map((v) => ({
@@ -810,7 +840,7 @@ const SubContractingGrnForm = ({ data, onBack }) => {
           gstNo: v.gstNo || "",
           gstType: v.gstType || "",
           igstApplicable: Boolean(v.igstApplicable),
-        })),
+        }))
       );
     } catch (error) {
       console.error("Failed to load vendor options:", error);
@@ -825,7 +855,7 @@ const SubContractingGrnForm = ({ data, onBack }) => {
         const list = await subContractingGrnAPI.getGateInwardEntry(
           branch,
           vendorId,
-          orgId,
+          orgId
         );
         setGatePassOptions(
           (list || []).map((g) => ({
@@ -833,25 +863,26 @@ const SubContractingGrnForm = ({ data, onBack }) => {
             label: g.GatePassNo,
             supplierDcNo: g.supplierDCNumber || "",
             supplierDcDate: g.supplierDcDate || "",
-          })),
+          }))
         );
       } catch (error) {
         console.error("Failed to load gate pass options:", error);
         setGatePassOptions([]);
       }
     },
-    [orgId, branch],
+    [orgId, branch]
   );
 
   const loadSchedules = useCallback(
     async (vendorId) => {
       if (!vendorId) return setScheduleOptions([]);
       try {
-        const list = await subContractingGrnAPI.getSubcontractSupplySchedule(
-          branch,
-          vendorId,
-          orgId,
-        );
+        const list =
+          await subContractingGrnAPI.getSubcontractSupplySchedule(
+            branch,
+            vendorId,
+            orgId
+          );
         setScheduleOptions(
           (list || []).map((s) => ({
             value: s.scheduleNo,
@@ -867,14 +898,14 @@ const SubContractingGrnForm = ({ data, onBack }) => {
             cgstRate: s.cgstRate ?? "",
             sgstRate: s.sgstRate ?? "",
             igstRate: s.igstRate ?? "",
-          })),
+          }))
         );
       } catch (error) {
         console.error("Failed to load schedule options:", error);
         setScheduleOptions([]);
       }
     },
-    [orgId, branch],
+    [orgId, branch]
   );
 
   const loadItems = useCallback(
@@ -889,7 +920,7 @@ const SubContractingGrnForm = ({ data, onBack }) => {
           branch,
           vendorId,
           orgId,
-          scheduleNo,
+          scheduleNo
         );
         const map = {};
         const options = (list || []).map((it, idx) => {
@@ -908,7 +939,7 @@ const SubContractingGrnForm = ({ data, onBack }) => {
         setItemMasterMap({});
       }
     },
-    [orgId, branch],
+    [orgId, branch]
   );
 
   const loadBomForItem = useCallback(
@@ -918,7 +949,7 @@ const SubContractingGrnForm = ({ data, onBack }) => {
         const list = await subContractingGrnAPI.getBomItemDetails(
           branch,
           itemId,
-          orgId,
+          orgId
         );
         setBomOptionsByItem((prev) => ({ ...prev, [itemId]: list || [] }));
         return list || [];
@@ -928,7 +959,7 @@ const SubContractingGrnForm = ({ data, onBack }) => {
         return [];
       }
     },
-    [orgId, branch, bomOptionsByItem],
+    [orgId, branch, bomOptionsByItem]
   );
 
   useEffect(() => {
@@ -936,8 +967,9 @@ const SubContractingGrnForm = ({ data, onBack }) => {
       loadPlants();
       loadBelongsTo();
       loadDepartments();
+      loadParticulars();
     }
-  }, [orgId, loadPlants, loadBelongsTo, loadDepartments]);
+  }, [orgId, loadPlants, loadBelongsTo, loadDepartments, loadParticulars]);
 
   useEffect(() => {
     if (orgId && branch) {
@@ -961,8 +993,7 @@ const SubContractingGrnForm = ({ data, onBack }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [header.vendorId, header.scheduleNo]);
 
-  /* ---------------- Auto-generated S.C GRN No ---------------- */
-
+  /* Auto-generated S.C GRN No */
   useEffect(() => {
     if (isEditMode || !orgId) return;
     let cancelled = false;
@@ -971,7 +1002,7 @@ const SubContractingGrnForm = ({ data, onBack }) => {
       try {
         const docId = await subContractingGrnAPI.getGrnDocId(
           financialYear,
-          orgId,
+          orgId
         );
         if (!cancelled)
           setHeader((prev) => ({ ...prev, scGrnNo: docId || "" }));
@@ -991,18 +1022,98 @@ const SubContractingGrnForm = ({ data, onBack }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEditMode, orgId]);
 
+  /* ---------------- Tax Details: Auto-calculate system rows ---------------- */
+
+  const calculateTaxDetails = useCallback(() => {
+    // Totals from detail rows
+    const totalAmount = detailRows.reduce(
+      (sum, r) => sum + toNum(r.amount),
+      0
+    );
+
+    const sgstTotal = detailRows.reduce(
+      (sum, r) => sum + toNum(r.sgstAmount),
+      0
+    );
+    const cgstTotal = detailRows.reduce(
+      (sum, r) => sum + toNum(r.cgstAmount),
+      0
+    );
+    const igstTotal = detailRows.reduce(
+      (sum, r) => sum + toNum(r.igstAmount),
+      0
+    );
+
+    const useIGST = Boolean(header.isIGSTAppl);
+
+    setTaxDetailRows((prev) => {
+      // Preserve user-added rows
+      const userRows = prev.filter(
+        (r) => !r.isSystemRow && !SYSTEM_PARTICULARS.includes(r.particulars)
+      );
+
+      const systemRows = [
+        {
+          particulars: "Gross Amount",
+          taxAmount: round2(totalAmount),
+          isSystemRow: true,
+        },
+      ];
+
+      if (useIGST) {
+        systemRows.push({
+          particulars: "IGST",
+          taxAmount: round2(igstTotal),
+          isSystemRow: true,
+        });
+      } else {
+        systemRows.push({
+          particulars: "SGST",
+          taxAmount: round2(sgstTotal),
+          isSystemRow: true,
+        });
+        systemRows.push({
+          particulars: "CGST",
+          taxAmount: round2(cgstTotal),
+          isSystemRow: true,
+        });
+      }
+
+      const next = [...systemRows, ...userRows];
+
+      // Avoid infinite renders — only replace if content changed
+      const same =
+        prev.length === next.length &&
+        prev.every(
+          (r, i) =>
+            r.particulars === next[i].particulars &&
+            toNum(r.taxAmount) === toNum(next[i].taxAmount) &&
+            Boolean(r.isSystemRow) === Boolean(next[i].isSystemRow)
+        );
+
+      return same ? prev : next;
+    });
+  }, [detailRows, header.isIGSTAppl]);
+
+  /* Recompute system tax rows whenever detail rows or IGST flag changes */
+  useEffect(() => {
+    calculateTaxDetails();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detailRows, header.isIGSTAppl]);
+
   /* ---------------- Header handlers ---------------- */
 
   const handleHeaderChange = (e) => {
     const { name, value } = e.target;
-    if (fieldErrors[name]) setFieldErrors((prev) => ({ ...prev, [name]: "" }));
+    if (fieldErrors[name])
+      setFieldErrors((prev) => ({ ...prev, [name]: "" }));
 
     setHeader((prev) => {
       const next = { ...prev, [name]: value };
 
       if (name === "vendorId") {
         const vendor = vendorOptions.find(
-          (v) => String(v.value) === String(value),
+          (v) => String(v.value) === String(value)
         );
         next.vendorName = vendor?.customerName || "";
         next.gstState = vendor?.gstState || "";
@@ -1024,7 +1135,7 @@ const SubContractingGrnForm = ({ data, onBack }) => {
 
       if (name === "gatePassNo") {
         const gp = gatePassOptions.find(
-          (g) => String(g.value) === String(value),
+          (g) => String(g.value) === String(value)
         );
         next.supplierDcNo = gp?.supplierDcNo || "";
         next.supplierDcDate = gp?.supplierDcDate || "";
@@ -1032,7 +1143,7 @@ const SubContractingGrnForm = ({ data, onBack }) => {
 
       if (name === "scheduleNo") {
         const sch = scheduleOptions.find(
-          (s) => String(s.value) === String(value),
+          (s) => String(s.value) === String(value)
         );
         next.contractNo = sch?.contractNo || "";
         next.schStartDate = sch?.schStartDate || "";
@@ -1068,6 +1179,23 @@ const SubContractingGrnForm = ({ data, onBack }) => {
         row.jobOrderNo = item.jobOrderNo || "";
         row.jobOrderQty = item.jobOrderQty ?? "";
         row.jobOrderRate = item.jobOrderRate ?? "";
+
+        const sch = scheduleOptions.find(
+          (s) => String(s.value) === String(header.scheduleNo)
+        );
+        const igst = toNum(sch?.igstRate);
+        const sgst = toNum(sch?.sgstRate);
+        const cgst = toNum(sch?.cgstRate);
+
+        if (header.isIGSTAppl) {
+          row.igstRate = igst || "";
+          row.sgstRate = "";
+          row.cgstRate = "";
+        } else {
+          row.sgstRate = sgst || "";
+          row.cgstRate = cgst || "";
+          row.igstRate = "";
+        }
       }
     }
 
@@ -1080,13 +1208,13 @@ const SubContractingGrnForm = ({ data, onBack }) => {
         prev.map((r, i) =>
           i === idx
             ? recomputeDetailRow({
-                ...r,
-                consumption: bomList.map((b) =>
-                  buildConsumptionRowFromBom(b, r.jobOrderQty),
-                ),
-              })
-            : r,
-        ),
+              ...r,
+              consumption: bomList.map((b) =>
+                buildConsumptionRowFromBom(b, r.jobOrderQty)
+              ),
+            })
+            : r
+        )
       );
       setExpandedRow(idx);
     }
@@ -1094,12 +1222,13 @@ const SubContractingGrnForm = ({ data, onBack }) => {
 
   const handleAddDetailRow = () =>
     setDetailRows((prev) => [...prev, emptyDetailRow()]);
+
   const handleRemoveDetailRow = (idx) =>
     setDetailRows((prev) =>
-      prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx),
+      prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx)
     );
 
-  /* ---------------- Consumption/Scrap row handlers (nested per detail row) --- */
+  /* ---------------- Consumption/Scrap row handlers ---------------- */
 
   const handleConsumptionCellChange = (rowIdx, consIdx, key, value) => {
     setDetailRows((prev) =>
@@ -1110,7 +1239,7 @@ const SubContractingGrnForm = ({ data, onBack }) => {
           let next = { ...c, [key]: value };
           if (key === "itemId") {
             const bom = (bomOptionsByItem[row.itemId] || []).find(
-              (b) => String(b.itemId) === String(value),
+              (b) => String(b.itemId) === String(value)
             );
             if (bom)
               next = {
@@ -1121,7 +1250,7 @@ const SubContractingGrnForm = ({ data, onBack }) => {
           return next;
         });
         return recomputeDetailRow({ ...row, consumption });
-      }),
+      })
     );
   };
 
@@ -1129,11 +1258,13 @@ const SubContractingGrnForm = ({ data, onBack }) => {
     setDetailRows((prev) =>
       prev.map((row, i) =>
         i === rowIdx
-          ? { ...row, consumption: [...row.consumption, emptyConsumptionRow()] }
-          : row,
-      ),
+          ? {
+            ...row,
+            consumption: [...row.consumption, emptyConsumptionRow()],
+          }
+          : row
+      )
     );
-    // make sure the BOM list for this item is loaded so the select has options
     const itemId = detailRows[rowIdx]?.itemId;
     if (itemId) loadBomForItem(itemId);
   };
@@ -1143,11 +1274,11 @@ const SubContractingGrnForm = ({ data, onBack }) => {
       prev.map((row, i) =>
         i === rowIdx
           ? recomputeDetailRow({
-              ...row,
-              consumption: row.consumption.filter((_, ci) => ci !== consIdx),
-            })
-          : row,
-      ),
+            ...row,
+            consumption: row.consumption.filter((_, ci) => ci !== consIdx),
+          })
+          : row
+      )
     );
   };
 
@@ -1155,13 +1286,17 @@ const SubContractingGrnForm = ({ data, onBack }) => {
 
   const handleTaxCellChange = (idx, key, value) =>
     setTaxDetailRows((prev) =>
-      prev.map((r, i) => (i === idx ? { ...r, [key]: value } : r)),
+      prev.map((r, i) => (i === idx ? { ...r, [key]: value } : r))
     );
+
   const handleAddTaxRow = () =>
     setTaxDetailRows((prev) => [...prev, emptyTaxRow()]);
+
   const handleRemoveTaxRow = (idx) =>
     setTaxDetailRows((prev) =>
-      prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx),
+      prev[idx]?.isSystemRow
+        ? prev
+        : prev.filter((_, i) => i !== idx)
     );
 
   /* ---------------- Attachments ---------------- */
@@ -1171,9 +1306,15 @@ const SubContractingGrnForm = ({ data, onBack }) => {
     setAttachmentRows((prev) =>
       prev.map((row, i) =>
         i === idx
-          ? { ...row, file, name: file.name, filePath: "", isExisting: false }
-          : row,
-      ),
+          ? {
+            ...row,
+            file,
+            name: file.name,
+            filePath: "",
+            isExisting: false,
+          }
+          : row
+      )
     );
   };
 
@@ -1200,10 +1341,17 @@ const SubContractingGrnForm = ({ data, onBack }) => {
   const basicAmount = detailRows
     .filter((r) => r.itemId)
     .reduce((sum, r) => sum + toNum(r.amount), 0);
+
   const totalTax = taxDetailRows
-    .filter((t) => t.particulars)
+    .filter((t) => t.particulars && !t.isSystemRow)
     .reduce((sum, t) => sum + toNum(t.taxAmount), 0);
-  const totalAmount = round2(basicAmount + totalTax);
+
+  const systemTaxTotal = taxDetailRows
+    .filter((t) => t.particulars && t.isSystemRow)
+    .filter((t) => t.particulars !== "Gross Amount")
+    .reduce((sum, t) => sum + toNum(t.taxAmount), 0);
+
+  const totalAmount = round2(basicAmount + systemTaxTotal + totalTax);
 
   /* ---------------- Validation ---------------- */
 
@@ -1211,15 +1359,18 @@ const SubContractingGrnForm = ({ data, onBack }) => {
     const errors = {};
     if (!header.plantId) errors.plantId = "Plant ID is required";
     if (!header.vendorId) errors.vendorId = "Vendor Id is required";
-    if (!header.gatePassNo) errors.gatePassNo = "Gate Pass No is required";
+    if (!header.gatePassNo)
+      errors.gatePassNo = "Gate Pass No is required";
     if (!header.scheduleNo) errors.scheduleNo = "Schedule No is required";
     if (!header.date) errors.date = "Date is required";
-    // On edit, the saved record may have no doc id — don't block the update
     if (!isEditMode && !header.scGrnNo?.trim())
       errors.scGrnNo = "S.C GRN No is required";
 
     const hasValidRow = detailRows.some(
-      (r) => r.itemId && toNum(r.gatePassQty) > 0 && toNum(r.receivedQty) > 0,
+      (r) =>
+        r.itemId &&
+        toNum(r.gatePassQty) > 0 &&
+        toNum(r.receivedQty) > 0
     );
     if (!hasValidRow)
       errors.grnDetail =
@@ -1251,7 +1402,9 @@ const SubContractingGrnForm = ({ data, onBack }) => {
       createdBy: isUpdate
         ? data?.createdBy || localStorage.getItem("usersId")
         : localStorage.getItem("usersId"),
-      ...(isUpdate ? { updatedBy: localStorage.getItem("usersId") } : {}),
+      ...(isUpdate
+        ? { updatedBy: localStorage.getItem("usersId") }
+        : {}),
       department: toInt(header.department),
       details: detailRows
         .filter((r) => r.itemId)
@@ -1317,7 +1470,7 @@ const SubContractingGrnForm = ({ data, onBack }) => {
       taxPercentage: toNum(header.taxPercentage),
       taxType: header.taxType || "",
       totalAmount,
-      totalTax: round2(totalTax),
+      totalTax: round2(systemTaxTotal + totalTax),
       vendor: toInt(header.vendorId),
       vendorLocation: toInt(header.vendorLocation),
     };
@@ -1329,25 +1482,25 @@ const SubContractingGrnForm = ({ data, onBack }) => {
     try {
       const response = await subContractingGrnAPI.createUpdateGrn(
         payload,
-        filesToUpload,
+        filesToUpload
       );
 
       if (response?.status) {
         addToast(
           response?.paramObjectsMap?.message ||
-            (isUpdate
-              ? "Sub Contracting GRN updated successfully!"
-              : "Sub Contracting GRN created successfully!"),
-          "success",
+          (isUpdate
+            ? "Sub Contracting GRN updated successfully!"
+            : "Sub Contracting GRN created successfully!"),
+          "success"
         );
         onBack?.();
       } else {
         addToast(
           response?.errors?.[0]?.shortMessage ||
-            response?.errors?.[0]?.longMessage ||
-            response?.message ||
-            "Failed to save Sub Contracting GRN.",
-          "error",
+          response?.errors?.[0]?.longMessage ||
+          response?.message ||
+          "Failed to save Sub Contracting GRN.",
+          "error"
         );
       }
     } catch (err) {
@@ -1355,17 +1508,18 @@ const SubContractingGrnForm = ({ data, onBack }) => {
       const body = err?.response?.data || err;
       addToast(
         body?.errors?.[0]?.shortMessage ||
-          body?.errors?.[0]?.longMessage ||
-          body?.message ||
-          body?.statusMessage ||
-          body?.error ||
-          "Something went wrong.",
-        "error",
+        body?.errors?.[0]?.longMessage ||
+        body?.message ||
+        body?.statusMessage ||
+        body?.error ||
+        "Something went wrong.",
+        "error"
       );
     } finally {
       setIsSubmitting(false);
     }
   };
+
   /* ---------------- Column definitions ---------------- */
 
   const detailColumns = [
@@ -1385,7 +1539,10 @@ const SubContractingGrnForm = ({ data, onBack }) => {
     { key: "qtyInPrimaryUnit", label: "Qty In Primary Unit" },
     { key: "location", label: "Location" },
     { key: "acceptedQty", label: "Accepted Qty" },
-    { key: "accQtyInPrimaryUnit", label: "Acc Qty In Primary Unit" },
+    {
+      key: "accQtyInPrimaryUnit",
+      label: "Acc Qty In Primary Unit",
+    },
     { key: "rejectedQty", label: "Rejected Qty" },
     { key: "rejQtyInPrimaryUnit", label: "Rej Qty In Primary Unit" },
     { key: "amount", label: "Amount" },
@@ -1411,9 +1568,24 @@ const SubContractingGrnForm = ({ data, onBack }) => {
     "igstAmount",
   ]);
 
+  const numericDetailKeys = new Set([
+    "sgstRate",
+    "cgstRate",
+    "igstRate",
+  ]);
+
+  const visibleDetailColumns = filterTaxColumns(
+    detailColumns,
+    header.isIGSTAppl
+  );
+
   const consumptionColumns = [
     { key: "itemCode", label: "OutGoing Item Code" },
-    { key: "itemDescription", label: "OutGoing Item Desc", readOnly: true },
+    {
+      key: "itemDescription",
+      label: "OutGoing Item Desc",
+      readOnly: true,
+    },
     { key: "unitCode", label: "Unit", readOnly: true },
     {
       key: "itemType",
@@ -1422,9 +1594,18 @@ const SubContractingGrnForm = ({ data, onBack }) => {
       options: ITEM_TYPES,
     },
     { key: "bomQty", label: "Bom Qty", readOnly: true },
-    { key: "availableStock", label: "Available Stock", type: "number" },
+    {
+      key: "availableStock",
+      label: "Available Stock",
+      type: "number",
+    },
     { key: "consumedQty", label: "Consumed Qty", readOnly: true },
-    { key: "scrapItem", label: "Scrap Item", type: "select", options: YES_NO },
+    {
+      key: "scrapItem",
+      label: "Scrap Item",
+      type: "select",
+      options: YES_NO,
+    },
     { key: "bomScrap", label: "Bom Scrap", readOnly: true },
     { key: "scrapQty", label: "Scrap Qty", type: "number" },
     { key: "rate", label: "Rate", type: "number" },
@@ -1432,6 +1613,26 @@ const SubContractingGrnForm = ({ data, onBack }) => {
   ];
 
   const grnHasError = Boolean(fieldErrors.grnDetail);
+
+  /* Tax Detail columns — Particulars dropdown + read-only amount */
+  const taxDetailColumns = useMemo(
+    () => [
+      {
+        key: "particulars",
+        label: "Particulars",
+        type: "select",
+        options: particularsOptions,
+        readOnly: false, // handled per-row below
+      },
+      {
+        key: "taxAmount",
+        label: "Tax Amount",
+        type: "number",
+        readOnly: true,
+      },
+    ],
+    [particularsOptions]
+  );
 
   return (
     <div className="p-2 max-w-7xl">
@@ -1445,13 +1646,15 @@ const SubContractingGrnForm = ({ data, onBack }) => {
         </button>
 
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-          {data ? "Edit Sub Contracting GRN" : "Add Sub Contracting GRN"}
+          {data
+            ? "Edit Sub Contracting GRN"
+            : "Add Sub Contracting GRN"}
         </h2>
       </div>
 
       {/* Main Card */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
-        {/* ---------------- Header Section ---------------- */}
+        {/* Header Section */}
         <div>
           <SectionHeader>Header Section</SectionHeader>
           <div className={fieldGrid}>
@@ -1469,7 +1672,7 @@ const SubContractingGrnForm = ({ data, onBack }) => {
               label="S.C GRN No"
               name="scGrnNo"
               value={generatingDocId ? "Generating..." : header.scGrnNo}
-              onChange={() => {}}
+              onChange={() => { }}
               error={fieldErrors.scGrnNo}
               required={!isEditMode}
               disabled
@@ -1480,7 +1683,10 @@ const SubContractingGrnForm = ({ data, onBack }) => {
               name="belongsTo"
               value={header.belongsTo}
               onChange={handleHeaderChange}
-              options={withCurrent(belongsToOptions, header.belongsTo)}
+              options={withCurrent(
+                belongsToOptions,
+                header.belongsTo
+              )}
             />
             <Field
               type="date"
@@ -1547,7 +1753,10 @@ const SubContractingGrnForm = ({ data, onBack }) => {
               value={header.gatePassNo}
               onChange={handleHeaderChange}
               error={fieldErrors.gatePassNo}
-              options={withCurrent(gatePassOptions, header.gatePassNo)}
+              options={withCurrent(
+                gatePassOptions,
+                header.gatePassNo
+              )}
               disabled={!header.vendorId}
               required
             />
@@ -1565,7 +1774,10 @@ const SubContractingGrnForm = ({ data, onBack }) => {
               value={header.scheduleNo}
               onChange={handleHeaderChange}
               error={fieldErrors.scheduleNo}
-              options={withCurrent(scheduleOptions, header.scheduleNo)}
+              options={withCurrent(
+                scheduleOptions,
+                header.scheduleNo
+              )}
               disabled={!header.vendorId}
               required
             />
@@ -1597,12 +1809,14 @@ const SubContractingGrnForm = ({ data, onBack }) => {
               name="serviceNameLabel"
               value={
                 scheduleOptions.find(
-                  (s) => String(s.serviceId) === String(header.serviceName),
+                  (s) =>
+                    String(s.serviceId) ===
+                    String(header.serviceName)
                 )?.serviceName ||
                 data?.serviceName?.serviceName ||
                 ""
               }
-              onChange={() => {}}
+              onChange={() => { }}
               disabled
             />
             <Field
@@ -1618,12 +1832,12 @@ const SubContractingGrnForm = ({ data, onBack }) => {
               name="sacCodeLabel"
               value={
                 scheduleOptions.find(
-                  (s) => String(s.hsnId) === String(header.sacCode),
+                  (s) => String(s.hsnId) === String(header.sacCode)
                 )?.hsnCode ||
                 data?.sacCode?.hsn ||
                 ""
               }
-              onChange={() => {}}
+              onChange={() => { }}
               disabled
             />
             <Field
@@ -1679,7 +1893,7 @@ const SubContractingGrnForm = ({ data, onBack }) => {
           </div>
         </div>
 
-        {/* ---------------- Child Tabs ---------------- */}
+        {/* Child Tabs */}
         <section className="mt-0 bg-white dark:bg-gray-800">
           <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 mb-0">
             <div className="flex flex-wrap">
@@ -1688,11 +1902,10 @@ const SubContractingGrnForm = ({ data, onBack }) => {
                   key={tab.key}
                   type="button"
                   onClick={() => setActiveChildTab(tab.key)}
-                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${
-                    activeChildTab === tab.key
+                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${activeChildTab === tab.key
                       ? "bg-blue-600 text-white"
                       : "text-gray-600 dark:text-gray-300"
-                  }`}
+                    }`}
                 >
                   {tab.label}
                   {tab.key === "grnDetail" && grnHasError && (
@@ -1705,31 +1918,43 @@ const SubContractingGrnForm = ({ data, onBack }) => {
             <button
               type="button"
               onClick={() => {
-                if (activeChildTab === "grnDetail") handleAddDetailRow();
-                else if (activeChildTab === "taxDetails") handleAddTaxRow();
+                if (activeChildTab === "grnDetail")
+                  handleAddDetailRow();
+                else if (activeChildTab === "taxDetails")
+                  handleAddTaxRow();
                 else if (activeChildTab === "invoiceCopy")
                   handleAddAttachmentRow();
               }}
-              className={`h-6 w-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-colors ${
-                activeChildTab === "summary" ? "invisible" : ""
-              }`}
+              className={`h-6 w-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-colors ${activeChildTab === "summary" ? "invisible" : ""
+                }`}
             >
               <Plus size={12} />
             </button>
           </div>
 
-          {/* GRN Detail (with nested Consumption/Scrap) */}
+          {/* GRN Detail */}
           {activeChildTab === "grnDetail" && (
             <div className="pt-4">
               <TableWrapper>
-                <TableHead
-                  headers={[
-                    "#",
-                    "",
-                    ...detailColumns.map((c) => c.label),
-                    "Action",
-                  ]}
-                />
+                <thead className="bg-gray-100 dark:bg-gray-700">
+                  <tr>
+                    <th className="p-2 whitespace-nowrap text-left dark:text-white">
+                      #
+                    </th>
+                    <th className="p-2 whitespace-nowrap text-left dark:text-white" />
+                    {visibleDetailColumns.map((c) => (
+                      <th
+                        key={c.key}
+                        className="p-2 whitespace-nowrap text-left dark:text-white"
+                      >
+                        {c.label}
+                      </th>
+                    ))}
+                    <th className="p-2 whitespace-nowrap text-left dark:text-white">
+                      Action
+                    </th>
+                  </tr>
+                </thead>
                 <tbody>
                   {detailRows.map((row, idx) => (
                     <Fragment key={idx}>
@@ -1743,7 +1968,6 @@ const SubContractingGrnForm = ({ data, onBack }) => {
                             onClick={() => {
                               const opening = expandedRow !== idx;
                               setExpandedRow(opening ? idx : null);
-                              // load BOM options so consumption selects work
                               if (opening && row.itemId)
                                 loadBomForItem(row.itemId);
                             }}
@@ -1756,8 +1980,11 @@ const SubContractingGrnForm = ({ data, onBack }) => {
                             )}
                           </button>
                         </td>
-                        {detailColumns.map((col) => (
-                          <td className="p-2 align-top" key={col.key}>
+                        {visibleDetailColumns.map((col) => (
+                          <td
+                            className="p-2 align-top"
+                            key={col.key}
+                          >
                             {col.key === "incomingItemCode" ? (
                               <select
                                 value={row.optionKey}
@@ -1765,21 +1992,24 @@ const SubContractingGrnForm = ({ data, onBack }) => {
                                   handleDetailCellChange(
                                     idx,
                                     "incomingItemCode",
-                                    e.target.value,
+                                    e.target.value
                                   )
                                 }
                                 className={cellInputClasses}
                               >
                                 <option value="">-- Select --</option>
                                 {itemOptions.map((opt) => (
-                                  <option key={opt.value} value={opt.value}>
+                                  <option
+                                    key={opt.value}
+                                    value={opt.value}
+                                  >
                                     {opt.label}
                                   </option>
                                 ))}
-                                {/* keeps the saved item visible when editing */}
                                 {row.optionKey &&
                                   !itemOptions.some(
-                                    (o) => o.value === row.optionKey,
+                                    (o) =>
+                                      o.value === row.optionKey
                                   ) && (
                                     <option value={row.optionKey}>
                                       {row.itemCode} ({row.jobOrderNo})
@@ -1793,7 +2023,7 @@ const SubContractingGrnForm = ({ data, onBack }) => {
                                   handleDetailCellChange(
                                     idx,
                                     "inspectionable",
-                                    e.target.value,
+                                    e.target.value
                                   )
                                 }
                                 className={cellInputClasses}
@@ -1811,28 +2041,37 @@ const SubContractingGrnForm = ({ data, onBack }) => {
                                   handleDetailCellChange(
                                     idx,
                                     "location",
-                                    e.target.value,
+                                    e.target.value
                                   )
                                 }
                                 className={cellInputClasses}
                               >
                                 <option value="">-- Select --</option>
                                 {locationOptions.map((opt) => (
-                                  <option key={opt.value} value={opt.value}>
+                                  <option
+                                    key={opt.value}
+                                    value={opt.value}
+                                  >
                                     {opt.label}
                                   </option>
                                 ))}
                               </select>
                             ) : (
                               <input
-                                type="text"
+                                type={
+                                  numericDetailKeys.has(col.key)
+                                    ? "number"
+                                    : "text"
+                                }
                                 value={row[col.key] ?? ""}
-                                readOnly={readOnlyDetailKeys.has(col.key)}
+                                readOnly={readOnlyDetailKeys.has(
+                                  col.key
+                                )}
                                 onChange={(e) =>
                                   handleDetailCellChange(
                                     idx,
                                     col.key,
-                                    e.target.value,
+                                    e.target.value
                                   )
                                 }
                                 className={
@@ -1847,13 +2086,14 @@ const SubContractingGrnForm = ({ data, onBack }) => {
                         <td className="p-2 text-center">
                           <button
                             type="button"
-                            onClick={() => handleRemoveDetailRow(idx)}
+                            onClick={() =>
+                              handleRemoveDetailRow(idx)
+                            }
                             disabled={detailRows.length <= 1}
-                            className={`h-6 w-6 rounded text-white flex items-center justify-center ${
-                              detailRows.length <= 1
+                            className={`h-6 w-6 rounded text-white flex items-center justify-center ${detailRows.length <= 1
                                 ? "bg-gray-400 cursor-not-allowed"
                                 : "bg-red-600 hover:bg-red-700"
-                            }`}
+                              }`}
                           >
                             <Trash2 size={12} />
                           </button>
@@ -1863,7 +2103,7 @@ const SubContractingGrnForm = ({ data, onBack }) => {
                       {expandedRow === idx && (
                         <tr>
                           <td
-                            colSpan={detailColumns.length + 3}
+                            colSpan={visibleDetailColumns.length + 3}
                             className="p-3 bg-gray-50 dark:bg-gray-900"
                           >
                             <div className="flex items-center justify-between mb-2">
@@ -1874,7 +2114,9 @@ const SubContractingGrnForm = ({ data, onBack }) => {
                               </span>
                               <button
                                 type="button"
-                                onClick={() => handleAddConsumptionRow(idx)}
+                                onClick={() =>
+                                  handleAddConsumptionRow(idx)
+                                }
                                 className="h-5 w-5 rounded bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center"
                               >
                                 <Plus size={10} />
@@ -1884,7 +2126,9 @@ const SubContractingGrnForm = ({ data, onBack }) => {
                               <TableHead
                                 headers={[
                                   "#",
-                                  ...consumptionColumns.map((c) => c.label),
+                                  ...consumptionColumns.map(
+                                    (c) => c.label
+                                  ),
                                   "Action",
                                 ]}
                               />
@@ -1892,7 +2136,9 @@ const SubContractingGrnForm = ({ data, onBack }) => {
                                 {row.consumption.length === 0 ? (
                                   <tr>
                                     <td
-                                      colSpan={consumptionColumns.length + 2}
+                                      colSpan={
+                                        consumptionColumns.length + 2
+                                      }
                                       className="p-2 text-center text-[11px] text-gray-400"
                                     >
                                       No consumption/scrap rows yet.
@@ -1907,107 +2153,138 @@ const SubContractingGrnForm = ({ data, onBack }) => {
                                       <td className="p-2 text-center dark:text-white">
                                         {ci + 1}
                                       </td>
-                                      {consumptionColumns.map((col) => (
-                                        <td
-                                          className="p-2 align-top"
-                                          key={col.key}
-                                        >
-                                          {col.key === "itemCode" ? (
-                                            <select
-                                              value={c.itemId}
-                                              onChange={(e) =>
-                                                handleConsumptionCellChange(
-                                                  idx,
-                                                  ci,
-                                                  "itemId",
-                                                  e.target.value,
-                                                )
-                                              }
-                                              className={cellInputClasses}
-                                            >
-                                              <option value="">
-                                                -- Select --
-                                              </option>
-                                              {(
-                                                bomOptionsByItem[row.itemId] ||
-                                                []
-                                              ).map((b) => (
-                                                <option
-                                                  key={b.itemId}
-                                                  value={b.itemId}
-                                                >
-                                                  {b.itemCode}
+                                      {consumptionColumns.map(
+                                        (col) => (
+                                          <td
+                                            className="p-2 align-top"
+                                            key={col.key}
+                                          >
+                                            {col.key ===
+                                              "itemCode" ? (
+                                              <select
+                                                value={c.itemId}
+                                                onChange={(e) =>
+                                                  handleConsumptionCellChange(
+                                                    idx,
+                                                    ci,
+                                                    "itemId",
+                                                    e.target.value
+                                                  )
+                                                }
+                                                className={
+                                                  cellInputClasses
+                                                }
+                                              >
+                                                <option value="">
+                                                  -- Select --
                                                 </option>
-                                              ))}
-                                              {/* keeps the saved outgoing item visible when editing */}
-                                              {c.itemId &&
-                                                !(
+                                                {(
                                                   bomOptionsByItem[
-                                                    row.itemId
+                                                  row.itemId
                                                   ] || []
-                                                ).some(
-                                                  (b) =>
-                                                    String(b.itemId) ===
-                                                    String(c.itemId),
-                                                ) && (
-                                                  <option value={c.itemId}>
-                                                    {c.itemCode}
+                                                ).map((b) => (
+                                                  <option
+                                                    key={b.itemId}
+                                                    value={b.itemId}
+                                                  >
+                                                    {b.itemCode}
                                                   </option>
-                                                )}
-                                            </select>
-                                          ) : col.type === "select" ? (
-                                            <select
-                                              value={c[col.key] ?? ""}
-                                              onChange={(e) =>
-                                                handleConsumptionCellChange(
-                                                  idx,
-                                                  ci,
-                                                  col.key,
-                                                  e.target.value,
-                                                )
-                                              }
-                                              className={cellInputClasses}
-                                            >
-                                              <option value="">
-                                                -- Select --
-                                              </option>
-                                              {col.options.map((opt) => (
-                                                <option key={opt} value={opt}>
-                                                  {opt}
+                                                ))}
+                                                {c.itemId &&
+                                                  !(
+                                                    bomOptionsByItem[
+                                                    row.itemId
+                                                    ] || []
+                                                  ).some(
+                                                    (b) =>
+                                                      String(
+                                                        b.itemId
+                                                      ) ===
+                                                      String(
+                                                        c.itemId
+                                                      )
+                                                  ) && (
+                                                    <option
+                                                      value={
+                                                        c.itemId
+                                                      }
+                                                    >
+                                                      {c.itemCode}
+                                                    </option>
+                                                  )}
+                                              </select>
+                                            ) : col.type ===
+                                              "select" ? (
+                                              <select
+                                                value={
+                                                  c[col.key] ?? ""
+                                                }
+                                                onChange={(e) =>
+                                                  handleConsumptionCellChange(
+                                                    idx,
+                                                    ci,
+                                                    col.key,
+                                                    e.target.value
+                                                  )
+                                                }
+                                                className={
+                                                  cellInputClasses
+                                                }
+                                              >
+                                                <option value="">
+                                                  -- Select --
                                                 </option>
-                                              ))}
-                                            </select>
-                                          ) : (
-                                            <input
-                                              type={
-                                                col.type === "number"
-                                                  ? "number"
-                                                  : "text"
-                                              }
-                                              value={c[col.key] ?? ""}
-                                              readOnly={col.readOnly}
-                                              onChange={(e) =>
-                                                handleConsumptionCellChange(
-                                                  idx,
-                                                  ci,
-                                                  col.key,
-                                                  e.target.value,
-                                                )
-                                              }
-                                              className={
-                                                col.readOnly
-                                                  ? cellReadOnlyClasses
-                                                  : cellInputClasses
-                                              }
-                                            />
-                                          )}
-                                        </td>
-                                      ))}
+                                                {col.options.map(
+                                                  (opt) => (
+                                                    <option
+                                                      key={opt}
+                                                      value={opt}
+                                                    >
+                                                      {opt}
+                                                    </option>
+                                                  )
+                                                )}
+                                              </select>
+                                            ) : (
+                                              <input
+                                                type={
+                                                  col.type ===
+                                                    "number"
+                                                    ? "number"
+                                                    : "text"
+                                                }
+                                                value={
+                                                  c[col.key] ?? ""
+                                                }
+                                                readOnly={
+                                                  col.readOnly
+                                                }
+                                                onChange={(e) =>
+                                                  handleConsumptionCellChange(
+                                                    idx,
+                                                    ci,
+                                                    col.key,
+                                                    e.target.value
+                                                  )
+                                                }
+                                                className={
+                                                  col.readOnly
+                                                    ? cellReadOnlyClasses
+                                                    : cellInputClasses
+                                                }
+                                              />
+                                            )}
+                                          </td>
+                                        )
+                                      )}
                                       <td className="p-2 text-center">
                                         <button
                                           type="button"
                                           onClick={() =>
-                                            handleRemoveConsumptionRow(idx, ci)
+                                            handleRemoveConsumptionRow(
+                                              idx,
+                                              ci
+                                            )
                                           }
                                           className="h-5 w-5 rounded bg-red-600 hover:bg-red-700 text-white flex items-center justify-center"
                                         >
@@ -2035,18 +2312,116 @@ const SubContractingGrnForm = ({ data, onBack }) => {
             </div>
           )}
 
-          {/* Tax Details */}
+          {/* Tax Details — Auto-calculated system rows + user rows */}
           {activeChildTab === "taxDetails" && (
             <div className="pt-4">
-              <DynamicTable
-                columns={[
-                  { key: "particulars", label: "Particulars" },
-                  { key: "taxAmount", label: "Tax Amount", type: "number" },
-                ]}
-                rows={taxDetailRows}
-                onCellChange={handleTaxCellChange}
-                onRemoveRow={handleRemoveTaxRow}
-              />
+              <TableWrapper>
+                <thead className="bg-gray-100 dark:bg-gray-700">
+                  <tr>
+                    <th className="p-2 whitespace-nowrap text-left dark:text-white">
+                      #
+                    </th>
+                    <th className="p-2 whitespace-nowrap text-left dark:text-white">
+                      Particulars
+                    </th>
+                    <th className="p-2 whitespace-nowrap text-left dark:text-white">
+                      Tax Amount
+                    </th>
+                    <th className="p-2 whitespace-nowrap text-left dark:text-white">
+                      Action
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {taxDetailRows.map((row, idx) => {
+                    const isSystemRow =
+                      row.isSystemRow ||
+                      SYSTEM_PARTICULARS.includes(row.particulars);
+                    return (
+                      <tr
+                        key={idx}
+                        className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"
+                      >
+                        <td className="p-2 text-center font-medium dark:text-white">
+                          {idx + 1}
+                        </td>
+                        <td className="p-2 align-top">
+                          <select
+                            value={row.particulars}
+                            onChange={(e) =>
+                              handleTaxCellChange(
+                                idx,
+                                "particulars",
+                                e.target.value
+                              )
+                            }
+                            className={`${cellInputClasses} ${isSystemRow
+                                ? "bg-gray-100 dark:bg-gray-800 cursor-not-allowed"
+                                : ""
+                              }`}
+                            disabled={isSystemRow}
+                          >
+                            <option value="">-- Select --</option>
+                            {isSystemRow ? (
+                              <option value={row.particulars}>
+                                {row.particulars}
+                              </option>
+                            ) : (
+                              particularsOptions
+                                .filter(
+                                  (o) =>
+                                    !SYSTEM_PARTICULARS.includes(
+                                      o.label
+                                    )
+                                )
+                                .map((opt) => (
+                                  <option
+                                    key={opt.value || opt.label}
+                                    value={opt.label}
+                                  >
+                                    {opt.label}
+                                  </option>
+                                ))
+                            )}
+                          </select>
+                        </td>
+                        <td className="p-2 align-top">
+                          <input
+                            type="number"
+                            value={row.taxAmount ?? ""}
+                            readOnly={isSystemRow}
+                            onChange={(e) =>
+                              handleTaxCellChange(
+                                idx,
+                                "taxAmount",
+                                e.target.value
+                              )
+                            }
+                            className={
+                              isSystemRow
+                                ? cellReadOnlyClasses
+                                : cellInputClasses
+                            }
+                          />
+                        </td>
+                        <td className="p-2 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveTaxRow(idx)}
+                            disabled={isSystemRow}
+                            className={`h-6 w-6 rounded text-white flex items-center justify-center ${isSystemRow
+                                ? "bg-gray-400 cursor-not-allowed"
+                                : "bg-red-600 hover:bg-red-700"
+                              }`}
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </TableWrapper>
             </div>
           )}
 
@@ -2058,21 +2433,21 @@ const SubContractingGrnForm = ({ data, onBack }) => {
                   label="Basic Amount"
                   name="basicAmountDisplay"
                   value={round2(basicAmount).toFixed(2)}
-                  onChange={() => {}}
+                  onChange={() => { }}
                   disabled
                 />
                 <Field
                   label="Total Amount"
                   name="totalAmountDisplay"
                   value={totalAmount.toFixed(2)}
-                  onChange={() => {}}
+                  onChange={() => { }}
                   disabled
                 />
                 <Field
                   label="Total Tax"
                   name="totalTaxDisplay"
-                  value={round2(totalTax).toFixed(2)}
-                  onChange={() => {}}
+                  value={round2(systemTaxTotal + totalTax).toFixed(2)}
+                  onChange={() => { }}
                   disabled
                 />
                 <Field
@@ -2104,6 +2479,7 @@ const SubContractingGrnForm = ({ data, onBack }) => {
           onCancel={onBack}
           onSave={handleSave}
           isSubmitting={isSubmitting}
+          payload=""
           saveLabel={data ? "Update" : "Save"}
         />
       </div>
