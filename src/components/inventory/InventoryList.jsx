@@ -48,12 +48,12 @@ const SECTIONS = [
         path: "/goodsreceivednote",
         screenCode: "GOODS_RECEIVED_NOTE",
       },
-      {
-        name: "Import GRN",
-        icon: Ship,
-        path: "/importgrn",
-        screenCode: "IMPORT_GRN",
-      },
+      // {
+      //   name: "Import GRN",
+      //   icon: Ship,
+      //   path: "/importgrn",
+      //   screenCode: "IMPORT_GRN",
+      // },
       {
         name: "Stock Transfer GRN",
         icon: Truck,

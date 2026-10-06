@@ -15,7 +15,6 @@ import { useToast } from "../../Toast/ToastContext";
 import branchAPI from "../../../api/branchAPI";
 import listOfValuesAPI from "../../../api/listOfValuesAPI";
 import locationMasterAPI from "../../../api/locationMasterAPI";
-import countryAPI from "../../../api/countryAPI";
 import currencyAPI from "../../../api/currencyAPI";
 import unitMasterAPI from "../../../api/unitAPI";
 import transportAPI from "../../../api/transportAPI";
@@ -57,6 +56,27 @@ let attachmentRowIdCounter = 1;
 /* Normalise ids coming back from API into strings so they match <select> values */
 const toStr = (v) =>
   v === undefined || v === null || v === "" ? "" : String(v);
+
+/* Keep the saved value selectable even if the API no longer lists it
+   (gate pass / PO / schedule already consumed by this GRN). */
+const withCurrent = (options, value) => {
+  const v = toStr(value);
+  if (!v) return options || [];
+  const exists = (options || []).some((o) => toStr(o.value ?? o) === v);
+  return exists ? options : [...(options || []), { value: v, label: v }];
+};
+
+/* Same for item-code selects: add every item already used in the rows */
+const mergeRowItems = (options, rows, codeKey, descKey) => {
+  const out = [...(options || [])];
+  (rows || []).forEach((r) => {
+    const v = toStr(r[codeKey]);
+    if (v && !out.some((o) => toStr(o.value) === v)) {
+      out.push({ value: v, label: r[descKey] || v });
+    }
+  });
+  return out;
+};
 
 /* ---------------------------------------------------------------------------- */
 /* Shared building blocks */
@@ -719,7 +739,6 @@ const GoodsReceivedNoteForm = ({ onBack, onSave, editData }) => {
   const [gatePassOptions, setGatePassOptions] = useState([]);
   const [gatePassMap, setGatePassMap] = useState({}); // eslint-disable-line no-unused-vars
   const [poOptions, setPoOptions] = useState([]);
-  const [countryOptions, setCountryOptions] = useState([]);
   const [currencyOptions, setCurrencyOptions] = useState([]);
   const [currencyMap, setCurrencyMap] = useState({});
   const [itemOptions, setItemOptions] = useState([]);
@@ -907,6 +926,8 @@ const GoodsReceivedNoteForm = ({ onBack, onSave, editData }) => {
           gstNo: supplier.gstNo || "",
           pinCode: supplier.pinCode || "",
           isRegistered: supplier.isRegistered ?? "",
+          dealerType: supplier.dealerType || "",
+          isReverseChrg: supplier.isReverseChrg || "",
         };
         return {
           value: supplier.supplierId,
@@ -1194,20 +1215,6 @@ const GoodsReceivedNoteForm = ({ onBack, onSave, editData }) => {
     [ORG_ID],
   );
 
-  const loadCountries = useCallback(async () => {
-    try {
-      const res = await countryAPI.getCountries(ORG_ID);
-      const options = (res || []).map((country) => ({
-        value: country.id || country.countryCode,
-        label: country.countryName || country.countryCode || country.id,
-      }));
-      setCountryOptions(options);
-    } catch (error) {
-      console.error("Failed to load countries:", error);
-      setCountryOptions([]);
-    }
-  }, [ORG_ID]);
-
   const loadCurrencies = useCallback(async () => {
     try {
       const res = await currencyAPI.getCurrencies(ORG_ID);
@@ -1328,6 +1335,13 @@ const GoodsReceivedNoteForm = ({ onBack, onSave, editData }) => {
     if (!isImport) {
       setLocalHeader((prev) => ({
         ...prev,
+        // country is kept as a plain name (taken from the supplier)
+        country:
+          (typeof grn.country === "string"
+            ? grn.country
+            : grn.country?.countryName) ||
+          grn.supplierCode?.country ||
+          "",
         dealerType: grn.dealerType || "",
         isReverseChrg: grn.isReverseCharge || "",
         scheduleNo: grn.scheduleNo || "",
@@ -1504,6 +1518,26 @@ const GoodsReceivedNoteForm = ({ onBack, onSave, editData }) => {
     }
   }, []);
 
+  // Country / dealer type / reverse charge come from the supplier. In edit mode,
+  // fill anything the saved GRN did not return once the supplier list is loaded.
+  useEffect(() => {
+    const sup = supplierMap[commonHeader.supplierCode];
+    if (!sup) return;
+    setLocalHeader((prev) => {
+      const next = {
+        ...prev,
+        country: prev.country || sup.country || "",
+        dealerType: prev.dealerType || sup.dealerType || "",
+        isReverseChrg: prev.isReverseChrg || sup.isReverseChrg || "",
+      };
+      return next.country === prev.country &&
+        next.dealerType === prev.dealerType &&
+        next.isReverseChrg === prev.isReverseChrg
+        ? prev
+        : next;
+    });
+  }, [supplierMap, commonHeader.supplierCode]);
+
   // Fetch GRN by id when editing
   useEffect(() => {
     const loadById = async () => {
@@ -1533,7 +1567,6 @@ const GoodsReceivedNoteForm = ({ onBack, onSave, editData }) => {
         loadBelongsTo(),
         loadLocations(),
         loadSuppliers(),
-        loadCountries(),
         loadCurrencies(),
         loadParticulars(),
         loadUnits(),
@@ -1546,7 +1579,6 @@ const GoodsReceivedNoteForm = ({ onBack, onSave, editData }) => {
     loadBelongsTo,
     loadLocations,
     loadSuppliers,
-    loadCountries,
     loadCurrencies,
     loadParticulars,
     loadUnits,
@@ -1774,6 +1806,9 @@ const GoodsReceivedNoteForm = ({ onBack, onSave, editData }) => {
 
         setLocalHeader((prev) => ({
           ...prev,
+          country: supplier.country || "",
+          dealerType: supplier.dealerType || "",
+          isReverseChrg: supplier.isReverseChrg || "",
           scheduleNo: "",
           scheduleDate: "",
           schStartDate: "",
@@ -1803,6 +1838,18 @@ const GoodsReceivedNoteForm = ({ onBack, onSave, editData }) => {
         gatePassNo: "",
         poNo: "",
       }));
+      setLocalHeader((prev) => ({
+        ...prev,
+        country: "",
+        dealerType: "",
+        isReverseChrg: "",
+        scheduleNo: "",
+        scheduleDate: "",
+        schStartDate: "",
+        schEndDate: "",
+      }));
+      setScheduleOptions([]);
+      setScheduleMap({});
       return;
     }
 
@@ -2250,7 +2297,12 @@ const GoodsReceivedNoteForm = ({ onBack, onSave, editData }) => {
           key: "itemCode",
           label: "Item Code",
           type: "select",
-          options: itemOptions,
+          options: mergeRowItems(
+            itemOptions,
+            localItemRows,
+            "itemCode",
+            "itemDescription",
+          ),
           disabled: false,
         },
         {
@@ -2481,7 +2533,12 @@ const GoodsReceivedNoteForm = ({ onBack, onSave, editData }) => {
           key: "itemCode",
           label: "Item Code",
           type: "select",
-          options: importItemOptions,
+          options: mergeRowItems(
+            importItemOptions,
+            importItemRows,
+            "itemCode",
+            "description",
+          ),
         },
         {
           key: "description",
@@ -3053,7 +3110,7 @@ const GoodsReceivedNoteForm = ({ onBack, onSave, editData }) => {
                 value={commonHeader.gatePassNo}
                 onChange={handleCommonHeaderChange}
                 error={fieldErrors.gatePassNo}
-                options={gatePassOptions}
+                options={withCurrent(gatePassOptions, commonHeader.gatePassNo)}
                 required
               />
             )}
@@ -3064,7 +3121,10 @@ const GoodsReceivedNoteForm = ({ onBack, onSave, editData }) => {
               value={commonHeader.poNo}
               onChange={handleCommonHeaderChange}
               error={fieldErrors.poNo}
-              options={grnType === "Local" ? poOptions : importPoOptions}
+              options={withCurrent(
+                grnType === "Local" ? poOptions : importPoOptions,
+                commonHeader.poNo,
+              )}
               required
             />
             <Field
@@ -3110,13 +3170,12 @@ const GoodsReceivedNoteForm = ({ onBack, onSave, editData }) => {
         {grnType === "Local" ? (
           <div className={fieldGrid}>
             <Field
-              type="select"
               label="Country"
               name="country"
               value={localHeader.country}
               onChange={handleLocalHeaderChange}
               error={fieldErrors.country}
-              options={countryOptions}
+              readOnly
               required
             />
             <Field
@@ -3139,7 +3198,7 @@ const GoodsReceivedNoteForm = ({ onBack, onSave, editData }) => {
               name="scheduleNo"
               value={localHeader.scheduleNo}
               onChange={handleLocalHeaderChange}
-              options={scheduleOptions}
+              options={withCurrent(scheduleOptions, localHeader.scheduleNo)}
             />
             <Field
               type="date"

@@ -1,15 +1,17 @@
 import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 
 import physicalStockReconciliationAPI from "../../../api/Inventory/physicalStockReconciliationAPI";
 import branchAPI from "../../../api/branchAPI";
+import { employeeAPI } from "../../../api/employeeAPI";
 import itemAPI from "../../../api/itemAPI";
 import listOfValuesAPI from "../../../api/listOfValuesAPI";
 
 import { useToast } from "../../Toast/ToastContext";
 
-/* ---------------------------------------------------------------------------- */
-/* Shared design tokens                                                        */
+/* ========================================================================= */
+/* DESIGN TOKENS                                                             */
+/* ========================================================================= */
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -36,8 +38,9 @@ const labelClasses =
 const fieldGrid =
   "grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-x-3 gap-y-2 items-start";
 
-/* ---------------------------------------------------------------------------- */
-/* Helpers                                                                     */
+/* ========================================================================= */
+/* HELPERS                                                                   */
+/* ========================================================================= */
 
 const toNumber = (value, fallback = 0) => {
   if (value === null || value === undefined || value === "") return fallback;
@@ -53,6 +56,15 @@ const toInteger = (value, fallback = 0) => {
   return Number.isFinite(n) ? n : fallback;
 };
 
+/* Number or null (never NaN) */
+const toIdOrNull = (value) => {
+  if (value === "" || value === null || value === undefined) return null;
+
+  const n = Number(value);
+
+  return Number.isFinite(n) ? n : null;
+};
+
 const round2 = (value) =>
   Math.round((toNumber(value) + Number.EPSILON) * 100) / 100;
 
@@ -62,8 +74,335 @@ const todayISO = () => new Date().toISOString().slice(0, 10);
 
 const nowTime = () => new Date().toTimeString().slice(0, 8);
 
-/* ---------------------------------------------------------------------------- */
-/* Shared building blocks                                                      */
+const isObj = (v) => v !== null && typeof v === "object";
+
+const norm = (v) =>
+  String(v ?? "")
+    .trim()
+    .toLowerCase();
+
+/* First value that is not undefined / null / "" */
+const pick = (...values) => {
+  for (const v of values) {
+    if (v !== undefined && v !== null && v !== "") return v;
+  }
+  return "";
+};
+
+/* ID of a backend value that can be an object or a primitive */
+const idOf = (v, ...keys) => {
+  if (isObj(v)) {
+    return pick(...keys.map((k) => v[k]), v.id);
+  }
+  return v ?? "";
+};
+
+/* Unit label from an item record: object, plain text, or alternate keys */
+const itemUnitText = (item) => {
+  const source = item?.unit ?? item?.primaryUnits ?? item?.uom ?? null;
+
+  const text = unitText(source);
+
+  return text || String(pick(item?.primaryUnit, item?.unitName));
+};
+
+/* Unit can be an object or a plain text */
+const unitText = (u) =>
+  isObj(u)
+    ? String(pick(u.unitName, u.primaryUnit, u.name, u.unit))
+    : String(u ?? "");
+
+/* Converts "2026-09-01T00:00:00", "01-09-2026", "01/09/2026" -> "2026-09-01" */
+const toDateInput = (v) => {
+  const text = String(v ?? "").trim();
+
+  if (!text) return "";
+
+  if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
+
+  const dmy = text.match(/^(\d{2})[-/](\d{2})[-/](\d{4})/);
+
+  if (dmy) return `${dmy[3]}-${dmy[2]}-${dmy[1]}`;
+
+  return "";
+};
+
+/*
+ * Make sure the saved value is always visible in a <select>, even if it is not
+ * (yet) one of the options (options still loading, name vs id, different case).
+ */
+const withCurrent = (options, value) => {
+  const list = options || [];
+
+  if (value === "" || value === null || value === undefined) return list;
+
+  const exists = list.some(
+    (o) => String(isObj(o) ? o.value : o) === String(value),
+  );
+
+  return exists ? list : [...list, { value, label: String(value) }];
+};
+
+const APPROVAL_OPTIONS = [
+  { value: "Pending", label: "Pending" },
+  { value: "Approved", label: "Approved" },
+  { value: "Rejected", label: "Rejected" },
+];
+
+/* ========================================================================= */
+/* EMPTY ROW + DEFAULT FORM                                                  */
+/* ========================================================================= */
+
+const emptyItemRow = () => ({
+  id: 0,
+  item: "",
+  itemCode: "",
+  itemDescription: "",
+  unit: "",
+  bookStock: "",
+  actualQty: "",
+  difference: "",
+  lcRate: "",
+  rate: "",
+  reasonCode: "",
+  amount: "",
+});
+
+const getDefaultForm = (branch) => ({
+  id: 0,
+  active: true,
+
+  approvedByPM: "Pending",
+
+  belongsTo: "",
+
+  branch: String(branch || ""),
+
+  cancelRemarks: "",
+
+  createdBy: "",
+
+  docDate: todayISO(),
+
+  docId: "",
+
+  financialYear: `${new Date().getFullYear()}-${String(
+    (new Date().getFullYear() % 100) + 1,
+  ).padStart(2, "0")}`,
+
+  location: "",
+
+  locationType: "",
+
+  narration: "",
+
+  preparedBy: "",
+
+  /* name sent by the backend, used only to resolve preparedBy against options */
+  preparedByName: "",
+
+  refDate: todayISO(),
+
+  refNo: "",
+
+  time: nowTime(),
+});
+
+/* ========================================================================= */
+/* EDIT DATA: EXTRACT + MAP                                                  */
+/* ========================================================================= */
+
+/*
+ * getReconciliationById may return:
+ *   - the record itself
+ *   - an array with one record
+ *   - { status, paramObjectsMap: { <someVO>: {...} } }
+ * so handle all of them.
+ */
+const extractRecord = (response) => {
+  if (!response) return null;
+
+  if (Array.isArray(response)) {
+    return isObj(response[0]) ? response[0] : null;
+  }
+
+  const map = response?.paramObjectsMap || response?.data?.paramObjectsMap;
+
+  if (map) {
+    let record =
+      map.physicalStockReConcilationVO ??
+      map.physicalStockReconciliationVO ??
+      map.physicalStockReConcilation ??
+      map.physicalStockReconciliation ??
+      Object.values(map).find((v) => isObj(v));
+
+    if (Array.isArray(record)) record = record[0];
+
+    return isObj(record) ? record : null;
+  }
+
+  if (isObj(response?.data) && !Array.isArray(response.data)) {
+    return response.data;
+  }
+
+  return isObj(response) ? response : null;
+};
+
+/* Find an array on the record by exact key first, then by key pattern */
+const findArray = (d, exactKeys, regex) => {
+  for (const key of exactKeys) {
+    if (Array.isArray(d[key]) && d[key].length) return d[key];
+  }
+
+  const found = Object.keys(d).find(
+    (key) => regex.test(key) && Array.isArray(d[key]) && d[key].length,
+  );
+
+  return found ? d[found] : [];
+};
+
+const mapDetailRow = (detail) => {
+  const itemObj = isObj(detail.item) ? detail.item : null;
+
+  const bookStock = pick(detail.bookStock, detail.bookQty);
+  const actualQty = pick(detail.actualQty, detail.actualStock);
+  const rate = pick(detail.rate);
+
+  const difference =
+    pick(detail.difference) !== ""
+      ? detail.difference
+      : bookStock !== "" || actualQty !== ""
+        ? round2(toNumber(actualQty) - toNumber(bookStock))
+        : "";
+
+  const amount =
+    pick(detail.amount) !== ""
+      ? detail.amount
+      : actualQty !== "" && rate !== ""
+        ? money(toNumber(actualQty) * toNumber(rate))
+        : "";
+
+  return {
+    ...emptyItemRow(),
+
+    id: detail.id ?? 0,
+
+    /* item id (or code, resolved against options later) */
+    item: String(
+      pick(
+        itemObj ? pick(itemObj.itemId, itemObj.id) : detail.item,
+        detail.itemId,
+      ),
+    ),
+
+    itemCode: String(pick(itemObj?.itemCode, detail.itemCode, itemObj?.code)),
+
+    itemDescription: String(
+      pick(
+        itemObj?.itemDescription,
+        detail.itemDescription,
+        detail.description,
+      ),
+    ),
+
+    unit: unitText(pick(detail.unit, itemObj?.unit, itemObj?.uom)),
+
+    bookStock,
+    actualQty,
+    difference,
+
+    lcRate: pick(detail.lcRate),
+    rate,
+
+    reasonCode: String(pick(detail.reasonCode)),
+
+    amount,
+  };
+};
+
+const mapEditData = (d, fallbackBranchId) => {
+  const approval = APPROVAL_OPTIONS.find(
+    (o) => norm(o.value) === norm(isObj(d.approvedByPM) ? "" : d.approvedByPM),
+  );
+
+  const preparedObj = isObj(d.preparedBy) ? d.preparedBy : null;
+
+  const form = {
+    ...getDefaultForm(fallbackBranchId),
+
+    id: d.id || 0,
+
+    active: d.active !== false && String(d.active).toLowerCase() !== "inactive",
+
+    approvedByPM: approval?.value || "Pending",
+
+    belongsTo: String(pick(d.belongsTo, d.belongTo)),
+
+    branch: String(
+      pick(idOf(d.branch, "branchId"), d.branchId, fallbackBranchId),
+    ),
+
+    cancelRemarks: d.cancelRemarks || "",
+
+    createdBy: d.createdBy || "",
+
+    docDate: toDateInput(d.docDate) || todayISO(),
+
+    docId: String(pick(d.docId, d.docNo)),
+
+    financialYear: String(
+      pick(d.financialYear, getDefaultForm(fallbackBranchId).financialYear),
+    ),
+
+    location: String(idOf(d.location, "locationId")),
+
+    locationType: String(idOf(d.locationType, "locationTypeId")),
+
+    narration: d.narration || "",
+
+    /* ID, or a name/code that is resolved against employees later */
+    preparedBy: String(
+      preparedObj
+        ? pick(preparedObj.employeeId, preparedObj.id)
+        : (d.preparedBy ?? ""),
+    ),
+
+    preparedByName: String(
+      preparedObj
+        ? pick(preparedObj.employeeName, preparedObj.employeeCode)
+        : "",
+    ),
+
+    refDate: toDateInput(d.refDate) || todayISO(),
+
+    refNo: d.refNo || "",
+
+    time: String(pick(d.time, nowTime())).slice(0, 8),
+  };
+
+  const rawDetails = findArray(
+    d,
+    [
+      "physicalStockReConcilationDetailsDTO",
+      "physicalStockReConcilationDetailsVO",
+      "physicalStockReConcilationDetailsResponseDTO",
+      "physicalStockReconciliationDetailsVO",
+      "physicalStockReconciliationDetailsDTO",
+      "details",
+    ],
+    /detail/i,
+  );
+
+  const itemRows = rawDetails.length
+    ? rawDetails.map(mapDetailRow)
+    : [emptyItemRow()];
+
+  return { form, itemRows };
+};
+
+/* ========================================================================= */
+/* SHARED BUILDING BLOCKS                                                    */
+/* ========================================================================= */
 
 const Field = ({
   label,
@@ -90,16 +429,16 @@ const Field = ({
           value={value ?? ""}
           onChange={onChange}
           disabled={disabled}
-          className={controlClasses}
+          className={`${controlClasses} ${error ? "border-red-500" : ""}`}
         >
           <option value="">-- Select --</option>
 
-          {(options || []).map((opt) => (
+          {withCurrent(options, value).map((opt) => (
             <option
-              key={typeof opt === "object" ? opt.value : opt}
-              value={typeof opt === "object" ? opt.value : opt}
+              key={isObj(opt) ? opt.value : opt}
+              value={isObj(opt) ? opt.value : opt}
             >
-              {typeof opt === "object" ? opt.label : opt}
+              {isObj(opt) ? opt.label : opt}
             </option>
           ))}
         </select>
@@ -159,7 +498,7 @@ const Field = ({
         value={value ?? ""}
         onChange={onChange}
         disabled={disabled}
-        className={controlClasses}
+        className={`${controlClasses} ${error ? "border-red-500" : ""}`}
       />
 
       {error && (
@@ -177,9 +516,16 @@ const SectionHeader = ({ children }) => (
   </h3>
 );
 
-const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
+const FormButtons = ({
+  onCancel,
+  onSave,
+  isSubmitting,
+  disabled,
+  saveLabel,
+}) => (
   <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
     <button
+      type="button"
       onClick={onCancel}
       disabled={isSubmitting}
       className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
@@ -189,8 +535,9 @@ const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
     </button>
 
     <button
+      type="button"
       onClick={onSave}
-      disabled={isSubmitting}
+      disabled={isSubmitting || disabled}
       className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
     >
       <Save className="h-3 w-3" />
@@ -199,8 +546,9 @@ const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
   </div>
 );
 
-/* ---------------------------------------------------------------------------- */
-/* Table helpers                                                               */
+/* ========================================================================= */
+/* TABLE HELPERS                                                             */
+/* ========================================================================= */
 
 const TableWrapper = ({ children }) => (
   <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
@@ -253,7 +601,7 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
 );
 
 const SelectCell = ({ value, onChange, options }) => (
-  <td className="p-1 align-top">
+  <td className="p-1 align-top min-w-[120px]">
     <select
       value={value ?? ""}
       onChange={onChange}
@@ -261,12 +609,12 @@ const SelectCell = ({ value, onChange, options }) => (
     >
       <option value="">-- Select --</option>
 
-      {(options || []).map((opt) => (
+      {withCurrent(options, value).map((opt) => (
         <option
-          key={typeof opt === "object" ? opt.value : opt}
-          value={typeof opt === "object" ? opt.value : opt}
+          key={isObj(opt) ? opt.value : opt}
+          value={isObj(opt) ? opt.value : opt}
         >
-          {typeof opt === "object" ? opt.label : opt}
+          {isObj(opt) ? opt.label : opt}
         </option>
       ))}
     </select>
@@ -294,7 +642,7 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
     <tbody>
       {rows.map((row, idx) => (
         <TableRow
-          key={idx}
+          key={row.id || idx}
           index={idx}
           onRemove={() => onRemoveRow(idx)}
           disabled={rows.length <= 1}
@@ -323,63 +671,9 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
   </TableWrapper>
 );
 
-/* ---------------------------------------------------------------------------- */
-/* Empty Item Row                                                              */
-
-const emptyItemRow = () => ({
-  id: 0,
-  item: "",
-  itemCode: "",
-  itemDescription: "",
-  unit: "",
-  bookStock: "",
-  actualQty: "",
-  difference: "",
-  lcRate: "",
-  rate: "",
-  reasonCode: "",
-  amount: "",
-});
-
-/* ---------------------------------------------------------------------------- */
-/* Default Form                                                                */
-
-const getDefaultForm = (branch) => ({
-  active: true,
-
-  approvedByPM: "Pending",
-
-  belongsTo: "",
-
-  branch: String(branch || ""),
-
-  cancelRemarks: "",
-
-  docDate: todayISO(),
-
-  docId: "",
-
-  financialYear: `${new Date().getFullYear()}-${String(
-    (new Date().getFullYear() % 100) + 1,
-  ).padStart(2, "0")}`,
-
-  location: "",
-
-  locationType: "",
-
-  narration: "",
-
-  preparedBy: "",
-
-  refDate: todayISO(),
-
-  refNo: "",
-
-  time: nowTime(),
-});
-
-/* ---------------------------------------------------------------------------- */
-/* Child Tabs                                                                  */
+/* ========================================================================= */
+/* CHILD TABS                                                                */
+/* ========================================================================= */
 
 const CHILD_TABS = [
   {
@@ -387,15 +681,12 @@ const CHILD_TABS = [
     label: "1-Physical Stock Detail",
     type: "table",
   },
-  {
-    key: "summary",
-    label: "2-Summary",
-    type: "fields",
-  },
+  { key: "summary", label: "2-Summary", type: "fields" },
 ];
 
-/* ---------------------------------------------------------------------------- */
-/* Main Component                                                              */
+/* ========================================================================= */
+/* MAIN COMPONENT                                                            */
+/* ========================================================================= */
 
 const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
   const ORG_ID = toInteger(localStorage.getItem("orgId"));
@@ -406,52 +697,146 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
 
   const { addToast } = useToast();
 
-  const [activeChildTab, setActiveChildTab] = useState("physicalStockDetail");
+  /*
+   * The row passed in from the list seeds the form instantly.
+   * The full record is then fetched by id (effect below), merged over the
+   * list row, and replaces this state.
+   */
+  const [mapped] = useState(() =>
+    isEditMode ? mapEditData(editData, BRANCH_ID) : null,
+  );
 
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [form, setForm] = useState(() =>
+    mapped ? mapped.form : getDefaultForm(BRANCH_ID),
+  );
 
-  const [generatingDocId, setGeneratingDocId] = useState(false);
-
-  const [fieldErrors, setFieldErrors] = useState({});
-
-  const [form, setForm] = useState(() => ({
-    ...getDefaultForm(BRANCH_ID),
-    ...(editData || {}),
-  }));
+  const [itemRows, setItemRows] = useState(() =>
+    mapped ? mapped.itemRows : [emptyItemRow()],
+  );
 
   const effectiveBranchId = toInteger(form.branch || BRANCH_ID);
 
-  const [itemRows, setItemRows] = useState(
-    editData?.physicalStockReConcilationDetailsDTO?.length
-      ? editData.physicalStockReConcilationDetailsDTO
-      : [emptyItemRow()],
-  );
+  const [activeChildTab, setActiveChildTab] = useState("physicalStockDetail");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [generatingDocId, setGeneratingDocId] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({});
 
-  /* ========================================================================= */
-  /* MASTER DATA                                                               */
-  /* ========================================================================= */
+  /* true while the by-id call is running (edit mode only) */
+  const [loadingData, setLoadingData] = useState(isEditMode);
+
+  /*
+   * Bumped after the record is loaded so the "resolve saved values against
+   * options" effect re-runs on the freshly fetched data.
+   */
+  const [hydrationKey, setHydrationKey] = useState(0);
+
+  /* ----------------------------------------------------------------------- */
+  /* MASTER DATA                                                             */
+  /* ----------------------------------------------------------------------- */
 
   const [branchOptions, setBranchOptions] = useState([]);
-
+  const [employeeOptions, setEmployeeOptions] = useState([]);
   const [locationTypeOptions, setLocationTypeOptions] = useState([]);
-
   const [locationOptions, setLocationOptions] = useState([]);
-
   const [belongsToOptions, setBelongsToOptions] = useState([]);
-
   const [itemOptions, setItemOptions] = useState([]);
 
-  /* ========================================================================= */
-  /* LOAD BRANCHES                                                             */
-  /* ========================================================================= */
+  /* ======================================================================= */
+  /* EDIT: LOAD BY ID                                                        */
+  /* ======================================================================= */
+
+  useEffect(() => {
+    if (!isEditMode) return;
+
+    let cancelled = false;
+
+    const loadById = async () => {
+      setLoadingData(true);
+
+      try {
+        /*
+         * NOTE: rename here if your API method has a different name.
+         */
+        const fetchById =
+          physicalStockReconciliationAPI.getReconciliationById ||
+          physicalStockReconciliationAPI.getPhysicalStockReconciliationById;
+
+        if (typeof fetchById !== "function") {
+          console.error(
+            "No by-id method found on physicalStockReconciliationAPI",
+          );
+          addToast("By-id API method is missing", "error");
+          return;
+        }
+
+        const response = await fetchById(editData.id);
+
+        if (cancelled) return;
+
+        console.log(
+          "Get Physical Stock Reconciliation By ID Response:",
+          response,
+        );
+
+        const record = extractRecord(response);
+
+        if (!record) {
+          console.error("Reconciliation record not found in response");
+          addToast("Physical Stock Reconciliation data not found", "error");
+          return;
+        }
+
+        console.log("Physical Stock Reconciliation record (raw):", record);
+
+        /*
+         * The by-id response may omit some fields. Fall back to the list row
+         * for anything the by-id response leaves out.
+         */
+        const nonNull = Object.fromEntries(
+          Object.entries(record).filter(
+            ([, v]) => v !== null && v !== undefined,
+          ),
+        );
+
+        const result = mapEditData({ ...editData, ...nonNull }, BRANCH_ID);
+
+        console.log("Mapped Physical Stock Reconciliation form:", result);
+
+        setForm(result.form);
+        setItemRows(result.itemRows);
+
+        setHydrationKey((key) => key + 1);
+      } catch (error) {
+        console.error("Failed to load Physical Stock Reconciliation:", error);
+
+        if (!cancelled) {
+          addToast(
+            "Failed to load Physical Stock Reconciliation data",
+            "error",
+          );
+        }
+      } finally {
+        if (!cancelled) setLoadingData(false);
+      }
+    };
+
+    loadById();
+
+    return () => {
+      cancelled = true;
+    };
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditMode, editData?.id]);
+
+  /* ======================================================================= */
+  /* MASTER DATA LOADERS                                                     */
+  /* ======================================================================= */
 
   const loadBranches = useCallback(async () => {
     try {
       if (!ORG_ID) {
-        console.warn("ORG_ID is missing. Cannot load branches.");
-
         setBranchOptions([]);
-
         return;
       }
 
@@ -471,20 +856,43 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
       );
     } catch (error) {
       console.error("Failed to load branches:", error);
-
       setBranchOptions([]);
     }
   }, [ORG_ID]);
 
-  /* ========================================================================= */
-  /* LOCATION TYPE                                                             */
-  /* ========================================================================= */
+  const loadEmployees = useCallback(async () => {
+    try {
+      if (!ORG_ID) {
+        setEmployeeOptions([]);
+        return;
+      }
+
+      const response = await employeeAPI.getEmployeeByOrgId(ORG_ID);
+
+      const list = Array.isArray(response)
+        ? response
+        : response?.paramObjectsMap?.employees ||
+          response?.paramObjectsMap?.employeeVO ||
+          [];
+
+      setEmployeeOptions(
+        list.map((employee) => ({
+          value: employee.id,
+          label:
+            employee.employeeName || employee.name || `Employee ${employee.id}`,
+          code: employee.employeeCode || "",
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to load employees:", error);
+      setEmployeeOptions([]);
+    }
+  }, [ORG_ID]);
 
   const loadLocationTypes = useCallback(async () => {
     try {
       if (!ORG_ID || !effectiveBranchId) {
         setLocationTypeOptions([]);
-
         return;
       }
 
@@ -494,25 +902,17 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
           ORG_ID,
         );
 
-      setLocationTypeOptions(options);
+      setLocationTypeOptions(options || []);
     } catch (error) {
       console.error("Failed to load location types:", error);
-
       setLocationTypeOptions([]);
     }
   }, [ORG_ID, effectiveBranchId]);
 
-  /* ========================================================================= */
-  /* BELONGS TO - LOV API                                                      */
-  /* ========================================================================= */
-
   const loadBelongsTo = useCallback(async () => {
     try {
       if (!ORG_ID) {
-        console.warn("ORG_ID is missing. Cannot load Belongs To values.");
-
         setBelongsToOptions([]);
-
         return;
       }
 
@@ -521,10 +921,6 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
         ORG_ID,
       );
 
-      console.log("========== BELONGS TO LOV RESPONSE ==========");
-
-      console.log(response);
-
       const list = Array.isArray(response)
         ? response
         : response?.paramObjectsMap?.listValues ||
@@ -532,43 +928,31 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
           response?.paramObjectsMap?.listValueDetails ||
           [];
 
-      const options = list
-        .map((item) => {
-          const description =
-            item?.valuesDescription ||
-            item?.valueDescription ||
-            item?.description ||
-            item?.value ||
-            "";
+      setBelongsToOptions(
+        list
+          .map((item) => {
+            const description =
+              item?.valuesDescription ||
+              item?.valueDescription ||
+              item?.description ||
+              item?.value ||
+              "";
 
-          return {
-            value: description,
-            label: description,
-          };
-        })
-        .filter((item) => item.value);
-
-      console.log("========== BELONGS TO OPTIONS ==========");
-
-      console.log(options);
-
-      setBelongsToOptions(options);
+            /* Belongs To sends the LOV description, not the LOV ID */
+            return { value: description, label: description };
+          })
+          .filter((item) => item.value),
+      );
     } catch (error) {
       console.error("Failed to load Belongs To values:", error);
-
       setBelongsToOptions([]);
     }
   }, [ORG_ID]);
-
-  /* ========================================================================= */
-  /* LOCATIONS                                                                 */
-  /* ========================================================================= */
 
   const loadLocations = useCallback(async () => {
     try {
       if (!ORG_ID || !effectiveBranchId || !form.locationType) {
         setLocationOptions([]);
-
         return;
       }
 
@@ -578,23 +962,17 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
         ORG_ID,
       );
 
-      setLocationOptions(options);
+      setLocationOptions(options || []);
     } catch (error) {
       console.error("Failed to load locations:", error);
-
       setLocationOptions([]);
     }
   }, [ORG_ID, effectiveBranchId, form.locationType]);
-
-  /* ========================================================================= */
-  /* ITEMS                                                                      */
-  /* ========================================================================= */
 
   const loadItems = useCallback(async () => {
     try {
       if (!ORG_ID) {
         setItemOptions([]);
-
         return;
       }
 
@@ -615,41 +993,159 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
           itemDescription:
             item.itemDescription || item.itemDesc || item.description || "",
 
-          unit: item.uom || item.unitId || item.unit || "",
+          unit: unitText(item.uom || item.unitId || item.unit || ""),
         })),
       );
     } catch (error) {
       console.error("Failed to load items:", error);
-
       setItemOptions([]);
     }
   }, [ORG_ID, effectiveBranchId]);
 
-  /* ========================================================================= */
-  /* LOAD MASTER DATA                                                          */
-  /* ========================================================================= */
-
   useEffect(() => {
     loadBranches();
-    loadLocationTypes();
+    loadEmployees();
     loadBelongsTo();
+  }, [loadBranches, loadEmployees, loadBelongsTo]);
+
+  useEffect(() => {
+    loadLocationTypes();
     loadItems();
-  }, [loadBranches, loadLocationTypes, loadBelongsTo, loadItems]);
+  }, [loadLocationTypes, loadItems]);
 
   useEffect(() => {
     loadLocations();
   }, [loadLocations]);
 
-  /* ========================================================================= */
-  /* DOC ID - AUTO GENERATE                                                    */
-  /* ========================================================================= */
+  /* ======================================================================= */
+  /* EDIT: RESOLVE SAVED VALUES AGAINST LOADED OPTIONS                       */
+  /* ======================================================================= */
+
+  /*
+   * If the saved value is not an option value (for example the backend sent a
+   * name or a code), match it by label / code and swap in the option value.
+   * Only unmatched values are touched, so user edits are kept.
+   */
+  const resolveValue = (current, options, extras = []) => {
+    if (current === "" || current === null || current === undefined) {
+      return current;
+    }
+
+    if (!options.length) return current;
+
+    const optValue = (o) => (isObj(o) ? o.value : o);
+
+    if (options.some((o) => String(optValue(o)) === String(current))) {
+      return current;
+    }
+
+    const match = options.find((o) => {
+      if (!isObj(o)) return norm(o) === norm(current);
+
+      return [o.label, o.code, ...extras]
+        .filter(Boolean)
+        .some((text) => norm(text) === norm(current));
+    });
+
+    return match ? String(optValue(match)) : current;
+  };
+
+  useEffect(() => {
+    if (!isEditMode || loadingData) return;
+
+    setForm((prev) => {
+      const branch = resolveValue(prev.branch, branchOptions);
+      const locationType = resolveValue(prev.locationType, locationTypeOptions);
+      const location = resolveValue(prev.location, locationOptions);
+
+      let preparedBy = resolveValue(prev.preparedBy, employeeOptions);
+
+      /* still not an employee id -> try the name sent by the backend */
+      if (
+        employeeOptions.length &&
+        preparedBy !== "" &&
+        !employeeOptions.some((o) => String(o.value) === String(preparedBy)) &&
+        prev.preparedByName
+      ) {
+        const byName = employeeOptions.find(
+          (o) =>
+            norm(o.label) === norm(prev.preparedByName) ||
+            norm(o.code) === norm(prev.preparedByName),
+        );
+
+        if (byName) preparedBy = String(byName.value);
+      }
+
+      if (
+        branch === prev.branch &&
+        locationType === prev.locationType &&
+        location === prev.location &&
+        preparedBy === prev.preparedBy
+      ) {
+        return prev;
+      }
+
+      return { ...prev, branch, locationType, location, preparedBy };
+    });
+
+    setItemRows((prev) => {
+      let changed = false;
+
+      const next = prev.map((row) => {
+        if (!row.item || !itemOptions.length) return row;
+
+        const resolved = resolveValue(row.item, itemOptions);
+
+        const option = itemOptions.find(
+          (o) => String(o.value) === String(resolved),
+        );
+
+        if (!option) return row;
+
+        const updated = {
+          ...row,
+          item: String(resolved),
+          itemCode: row.itemCode || option.label || "",
+          itemDescription: row.itemDescription || option.itemDescription || "",
+          unit: row.unit || option.unit || "",
+        };
+
+        if (
+          updated.item !== row.item ||
+          updated.itemCode !== row.itemCode ||
+          updated.itemDescription !== row.itemDescription ||
+          updated.unit !== row.unit
+        ) {
+          changed = true;
+          return updated;
+        }
+
+        return row;
+      });
+
+      return changed ? next : prev;
+    });
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    isEditMode,
+    loadingData,
+    hydrationKey,
+    branchOptions,
+    employeeOptions,
+    locationTypeOptions,
+    locationOptions,
+    itemOptions,
+  ]);
+
+  /* ======================================================================= */
+  /* DOC ID - NEW RECORD ONLY                                                */
+  /* ======================================================================= */
 
   useEffect(() => {
     if (isEditMode) return;
 
-    if (!ORG_ID || !form.financialYear) {
-      return;
-    }
+    if (!ORG_ID || !form.financialYear) return;
 
     let cancelled = false;
 
@@ -660,36 +1156,21 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
         const docId =
           await physicalStockReconciliationAPI.getReconciliationDocId({
             financialYear: toInteger(String(form.financialYear).split("-")[0]),
-
             orgId: ORG_ID,
           });
 
-        console.log("Generated Physical Stock Reconciliation Doc ID:", docId);
-
         if (!cancelled) {
-          setForm((prev) => ({
-            ...prev,
-            docId: docId || "",
-          }));
+          setForm((prev) => ({ ...prev, docId: docId || "" }));
         }
       } catch (error) {
-        console.error(
-          "Error generating physical stock reconciliation doc id:",
-          error,
-        );
+        console.error("Error generating doc id:", error);
 
         if (!cancelled) {
-          setForm((prev) => ({
-            ...prev,
-            docId: "",
-          }));
-
+          setForm((prev) => ({ ...prev, docId: "" }));
           addToast("Failed to generate Doc No", "error");
         }
       } finally {
-        if (!cancelled) {
-          setGeneratingDocId(false);
-        }
+        if (!cancelled) setGeneratingDocId(false);
       }
     };
 
@@ -700,45 +1181,31 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
     };
   }, [isEditMode, ORG_ID, form.financialYear, addToast]);
 
-  /* ========================================================================= */
-  /* FIELD CHANGE                                                              */
-  /* ========================================================================= */
+  /* ======================================================================= */
+  /* FIELD CHANGE                                                            */
+  /* ======================================================================= */
 
   const handleFieldChange = (e) => {
     const { name, value } = e.target;
 
     if (fieldErrors[name]) {
-      setFieldErrors((prev) => ({
-        ...prev,
-        [name]: "",
-      }));
+      setFieldErrors((prev) => ({ ...prev, [name]: "" }));
     }
 
     if (name === "locationType") {
-      setForm((prev) => ({
-        ...prev,
-        locationType: value,
-        location: "",
-      }));
-
+      setForm((prev) => ({ ...prev, locationType: value, location: "" }));
       return;
     }
 
-    setForm((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setForm((prev) => ({ ...prev, [name]: value }));
   };
 
-  /* ========================================================================= */
-  /* ITEM ROW CALCULATION                                                      */
-  /* ========================================================================= */
+  /* ======================================================================= */
+  /* ITEM ROWS                                                               */
+  /* ======================================================================= */
 
   const calculateItemRow = (row, changedKey, changedValue) => {
-    const updated = {
-      ...row,
-      [changedKey]: changedValue,
-    };
+    const updated = { ...row, [changedKey]: changedValue };
 
     if (changedKey === "item") {
       const selected = itemOptions.find(
@@ -747,21 +1214,20 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
 
       if (selected) {
         updated.itemCode = selected.label || "";
-
         updated.itemDescription = selected.itemDescription || "";
-
         updated.unit = selected.unit || "";
+      } else {
+        updated.itemCode = "";
+        updated.itemDescription = "";
+        updated.unit = "";
       }
     }
 
     const actualQty = toNumber(updated.actualQty);
-
     const bookStock = toNumber(updated.bookStock);
-
     const rate = toNumber(updated.rate);
 
     updated.difference = round2(actualQty - bookStock);
-
     updated.amount = money(actualQty * rate);
 
     return updated;
@@ -775,18 +1241,12 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
     );
   };
 
-  const addItemRow = () => {
-    setItemRows((prev) => [...prev, emptyItemRow()]);
-  };
+  const addItemRow = () => setItemRows((prev) => [...prev, emptyItemRow()]);
 
   const removeItemRow = (idx) => {
-    setItemRows((prev) => {
-      if (prev.length <= 1) {
-        return prev;
-      }
-
-      return prev.filter((_, i) => i !== idx);
-    });
+    setItemRows((prev) =>
+      prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx),
+    );
   };
 
   const totalAmount = useMemo(
@@ -794,67 +1254,53 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
     [itemRows],
   );
 
-  /* ========================================================================= */
-  /* VALIDATION                                                                */
-  /* ========================================================================= */
+  /* ======================================================================= */
+  /* VALIDATION                                                              */
+  /* ======================================================================= */
 
   const validate = () => {
     const errors = {};
 
-    if (!form.branch) {
-      errors.branch = "Plant ID is required";
-    }
+    if (!form.branch) errors.branch = "Plant ID is required";
 
-    if (!form.docDate) {
-      errors.docDate = "Doc. Date is required";
-    }
+    if (!form.docDate) errors.docDate = "Doc. Date is required";
 
-    if (!form.locationType) {
-      errors.locationType = "Location Type is required";
-    }
+    if (!form.locationType) errors.locationType = "Location Type is required";
 
-    if (!form.location) {
-      errors.location = "Location is required";
-    }
+    if (!form.location) errors.location = "Location is required";
 
     setFieldErrors(errors);
 
     if (Object.keys(errors).length > 0) {
       addToast("Please fill all required fields correctly", "error");
-
       return false;
     }
 
-    const activeRows = itemRows.filter((r) => r.item);
-
-    if (activeRows.length === 0) {
+    if (itemRows.filter((r) => r.item).length === 0) {
       addToast("Please add at least one item", "error");
-
       return false;
     }
 
     return true;
   };
 
-  /* ========================================================================= */
-  /* SAVE                                                                      */
-  /* ========================================================================= */
+  /* ======================================================================= */
+  /* SAVE                                                                    */
+  /* ======================================================================= */
 
   const handleSave = async () => {
-    if (!validate()) {
-      return;
-    }
+    if (isSubmitting || loadingData) return;
+
+    if (!validate()) return;
 
     setIsSubmitting(true);
+
+    const userName = localStorage.getItem("userName") || "SYSTEM";
 
     const details = itemRows
       .filter((r) => r.item)
       .map((r) => ({
-        ...(r.id
-          ? {
-              id: toInteger(r.id),
-            }
-          : {}),
+        ...(r.id ? { id: toInteger(r.id) } : {}),
 
         item: toInteger(r.item),
 
@@ -874,32 +1320,22 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
       }));
 
     const payload = {
-      ...(isEditMode && {
-        id: editData.id,
-      }),
+      ...(isEditMode && { id: toInteger(editData.id) }),
 
       active: form.active !== false,
 
       approvedByPM: form.approvedByPM || "Pending",
 
-      /*
-       * IMPORTANT:
-       * Belongs To sends the LOV description string.
-       * It does NOT send the LOV ID.
-       */
+      /* Belongs To sends the LOV description string, not the LOV ID */
       belongsTo: form.belongsTo || "",
 
       branch: toInteger(form.branch),
 
-      cancelRemarks: "",
+      cancelRemarks: form.cancelRemarks || "",
 
-      createdBy:
-        (isEditMode ? form.createdBy : localStorage.getItem("userName")) ||
-        "SYSTEM",
+      createdBy: (isEditMode ? form.createdBy : userName) || userName,
 
-      ...(isEditMode && {
-        updatedBy: localStorage.getItem("userName") || "SYSTEM",
-      }),
+      ...(isEditMode && { updatedBy: userName }),
 
       docDate: form.docDate || todayISO(),
 
@@ -917,7 +1353,7 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
 
       physicalStockReConcilationDetailsDTO: details,
 
-      preparedBy: toInteger(form.preparedBy),
+      preparedBy: toIdOrNull(form.preparedBy),
 
       refDate: form.refDate || todayISO(),
 
@@ -934,9 +1370,10 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
           payload,
         );
 
-      const status = response?.status === true || response?.statusFlag === "Ok";
+      const success =
+        response?.status === true || response?.statusFlag === "Ok";
 
-      if (status) {
+      if (success) {
         addToast(
           isEditMode
             ? "Physical Stock Reconciliation updated successfully"
@@ -944,19 +1381,16 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
           "success",
         );
 
-        if (onSave) {
-          onSave(payload);
-        } else {
-          onBack();
-        }
+        if (onSave) onSave(payload);
+        else onBack();
       } else {
-        const errorMessage =
+        addToast(
           response?.paramObjectsMap?.errorMessage ||
-          response?.paramObjectsMap?.message ||
-          response?.message ||
-          "Failed to save physical stock reconciliation";
-
-        addToast(errorMessage, "error");
+            response?.paramObjectsMap?.message ||
+            response?.message ||
+            "Failed to save physical stock reconciliation",
+          "error",
+        );
       }
     } catch (error) {
       console.error("Save Error:", error);
@@ -973,111 +1407,44 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
     }
   };
 
-  /* ========================================================================= */
-  /* CHILD TAB CONFIG                                                          */
-  /* ========================================================================= */
+  /* ======================================================================= */
+  /* CHILD TAB CONFIG                                                        */
+  /* ======================================================================= */
 
-  const childTabConfig = {
-    physicalStockDetail: {
-      type: "table",
+  const itemColumns = [
+    { key: "item", label: "Item Code", type: "select", options: itemOptions },
 
-      rows: itemRows,
+    { key: "itemDescription", label: "Item Description", readOnly: true },
 
-      handlers: {
-        onCellChange: handleItemRowChange,
+    { key: "unit", label: "Unit", readOnly: false },
 
-        onAddRow: addItemRow,
+    { key: "bookStock", label: "Book Stock", type: "number" },
 
-        onRemoveRow: removeItemRow,
-      },
+    { key: "actualQty", label: "Actual Qty", type: "number" },
 
-      columns: [
-        {
-          key: "item",
-          label: "Item Code",
-          type: "select",
-          options: itemOptions,
-        },
+    { key: "difference", label: "Difference", type: "number", readOnly: true },
 
-        {
-          key: "itemDescription",
-          label: "Item Description",
-          readOnly: true,
-        },
+    { key: "lcRate", label: "LC Rate", type: "number" },
 
-        {
-          key: "unit",
-          label: "Unit",
-          readOnly: false,
-        },
+    { key: "rate", label: "Rate", type: "number" },
 
-        {
-          key: "bookStock",
-          label: "Book Stock",
-          type: "number",
-        },
+    { key: "reasonCode", label: "Reason Code" },
 
-        {
-          key: "actualQty",
-          label: "Actual Qty",
-          type: "number",
-        },
+    { key: "amount", label: "Amount", type: "number", readOnly: true },
+  ];
 
-        {
-          key: "difference",
-          label: "Difference",
-          type: "number",
-          readOnly: true,
-        },
+  const activeTabType = CHILD_TABS.find((t) => t.key === activeChildTab)?.type;
 
-        {
-          key: "lcRate",
-          label: "LC Rate",
-          type: "number",
-        },
-
-        {
-          key: "rate",
-          label: "Rate",
-          type: "number",
-        },
-
-        {
-          key: "reasonCode",
-          label: "Reason Code",
-        },
-
-        {
-          key: "amount",
-          label: "Amount",
-          type: "number",
-          readOnly: true,
-        },
-      ],
-    },
-
-    summary: {
-      type: "fields",
-    },
-  };
-
-  const activeTabConfig = childTabConfig[activeChildTab];
-
-  const handleAddChildRow = () => {
-    if (activeTabConfig.type === "table") {
-      activeTabConfig.handlers.onAddRow();
-    }
-  };
-
-  /* ========================================================================= */
-  /* UI                                                                        */
-  /* ========================================================================= */
+  /* ======================================================================= */
+  /* UI                                                                      */
+  /* ======================================================================= */
 
   return (
     <div className="p-2 max-w-7xl">
-      {/* Header */}
+      {/* Title */}
       <div className="flex items-center gap-2 mb-3">
         <button
+          type="button"
           onClick={onBack}
           disabled={isSubmitting}
           className="p-1 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white transition-colors"
@@ -1093,13 +1460,19 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
       </div>
 
       {/* Main Card */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
+      <div className="relative bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
+        {/* Loading overlay (edit mode, while the by-id call runs) */}
+        {loadingData && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-white/70 dark:bg-gray-800/70 text-xs text-gray-600 dark:text-gray-300">
+            Loading physical stock reconciliation...
+          </div>
+        )}
+
         {/* Header Fields */}
         <div>
           <SectionHeader>Reconciliation Details</SectionHeader>
 
           <div className={fieldGrid}>
-            {/* Plant ID */}
             <Field
               type="select"
               label="Plant ID"
@@ -1108,10 +1481,10 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
               onChange={handleFieldChange}
               error={fieldErrors.branch}
               options={branchOptions}
+              disabled={isEditMode}
               required
             />
 
-            {/* Doc No */}
             <Field
               label="Doc No."
               name="docId"
@@ -1120,7 +1493,6 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
               disabled
             />
 
-            {/* Location Type */}
             <Field
               type="select"
               label="Location Type"
@@ -1132,7 +1504,6 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
               required
             />
 
-            {/* Location */}
             <Field
               type="select"
               label="Location"
@@ -1145,7 +1516,6 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
               required
             />
 
-            {/* Doc Date */}
             <Field
               type="date"
               label="Doc. Date"
@@ -1156,7 +1526,6 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
               required
             />
 
-            {/* Time */}
             <Field
               type="time"
               label="Time"
@@ -1165,7 +1534,6 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
               onChange={handleFieldChange}
             />
 
-            {/* Ref No */}
             <Field
               label="Ref. No"
               name="refNo"
@@ -1173,7 +1541,6 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
               onChange={handleFieldChange}
             />
 
-            {/* Ref Date */}
             <Field
               type="date"
               label="Ref. Date"
@@ -1182,9 +1549,6 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
               onChange={handleFieldChange}
             />
 
-            {/* ============================================================= */}
-            {/* BELONGS TO - LOV DROPDOWN                                     */}
-            {/* ============================================================= */}
             <Field
               type="select"
               label="Belongs to"
@@ -1194,28 +1558,30 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
               options={belongsToOptions}
             />
 
-            {/* Prepared By PM */}
             <Field
-              label="Prepared By PM"
+              type="select"
+              label="Prepared By"
               name="preparedBy"
               value={form.preparedBy}
               onChange={handleFieldChange}
+              options={employeeOptions}
             />
 
-            {/* Financial Year */}
             <Field
               label="Financial Year"
               name="financialYear"
               value={form.financialYear}
               onChange={handleFieldChange}
+              disabled={isEditMode}
             />
 
-            {/* Approved By PM */}
             <Field
+              type="select"
               label="Approved By PM"
               name="approvedByPM"
               value={form.approvedByPM}
               onChange={handleFieldChange}
+              options={APPROVAL_OPTIONS}
             />
           </div>
         </div>
@@ -1240,10 +1606,10 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
               ))}
             </div>
 
-            {activeTabConfig.type === "table" && (
+            {activeTabType === "table" && (
               <button
                 type="button"
-                onClick={handleAddChildRow}
+                onClick={addItemRow}
                 className="h-6 w-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-colors flex-shrink-0"
               >
                 <Plus size={12} />
@@ -1251,13 +1617,13 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
             )}
           </div>
 
-          {activeTabConfig.type === "table" ? (
+          {activeTabType === "table" ? (
             <>
               <DynamicTable
-                columns={activeTabConfig.columns}
-                rows={activeTabConfig.rows}
-                onCellChange={activeTabConfig.handlers.onCellChange}
-                onRemoveRow={activeTabConfig.handlers.onRemoveRow}
+                columns={itemColumns}
+                rows={itemRows}
+                onCellChange={handleItemRowChange}
+                onRemoveRow={removeItemRow}
               />
 
               <div className="flex justify-end mt-1 text-[11px] text-gray-500 dark:text-gray-400">
@@ -1294,6 +1660,7 @@ const PhysicalStockReconciliationForm = ({ onBack, onSave, editData }) => {
           onCancel={onBack}
           onSave={handleSave}
           isSubmitting={isSubmitting}
+          disabled={loadingData}
           saveLabel={isEditMode ? "Update" : "Save"}
         />
       </div>

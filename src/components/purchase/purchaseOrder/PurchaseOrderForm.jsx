@@ -662,6 +662,9 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
 
   const [employeeOptions, setEmployeeOptions] = useState([]);
 
+  /* L.M.E RATE MASTER DATA */
+  const [lmeOptions, setLmeOptions] = useState([]);
+
   const [fieldErrors, setFieldErrors] = useState({});
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -983,6 +986,117 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
       setSupplierOptions([]);
     }
   }, [ORG_ID, effectiveBranchId]);
+
+  /* ========================================================================= */
+  /* L.M.E RATE DROPDOWN                                                       */
+  /* GET /api/commonmaster/getLMEByOrgId                                      */
+  /* ========================================================================= */
+
+  const loadLMERates = useCallback(async () => {
+    try {
+      if (!ORG_ID || !effectiveBranchId) {
+        setLmeOptions([]);
+        return;
+      }
+
+      const response = await purchaseOrderAPI.getLMEByOrgId(
+        effectiveBranchId,
+        ORG_ID,
+      );
+
+      console.log("LME Rate Response:", response);
+
+      const data = response?.data ?? response;
+
+      const list = Array.isArray(data?.paramObjectsMap?.transportList)
+        ? data.paramObjectsMap.transportList
+        : [];
+
+      const options = list
+        .filter((item) => item?.id != null)
+        .map((item) => ({
+          value: item.id,
+          label: String(item.lmeRate ?? ""),
+          lmeRate: item.lmeRate,
+          lmeDateFrom: item.lmeDateFrom || "",
+          elmeDateTo: item.elmeDateTo || "",
+        }));
+
+      setLmeOptions(options);
+
+      /*
+       * New PO: automatically select the currently valid/latest LME record.
+       * Edit PO: preserve the existing LME id when it is already present.
+       */
+      setFormData((previous) => {
+        const currentValue = previous.lmeRate;
+
+        if (
+          currentValue !== "" &&
+          currentValue !== null &&
+          currentValue !== undefined &&
+          Number(currentValue) !== 0
+        ) {
+          const exactMatch = options.find(
+            (option) => String(option.value) === String(currentValue),
+          );
+
+          if (exactMatch) {
+            return previous;
+          }
+
+          /* Older records may contain the actual rate instead of the LME id.
+             Convert that rate to the corresponding LME master id. */
+          const rateMatch = options.find(
+            (option) => Number(option.lmeRate) === Number(currentValue),
+          );
+
+          if (rateMatch) {
+            return {
+              ...previous,
+              lmeRate: rateMatch.value,
+            };
+          }
+        }
+
+        if (!options.length) {
+          return { ...previous, lmeRate: "" };
+        }
+
+        const today = todayISO();
+
+        const currentDateOption = options.find((option) => {
+          const from = option.lmeDateFrom;
+          const to = option.elmeDateTo;
+
+          return from && to && today >= from && today <= to;
+        });
+
+        const selected = currentDateOption || options[options.length - 1];
+
+        return {
+          ...previous,
+          lmeRate: selected.value,
+        };
+      });
+    } catch (error) {
+      console.error("Failed to load LME rates:", error);
+      setLmeOptions([]);
+
+      /* Do not overwrite an existing edit value when the master API fails. */
+      if (!isEditMode) {
+        setFormData((previous) => ({
+          ...previous,
+          lmeRate: "",
+        }));
+      }
+    }
+  }, [ORG_ID, effectiveBranchId, isEditMode]);
+
+  /* Load L.M.E whenever the selected Plant/Branch changes. */
+  useEffect(() => {
+    loadLMERates();
+  }, [loadLMERates]);
 
   /* ========================================================================= */
   /* INDENT DROPDOWN                                                           */
@@ -1706,9 +1820,11 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
         supplierState: "",
         supplierPinCode: "",
         gstnNo: "",
+        lmeRate: "",
       }));
 
       setSupplierOptions([]);
+      setLmeOptions([]);
       setLocalDetailRows([emptyLocalDetailRow()]);
       setImportDetailRows([emptyImportDetailRow()]);
       setIndentItemOptions([]);
@@ -2966,6 +3082,7 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
 
         itemType: formData.itemType || "",
 
+        // L.M.E Rate stores the LME master ID, not the displayed rate.
         lmeRate: toNumber(formData.lmeRate),
 
         modeOfDespatch: formData.modeOfDespatch || "",
@@ -3609,13 +3726,14 @@ const PurchaseOrderForm = ({ onBack, onSave, editData }) => {
                 />
 
                 <Field
+                  type="select"
                   label="L.M.E Rate"
                   name="lmeRate"
-                  type="number"
-                  min="0"
-                  step="0.01"
                   value={formData.lmeRate}
                   onChange={handleFieldChange}
+                  options={lmeOptions}
+                  disabled={!effectiveBranchId || !lmeOptions.length}
+                  error={fieldErrors.lmeRate}
                 />
 
                 <Field

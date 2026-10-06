@@ -338,6 +338,33 @@ const purchaseOrderAPI = {
       throw error;
     }
   },
+  /* ================================================================
+     GET LME RATE DETAILS
+     GET /api/commonmaster/getLMEByOrgId
+  ================================================================ */
+  getLMEByOrgId: async (branch, orgId) => {
+    try {
+      const response = await apiClient.get("/api/commonmaster/getLMEByOrgId", {
+        params: {
+          branch,
+          orgId,
+        },
+      });
+
+      const data = response?.data ?? response;
+
+      console.log("LME RATE API RESPONSE:", data);
+
+      return data;
+    } catch (error) {
+      console.error(
+        "Error fetching LME rate details:",
+        error?.response?.data || error,
+      );
+
+      throw error;
+    }
+  },
 };
 
 export default purchaseOrderAPI;

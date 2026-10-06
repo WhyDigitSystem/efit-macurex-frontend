@@ -73,6 +73,13 @@ const nowTime = () => {
   ).padStart(2, "0")}`;
 };
 
+/* id of a nested object ({ id }) or the raw value */
+const idOf = (value) =>
+  value && typeof value === "object" ? (value.id ?? "") : (value ?? "");
+
+const isActiveValue = (value) =>
+  value === true || value === "Yes" || value === "Active";
+
 /* ========================================================================= */
 /* FIELD COMPONENT                                                           */
 /* ========================================================================= */
@@ -292,7 +299,7 @@ const DetailTable = ({
     <tbody>
       {rows.map((row, index) => (
         <tr
-          key={row.id || index}
+          key={index}
           className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"
         >
           <td className="p-1 text-center font-medium dark:text-white text-[10px]">
@@ -460,6 +467,7 @@ const emptyDetailRow = () => ({
 
   itemMaxQty: 0,
   bankchrg: 0,
+  taxPercentage: "",
 });
 
 const emptyFileRow = () => ({
@@ -519,7 +527,131 @@ const getDefaultValues = () => ({
   financialYear: String(new Date().getFullYear()),
 
   cancelRemarks: "",
+  createdBy: "",
 });
+
+/* ========================================================================= */
+/* API RESPONSE -> FORM STATE (used in edit mode)                            */
+/* ========================================================================= */
+
+const mapRecordToFormData = (r) => ({
+  ...getDefaultValues(),
+
+  active: isActiveValue(r.active),
+
+  branch: String(idOf(r.branch)),
+  grnNo: r.docId || "",
+  belongsTo: r.belongsTo || "",
+  grnDate: r.docDate || "",
+  location: String(idOf(r.location)),
+
+  supplierCode: String(idOf(r.supplierCode)),
+  supplierName: r.supplierCode?.supplierName || "",
+  address: r.supplierCode?.address || "",
+  gstState: r.supplierCode?.gstSate || r.supplierCode?.gstState || "",
+  gstinNo: r.supplierCode?.gstNo || "",
+  country: r.supplierCode?.country || "",
+
+  isIgstApplicable: r.isIgstApplicable || "No",
+  gatePassNo: r.gatePassNo || "",
+
+  poNo: r.poNo || "",
+  dealerType: r.dealerType || "",
+  scheduleNo: r.scheduleNo || "",
+  isReverseCharge: r.isReverseCharge || "No",
+
+  scheduleDate: r.scheduleDate || "",
+  currency: String(idOf(r.currency)),
+  schStartDate: r.scheduleStartDate || "",
+  exchangeRate: r.exchangeRate ?? 1,
+  schEndDate: r.scheduleEndDate || "",
+  grnClearTime: (r.grnClearTime || "").slice(0, 5) || nowTime(),
+
+  grossAmount: r.grossAmount ?? 0,
+  modvatCopyReceived: r.modvatCopyReceived || "No",
+  totalQtyKg: r.totalQtyInKg ?? 0,
+  partyDcNo: r.partyDcNo || "",
+  discountPerc: r.discount ?? 0,
+  supplierDcDate: r.supplierDcDate || "",
+
+  netAmount: r.netAmount ?? 0,
+  basicAmount: r.basicAmount ?? 0,
+  totalAmountTax: r.totalAmountTax ?? 0,
+  invoiceSentOn: r.invoiceSentOn || "",
+  remarks: r.remarks || "",
+
+  financialYear: r.financialYear || String(new Date().getFullYear()),
+
+  cancelRemarks: r.cancelRemarks || "",
+  createdBy: r.createdBy || "",
+});
+
+const mapRecordToDetailRows = (r) => {
+  const list = r.stockTransferGrnDetailsResponseDTO || [];
+
+  if (!list.length) return [emptyDetailRow()];
+
+  return list.map((d) => ({
+    id: d.id || 0,
+
+    item: String(idOf(d.item)),
+    itemCode: d.item?.itemCode || "",
+    itemDescription: d.item?.itemDescription || "",
+
+    primaryUnit: idOf(d.item?.primaryUnit),
+    stock: toNumber(d.stock) > 0,
+    purchaseTolerance: d.purchaseTolerance ?? "",
+    inspectionable: d.inspectionable === "Yes",
+
+    poRate: d.poRate ?? "",
+    poQty: d.poQty ?? "",
+    poUnit: idOf(d.poUnit),
+
+    challanQty: d.challanQty ?? "",
+    storeStock: d.storeStock ?? "",
+    pendingQty: d.pendingQty ?? "",
+
+    receivedQty: d.receivedQty ?? "",
+    receivedUnit: idOf(d.receivedUnit),
+    conversionFactor: d.conversionFactor ?? 1,
+    recQtyInPrimaryUnit: d.recQtyInPrimaryUnit ?? "",
+
+    acceptQty: d.acceptQty ?? "",
+    accQtyInPrimaryUnit: d.accQtyInPrimaryUnit ?? "",
+    accUnit: idOf(d.accUnit),
+
+    rejectQty: d.rejectQty ?? "",
+    rejQtyInPrimaryUnit: d.rejQtyInPrimaryUnit ?? "",
+
+    excessQty: d.excessQty ?? "",
+
+    amount: d.amount ?? "",
+    apportionedCost: d.apportionedCost ?? "",
+    insurance: d.insurance ?? "",
+    handCharge: d.handCharge ?? "",
+    lcost: d.lcost ?? "",
+    landedCostRate: d.landedCostRate ?? "",
+    landedValue: d.landedValue ?? "",
+
+    itemMaxQty: d.itemMaxQty ?? 0,
+    bankchrg: d.bankchrg ?? 0,
+    taxPercentage: d.taxPercentage ?? "",
+  }));
+};
+
+const mapRecordToFileRows = (r) => {
+  const list = r.stockTransferGrnFileUploadDetailsResponseDTO || [];
+
+  if (!list.length) return [emptyFileRow()];
+
+  return list.map((f) => ({
+    name: f.name || f.fileName || "",
+    file: null,
+    filePath: f.filePath || "",
+    remarks: f.remarks || "",
+    isExisting: true,
+  }));
+};
 
 /* ========================================================================= */
 /* COMPONENT                                                                 */
@@ -529,27 +661,20 @@ const StockTransferGRNForm = ({ data: editData, onBack }) => {
   const ORG_ID = toInteger(localStorage.getItem("orgId"));
   const BRANCH_ID = toInteger(localStorage.getItem("branchId"));
 
+  /* In edit mode only editData.id is used; everything else is fetched. */
   const isEditMode = Boolean(editData?.id);
 
   const { addToast } = useToast();
 
   const [formData, setFormData] = useState(() => ({
     ...getDefaultValues(),
-    branch: String(editData?.branch ?? BRANCH_ID ?? ""),
-    ...(editData || {}),
+    branch: isEditMode ? "" : String(BRANCH_ID || ""),
   }));
 
   const effectiveBranchId = toInteger(formData.branch || BRANCH_ID);
 
-  const [detailRows, setDetailRows] = useState(
-    editData?.stockTransferGrnDetailsDTO?.length
-      ? editData.stockTransferGrnDetailsDTO
-      : [emptyDetailRow()],
-  );
-
-  const [fileRows, setFileRows] = useState(
-    editData?.attachments?.length ? editData.attachments : [emptyFileRow()],
-  );
+  const [detailRows, setDetailRows] = useState([emptyDetailRow()]);
+  const [fileRows, setFileRows] = useState([emptyFileRow()]);
 
   const [activeTab, setActiveTab] = useState("purchaseDetail");
 
@@ -564,6 +689,86 @@ const StockTransferGRNForm = ({ data: editData, onBack }) => {
   const [fieldErrors, setFieldErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [generatingDocId, setGeneratingDocId] = useState(false);
+
+  /* edit-mode loading state */
+  const [loadingRecord, setLoadingRecord] = useState(isEditMode);
+  const [recordLoaded, setRecordLoaded] = useState(!isEditMode);
+
+  /* ========================================================================= */
+  /* LOAD EXISTING RECORD (EDIT MODE) - getStockTransferGrnById                */
+  /* ========================================================================= */
+
+  useEffect(() => {
+    if (!isEditMode) return;
+
+    let cancelled = false;
+
+    const loadRecord = async () => {
+      setLoadingRecord(true);
+
+      try {
+        const response = await stockTransferGrnAPI.getStockTransferGrnById(
+          editData.id,
+        );
+
+        const raw = response?.paramObjectsMap?.stockTransferGrnVO;
+        const record = Array.isArray(raw) ? raw[0] : raw;
+
+        if (!record) {
+          if (!cancelled) addToast("Stock Transfer GRN not found", "error");
+          return;
+        }
+
+        if (cancelled) return;
+
+        setFormData(mapRecordToFormData(record));
+        setDetailRows(mapRecordToDetailRows(record));
+        setFileRows(mapRecordToFileRows(record));
+
+        /* PO list depends on supplier + branch of THIS record */
+        const recordBranchId = toInteger(idOf(record.branch));
+        const recordSupplierId = idOf(record.supplierCode);
+
+        if (recordBranchId && recordSupplierId) {
+          try {
+            const poResponse =
+              await stockTransferGrnAPI.getPurchaseOrderNumberStockTransfer(
+                recordBranchId,
+                ORG_ID,
+                recordSupplierId,
+              );
+
+            const poList = poResponse?.paramObjectsMap?.mapp || [];
+
+            if (!cancelled) {
+              setPoOptions(
+                poList.map((po) => ({ value: po.docId, label: po.docId })),
+              );
+            }
+          } catch (poError) {
+            console.error("Failed to load PO numbers:", poError);
+          }
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error("Failed to load Stock Transfer GRN:", error);
+          addToast("Failed to load Stock Transfer GRN", "error");
+        }
+      } finally {
+        if (!cancelled) {
+          setRecordLoaded(true);
+          setLoadingRecord(false);
+        }
+      }
+    };
+
+    loadRecord();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditMode, editData?.id]);
 
   /* ========================================================================= */
   /* MASTER DATA LOADERS                                                       */
@@ -796,13 +1001,15 @@ const StockTransferGRNForm = ({ data: editData, onBack }) => {
     loadCurrency();
   }, [loadBranches, loadBelongsTo, loadCurrency]);
 
+  /* In edit mode wait until the record's branch is known */
   useEffect(() => {
+    if (!recordLoaded) return;
     loadLocations();
     loadItems();
     loadSuppliers();
-  }, [loadLocations, loadItems, loadSuppliers]);
+  }, [recordLoaded, loadLocations, loadItems, loadSuppliers]);
 
-  /* GRN No generation */
+  /* GRN No generation (create mode only) */
 
   useEffect(() => {
     if (isEditMode) return;
@@ -1006,23 +1213,27 @@ const StockTransferGRNForm = ({ data: editData, onBack }) => {
     [detailRows],
   );
 
+  /* If Gross Amt is not entered, fall back to the item total */
+  const effectiveGross = useMemo(() => {
+    const gross = toNumber(formData.grossAmount);
+    return gross > 0 ? gross : detailAmountTotal;
+  }, [formData.grossAmount, detailAmountTotal]);
+
   const discountAmount = useMemo(
-    () =>
-      round2(
-        (toNumber(formData.grossAmount) * toNumber(formData.discountPerc)) /
-          100,
-      ),
-    [formData.grossAmount, formData.discountPerc],
+    () => round2((effectiveGross * toNumber(formData.discountPerc)) / 100),
+    [effectiveGross, formData.discountPerc],
   );
 
   const netAmount = useMemo(
-    () => round2(toNumber(formData.grossAmount) - discountAmount),
-    [formData.grossAmount, discountAmount],
+    () => round2(effectiveGross - discountAmount),
+    [effectiveGross, discountAmount],
   );
 
   const basicAmount = detailAmountTotal;
 
   useEffect(() => {
+    if (!recordLoaded) return;
+
     setFormData((previous) => {
       if (
         Number(previous.netAmount) === Number(netAmount) &&
@@ -1036,7 +1247,34 @@ const StockTransferGRNForm = ({ data: editData, onBack }) => {
         basicAmount: money(basicAmount),
       };
     });
-  }, [netAmount, basicAmount]);
+  }, [netAmount, basicAmount, recordLoaded]);
+
+  /* ========================================================================= */
+  /* DROPDOWN OPTIONS THAT MUST ALWAYS CONTAIN THE SAVED VALUE                 */
+  /* ========================================================================= */
+
+  const poOptionsWithCurrent = useMemo(() => {
+    if (
+      formData.poNo &&
+      !poOptions.some((o) => String(o.value) === String(formData.poNo))
+    ) {
+      return [{ value: formData.poNo, label: formData.poNo }, ...poOptions];
+    }
+    return poOptions;
+  }, [poOptions, formData.poNo]);
+
+  const getItemOptionsForRow = (row) => {
+    if (
+      row.item &&
+      !itemOptions.some((o) => String(o.value) === String(row.item))
+    ) {
+      return [
+        { value: row.item, label: row.itemCode || `Item ${row.item}` },
+        ...itemOptions,
+      ];
+    }
+    return itemOptions;
+  };
 
   /* ========================================================================= */
   /* ATTACHMENTS                                                               */
@@ -1058,17 +1296,18 @@ const StockTransferGRNForm = ({ data: editData, onBack }) => {
 
   const handleRemoveFileRow = (index) =>
     setFileRows((previous) => {
-      if (previous.length <= 1) return previous;
+      if (previous.length <= 1) return [emptyFileRow()];
       return previous.filter((_, i) => i !== index);
     });
 
   const handleViewFile = (row) => {
     if (row.isExisting && row.filePath) {
-      window.open(
-        stockTransferGrnAPI.getViewFileUrl(row.filePath),
-        "_blank",
-        "noopener,noreferrer",
-      );
+      /* API already returns a full URL for saved files */
+      const url = /^https?:\/\//i.test(row.filePath)
+        ? row.filePath
+        : stockTransferGrnAPI.getViewFileUrl(row.filePath);
+
+      window.open(url, "_blank", "noopener,noreferrer");
       return;
     }
 
@@ -1173,6 +1412,7 @@ const StockTransferGRNForm = ({ data: editData, onBack }) => {
 
           itemMaxQty: toNumber(row.itemMaxQty),
           bankchrg: toNumber(row.bankchrg),
+          taxPercentage: toNumber(row.taxPercentage),
         }));
 
       const payload = {
@@ -1222,8 +1462,7 @@ const StockTransferGRNForm = ({ data: editData, onBack }) => {
         totalAmountTax: toNumber(formData.totalAmountTax),
         totalQtyInKg: toNumber(formData.totalQtyKg),
 
-        /* Extra fields kept for completeness — remove if backend rejects
-           unknown keys. */
+        /* Extra fields kept for completeness */
         grnNo: formData.grnNo || "",
         grnDate: formData.grnDate || todayISO(),
         grnClearTime: formData.grnClearTime || nowTime(),
@@ -1236,6 +1475,7 @@ const StockTransferGRNForm = ({ data: editData, onBack }) => {
         eSugamNo: formData.eSugamNo || "",
       };
 
+      /* Only newly picked files are uploaded; saved files stay on the server */
       fileRows.forEach((row) => {
         if (row.file) filesToUpload.push(row.file);
       });
@@ -1272,6 +1512,7 @@ const StockTransferGRNForm = ({ data: editData, onBack }) => {
       addToast(
         error?.response?.data?.message ||
           error?.response?.data?.errorMessage ||
+          error?.message ||
           "Failed to save Stock Transfer GRN.",
         "error",
       );
@@ -1289,7 +1530,7 @@ const StockTransferGRNForm = ({ data: editData, onBack }) => {
       key: "item",
       label: "Item Code",
       type: "select",
-      options: itemOptions,
+      options: (row) => getItemOptionsForRow(row),
       minWidth: "130px",
     },
     {
@@ -1455,6 +1696,29 @@ const StockTransferGRNForm = ({ data: editData, onBack }) => {
   /* RENDER                                                                    */
   /* ========================================================================= */
 
+  if (loadingRecord) {
+    return (
+      <div className="p-2 max-w-7xl">
+        <div className="flex items-center gap-2 mb-3">
+          <button
+            type="button"
+            onClick={onBack}
+            className="p-1 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+          <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+            Edit Stock Transfer GRN
+          </h2>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 text-xs text-gray-500 dark:text-gray-400">
+          Loading Stock Transfer GRN...
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-2 max-w-7xl">
       <div className="flex items-center gap-2 mb-3">
@@ -1594,7 +1858,7 @@ const StockTransferGRNForm = ({ data: editData, onBack }) => {
               name="poNo"
               value={formData.poNo}
               onChange={handleFieldChange}
-              options={poOptions}
+              options={poOptionsWithCurrent}
             />
 
             <Field
@@ -1870,7 +2134,7 @@ const StockTransferGRNForm = ({ data: editData, onBack }) => {
                   <div>
                     <span className="text-gray-500">Gross:</span>
                     <span className="font-semibold ml-1">
-                      {money(formData.grossAmount)}
+                      {money(effectiveGross)}
                     </span>
                   </div>
 
@@ -1983,9 +2247,9 @@ const StockTransferGRNForm = ({ data: editData, onBack }) => {
                       <button
                         type="button"
                         onClick={() => handleRemoveFileRow(index)}
-                        disabled={fileRows.length <= 1}
+                        disabled={fileRows.length <= 1 && !row.name}
                         className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-                          fileRows.length <= 1
+                          fileRows.length <= 1 && !row.name
                             ? "bg-gray-400 cursor-not-allowed"
                             : "bg-red-600 hover:bg-red-700"
                         }`}

@@ -1,9 +1,12 @@
+// src/components/Inventory/OpeningStockEntry/OpeningStockEntryForm.jsx
+
 import { ArrowLeft, Save, X, Loader2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import dayjs from "dayjs";
 
 import openingStockEntryAPI from "../../../api/Inventory/openingStockEntryAPI";
 import { branchAPI } from "../../../api/branchAPI";
+import itemAPI from "../../../api/itemAPI";
 import { useToast } from "../../Toast/ToastContext";
 
 /* -------------------------------------------------------------------------- */
@@ -39,12 +42,62 @@ const fieldGrid =
 
 const getToday = () => dayjs().format("YYYY-MM-DD");
 
-const formatDate = (value) => {
-  if (!value) return "";
+const isObj = (v) => v !== null && typeof v === "object";
 
-  const date = dayjs(value);
+/* First value that is not undefined / null / "" */
+const pick = (...values) => {
+  for (const v of values) {
+    if (v !== undefined && v !== null && v !== "") return v;
+  }
+  return "";
+};
 
-  return date.isValid() ? date.format("YYYY-MM-DD") : "";
+/* ID of a backend value that can be an object or a primitive */
+const idOf = (v, ...keys) => {
+  if (isObj(v)) return pick(...keys.map((k) => v[k]), v.id);
+  return v ?? "";
+};
+
+/*
+ * Value of the first exact key that has a primitive value; otherwise the first
+ * key whose NAME matches the pattern. Used because backends name qty / rate /
+ * amount fields differently (qty, quantity, openingQty, stockQty ...).
+ */
+const pickKey = (obj, exactKeys, regex) => {
+  if (!isObj(obj)) return "";
+
+  const usable = (v) => v !== undefined && v !== null && v !== "" && !isObj(v);
+
+  for (const key of exactKeys) {
+    if (usable(obj[key])) return obj[key];
+  }
+
+  if (regex) {
+    const found = Object.keys(obj).find(
+      (key) => regex.test(key) && usable(obj[key]),
+    );
+
+    if (found) return obj[found];
+  }
+
+  return "";
+};
+
+/* Converts "2026-09-01T00:00:00", "01-09-2026", "01/09/2026" -> "2026-09-01" */
+const toDateInput = (v) => {
+  const text = String(v ?? "").trim();
+
+  if (!text) return "";
+
+  if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
+
+  const dmy = text.match(/^(\d{2})[-/](\d{2})[-/](\d{4})/);
+
+  if (dmy) return `${dmy[3]}-${dmy[2]}-${dmy[1]}`;
+
+  const parsed = dayjs(text);
+
+  return parsed.isValid() ? parsed.format("YYYY-MM-DD") : "";
 };
 
 const calculateAmount = (quantity, rate) => {
@@ -71,50 +124,270 @@ const getLocalStorageNumber = (key) => {
   return Number.isFinite(value) && value > 0 ? value : null;
 };
 
-const getCurrentUser = () => {
-  return (
-    localStorage.getItem("userId") ||
-    localStorage.getItem("usersId") ||
-    localStorage.getItem("userName") ||
-    localStorage.getItem("username") ||
-    ""
-  );
+const getCurrentUser = () =>
+  localStorage.getItem("userId") ||
+  localStorage.getItem("usersId") ||
+  localStorage.getItem("userName") ||
+  localStorage.getItem("username") ||
+  "";
+
+/*
+ * Make sure the saved value is always visible in a <select>, even if it is not
+ * (yet) one of the options (options still loading, different case, etc.).
+ */
+const withCurrent = (options, value, fallbackLabel) => {
+  const list = options || [];
+
+  if (value === "" || value === null || value === undefined) return list;
+
+  const exists = list.some((o) => String(o.value) === String(value));
+
+  return exists
+    ? list
+    : [...list, { value, label: fallbackLabel || String(value) }];
 };
 
 /* -------------------------------------------------------------------------- */
-/* Extract Item Information                                                   */
+/* Item information                                                           */
 /* -------------------------------------------------------------------------- */
+
+/* Unit can be an object, an id or a plain text */
+const unitText = (u) => {
+  if (isObj(u)) {
+    return String(
+      pick(u.unitName, u.primaryUnit, u.name, u.unit, u.unitId, u.id),
+    );
+  }
+
+  return String(u ?? "");
+};
 
 const getItemCode = (item) => {
   if (!item) return "";
 
-  if (typeof item === "string") {
-    return item;
-  }
+  if (typeof item === "string") return item;
 
-  return item?.itemCode || item?.code || item?.item_code || "";
+  return String(pick(item.itemCode, item.code, item.item_code));
 };
 
 const getItemDescription = (item) => {
-  if (!item || typeof item === "string") {
-    return "";
-  }
+  if (!item || typeof item === "string") return "";
 
-  return (
-    item?.itemDescription ||
-    item?.description ||
-    item?.itemName ||
-    item?.name ||
-    ""
+  return String(
+    pick(
+      item.itemDescription,
+      item.itemDesc,
+      item.description,
+      item.itemName,
+      item.name,
+    ),
   );
 };
 
 const getItemUnit = (item) => {
-  if (!item || typeof item === "string") {
-    return "";
+  if (!item || typeof item === "string") return "";
+
+  const direct = unitText(
+    pick(
+      item.unit,
+      item.primaryUnits,
+      item.primaryUnit,
+      item.uom,
+      item.unitName,
+      item.unitId,
+    ),
+  );
+
+  if (direct) return direct;
+
+  /* any key that looks like a unit */
+  const key = Object.keys(item).find(
+    (k) => /unit|uom/i.test(k) && item[k] !== null && item[k] !== "",
+  );
+
+  return key ? unitText(item[key]) : "";
+};
+
+const getItemId = (item) => {
+  if (!isObj(item)) return "";
+
+  return String(pick(item.itemId, item.id));
+};
+
+/* -------------------------------------------------------------------------- */
+/* Edit data: extract + map                                                   */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * openingStockEntryAPI.getById already unwraps paramObjectsMap and returns the
+ * record (or null). It may be an object or a one-item array, and this also
+ * accepts a raw { paramObjectsMap: { ... } } response, so every shape works.
+ */
+const extractRecord = (response) => {
+  if (!response) return null;
+
+  if (Array.isArray(response)) {
+    return isObj(response[0]) ? response[0] : null;
   }
 
-  return item?.unitId || item?.unit || item?.uom || item?.unitName || "";
+  const map = response?.paramObjectsMap || response?.data?.paramObjectsMap;
+
+  if (map) {
+    let record =
+      map.openStockEntryResponseVO ??
+      map.openStockEntryVO ??
+      map.openStockEntry ??
+      Object.values(map).find((v) => isObj(v));
+
+    if (Array.isArray(record)) record = record[0];
+
+    return isObj(record) ? record : null;
+  }
+
+  return isObj(response) ? response : null;
+};
+
+/* Find an array on the record by exact key first, then by key pattern */
+const findArray = (d, exactKeys, regex) => {
+  for (const key of exactKeys) {
+    if (Array.isArray(d[key]) && d[key].length) return d[key];
+  }
+
+  const found = Object.keys(d).find(
+    (key) => regex.test(key) && Array.isArray(d[key]) && d[key].length,
+  );
+
+  return found ? d[found] : [];
+};
+
+const createInitialHeader = () => ({
+  plant: "",
+  plantName: "",
+  docDate: getToday(),
+  asOnDate: getToday(),
+  docId: "",
+  location: "",
+  locationName: "",
+  itemCode: "",
+  itemId: "",
+  itemDescription: "",
+  unit: "",
+  quantity: "",
+  rate: "",
+  amount: "",
+  remarks: "",
+});
+
+const QTY_KEYS = [
+  "quantity",
+  "qty",
+  "openingQty",
+  "openQty",
+  "openingQuantity",
+  "stockQty",
+  "stockQuantity",
+];
+
+const RATE_KEYS = ["rate", "unitRate", "itemRate", "price", "unitPrice"];
+
+const AMOUNT_KEYS = ["amount", "totalAmount", "value", "stockValue"];
+
+/*
+ * Works for both shapes:
+ *   - flat record (itemCode / quantity / rate on the record itself)
+ *   - header + details array (first detail row holds the item)
+ */
+const mapEditData = (d) => {
+  const detail =
+    findArray(
+      d,
+      [
+        "openStockEntryDetailsResponseDTO",
+        "openStockEntryDetailsVO",
+        "openStockEntryDetailsDTO",
+        "openingStockEntryDetailsVO",
+        "stockDetails",
+        "stockDetailList",
+        "openStockEntryDetails",
+        "details",
+      ],
+      /detail/i,
+    )[0] ||
+    d.detail ||
+    {};
+
+  const item = isObj(detail.item) ? detail.item : isObj(d.item) ? d.item : null;
+
+  const itemCode = String(
+    pick(
+      getItemCode(item),
+      typeof detail.item === "string" ? detail.item : "",
+      detail.itemCode,
+      d.itemCode,
+    ),
+  );
+
+  /* qty / rate / amount: detail row first, then the record, then the item */
+  const quantity = pick(
+    pickKey(detail, QTY_KEYS, /qty|quantity/i),
+    pickKey(d, QTY_KEYS, /qty|quantity/i),
+  );
+
+  const rate = pick(
+    pickKey(detail, RATE_KEYS, /^(.*rate|price)$/i),
+    pickKey(d, RATE_KEYS, /^(.*rate|price)$/i),
+  );
+
+  const savedAmount = pick(
+    pickKey(detail, AMOUNT_KEYS, /amount/i),
+    pickKey(d, AMOUNT_KEYS, /amount/i),
+  );
+
+  return {
+    ...createInitialHeader(),
+
+    plant: String(pick(idOf(d.branch, "branchId"), d.plant, d.branchId)),
+
+    plantName: String(
+      pick(isObj(d.branch) ? d.branch.branchName : "", d.branchName),
+    ),
+
+    docDate: toDateInput(d.docDate) || getToday(),
+
+    asOnDate: toDateInput(d.asOnDate) || getToday(),
+
+    docId: String(pick(d.docId, d.docNo)),
+
+    location: String(pick(idOf(d.location, "locationId"), d.locationId)),
+
+    locationName: String(
+      pick(isObj(d.location) ? d.location.locationName : "", d.locationName),
+    ),
+
+    itemCode,
+
+    itemId: getItemId(item),
+
+    itemDescription: String(
+      pick(
+        getItemDescription(item),
+        detail.itemDescription,
+        detail.itemDesc,
+        detail.description,
+        d.itemDescription,
+      ),
+    ),
+
+    unit: String(pick(getItemUnit(item), getItemUnit(detail), getItemUnit(d))),
+
+    quantity,
+
+    rate,
+
+    amount: savedAmount !== "" ? savedAmount : calculateAmount(quantity, rate),
+
+    remarks: d.remarks || "",
+  };
 };
 
 /* -------------------------------------------------------------------------- */
@@ -244,7 +517,13 @@ const Field = ({
 /* Buttons                                                                    */
 /* -------------------------------------------------------------------------- */
 
-const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
+const FormButtons = ({
+  onCancel,
+  onSave,
+  isSubmitting,
+  disabled,
+  saveLabel,
+}) => (
   <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
     <button
       type="button"
@@ -266,7 +545,7 @@ const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
     <button
       type="button"
       onClick={onSave}
-      disabled={isSubmitting}
+      disabled={isSubmitting || disabled}
       className={
         "flex items-center gap-1 px-3 py-1.5 rounded text-xs " +
         "text-white bg-blue-600 hover:bg-blue-700 " +
@@ -286,25 +565,6 @@ const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
 );
 
 /* -------------------------------------------------------------------------- */
-/* Initial Header                                                             */
-/* -------------------------------------------------------------------------- */
-
-const createInitialHeader = () => ({
-  plant: "",
-  docDate: getToday(),
-  asOnDate: getToday(),
-  docId: "",
-  location: "",
-  itemCode: "",
-  itemDescription: "",
-  unit: "",
-  quantity: "",
-  rate: "",
-  amount: "",
-  remarks: "",
-});
-
-/* -------------------------------------------------------------------------- */
 /* Component                                                                  */
 /* -------------------------------------------------------------------------- */
 
@@ -313,7 +573,7 @@ const OpeningStockEntryForm = ({ data, onBack }) => {
 
   const orgId = getLocalStorageNumber("orgId");
   const branchId = getLocalStorageNumber("branchId");
-
+  const finYear = localStorage.getItem("finYear");
   const currentUser = getCurrentUser();
 
   const existingId =
@@ -321,150 +581,131 @@ const OpeningStockEntryForm = ({ data, onBack }) => {
 
   const isEdit = Boolean(existingId);
 
+  /*
+   * The row passed in from the list seeds the form instantly.
+   * The full record is then fetched with getById (effect below), merged over
+   * the list row, and replaces this state.
+   */
+  const [header, setHeader] = useState(() =>
+    isEdit
+      ? mapEditData(data?.header || data?.openStockEntry || data || {})
+      : createInitialHeader(),
+  );
+
+  /* keeps the saved record (createdBy / active) for the update payload */
+  const [savedRecord, setSavedRecord] = useState(() =>
+    isEdit ? data?.header || data?.openStockEntry || data || {} : {},
+  );
+
+  /* true while getById is running (edit mode only) */
+  const [loadingData, setLoadingData] = useState(isEdit);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
-
   const [loadingMasters, setLoadingMasters] = useState(false);
-
   const [loadingLocations, setLoadingLocations] = useState(false);
-
   const [fieldErrors, setFieldErrors] = useState({});
 
   const [plantOptions, setPlantOptions] = useState([]);
-
   const [locationOptions, setLocationOptions] = useState([]);
-
   const [itemOptions, setItemOptions] = useState([]);
-
   const [itemMap, setItemMap] = useState({});
 
-  /* ---------------------------------------------------------------------- */
-  /* Initial Header                                                         */
-  /* ---------------------------------------------------------------------- */
-
-  const getInitialHeader = () => {
-    const source = data?.header || data?.openStockEntry || data || {};
-
-    const detail =
-      data?.stockDetails?.[0] ||
-      data?.stockDetailList?.[0] ||
-      data?.openStockEntryDetails?.[0] ||
-      data?.details?.[0] ||
-      source?.detail ||
-      {};
-
-    const item = detail?.item || source?.item || data?.item || null;
-
-    const itemCode =
-      getItemCode(item) ||
-      detail?.itemCode ||
-      source?.itemCode ||
-      data?.itemCode ||
-      "";
-
-    const itemDescription =
-      getItemDescription(item) ||
-      detail?.itemDescription ||
-      detail?.itemDesc ||
-      detail?.description ||
-      source?.itemDescription ||
-      data?.itemDescription ||
-      "";
-
-    const unit =
-      getItemUnit(item) ||
-      detail?.unit ||
-      detail?.unitId ||
-      detail?.uom ||
-      source?.unit ||
-      data?.unit ||
-      "";
-
-    const quantity =
-      detail?.quantity ??
-      detail?.qty ??
-      source?.quantity ??
-      source?.qty ??
-      data?.quantity ??
-      data?.qty ??
-      "";
-
-    return {
-      ...createInitialHeader(),
-
-      plant:
-        source?.branch?.id ??
-        source?.plant ??
-        source?.branch ??
-        source?.branchId ??
-        data?.branch?.id ??
-        data?.plant ??
-        data?.branch ??
-        data?.branchId ??
-        "",
-
-      docDate: formatDate(source?.docDate ?? data?.docDate ?? getToday()),
-
-      asOnDate: formatDate(source?.asOnDate ?? data?.asOnDate ?? getToday()),
-
-      docId: source?.docId || data?.docId || "",
-
-      location:
-        source?.location?.id ??
-        source?.location ??
-        source?.locationId ??
-        data?.location?.id ??
-        data?.location ??
-        data?.locationId ??
-        "",
-
-      itemCode,
-
-      itemDescription,
-
-      unit,
-
-      quantity,
-
-      rate: detail?.rate ?? source?.rate ?? data?.rate ?? "",
-
-      amount: detail?.amount ?? source?.amount ?? data?.amount ?? "",
-
-      remarks: source?.remarks || data?.remarks || "",
-    };
-  };
-
-  const [header, setHeader] = useState(getInitialHeader);
+  /* item ids already looked up, so a missing unit does not cause a loop */
+  const itemLookupDone = useRef(new Set());
 
   /* ---------------------------------------------------------------------- */
-  /* Recalculate Amount                                                     */
+  /* Edit: load by id                                                       */
   /* ---------------------------------------------------------------------- */
 
   useEffect(() => {
-    if (header.quantity === "" || header.rate === "") {
-      return;
-    }
+    if (!isEdit) return;
+
+    let cancelled = false;
+
+    const loadById = async () => {
+      setLoadingData(true);
+
+      try {
+        const response = await openingStockEntryAPI.getById(existingId);
+
+        if (cancelled) return;
+
+        console.log("Get Opening Stock Entry By ID Response:", response);
+
+        const record = extractRecord(response);
+
+        if (!record) {
+          console.error(
+            "getById returned no record. Check the key names inside getById in openingStockEntryAPI.",
+          );
+          addToast("Opening Stock Entry data not found", "error");
+          return;
+        }
+
+        console.log("Opening Stock Entry record (raw):", record);
+        console.log("Record keys:", Object.keys(record));
+
+        /*
+         * The by-id response may omit some fields. Fall back to the list row
+         * for anything the by-id response leaves out.
+         */
+        const nonNull = Object.fromEntries(
+          Object.entries(record).filter(
+            ([, v]) => v !== null && v !== undefined,
+          ),
+        );
+
+        const merged = { ...(data?.header || data || {}), ...nonNull };
+
+        const result = mapEditData(merged);
+
+        console.log("Mapped Opening Stock Entry form:", result);
+
+        setHeader(result);
+        setSavedRecord(merged);
+      } catch (error) {
+        console.error("Failed to load Opening Stock Entry:", error);
+
+        if (!cancelled) {
+          addToast("Failed to load Opening Stock Entry data", "error");
+        }
+      } finally {
+        if (!cancelled) setLoadingData(false);
+      }
+    };
+
+    loadById();
+
+    return () => {
+      cancelled = true;
+    };
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEdit, existingId]);
+
+  /* ---------------------------------------------------------------------- */
+  /* Recalculate amount                                                     */
+  /* ---------------------------------------------------------------------- */
+
+  useEffect(() => {
+    if (header.quantity === "" || header.rate === "") return;
 
     const calculatedAmount = calculateAmount(header.quantity, header.rate);
 
-    if (calculatedAmount !== header.amount) {
-      setHeader((previous) => ({
-        ...previous,
-        amount: calculatedAmount,
-      }));
+    if (calculatedAmount !== String(header.amount)) {
+      setHeader((previous) => ({ ...previous, amount: calculatedAmount }));
     }
   }, [header.quantity, header.rate, header.amount]);
 
   /* ---------------------------------------------------------------------- */
-  /* Load Branch + Items                                                    */
+  /* Load branches + items                                                  */
   /* ---------------------------------------------------------------------- */
 
   useEffect(() => {
     let cancelled = false;
 
     const loadMasters = async () => {
-      if (!orgId || !branchId) {
-        return;
-      }
+      if (!orgId || !branchId) return;
 
       try {
         setLoadingMasters(true);
@@ -474,31 +715,29 @@ const OpeningStockEntryForm = ({ data, onBack }) => {
           openingStockEntryAPI.getItemCodeDropdown(branchId, orgId),
         ]);
 
-        if (cancelled) {
-          return;
-        }
+        if (cancelled) return;
 
         /* ---------------- Branches ---------------- */
 
         const branchList = Array.isArray(branches) ? branches : [];
 
-        const branchOptions = branchList
-          .map((branch) => ({
-            value: branch?.id ?? branch?.branchId ?? "",
+        setPlantOptions(
+          branchList
+            .map((branch) => ({
+              value: branch?.id ?? branch?.branchId ?? "",
 
-            label:
-              branch?.branchName ||
-              branch?.name ||
-              branch?.branchCode ||
-              String(branch?.id ?? branch?.branchId ?? ""),
-          }))
-          .filter((option) => option.value !== "");
+              label:
+                branch?.branchName ||
+                branch?.name ||
+                branch?.branchCode ||
+                String(branch?.id ?? branch?.branchId ?? ""),
+            }))
+            .filter((option) => option.value !== ""),
+        );
 
-        setPlantOptions(branchOptions);
+        /* ---------------- Default branch (new record only) ---------------- */
 
-        /* ---------------- Default Branch ---------------- */
-
-        if (!isEdit && branchId) {
+        if (!isEdit) {
           setHeader((previous) => ({
             ...previous,
             plant: previous.plant || String(branchId),
@@ -509,33 +748,21 @@ const OpeningStockEntryForm = ({ data, onBack }) => {
 
         const itemList = Array.isArray(items) ? items : [];
 
+        console.log("Item dropdown sample:", itemList[0]);
+
         const nextItemMap = {};
 
         const nextItemOptions = itemList
           .map((item) => {
             const code = getItemCode(item);
 
-            if (!code) {
-              return null;
-            }
+            if (!code) return null;
 
             nextItemMap[code] = item;
 
-            return {
-              value: code,
-              label: code,
-            };
+            return { value: code, label: code };
           })
           .filter(Boolean);
-
-        /* Preserve edit item */
-
-        if (isEdit && header.itemCode && !nextItemMap[header.itemCode]) {
-          nextItemOptions.unshift({
-            value: header.itemCode,
-            label: header.itemCode,
-          });
-        }
 
         setItemMap(nextItemMap);
         setItemOptions(nextItemOptions);
@@ -550,9 +777,7 @@ const OpeningStockEntryForm = ({ data, onBack }) => {
           addToast("Failed to load Opening Stock Entry master data.", "error");
         }
       } finally {
-        if (!cancelled) {
-          setLoadingMasters(false);
-        }
+        if (!cancelled) setLoadingMasters(false);
       }
     };
 
@@ -561,10 +786,12 @@ const OpeningStockEntryForm = ({ data, onBack }) => {
     return () => {
       cancelled = true;
     };
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orgId, branchId, isEdit]);
 
   /* ---------------------------------------------------------------------- */
-  /* Load Locations                                                         */
+  /* Load locations (follows the selected plant)                            */
   /* ---------------------------------------------------------------------- */
 
   useEffect(() => {
@@ -584,54 +811,31 @@ const OpeningStockEntryForm = ({ data, onBack }) => {
           Number(header.plant),
         );
 
-        if (cancelled) {
-          return;
-        }
+        if (cancelled) return;
 
         const list = Array.isArray(locations) ? locations : [];
 
-        const options = list
-          .map((location) => ({
-            value: location?.id ?? location?.locationId ?? "",
+        setLocationOptions(
+          list
+            .map((location) => ({
+              value: location?.id ?? location?.locationId ?? "",
 
-            label:
-              location?.locationName ||
-              location?.name ||
-              String(location?.id ?? location?.locationId ?? ""),
-          }))
-          .filter((option) => option.value !== "");
-
-        /* Preserve existing edit location */
-
-        if (
-          isEdit &&
-          header.location &&
-          !options.some(
-            (option) => String(option.value) === String(header.location),
-          )
-        ) {
-          options.unshift({
-            value: header.location,
-            label:
-              data?.location?.locationName ||
-              data?.locationName ||
-              String(header.location),
-          });
-        }
-
-        setLocationOptions(options);
+              label:
+                location?.locationName ||
+                location?.name ||
+                String(location?.id ?? location?.locationId ?? ""),
+            }))
+            .filter((option) => option.value !== ""),
+        );
       } catch (error) {
         console.error("Opening Stock Entry location loading error:", error);
 
         if (!cancelled) {
           setLocationOptions([]);
-
           addToast("Failed to load locations.", "error");
         }
       } finally {
-        if (!cancelled) {
-          setLoadingLocations(false);
-        }
+        if (!cancelled) setLoadingLocations(false);
       }
     };
 
@@ -640,25 +844,109 @@ const OpeningStockEntryForm = ({ data, onBack }) => {
     return () => {
       cancelled = true;
     };
-  }, [orgId, header.plant, isEdit]);
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgId, header.plant]);
 
   /* ---------------------------------------------------------------------- */
-  /* Generate Document ID                                                   */
+  /* Fill description / unit (add + edit)                                   */
   /* ---------------------------------------------------------------------- */
 
   useEffect(() => {
+    if (loadingData || !header.itemCode) return;
+
+    if (header.itemDescription && header.unit) return;
+
+    const code = header.itemCode;
+
+    /* 1. item dropdown list */
+    const listed = itemMap[code];
+
+    if (listed) {
+      const description = getItemDescription(listed);
+      const unit = getItemUnit(listed);
+
+      if ((!header.itemDescription && description) || (!header.unit && unit)) {
+        setHeader((previous) =>
+          previous.itemCode !== code
+            ? previous
+            : {
+                ...previous,
+                itemDescription: previous.itemDescription || description,
+                unit: previous.unit || unit,
+                itemId: previous.itemId || getItemId(listed),
+              },
+        );
+
+        return;
+      }
+    }
+
+    /* 2. item master by id (once per item) */
+    const itemId = header.itemId || getItemId(listed);
+
+    if (!itemId || !/^\d+$/.test(String(itemId))) {
+      console.warn(
+        "Cannot look up item details: no numeric item id for",
+        code,
+        listed,
+      );
+      return;
+    }
+
+    if (itemLookupDone.current.has(String(itemId))) return;
+
+    itemLookupDone.current.add(String(itemId));
+
+    (async () => {
+      try {
+        const itemDetail = await itemAPI.getItemById(itemId);
+
+        console.log("Item master response:", itemDetail);
+
+        if (!itemDetail) return;
+
+        const description = getItemDescription(itemDetail);
+        const unit = getItemUnit(itemDetail);
+
+        /* not cancelled on re-render; only skipped if the item changed */
+        setHeader((previous) =>
+          previous.itemCode !== code
+            ? previous
+            : {
+                ...previous,
+                itemId: previous.itemId || String(itemId),
+                itemDescription: previous.itemDescription || description,
+                unit: previous.unit || unit,
+              },
+        );
+      } catch (error) {
+        console.error("Failed to load item details:", error);
+        itemLookupDone.current.delete(String(itemId));
+      }
+    })();
+  }, [
+    loadingData,
+    header.itemCode,
+    header.itemId,
+    header.itemDescription,
+    header.unit,
+    itemMap,
+  ]);
+
+  /* ---------------------------------------------------------------------- */
+  /* Generate document id (new record only)                                 */
+  /* ---------------------------------------------------------------------- */
+
+  useEffect(() => {
+    if (isEdit) return;
+
+    if (!orgId || header.docId) return;
+
     let cancelled = false;
 
     const generateDocId = async () => {
-      if (isEdit) {
-        return;
-      }
-
-      if (!orgId || header.docId) {
-        return;
-      }
-
-      const financialYear = dayjs().format("YYYY");
+      const financialYear = localStorage.getItem("finYear");
 
       try {
         const docId = await openingStockEntryAPI.getOpenStockEntryDocId(
@@ -668,10 +956,7 @@ const OpeningStockEntryForm = ({ data, onBack }) => {
         );
 
         if (!cancelled && docId) {
-          setHeader((previous) => ({
-            ...previous,
-            docId,
-          }));
+          setHeader((previous) => ({ ...previous, docId }));
         }
       } catch (error) {
         console.error("Opening Stock Entry Doc ID generation error:", error);
@@ -687,41 +972,37 @@ const OpeningStockEntryForm = ({ data, onBack }) => {
     return () => {
       cancelled = true;
     };
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orgId, isEdit, header.docId]);
 
   /* ---------------------------------------------------------------------- */
-  /* Item Options                                                           */
+  /* Select options (the saved value is always visible)                     */
   /* ---------------------------------------------------------------------- */
 
-  const finalItemOptions = useMemo(() => {
-    const options = [...itemOptions];
+  const finalPlantOptions = useMemo(
+    () => withCurrent(plantOptions, header.plant, header.plantName),
+    [plantOptions, header.plant, header.plantName],
+  );
 
-    if (
-      header.itemCode &&
-      !options.some(
-        (option) => String(option.value) === String(header.itemCode),
-      )
-    ) {
-      options.unshift({
-        value: header.itemCode,
-        label: header.itemCode,
-      });
-    }
+  const finalLocationOptions = useMemo(
+    () => withCurrent(locationOptions, header.location, header.locationName),
+    [locationOptions, header.location, header.locationName],
+  );
 
-    return options;
-  }, [itemOptions, header.itemCode]);
+  const finalItemOptions = useMemo(
+    () => withCurrent(itemOptions, header.itemCode),
+    [itemOptions, header.itemCode],
+  );
 
   /* ---------------------------------------------------------------------- */
-  /* Change Handler                                                         */
+  /* Change handler                                                         */
   /* ---------------------------------------------------------------------- */
 
   const handleChange = (event) => {
     const { name, value } = event.target;
 
-    setFieldErrors((previous) => ({
-      ...previous,
-      [name]: "",
-    }));
+    setFieldErrors((previous) => ({ ...previous, [name]: "" }));
 
     /* ---------------- Plant ---------------- */
 
@@ -729,7 +1010,9 @@ const OpeningStockEntryForm = ({ data, onBack }) => {
       setHeader((previous) => ({
         ...previous,
         plant: value,
+        plantName: "",
         location: "",
+        locationName: "",
       }));
 
       setFieldErrors((previous) => ({
@@ -741,20 +1024,42 @@ const OpeningStockEntryForm = ({ data, onBack }) => {
       return;
     }
 
-    /* ---------------- Item Code ---------------- */
+    /* ---------------- Location ---------------- */
+
+    if (name === "location") {
+      const selected = locationOptions.find(
+        (option) => String(option.value) === String(value),
+      );
+
+      setHeader((previous) => ({
+        ...previous,
+        location: value,
+        locationName: selected?.label || "",
+      }));
+
+      return;
+    }
+
+    /* ---------------- Item code ---------------- */
 
     if (name === "itemCode") {
       const selectedItem = itemMap[value];
+
+      if (selectedItem) {
+        itemLookupDone.current.delete(getItemId(selectedItem));
+      }
 
       setHeader((previous) => ({
         ...previous,
 
         itemCode: value,
 
-        itemDescription:
-          getItemDescription(selectedItem) || previous.itemDescription,
+        itemId: getItemId(selectedItem),
 
-        unit: getItemUnit(selectedItem) || previous.unit,
+        /* a different item must not keep the previous item's values */
+        itemDescription: getItemDescription(selectedItem),
+
+        unit: getItemUnit(selectedItem),
       }));
 
       setFieldErrors((previous) => ({
@@ -767,12 +1072,11 @@ const OpeningStockEntryForm = ({ data, onBack }) => {
       return;
     }
 
-    /* ---------------- Quantity / Rate ---------------- */
+    /* ---------------- Quantity / rate ---------------- */
 
     if (name === "quantity" || name === "rate") {
       setHeader((previous) => {
         const quantity = name === "quantity" ? value : previous.quantity;
-
         const rate = name === "rate" ? value : previous.rate;
 
         return {
@@ -785,12 +1089,9 @@ const OpeningStockEntryForm = ({ data, onBack }) => {
       return;
     }
 
-    /* ---------------- Other Fields ---------------- */
+    /* ---------------- Other fields ---------------- */
 
-    setHeader((previous) => ({
-      ...previous,
-      [name]: value,
-    }));
+    setHeader((previous) => ({ ...previous, [name]: value }));
   };
 
   /* ---------------------------------------------------------------------- */
@@ -800,37 +1101,25 @@ const OpeningStockEntryForm = ({ data, onBack }) => {
   const validate = () => {
     const errors = {};
 
-    if (!header.plant) {
-      errors.plant = "Plant is required";
-    }
+    if (!header.plant) errors.plant = "Plant is required";
 
-    if (!header.docDate) {
-      errors.docDate = "Doc Date is required";
-    }
+    if (!header.docDate) errors.docDate = "Doc Date is required";
 
-    if (!header.asOnDate) {
-      errors.asOnDate = "As On Date is required";
-    }
+    if (!header.asOnDate) errors.asOnDate = "As On Date is required";
 
-    if (!header.docId?.trim()) {
-      errors.docId = "Doc Id is required";
-    }
+    if (!String(header.docId || "").trim()) errors.docId = "Doc Id is required";
 
-    if (!header.location) {
-      errors.location = "Location is required";
-    }
+    if (!header.location) errors.location = "Location is required";
 
-    if (!header.itemCode?.trim()) {
+    if (!String(header.itemCode || "").trim()) {
       errors.itemCode = "Item Code is required";
     }
 
-    if (!header.itemDescription?.trim()) {
+    if (!String(header.itemDescription || "").trim()) {
       errors.itemDescription = "Item Description is required";
     }
 
-    if (!header.unit?.trim()) {
-      errors.unit = "Unit is required";
-    }
+    if (!String(header.unit || "").trim()) errors.unit = "Unit is required";
 
     if (
       header.quantity === "" ||
@@ -848,9 +1137,7 @@ const OpeningStockEntryForm = ({ data, onBack }) => {
       errors.rate = "Rate cannot be negative";
     }
 
-    const amount = calculateAmount(header.quantity, header.rate);
-
-    if (!amount) {
+    if (!calculateAmount(header.quantity, header.rate)) {
       errors.amount = "Invalid Qty / Rate";
     }
 
@@ -860,20 +1147,17 @@ const OpeningStockEntryForm = ({ data, onBack }) => {
   };
 
   /* ---------------------------------------------------------------------- */
-  /* Build Payload                                                          */
+  /* Build payload                                                          */
   /* ---------------------------------------------------------------------- */
 
   const buildPayload = () => {
-    const isUpdate = Boolean(existingId);
-
     const amount = calculateAmount(header.quantity, header.rate);
 
+    /* the backend stores the item by ID, not by code */
+    const itemId = header.itemId || getItemId(itemMap[header.itemCode]);
+
     return {
-      ...(isUpdate
-        ? {
-            id: Number(existingId),
-          }
-        : {}),
+      ...(isEdit ? { id: Number(existingId) } : {}),
 
       orgId: Number(orgId),
 
@@ -884,16 +1168,15 @@ const OpeningStockEntryForm = ({ data, onBack }) => {
       asOnDate: header.asOnDate,
 
       docId: header.docId,
+      financialYear: finYear,
 
       location: Number(header.location),
 
-      itemCode: header.itemCode,
+      /* item ID, not the code */
+      item: Number(itemId),
 
-      itemDescription: header.itemDescription,
-
-      unit: header.unit,
-
-      quantity: Number(header.quantity),
+      /* backend key is "qty", not "quantity" */
+      qty: Number(header.quantity),
 
       rate: Number(header.rate),
 
@@ -901,17 +1184,14 @@ const OpeningStockEntryForm = ({ data, onBack }) => {
 
       remarks: header.remarks || "",
 
-      active: typeof data?.active === "boolean" ? data.active : true,
+      active:
+        typeof savedRecord?.active === "boolean"
+          ? savedRecord.active
+          : String(savedRecord?.active).toLowerCase() !== "inactive",
 
-      createdBy: isUpdate
-        ? data?.createdBy || data?.header?.createdBy || currentUser
-        : currentUser,
+      createdBy: isEdit ? savedRecord?.createdBy || currentUser : currentUser,
 
-      ...(isUpdate
-        ? {
-            updatedBy: currentUser,
-          }
-        : {}),
+      ...(isEdit ? { updatedBy: currentUser } : {}),
     };
   };
 
@@ -920,9 +1200,10 @@ const OpeningStockEntryForm = ({ data, onBack }) => {
   /* ---------------------------------------------------------------------- */
 
   const handleSave = async () => {
+    if (isSubmitting || loadingData) return;
+
     if (!validate()) {
       addToast("Please fill all mandatory fields before saving.", "error");
-
       return;
     }
 
@@ -932,51 +1213,50 @@ const OpeningStockEntryForm = ({ data, onBack }) => {
       const payload = buildPayload();
 
       console.log(
-        "================ OPENING STOCK ENTRY PAYLOAD ================",
+        "OPENING STOCK ENTRY PAYLOAD:",
+        JSON.stringify(payload, null, 2),
       );
-
-      console.log(JSON.stringify(payload, null, 2));
 
       const response = await openingStockEntryAPI.createUpdate(payload);
 
       if (response?.status === true) {
-        const message =
+        addToast(
           response?.paramObjectsMap?.message ||
-          (isEdit
-            ? "Opening Stock Entry updated successfully!"
-            : "Opening Stock Entry created successfully!");
-
-        addToast(message, "success");
+            (isEdit
+              ? "Opening Stock Entry updated successfully!"
+              : "Opening Stock Entry created successfully!"),
+          "success",
+        );
 
         onBack?.();
 
         return;
       }
 
-      const errorMessage =
+      addToast(
         response?.errors?.[0]?.shortMessage ||
-        response?.errors?.[0]?.longMessage ||
-        response?.paramObjectsMap?.errorMessage ||
-        response?.paramObjectsMap?.message ||
-        response?.message ||
-        "Failed to save Opening Stock Entry.";
-
-      addToast(errorMessage, "error");
+          response?.errors?.[0]?.longMessage ||
+          response?.paramObjectsMap?.errorMessage ||
+          response?.paramObjectsMap?.message ||
+          response?.message ||
+          "Failed to save Opening Stock Entry.",
+        "error",
+      );
     } catch (error) {
       console.error("Opening Stock Entry Save Error:", error);
 
       const responseData = error?.response?.data;
 
-      const errorMessage =
+      addToast(
         responseData?.errors?.[0]?.shortMessage ||
-        responseData?.errors?.[0]?.longMessage ||
-        responseData?.paramObjectsMap?.errorMessage ||
-        responseData?.paramObjectsMap?.message ||
-        responseData?.message ||
-        error?.message ||
-        "Something went wrong while saving.";
-
-      addToast(errorMessage, "error");
+          responseData?.errors?.[0]?.longMessage ||
+          responseData?.paramObjectsMap?.errorMessage ||
+          responseData?.paramObjectsMap?.message ||
+          responseData?.message ||
+          error?.message ||
+          "Something went wrong while saving.",
+        "error",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -988,7 +1268,7 @@ const OpeningStockEntryForm = ({ data, onBack }) => {
 
   return (
     <div className="p-2 max-w-7xl">
-      {/* Header */}
+      {/* Title */}
 
       <div className="flex items-center gap-2 mb-3">
         <button
@@ -1013,10 +1293,17 @@ const OpeningStockEntryForm = ({ data, onBack }) => {
         </h2>
       </div>
 
-      {/* Main Card */}
+      {/* Main card */}
 
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
-        {/* Document Details */}
+      <div className="relative bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
+        {/* Loading overlay (edit mode, while getById runs) */}
+        {loadingData && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-white/70 dark:bg-gray-800/70 text-xs text-gray-600 dark:text-gray-300">
+            Loading opening stock entry...
+          </div>
+        )}
+
+        {/* Document details */}
 
         <div>
           <div className={fieldGrid}>
@@ -1026,7 +1313,7 @@ const OpeningStockEntryForm = ({ data, onBack }) => {
               name="plant"
               value={header.plant}
               onChange={handleChange}
-              options={plantOptions}
+              options={finalPlantOptions}
               error={fieldErrors.plant}
               required
               disabled={loadingMasters || isEdit}
@@ -1067,7 +1354,7 @@ const OpeningStockEntryForm = ({ data, onBack }) => {
           </div>
         </div>
 
-        {/* Stock Details */}
+        {/* Stock details */}
 
         <div>
           <div className={fieldGrid}>
@@ -1077,7 +1364,7 @@ const OpeningStockEntryForm = ({ data, onBack }) => {
               name="location"
               value={header.location}
               onChange={handleChange}
-              options={locationOptions}
+              options={finalLocationOptions}
               error={fieldErrors.location}
               required
               disabled={!header.plant || loadingLocations}
@@ -1179,6 +1466,7 @@ const OpeningStockEntryForm = ({ data, onBack }) => {
           onCancel={onBack}
           onSave={handleSave}
           isSubmitting={isSubmitting}
+          disabled={loadingData}
           saveLabel={isEdit ? "Update" : "Save"}
         />
       </div>

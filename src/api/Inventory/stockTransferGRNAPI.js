@@ -1,138 +1,79 @@
 import apiClient from "../apiClient";
 
-/* ========================================================================= */
-/* STOCK TRANSFER GRN API                                                    */
-/* ========================================================================= */
-
 const stockTransferGrnAPI = {
-  /* ----------------------------------------------------------------------- */
-  /* DOC ID GENERATION                                                       */
-  /* ----------------------------------------------------------------------- */
-
-  getStockTransferGrnDocId: async (orgId, financialYear) => {
-    return apiClient.get("/api/grn/getStockTransferGrnDocId", {
+  getStockTransferGrnDocId: async (orgId, financialYear) =>
+    apiClient.get("/api/grn/getStockTransferGrnDocId", {
       params: { orgId, financialYear },
-    });
-  },
+    }),
 
-  /* ----------------------------------------------------------------------- */
-  /* LIST / SINGLE RECORD                                                    */
-  /* ----------------------------------------------------------------------- */
-
-  getStockTransferGrnByOrgId: async (orgId, branch) => {
-    return apiClient.get("/api/grn/getStockTransferGrnByOrgId", {
+  getStockTransferGrnByOrgId: async (orgId, branch) =>
+    apiClient.get("/api/grn/getStockTransferGrnByOrgId", {
       params: { orgId, branch },
-    });
-  },
+    }),
 
-  getStockTransferGrnById: async (id) => {
-    return apiClient.get("/api/grn/getStockTransferGrnById", {
-      params: { id },
-    });
-  },
+  getStockTransferGrnById: async (id) =>
+    apiClient.get("/api/grn/getStockTransferGrnById", { params: { id } }),
 
-  /* ----------------------------------------------------------------------- */
-  /* SUPPLIER                                                                */
-  /* ----------------------------------------------------------------------- */
-
-  getSupplierDetailsForGrn: async (branch, orgId) => {
-    return apiClient.get("/api/grn/getSupplierDetailsForGrn", {
+  getSupplierDetailsForGrn: async (branch, orgId) =>
+    apiClient.get("/api/grn/getSupplierDetailsForGrn", {
       params: { branch, orgId },
-    });
-  },
-
-  /* ----------------------------------------------------------------------- */
-  /* GATE PASS                                                               */
-  /* ----------------------------------------------------------------------- */
+    }),
 
   getGatePassDocIdDetailsForStockTransfer: async (
     branch,
     orgId,
     supplierCode,
-  ) => {
-    return apiClient.get("/api/grn/getGatePassDocIdDetailsForStockTransfer", {
+  ) =>
+    apiClient.get("/api/grn/getGatePassDocIdDetailsForStockTransfer", {
       params: { branch, orgId, supplierCode },
-    });
-  },
+    }),
 
-  /* ----------------------------------------------------------------------- */
-  /* PURCHASE ORDER / SCHEDULE                                               */
-  /* ----------------------------------------------------------------------- */
-
-  getPurchaseOrderNumberStockTransfer: async (branch, orgId, supplierCode) => {
-    return apiClient.get("/api/grn/getPurchaseOrderNumberStockTransfer", {
+  getPurchaseOrderNumberStockTransfer: async (branch, orgId, supplierCode) =>
+    apiClient.get("/api/grn/getPurchaseOrderNumberStockTransfer", {
       params: { branch, orgId, supplierCode },
-    });
-  },
+    }),
 
   getScheduleDocIdStockTransfer: async (
     branch,
     orgId,
     purchaseOrderNo,
     supplierCode,
-  ) => {
-    return apiClient.get("/api/grn/getScheduleDocIdStockTransfer", {
+  ) =>
+    apiClient.get("/api/grn/getScheduleDocIdStockTransfer", {
       params: { branch, orgId, purchaseOrderNo, supplierCode },
-    });
-  },
+    }),
 
-  /* ----------------------------------------------------------------------- */
-  /* LOCATION                                                                */
-  /* ----------------------------------------------------------------------- */
+  getLocationDetails: async (branch, orgId) =>
+    apiClient.get("/api/grn/getLocationDetails", {
+      params: { branch: Number(branch), orgId: Number(orgId) },
+    }),
 
-  /*
-   * NOTE: endpoint path not confirmed from Swagger — adjust if your
-   * backend exposes this differently.
-   */
-  /* ----------------------------------------------------------------------- */
-  /* LOCATION                                                                */
-  /* ----------------------------------------------------------------------- */
+  getCurrency: async (orgid) =>
+    apiClient.get("/api/commonmaster/currency", { params: { orgid } }),
 
-  getLocationDetails: async (branch, orgId) => {
-    return apiClient.get("/api/grn/getLocationDetails", {
-      params: {
-        branch: Number(branch),
-        orgId: Number(orgId),
-      },
-    });
-  },
-
-  /* ----------------------------------------------------------------------- */
-  /* CURRENCY                                                                */
-  /* ----------------------------------------------------------------------- */
-
-  getCurrency: async (orgid) => {
-    return apiClient.get("/api/commonmaster/currency", {
-      params: { orgid },
-    });
-  },
-
-  /* ----------------------------------------------------------------------- */
-  /* CREATE / UPDATE                                                         */
-  /* ----------------------------------------------------------------------- */
-
+  /* Backend: @PutMapping + multipart/form-data
+     parts: "stockTransferGrn" (JSON) and "files" (optional) */
   createUpdateStockTransferGrn: async (payload, files = []) => {
-    if (files && files.length > 0) {
-      const formData = new FormData();
+    const formData = new FormData();
 
-      formData.append(
-        "dto",
-        new Blob([JSON.stringify(payload)], { type: "application/json" }),
-      );
+    formData.append(
+      "stockTransferGrn",
+      new Blob([JSON.stringify(payload)], { type: "application/json" }),
+    );
 
-      files.forEach((file) => formData.append("files", file));
+    (Array.isArray(files) ? files : []).forEach((file) => {
+      if (file instanceof File) formData.append("files", file);
+    });
 
-      return apiClient.post("/api/grn/createUpdateStockTransferGrn", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-    }
-
-    return apiClient.post("/api/grn/createUpdateStockTransferGrn", payload);
+    // Explicit method: do not rely on apiClient.put
+    return apiClient.request({
+      url: "/api/grn/createUpdateStockTransferGrn",
+      method: "PUT",
+      data: formData,
+      // Let the browser set multipart boundary
+      headers: { "Content-Type": undefined },
+    });
   },
-
-  /* ----------------------------------------------------------------------- */
-  /* FILE VIEW                                                               */
-  /* ----------------------------------------------------------------------- */
 
   getViewFileUrl: (filePath) => {
     const base = apiClient?.defaults?.baseURL || "";

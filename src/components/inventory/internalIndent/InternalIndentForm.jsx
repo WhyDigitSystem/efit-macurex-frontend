@@ -1,3 +1,5 @@
+// src/components/Inventory/InternalIndent/InternalIndentForm.jsx
+
 import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -5,7 +7,7 @@ import internalIndentAPI from "../../../api/Inventory/internalIndentAPI";
 import branchAPI from "../../../api/branchAPI";
 import listOfValuesAPI from "../../../api/listOfValuesAPI";
 
-// CONFIRMED: departmentAPI.js exports a named export, not a default export
+// departmentAPI.js exports a named export, not a default export
 import { departmentAPI } from "../../../api/departmentAPI";
 import { employeeAPI } from "../../../api/employeeAPI";
 import itemAPI from "../../../api/itemAPI";
@@ -45,6 +47,53 @@ const todayISO = () => new Date().toISOString().slice(0, 10);
 
 const nowTime = () => new Date().toTimeString().slice(0, 5);
 
+const isObj = (v) => v !== null && typeof v === "object";
+
+const norm = (v) =>
+  String(v ?? "")
+    .trim()
+    .toLowerCase();
+
+/* First value that is not undefined / null / "" */
+const pick = (...values) => {
+  for (const v of values) {
+    if (v !== undefined && v !== null && v !== "") return v;
+  }
+  return "";
+};
+
+/* ID of a backend value that can be an object or a primitive */
+const idOf = (v, ...keys) => {
+  if (isObj(v)) {
+    return pick(...keys.map((k) => v[k]), v.id);
+  }
+  return v ?? "";
+};
+
+/* Converts "2026-09-01T00:00:00", "01-09-2026", "01/09/2026" -> "2026-09-01" */
+const toDateInput = (v) => {
+  const text = String(v ?? "").trim();
+
+  if (!text) return "";
+
+  if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
+
+  const dmy = text.match(/^(\d{2})[-/](\d{2})[-/](\d{4})/);
+
+  if (dmy) return `${dmy[3]}-${dmy[2]}-${dmy[1]}`;
+
+  return "";
+};
+
+/* Number or null (never NaN) */
+const toIdOrNull = (value) => {
+  if (value === "" || value === null || value === undefined) return null;
+
+  const number = Number(value);
+
+  return Number.isFinite(number) ? number : null;
+};
+
 const pickArray = (source, keys) => {
   if (Array.isArray(source)) return source;
 
@@ -61,14 +110,22 @@ const pickArray = (source, keys) => {
   return [];
 };
 
-const asId = (value) => {
-  if (value === null || value === undefined) return "";
-  if (typeof value === "object") return value.id ?? "";
-  return value;
+/*
+ * Make sure the saved value is always visible in a <select>, even if it is not
+ * (yet) one of the options (options still loading, name vs id, different case).
+ */
+const withCurrent = (options, value) => {
+  const list = options || [];
+
+  if (value === "" || value === null || value === undefined) return list;
+
+  const exists = list.some((o) => String(o.value) === String(value));
+
+  return exists ? list : [...list, { value, label: String(value) }];
 };
 
-const emptyHeader = () => ({
-  branch: "",
+const emptyHeader = (branchId = "") => ({
+  branch: branchId ? String(branchId) : "",
   docId: "",
   belongTo: "",
   docDate: todayISO(),
@@ -84,6 +141,7 @@ const emptySummary = () => ({
 });
 
 const emptyItemRow = () => ({
+  id: 0,
   itemCode: "",
   itemDescription: "",
   unit: "",
@@ -91,6 +149,162 @@ const emptyItemRow = () => ({
   requiredQty: "",
   purpose: "",
 });
+
+const APPROVAL_OPTIONS = [
+  { value: "Pending", label: "Pending" },
+  { value: "Approved", label: "Approved" },
+  { value: "Rejected", label: "Rejected" },
+];
+
+/* ========================================================================= */
+/* EDIT DATA: EXTRACT + MAP                                                  */
+/* ========================================================================= */
+
+/*
+ * getInternalIndentById may return:
+ *   - the record itself
+ *   - an array with one record
+ *   - { status, paramObjectsMap: { internalIndentVO: {...} } }
+ * so handle all of them.
+ */
+const extractRecord = (response) => {
+  if (!response) return null;
+
+  if (Array.isArray(response)) {
+    return isObj(response[0]) ? response[0] : null;
+  }
+
+  const map = response?.paramObjectsMap || response?.data?.paramObjectsMap;
+
+  if (map) {
+    let record =
+      map.internalIndentVO ??
+      map.internalIndent ??
+      map.internalIndentDTO ??
+      Object.values(map).find((v) => isObj(v));
+
+    if (Array.isArray(record)) record = record[0];
+
+    return isObj(record) ? record : null;
+  }
+
+  if (isObj(response?.data) && !Array.isArray(response.data)) {
+    return response.data;
+  }
+
+  return isObj(response) ? response : null;
+};
+
+/* Find an array on the record by exact key first, then by key pattern */
+const findArray = (d, exactKeys, regex) => {
+  for (const key of exactKeys) {
+    if (Array.isArray(d[key]) && d[key].length) return d[key];
+  }
+
+  const found = Object.keys(d).find(
+    (key) => regex.test(key) && Array.isArray(d[key]) && d[key].length,
+  );
+
+  return found ? d[found] : [];
+};
+
+const mapDetailRow = (detail) => {
+  const itemObj = isObj(detail.item) ? detail.item : null;
+
+  const unitSource = pick(itemObj?.unit, detail.unit, itemObj?.primaryUnits);
+
+  const unitObj = isObj(unitSource) ? unitSource : null;
+
+  return {
+    ...emptyItemRow(),
+
+    id: detail.id ?? 0,
+
+    /* item id (or code / description, resolved against options later) */
+    itemCode: String(
+      pick(
+        itemObj ? pick(itemObj.id, itemObj.itemId) : detail.item,
+        detail.itemId,
+      ),
+    ),
+
+    itemDescription: String(
+      pick(
+        itemObj?.itemDescription,
+        detail.itemDescription,
+        detail.description,
+      ),
+    ),
+
+    unit: String(unitObj ? pick(unitObj.id, unitObj.unitId) : ""),
+
+    unitLabel: String(
+      unitObj
+        ? pick(unitObj.unitName, unitObj.primaryUnit, unitObj.name)
+        : pick(unitSource, detail.unitName),
+    ),
+
+    requiredQty: pick(detail.requiredQty, detail.qty),
+
+    purpose: detail.purpose || "",
+  };
+};
+
+const mapEditData = (d, fallbackBranchId) => {
+  const header = {
+    ...emptyHeader(fallbackBranchId),
+
+    branch: String(
+      pick(idOf(d.branch, "branchId"), d.branchId, fallbackBranchId),
+    ),
+
+    docId: String(pick(d.docId, d.docNo)),
+
+    belongTo: String(pick(d.belongTo, d.belongsTo)),
+
+    docDate: toDateInput(d.docDate) || todayISO(),
+
+    department: String(idOf(d.department, "departmentId")),
+
+    timeOfIndent: String(pick(d.timeOfIndent, d.indentTime, nowTime())).slice(
+      0,
+      5,
+    ),
+  };
+
+  const approval = APPROVAL_OPTIONS.find(
+    (o) => norm(o.value) === norm(d.approvedByPM),
+  );
+
+  const summary = {
+    approvedByPM: approval?.value || "Pending",
+
+    /* ID, or a name that is resolved against employees later */
+    preparedBy: String(idOf(d.preparedBy, "employeeId")),
+
+    authorizedBy: String(idOf(d.authorizedBy, "employeeId")),
+
+    remarks: d.remarks || "",
+  };
+
+  const rawDetails = findArray(
+    d,
+    [
+      "internalIndentDetailsResponseDTO",
+      "internalIndentDetailsVO",
+      "internalIndentDetailsDTO",
+      "internalIndentDetails",
+      "details",
+    ],
+    /detail/i,
+  );
+
+  const itemRows = rawDetails.length
+    ? rawDetails.map(mapDetailRow)
+    : [emptyItemRow()];
+
+  return { header, summary, itemRows };
+};
 
 /* ========================================================================= */
 /* FIELD                                                                     */
@@ -128,8 +342,8 @@ const Field = ({
         >
           <option value="">-- Select --</option>
 
-          {(options || []).map((option) => (
-            <option key={option.id} value={option.id}>
+          {withCurrent(options, value).map((option) => (
+            <option key={option.value} value={option.value}>
               {option.label}
             </option>
           ))}
@@ -244,16 +458,41 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
 
   const isEditMode = Boolean(editData?.id);
 
-  const [loading, setLoading] = useState(isEditMode);
+  /*
+   * The row passed in from the list seeds the form instantly.
+   * The full record is then fetched with getInternalIndentById (effect below),
+   * merged over the list row, and replaces this state.
+   */
+  const [mapped] = useState(() =>
+    isEditMode ? mapEditData(editData, BRANCH_ID) : null,
+  );
+
+  const [header, setHeader] = useState(() =>
+    mapped ? mapped.header : emptyHeader(BRANCH_ID),
+  );
+
+  const [summary, setSummary] = useState(() =>
+    mapped ? mapped.summary : emptySummary(),
+  );
+
+  const [itemRows, setItemRows] = useState(() =>
+    mapped ? mapped.itemRows : [emptyItemRow()],
+  );
+
+  /* true while getInternalIndentById is running (edit mode only) */
+  const [loadingData, setLoadingData] = useState(isEditMode);
+
+  /*
+   * Bumped after the record is loaded so the "resolve saved values against
+   * options" effect re-runs on the freshly fetched data.
+   */
+  const [hydrationKey, setHydrationKey] = useState(0);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState("indentDetail");
   const [fieldErrors, setFieldErrors] = useState({});
   const [loadingItemRow, setLoadingItemRow] = useState(null);
   const [generatingDocId, setGeneratingDocId] = useState(false);
-
-  const [header, setHeader] = useState(emptyHeader());
-  const [summary, setSummary] = useState(emptySummary());
-  const [itemRows, setItemRows] = useState([emptyItemRow()]);
 
   /* ----------------------------------------------------------------------- */
   /* MASTER DATA                                                             */
@@ -263,22 +502,141 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
   const [departmentOptions, setDepartmentOptions] = useState([]);
   const [employeeOptions, setEmployeeOptions] = useState([]);
   const [itemOptions, setItemOptions] = useState([]);
-
-  // NEW: Belongs To LOV options
   const [belongsToOptions, setBelongsToOptions] = useState([]);
 
   /* ----------------------------------------------------------------------- */
-  /* LOAD BRANCHES                                                           */
+  /* EDIT: LOAD BY ID                                                        */
+  /* ----------------------------------------------------------------------- */
+
+  useEffect(() => {
+    if (!isEditMode) return;
+
+    let cancelled = false;
+
+    const loadById = async () => {
+      setLoadingData(true);
+
+      try {
+        const response = await internalIndentAPI.getInternalIndentById(
+          editData.id,
+        );
+
+        if (cancelled) return;
+
+        console.log("Get Internal Indent By ID Response:", response);
+
+        const record = extractRecord(response);
+
+        if (!record) {
+          console.error("Internal indent record not found in response");
+          toast.error("Internal Indent details not found");
+          return;
+        }
+
+        console.log("Internal Indent record (raw):", record);
+
+        /*
+         * The by-id response may omit some fields. Fall back to the list row
+         * for anything the by-id response leaves out.
+         */
+        const nonNull = Object.fromEntries(
+          Object.entries(record).filter(
+            ([, v]) => v !== null && v !== undefined,
+          ),
+        );
+
+        const result = mapEditData({ ...editData, ...nonNull }, BRANCH_ID);
+
+        console.log("Mapped Internal Indent form data:", result);
+
+        setHeader(result.header);
+        setSummary(result.summary);
+        setItemRows(result.itemRows);
+
+        setHydrationKey((key) => key + 1);
+
+        /*
+         * If a detail row has an item but no description / unit,
+         * fetch the item to fill them in.
+         */
+        result.itemRows.forEach(async (row, index) => {
+          if (!row.itemCode || (row.itemDescription && row.unitLabel)) return;
+          if (!/^\d+$/.test(String(row.itemCode))) return;
+
+          try {
+            const itemDetail = await itemAPI.getItemById(row.itemCode);
+
+            if (cancelled || !itemDetail) return;
+
+            const unitObject =
+              itemDetail.unit ??
+              itemDetail.primaryUnits ??
+              itemDetail.uom ??
+              null;
+
+            setItemRows((prev) =>
+              prev.map((r, i) =>
+                i === index && String(r.itemCode) === String(row.itemCode)
+                  ? {
+                      ...r,
+                      itemDescription:
+                        r.itemDescription ||
+                        itemDetail.itemDescription ||
+                        itemDetail.description ||
+                        "",
+                      unit: r.unit || String(unitObject?.id ?? ""),
+                      unitLabel:
+                        r.unitLabel ||
+                        unitObject?.unitName ||
+                        unitObject?.primaryUnit ||
+                        unitObject?.name ||
+                        "",
+                    }
+                  : r,
+              ),
+            );
+          } catch (error) {
+            console.error("Failed to load item for row:", error);
+          }
+        });
+      } catch (error) {
+        console.error("Error loading Internal Indent:", error);
+
+        if (!cancelled) {
+          toast.error("Failed to load Internal Indent details");
+        }
+      } finally {
+        if (!cancelled) setLoadingData(false);
+      }
+    };
+
+    loadById();
+
+    return () => {
+      cancelled = true;
+    };
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditMode, editData?.id]);
+
+  /* ----------------------------------------------------------------------- */
+  /* MASTER DATA LOADERS                                                     */
   /* ----------------------------------------------------------------------- */
 
   const loadBranches = useCallback(async () => {
     try {
       const response = await branchAPI.getBranchByOrgId(ORG_ID);
 
+      const list = Array.isArray(response)
+        ? response
+        : response?.paramObjectsMap?.branches ||
+          response?.paramObjectsMap?.branchVO ||
+          [];
+
       setBranchOptions(
-        (response || []).map((branch) => ({
-          id: branch.id,
-          label: branch.branchName,
+        list.map((branch) => ({
+          value: branch.id,
+          label: branch.branchName || branch.name || `Branch ${branch.id}`,
         })),
       );
     } catch (error) {
@@ -286,10 +644,6 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
       setBranchOptions([]);
     }
   }, [ORG_ID]);
-
-  /* ----------------------------------------------------------------------- */
-  /* LOAD DEPARTMENTS                                                        */
-  /* ----------------------------------------------------------------------- */
 
   const loadDepartments = useCallback(async () => {
     try {
@@ -305,7 +659,7 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
 
       setDepartmentOptions(
         list.map((department) => ({
-          id: department.id,
+          value: department.id,
           label: department.departmentName ?? department.name,
         })),
       );
@@ -315,18 +669,21 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
     }
   }, [ORG_ID]);
 
-  /* ----------------------------------------------------------------------- */
-  /* LOAD EMPLOYEES                                                          */
-  /* ----------------------------------------------------------------------- */
-
   const loadEmployees = useCallback(async () => {
     try {
       const response = await employeeAPI.getEmployeeByOrgId(ORG_ID);
 
+      const list = Array.isArray(response)
+        ? response
+        : response?.paramObjectsMap?.employees ||
+          response?.paramObjectsMap?.employeeVO ||
+          [];
+
       setEmployeeOptions(
-        (response || []).map((employee) => ({
-          id: employee.id,
-          label: employee.employeeName,
+        list.map((employee) => ({
+          value: employee.id,
+          label:
+            employee.employeeName || employee.name || `Employee ${employee.id}`,
         })),
       );
     } catch (error) {
@@ -335,18 +692,19 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
     }
   }, [ORG_ID]);
 
-  /* ----------------------------------------------------------------------- */
-  /* LOAD ITEMS                                                              */
-  /* ----------------------------------------------------------------------- */
-
   const loadItems = useCallback(async () => {
     try {
       const response = await itemAPI.getItems(ORG_ID, BRANCH_ID);
 
+      const list = Array.isArray(response)
+        ? response
+        : response?.paramObjectsMap?.items || [];
+
       setItemOptions(
-        (response || []).map((item) => ({
-          id: item.id,
+        list.map((item) => ({
+          value: item.id,
           label: item.itemCode ?? item.code ?? item.itemName,
+          itemDescription: item.itemDescription || "",
         })),
       );
     } catch (error) {
@@ -354,10 +712,6 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
       setItemOptions([]);
     }
   }, [ORG_ID, BRANCH_ID]);
-
-  /* ----------------------------------------------------------------------- */
-  /* LOAD BELONGS TO LOV                                                     */
-  /* ----------------------------------------------------------------------- */
 
   const loadBelongsTo = useCallback(async () => {
     try {
@@ -372,9 +726,6 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
         ORG_ID,
       );
 
-      console.log("========== BELONGS TO LOV RESPONSE ==========");
-      console.log(response);
-
       const list = Array.isArray(response)
         ? response
         : response?.paramObjectsMap?.listValues ||
@@ -382,38 +733,27 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
           response?.paramObjectsMap?.listValueDetails ||
           [];
 
-      const options = list
-        .map((item) => {
-          const description =
-            item?.valuesDescription ||
-            item?.valueDescription ||
-            item?.description ||
-            item?.value ||
-            "";
+      setBelongsToOptions(
+        list
+          .map((item) => {
+            const description =
+              item?.valuesDescription ||
+              item?.valueDescription ||
+              item?.description ||
+              item?.value ||
+              "";
 
-          return {
-            // IMPORTANT:
-            // Belongs To must send the description/string to backend,
+            // Belongs To sends the description/string to the backend,
             // not the LOV ID.
-            id: description,
-            label: description,
-          };
-        })
-        .filter((item) => item.id);
-
-      console.log("========== BELONGS TO OPTIONS ==========");
-      console.log(options);
-
-      setBelongsToOptions(options);
+            return { value: description, label: description };
+          })
+          .filter((item) => item.value),
+      );
     } catch (error) {
       console.error("Failed to load Belongs To values:", error);
       setBelongsToOptions([]);
     }
   }, [ORG_ID]);
-
-  /* ----------------------------------------------------------------------- */
-  /* LOAD ALL MASTER DATA                                                    */
-  /* ----------------------------------------------------------------------- */
 
   useEffect(() => {
     loadBranches();
@@ -424,122 +764,83 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
   }, [loadBranches, loadDepartments, loadEmployees, loadItems, loadBelongsTo]);
 
   /* ----------------------------------------------------------------------- */
-  /* APPROVAL OPTIONS                                                        */
+  /* EDIT: RESOLVE SAVED VALUES AGAINST LOADED OPTIONS                       */
   /* ----------------------------------------------------------------------- */
 
-  const approvalOptions = useMemo(
-    () => [
-      { id: "Pending", label: "Pending" },
-      { id: "Approved", label: "Approved" },
-      { id: "Rejected", label: "Rejected" },
-    ],
-    [],
-  );
+  /*
+   * If the saved value is not an option value (for example the backend sent a
+   * name or a code), match it by label and swap in the option value.
+   * Only unmatched values are touched, so user edits are kept.
+   */
+  const resolveValue = (current, options) => {
+    if (current === "" || current === null || current === undefined)
+      return current;
 
-  /* ----------------------------------------------------------------------- */
-  /* LOAD EDIT DATA                                                          */
-  /* ----------------------------------------------------------------------- */
+    if (!options.length) return current;
 
-  useEffect(() => {
-    if (!isEditMode) {
-      setHeader({
-        ...emptyHeader(),
-
-        branch: BRANCH_ID ? String(BRANCH_ID) : "",
-
-        // Keep empty here so the LOV value can be selected.
-        // If you want Domestic as default, change this to:
-        // belongTo: "Domestic"
-        belongTo: "",
-      });
-
-      setSummary(emptySummary());
-      setItemRows([emptyItemRow()]);
-      setLoading(false);
-
-      return;
+    if (options.some((o) => String(o.value) === String(current))) {
+      return current;
     }
 
-    let cancelled = false;
+    const match = options.find((o) => norm(o.label) === norm(current));
 
-    const loadEditData = async () => {
-      setLoading(true);
+    return match ? String(match.value) : current;
+  };
 
-      try {
-        const data = await internalIndentAPI.getInternalIndentById(editData.id);
+  useEffect(() => {
+    if (!isEditMode || loadingData) return;
 
-        if (cancelled) return;
+    setHeader((prev) => {
+      const branch = resolveValue(prev.branch, branchOptions);
+      const department = resolveValue(prev.department, departmentOptions);
 
-        if (!data) {
-          toast.error("Internal Indent details not found");
-          return;
-        }
-
-        setHeader({
-          branch: asId(data.branch),
-
-          docId: data.docId || "",
-
-          // Backend returns the Belongs To description/string.
-          belongTo: data.belongTo || "",
-
-          docDate: data.docDate || todayISO(),
-
-          department: asId(data.department),
-
-          timeOfIndent: (data.timeOfIndent || nowTime()).slice(0, 5),
-        });
-
-        setSummary({
-          approvedByPM: data.approvedByPM || "Pending",
-
-          preparedBy: asId(data.preparedBy?.employeeId ?? data.preparedBy),
-
-          authorizedBy: asId(
-            data.authorizedBy?.employeeId ?? data.authorizedBy,
-          ),
-
-          remarks: data.remarks || "",
-        });
-
-        const details = data.internalIndentDetailsResponseDTO || [];
-
-        setItemRows(
-          details.length > 0
-            ? details.map((detail) => ({
-                itemCode: asId(detail.item),
-
-                itemDescription: detail.item?.itemDescription || "",
-
-                unit: asId(detail.item?.unit),
-
-                unitLabel:
-                  detail.item?.unit?.unitName ?? detail.item?.unit?.name ?? "",
-
-                requiredQty: detail.requiredQty ?? "",
-
-                purpose: detail.purpose || "",
-              }))
-            : [emptyItemRow()],
-        );
-
-        setHeader((prev) => ({ ...prev }));
-      } catch (error) {
-        console.error("Error loading Internal Indent:", error);
-        toast.error("Failed to load Internal Indent details");
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+      if (branch === prev.branch && department === prev.department) {
+        return prev;
       }
-    };
 
-    loadEditData();
+      return { ...prev, branch, department };
+    });
 
-    return () => {
-      cancelled = true;
-    };
-  }, [editData?.id, isEditMode, BRANCH_ID]);
+    setSummary((prev) => {
+      const preparedBy = resolveValue(prev.preparedBy, employeeOptions);
+      const authorizedBy = resolveValue(prev.authorizedBy, employeeOptions);
+
+      if (
+        preparedBy === prev.preparedBy &&
+        authorizedBy === prev.authorizedBy
+      ) {
+        return prev;
+      }
+
+      return { ...prev, preparedBy, authorizedBy };
+    });
+
+    setItemRows((prev) => {
+      let changed = false;
+
+      const next = prev.map((row) => {
+        const itemCode = resolveValue(row.itemCode, itemOptions);
+
+        if (itemCode === row.itemCode) return row;
+
+        changed = true;
+
+        return { ...row, itemCode: String(itemCode) };
+      });
+
+      return changed ? next : prev;
+    });
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    isEditMode,
+    loadingData,
+    hydrationKey,
+    branchOptions,
+    departmentOptions,
+    employeeOptions,
+    itemOptions,
+  ]);
 
   /* ----------------------------------------------------------------------- */
   /* GENERATE DOC ID FOR NEW RECORD ONLY                                     */
@@ -548,28 +849,20 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
   useEffect(() => {
     if (isEditMode) return;
 
+    if (!ORG_ID || !FINANCIAL_YEAR) {
+      console.warn("orgId or financialYear is missing", {
+        ORG_ID,
+        FINANCIAL_YEAR,
+      });
+
+      toast.error("Organization ID or Financial Year is missing");
+      return;
+    }
+
+    let cancelled = false;
+
     const generateDocId = async () => {
-      console.log("========== INTERNAL INDENT DOC ID ==========");
-      console.log("ORG_ID:", ORG_ID);
-      console.log("FINANCIAL_YEAR:", FINANCIAL_YEAR);
-      console.log("BRANCH_ID:", BRANCH_ID);
-
-      if (!ORG_ID || !FINANCIAL_YEAR) {
-        console.warn("orgId or financialYear is missing", {
-          ORG_ID,
-          FINANCIAL_YEAR,
-        });
-
-        toast.error("Organization ID or Financial Year is missing");
-        return;
-      }
-
       setGeneratingDocId(true);
-
-      setHeader((prev) => ({
-        ...prev,
-        docId: "",
-      }));
 
       try {
         const docId = await internalIndentAPI.getInternalIndentDocId({
@@ -577,8 +870,7 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
           financialYear: FINANCIAL_YEAR,
         });
 
-        console.log("========== GENERATED INTERNAL INDENT DOC ID ==========");
-        console.log("docId:", docId);
+        if (cancelled) return;
 
         if (!docId) {
           toast.error(
@@ -587,33 +879,31 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
           return;
         }
 
-        setHeader((prev) => ({
-          ...prev,
-          docId,
-        }));
+        setHeader((prev) => ({ ...prev, docId }));
       } catch (error) {
-        console.error("========== INTERNAL INDENT DOC ID ERROR ==========");
+        if (cancelled) return;
 
-        console.error("Full error:", error);
+        console.error("INTERNAL INDENT DOC ID ERROR:", error);
 
         const errorData = error?.response?.data;
 
-        console.error("Backend error response:", errorData);
-
-        const message =
+        toast.error(
           errorData?.paramObjectsMap?.errorMessage ||
-          errorData?.paramObjectsMap?.message ||
-          errorData?.message ||
-          error?.message ||
-          "Failed to generate document number";
-
-        toast.error(message);
+            errorData?.paramObjectsMap?.message ||
+            errorData?.message ||
+            error?.message ||
+            "Failed to generate document number",
+        );
       } finally {
-        setGeneratingDocId(false);
+        if (!cancelled) setGeneratingDocId(false);
       }
     };
 
     generateDocId();
+
+    return () => {
+      cancelled = true;
+    };
   }, [isEditMode, ORG_ID, FINANCIAL_YEAR]);
 
   /* ----------------------------------------------------------------------- */
@@ -624,25 +914,16 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
     const { name, value } = event.target;
 
     if (fieldErrors[name]) {
-      setFieldErrors((prev) => ({
-        ...prev,
-        [name]: "",
-      }));
+      setFieldErrors((prev) => ({ ...prev, [name]: "" }));
     }
 
-    setHeader((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setHeader((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSummaryChange = (event) => {
     const { name, value } = event.target;
 
-    setSummary((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setSummary((prev) => ({ ...prev, [name]: value }));
   };
 
   /* ----------------------------------------------------------------------- */
@@ -655,6 +936,7 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
         rowIndex === index
           ? {
               ...emptyItemRow(),
+              id: row.id, // keep the detail id when editing
               itemCode: itemId,
               requiredQty: row.requiredQty,
               purpose: row.purpose,
@@ -679,9 +961,7 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
         prev.map((row, rowIndex) => {
           if (rowIndex !== index) return row;
 
-          if (String(row.itemCode) !== String(itemId)) {
-            return row;
-          }
+          if (String(row.itemCode) !== String(itemId)) return row;
 
           return {
             ...row,
@@ -714,12 +994,7 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
 
     setItemRows((prev) =>
       prev.map((row, rowIndex) =>
-        rowIndex === index
-          ? {
-              ...row,
-              [key]: value,
-            }
-          : row,
+        rowIndex === index ? { ...row, [key]: value } : row,
       ),
     );
   };
@@ -741,21 +1016,13 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
   const validate = () => {
     const errors = {};
 
-    if (!header.branch) {
-      errors.branch = "Branch is required";
-    }
+    if (!header.branch) errors.branch = "Branch is required";
 
-    if (!header.docDate) {
-      errors.docDate = "Doc Date is required";
-    }
+    if (!header.docDate) errors.docDate = "Doc Date is required";
 
-    if (!header.department) {
-      errors.department = "Department is required";
-    }
+    if (!header.department) errors.department = "Department is required";
 
-    if (!itemRows.length) {
-      errors.items = "At least one item is required";
-    }
+    if (!itemRows.length) errors.items = "At least one item is required";
 
     itemRows.forEach((row, index) => {
       if (!row.itemCode) {
@@ -784,24 +1051,18 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
 
   const buildPayload = () => {
     const payload = {
-      ...(isEditMode && editData?.id
-        ? {
-            id: Number(editData.id),
-          }
-        : {}),
+      ...(isEditMode && editData?.id ? { id: Number(editData.id) } : {}),
 
-      branch: header.branch ? Number(header.branch) : null,
+      branch: toIdOrNull(header.branch),
 
-      // IMPORTANT:
-      // Belongs To is a LOV DESCRIPTION/string.
-      // Do NOT convert this to Number().
+      // Belongs To is a LOV DESCRIPTION/string. Do NOT convert to Number().
       belongTo: header.belongTo || "Domestic",
 
       docId: header.docId || "",
 
       docDate: header.docDate || todayISO(),
 
-      department: header.department ? Number(header.department) : null,
+      department: toIdOrNull(header.department),
 
       financialYear: FINANCIAL_YEAR,
 
@@ -813,19 +1074,9 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
 
       approvedByPM: summary.approvedByPM || "Pending",
 
-      preparedBy:
-        summary.preparedBy !== "" &&
-        summary.preparedBy !== null &&
-        summary.preparedBy !== undefined
-          ? Number(summary.preparedBy)
-          : null,
+      preparedBy: toIdOrNull(summary.preparedBy),
 
-      authorizedBy:
-        summary.authorizedBy !== "" &&
-        summary.authorizedBy !== null &&
-        summary.authorizedBy !== undefined
-          ? Number(summary.authorizedBy)
-          : null,
+      authorizedBy: toIdOrNull(summary.authorizedBy),
 
       remarks: summary.remarks || "",
 
@@ -840,6 +1091,8 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
       internalIndentDetailsDTO: itemRows
         .filter((row) => row.itemCode)
         .map((row) => ({
+          ...(row.id ? { id: Number(row.id) } : {}),
+
           item: Number(row.itemCode),
 
           requiredQty: Number(row.requiredQty),
@@ -848,9 +1101,10 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
         })),
     };
 
-    console.log("========== INTERNAL INDENT FINAL PAYLOAD ==========");
-
-    console.log(JSON.stringify(payload, null, 2));
+    console.log(
+      "INTERNAL INDENT FINAL PAYLOAD:",
+      JSON.stringify(payload, null, 2),
+    );
 
     return payload;
   };
@@ -860,7 +1114,7 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
   /* ----------------------------------------------------------------------- */
 
   const handleSave = async () => {
-    if (isSubmitting) return;
+    if (isSubmitting || loadingData) return;
 
     if (!validate()) return;
 
@@ -876,13 +1130,12 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
         response?.status === true || response?.statusFlag === "Ok";
 
       if (!success) {
-        const message =
+        toast.error(
           response?.paramObjectsMap?.errorMessage ||
-          response?.paramObjectsMap?.message ||
-          response?.message ||
-          "Failed to save Internal Indent";
-
-        toast.error(message);
+            response?.paramObjectsMap?.message ||
+            response?.message ||
+            "Failed to save Internal Indent",
+        );
 
         return;
       }
@@ -897,12 +1150,11 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
     } catch (error) {
       console.error("Internal Indent save error:", error);
 
-      const message =
+      toast.error(
         error?.response?.data?.paramObjectsMap?.errorMessage ||
-        error?.response?.data?.paramObjectsMap?.message ||
-        "Failed to save Internal Indent";
-
-      toast.error(message);
+          error?.response?.data?.paramObjectsMap?.message ||
+          "Failed to save Internal Indent",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -914,10 +1166,7 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
 
   return (
     <div className="p-2 max-w-7xl">
-      {/* ----------------------------------------------------------------- */}
-      {/* HEADER                                                            */}
-      {/* ----------------------------------------------------------------- */}
-
+      {/* TITLE */}
       <div className="flex items-center gap-2 mb-3">
         <button
           type="button"
@@ -933,16 +1182,19 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
         </h2>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
-        {/* ----------------------------------------------------------------- */}
-        {/* INDENT DETAILS                                                   */}
-        {/* ----------------------------------------------------------------- */}
+      <div className="relative bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
+        {/* LOADING OVERLAY (edit mode, while getInternalIndentById runs) */}
+        {loadingData && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-white/70 dark:bg-gray-800/70 text-xs text-gray-600 dark:text-gray-300">
+            Loading internal indent...
+          </div>
+        )}
 
+        {/* INDENT DETAILS */}
         <div>
           <SectionHeader>Indent Details</SectionHeader>
 
           <div className={fieldGrid}>
-            {/* Branch */}
             <Field
               type="select"
               label="Branch"
@@ -955,7 +1207,6 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
               disabled={isEditMode}
             />
 
-            {/* Doc ID */}
             <Field
               label="Doc ID"
               name="docId"
@@ -964,7 +1215,6 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
               disabled
             />
 
-            {/* Belongs To - LOV DROPDOWN */}
             <Field
               type="select"
               label="Belongs To"
@@ -974,7 +1224,6 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
               options={belongsToOptions}
             />
 
-            {/* Doc Date */}
             <Field
               type="date"
               label="Doc Date"
@@ -985,7 +1234,6 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
               required
             />
 
-            {/* Department */}
             <Field
               type="select"
               label="Department"
@@ -997,7 +1245,6 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
               required
             />
 
-            {/* Time */}
             <Field
               type="time"
               label="Time Of Indent"
@@ -1008,14 +1255,10 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
           </div>
         </div>
 
-        {/* ----------------------------------------------------------------- */}
-        {/* TABS                                                             */}
-        {/* ----------------------------------------------------------------- */}
-
+        {/* TABS */}
         <section>
           <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700">
             <div className="flex">
-              {/* Indent Detail Tab */}
               <button
                 type="button"
                 onClick={() => setActiveTab("indentDetail")}
@@ -1028,7 +1271,6 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
                 1-Indent Detail
               </button>
 
-              {/* Summary Tab */}
               <button
                 type="button"
                 onClick={() => setActiveTab("summary")}
@@ -1054,10 +1296,7 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
             )}
           </div>
 
-          {/* ---------------------------------------------------------------- */}
-          {/* INDENT DETAIL TAB                                               */}
-          {/* ---------------------------------------------------------------- */}
-
+          {/* INDENT DETAIL TAB */}
           {activeTab === "indentDetail" && (
             <div className="mt-2">
               <TableWrapper>
@@ -1076,10 +1315,9 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
                 <tbody>
                   {itemRows.map((row, index) => (
                     <tr
-                      key={index}
+                      key={row.id || index}
                       className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"
                     >
-                      {/* # */}
                       <td className="p-1 text-center dark:text-white">
                         {index + 1}
                       </td>
@@ -1095,11 +1333,13 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
                         >
                           <option value="">-- Select Item --</option>
 
-                          {itemOptions.map((item) => (
-                            <option key={item.id} value={item.id}>
-                              {item.label}
-                            </option>
-                          ))}
+                          {withCurrent(itemOptions, row.itemCode).map(
+                            (item) => (
+                              <option key={item.value} value={item.value}>
+                                {item.label}
+                              </option>
+                            ),
+                          )}
                         </select>
 
                         {fieldErrors[`itemCode_${index}`] && (
@@ -1139,7 +1379,7 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
                           type="number"
                           min="0"
                           step="any"
-                          value={row.requiredQty}
+                          value={row.requiredQty ?? ""}
                           onChange={(e) =>
                             handleItemChange(
                               index,
@@ -1191,24 +1431,19 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
             </div>
           )}
 
-          {/* ---------------------------------------------------------------- */}
-          {/* SUMMARY TAB                                                     */}
-          {/* ---------------------------------------------------------------- */}
-
+          {/* SUMMARY TAB */}
           {activeTab === "summary" && (
             <div className="pt-3">
               <div className={fieldGrid}>
-                {/* Approved By PM */}
                 <Field
                   type="select"
                   label="Approved By PM"
                   name="approvedByPM"
                   value={summary.approvedByPM}
                   onChange={handleSummaryChange}
-                  options={approvalOptions}
+                  options={APPROVAL_OPTIONS}
                 />
 
-                {/* Prepared By */}
                 <Field
                   type="select"
                   label="Prepared By"
@@ -1218,7 +1453,6 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
                   options={employeeOptions}
                 />
 
-                {/* Authorised By */}
                 <Field
                   type="select"
                   label="Authorised By"
@@ -1228,7 +1462,6 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
                   options={employeeOptions}
                 />
 
-                {/* Remarks */}
                 <Field
                   type="textarea"
                   label="Remarks"
@@ -1242,12 +1475,8 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
           )}
         </section>
 
-        {/* ----------------------------------------------------------------- */}
-        {/* ACTION BUTTONS                                                    */}
-        {/* ----------------------------------------------------------------- */}
-
+        {/* ACTION BUTTONS */}
         <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
-          {/* Cancel */}
           <button
             type="button"
             onClick={onBack}
@@ -1258,11 +1487,10 @@ const InternalIndentForm = ({ onBack, onSave, editData }) => {
             Cancel
           </button>
 
-          {/* Save */}
           <button
             type="button"
             onClick={handleSave}
-            disabled={isSubmitting || loading}
+            disabled={isSubmitting || loadingData}
             className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60"
           >
             <Save className="h-3 w-3" />
