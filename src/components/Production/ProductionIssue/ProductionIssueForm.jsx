@@ -1,6 +1,6 @@
 import { ArrowLeft, Save, X, Plus, Trash2, Calendar } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useForm, Controller, useFieldArray } from "react-hook-form";
+import { useForm, Controller, useFieldArray, useWatch } from "react-hook-form";
 import dayjs from "dayjs";
 
 import { useToast } from "../../Toast/ToastContext";
@@ -45,15 +45,66 @@ const toInteger = (value, fallback = 0) => {
   return Number.isFinite(number) ? number : fallback;
 };
 
-/* API dates are ISO (YYYY-MM-DD); the pickers display DD-MM-YYYY. */
-const isoToDisplay = (value) =>
-  value ? dayjs(value).format("DD-MM-YYYY") : "";
+/* API dates are ISO (YYYY-MM-DD); the pickers display DD-MM-YYYY.
+   Already-formatted DD-MM-YYYY values are passed through untouched. */
+const isoToDisplay = (value) => {
+  if (!value) return "";
+  if (/^\d{2}-\d{2}-\d{4}$/.test(String(value))) return String(value);
+  const parsed = dayjs(value);
+  return parsed.isValid() ? parsed.format("DD-MM-YYYY") : "";
+};
 
 const displayToIso = (value) => {
   if (!value) return "";
   const [day, month, year] = String(value).split("-");
   if (!day || !month || !year) return "";
   return `${year}-${month}-${day}`;
+};
+
+/* Returns the first usable id from a list of candidates. A candidate may be
+   an object ({ id }), a number, or a numeric string. Non-numeric strings
+   (e.g. a display name) are skipped. */
+const pickId = (...candidates) => {
+  for (const c of candidates) {
+    if (c === null || c === undefined || c === "") continue;
+    if (typeof c === "object") {
+      if (c.id !== null && c.id !== undefined && c.id !== "") return c.id;
+      continue;
+    }
+    if (typeof c === "number" || (typeof c === "string" && !isNaN(c))) {
+      return c;
+    }
+  }
+  return "";
+};
+
+/* First candidate that is a NON-EMPTY array. (An empty array is truthy, so a
+   plain `a || b` would stop at an empty list and never reach the real one.) */
+const firstNonEmptyArray = (...candidates) =>
+  candidates.find((c) => Array.isArray(c) && c.length > 0) || [];
+
+/* Overlay `override` on `base`, ignoring null / undefined / "" values so the
+   list row can fill any gaps in the by-id response. */
+const mergeRecord = (base, override) => {
+  const out = { ...(base || {}) };
+  Object.entries(override || {}).forEach(([key, value]) => {
+    if (value !== null && value !== undefined && value !== "") {
+      out[key] = value;
+    }
+  });
+  return out;
+};
+
+/* Make sure the currently selected value always exists as an <option>,
+   otherwise a <select> renders blank when the lookup list doesn't contain it
+   (not loaded yet, or the saved value is no longer in the list). */
+const withCurrent = (options, value, label) => {
+  if (value === "" || value === null || value === undefined) return options;
+  const exists = (options || []).some(
+    (o) => String(typeof o === "object" ? o.value : o) === String(value),
+  );
+  if (exists) return options;
+  return [{ value, label: label || String(value) }, ...(options || [])];
 };
 
 const getFieldError = (errors, name) => {
@@ -325,12 +376,7 @@ const DatePickerField = ({
   );
 };
 
-/* ---- table ----
-   Deliberately NOT table-fixed / percentage-based: with 12 data columns,
-   forcing percentages produces cramped, uneven cells. Instead each cell
-   below declares its own min-width (via the `width` prop on InputCell /
-   SelectCell) and the wrapper scrolls horizontally, so every column gets
-   enough room to show its content and the table never gets squeezed. */
+/* ---- table ---- */
 
 const TableWrapper = ({ children }) => (
   <div className="w-full overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
@@ -506,44 +552,131 @@ const getDefaultDetailRow = () => ({
   amount: "",
 });
 
-const getDefaultValues = (record) => ({
-  plant: record?.plant?.id ?? record?.plantId ?? "",
-  issueNo: record?.docId || record?.issueNo || "",
-  belongsTo: record?.belongsTo || "",
-  date:
-    isoToDisplay(record?.date || record?.docDate) ||
-    dayjs().format("DD-MM-YYYY"),
-  fgItemId: record?.fgItem?.id ?? record?.fgItemId ?? "",
-  fgItemDescription:
-    record?.fgItem?.itemDescription || record?.fgItemDescription || "",
-  indentNo: record?.indentNo || "",
-  issueRefDate: isoToDisplay(record?.issueRefDate),
-  scheduleOrderNo: record?.scheduleOrderNo || "",
-  type: record?.issueType || "",
-  fromLocation: record?.fromLocation?.id ?? record?.fromLocationId ?? "",
-  toLocation: record?.toLocation?.id ?? record?.toLocationId ?? "",
-  narration: record?.narration || "",
-  totalValue: record?.totalValue || 0,
-  productionIssueDetails: record?.productionIssueDetailsResponseDTO?.length
-    ? record.productionIssueDetailsResponseDTO.map((row) => ({
-        id: row.id || 0,
-        itemId: row.item?.id ?? row.itemId ?? "",
-        itemCode: row.item?.itemCode || row.itemCode || "",
-        itemDescription: row.item?.itemDescription || row.itemDescription || "",
-        unit: row.unit?.id ?? row.unit ?? "",
-        unitLabel: row.unit?.unitId || row.unitDescription || "",
-        availableQty: row.availableQty ?? "",
-        grnNo: row.grnNo || "",
-        grnDate: isoToDisplay(row.grnDate),
-        internalRequiredQty: row.internalRequiredQty ?? "",
-        internalFundedQty: row.internalFundedQty ?? "",
-        issueQty: row.issueQty ?? "",
-        itemMinimumQty: row.itemMinimumQty ?? "",
-        rate: row.rate ?? "",
-        amount: row.amount ?? "",
-      }))
-    : [getDefaultDetailRow()],
+/* Maps one saved detail row (itemDetails from the API) to the form row.
+   Backend names: intReqQty, itemMinQty. Older names are still accepted. */
+const mapDetailRow = (row) => {
+  const unitObj = row.unit && typeof row.unit === "object" ? row.unit : null;
+
+  const issueQty = row.issueQty ?? "";
+  const rate = row.rate ?? "";
+
+  return {
+    id: row.id || 0,
+    itemId: pickId(row.item, row.itemId),
+    itemCode: row.item?.itemCode || row.itemCode || "",
+    itemDescription: row.item?.itemDescription || row.itemDescription || "",
+    unit: pickId(row.unit, row.unitId),
+    unitLabel:
+      unitObj?.unitId ||
+      unitObj?.unitName ||
+      row.unitDescription ||
+      row.unitLabel ||
+      (typeof row.unit === "string" && isNaN(row.unit) ? row.unit : "") ||
+      "",
+    availableQty: row.availableQty ?? "",
+    grnNo: row.grnNo || "",
+    grnDate: isoToDisplay(row.grnDate),
+    internalRequiredQty: row.intReqQty ?? row.internalRequiredQty ?? "",
+    internalFundedQty: row.internalFundedQty ?? "",
+    issueQty,
+    itemMinimumQty: row.itemMinQty ?? row.itemMinimumQty ?? "",
+    rate,
+    amount:
+      row.amount ??
+      (issueQty !== "" && rate !== ""
+        ? Number((toNumber(issueQty) * toNumber(rate)).toFixed(2))
+        : ""),
+  };
+};
+
+/* Maps one line from getIndentNoDetailsForProductionIssue to a form row. */
+const mapIndentLine = (line) => ({
+  id: 0,
+  itemId: line.itemId ?? "",
+  itemCode: line.itemCode || "",
+  itemDescription: line.itemDescription || "",
+  unit: line.unit ?? "",
+  unitLabel: line.unitDescription || "",
+  availableQty: "",
+  grnNo: "",
+  grnDate: "",
+  internalRequiredQty: line.requiredQty ?? "",
+  internalFundedQty: "",
+  issueQty: "",
+  itemMinimumQty: "",
+  rate: "",
+  amount: "",
 });
+
+/* Builds the form values from a getProductionIssueById entry, a list row,
+   or a merge of both. */
+const getDefaultValues = (record) => {
+  const detailRows = firstNonEmptyArray(
+    record?.itemDetails,
+    record?.productionIssueDetailsResponseDTO,
+    record?.productionIssueDetailsVO,
+    record?.productionIssueDetails,
+    record?.productionIssueDetailsDTO,
+  );
+
+  return {
+    plant: pickId(
+      record?.branch,
+      record?.branchId,
+      record?.plantId,
+      record?.plant,
+    ),
+    plantLabel:
+      record?.branch?.branchName ||
+      record?.branch?.branchCode ||
+      (typeof record?.plant === "string" && isNaN(record.plant)
+        ? record.plant
+        : "") ||
+      "",
+
+    /* Issue No. = docId from the backend. Temporary PI-<id> only while the
+       backend still returns docId = null. */
+    issueNo: record?.docId || (record?.id ? `PI-${record.id}` : ""),
+
+    belongsTo: record?.belongsTo || "",
+
+    /* Date = docDate (issueDate is accepted as a fallback). */
+    date:
+      isoToDisplay(record?.docDate || record?.issueDate) ||
+      dayjs().format("DD-MM-YYYY"),
+
+    fgItemId: pickId(record?.fgItem, record?.fgItemId),
+    fgItemCode: record?.fgItem?.itemCode || record?.fgItemCode || "",
+    fgItemDescription:
+      record?.fgItem?.itemDescription || record?.fgItemDescription || "",
+
+    indentNo: record?.indentNo || "",
+
+    /* Read-only indent reference date; re-derived from the Indent No list
+       once it has loaded. */
+    issueRefDate: "",
+    scheduleOrderNo: record?.schOrderNo || record?.scheduleOrderNo || "",
+    type: record?.type || record?.issueType || "",
+
+    fromLocation: pickId(record?.fromLocation, record?.fromLocationId),
+    fromLocationLabel:
+      record?.fromLocation?.locationName ||
+      record?.fromLocation?.locationCode ||
+      "",
+    toLocation: pickId(record?.toLocation, record?.toLocationId),
+    toLocationLabel:
+      record?.toLocation?.locationName ||
+      record?.toLocation?.locationCode ||
+      "",
+
+    narration: record?.narration || "",
+    totalValue: record?.totalValue || 0,
+
+    productionIssueDetails: detailRows.length
+      ? detailRows.map(mapDetailRow)
+      : [getDefaultDetailRow()],
+  };
+};
 
 /* ========================================================================= */
 /* COMPONENT                                                                 */
@@ -564,6 +697,7 @@ const ProductionIssueForm = ({ data, editData, onBack }) => {
   const [activeTab, setActiveTab] = useState("details");
   const [saving, setSaving] = useState(false);
   const [generatingDocId, setGeneratingDocId] = useState(false);
+  const [loadingRecord, setLoadingRecord] = useState(false);
   const dataLoadedRef = useRef(null);
 
   /* lookups */
@@ -578,7 +712,7 @@ const ProductionIssueForm = ({ data, editData, onBack }) => {
   /* Indent cascade (schOrderNo / docId / docDate) for the selected FG item */
   const [indentRows, setIndentRows] = useState([]);
 
-  /* GRN options per item id, populated once an indent's lines are loaded */
+  /* GRN options per item id (filled on indent selection AND on edit load) */
   const [grnOptionsMap, setGrnOptionsMap] = useState({});
 
   const {
@@ -602,7 +736,21 @@ const ProductionIssueForm = ({ data, editData, onBack }) => {
   const watchedPlant = watch("plant");
   const watchedFgItemId = watch("fgItemId");
   const watchedFromLocation = watch("fromLocation");
-  const watchDetails = watch("productionIssueDetails");
+  const watchedToLocation = watch("toLocation");
+  const watchedIndentNo = watch("indentNo");
+  const watchedBelongsTo = watch("belongsTo");
+  const watchedType = watch("type");
+  const watchedPlantLabel = watch("plantLabel");
+  const watchedFgItemCode = watch("fgItemCode");
+  const watchedFromLabel = watch("fromLocationLabel");
+  const watchedToLabel = watch("toLocationLabel");
+
+  /* useWatch re-renders on every nested field change inside the field array
+     (Issue Qty, Rate, ...), which drives the auto calculation below. */
+  const watchDetails = useWatch({
+    control,
+    name: "productionIssueDetails",
+  });
 
   const effectiveBranchId = toInteger(watchedPlant || BRANCH_ID);
 
@@ -708,10 +856,6 @@ const ProductionIssueForm = ({ data, editData, onBack }) => {
     }
   }, [ORG_ID, effectiveBranchId]);
 
-  /* Loads the { schOrderNo, docId, docDate } rows for whichever FG item is
-       currently selected — runs both on manual selection and on edit-mode
-       hydration, since it only populates the Indent No dropdown and never
-       clears sibling fields itself. */
   const loadIndentRows = useCallback(
     async (fgItemId) => {
       try {
@@ -735,6 +879,26 @@ const ProductionIssueForm = ({ data, editData, onBack }) => {
     [ORG_ID, effectiveBranchId],
   );
 
+  const loadGrnOptionsForRows = useCallback(
+    async (rows, branchId) => {
+      const itemIds = [
+        ...new Set((rows || []).map((r) => r.itemId).filter(Boolean)),
+      ];
+
+      if (!itemIds.length || !branchId || !ORG_ID) return;
+
+      const entries = await Promise.all(
+        itemIds.map(async (itemId) => [
+          itemId,
+          await productionIssueAPI.getGrnForItem(branchId, itemId, ORG_ID),
+        ]),
+      );
+
+      setGrnOptionsMap(Object.fromEntries(entries));
+    },
+    [ORG_ID],
+  );
+
   useEffect(() => {
     loadPlants();
     loadBelongsTo();
@@ -749,6 +913,25 @@ const ProductionIssueForm = ({ data, editData, onBack }) => {
     loadIndentRows(watchedFgItemId);
   }, [watchedFgItemId, loadIndentRows]);
 
+  /* Fill the read-only Issue Date (indent date) and Sch. Order No. from the
+     matching indent once the indent list has loaded — only when still empty,
+     so nothing the user picked or the backend returned is overwritten. */
+  useEffect(() => {
+    if (!watchedIndentNo || !indentRows.length) return;
+
+    const row = indentRows.find((r) => r.docId === watchedIndentNo);
+    if (!row) return;
+
+    if (!getValues("issueRefDate") && row.docDate) {
+      setValue("issueRefDate", isoToDisplay(row.docDate));
+    }
+
+    if (!getValues("scheduleOrderNo") && row.schOrderNo) {
+      setValue("scheduleOrderNo", row.schOrderNo);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [indentRows, watchedIndentNo]);
+
   /* Keep From/To Location mutually exclusive. */
   useEffect(() => {
     if (
@@ -760,10 +943,48 @@ const ProductionIssueForm = ({ data, editData, onBack }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watchedFromLocation]);
 
-  const indentNoOptions = indentRows.map((row) => ({
-    value: row.docId,
-    label: row.docId,
-  }));
+  const plantSelectOptions = withCurrent(
+    plantOptions,
+    watchedPlant,
+    watchedPlantLabel,
+  );
+
+  const belongsToSelectOptions = withCurrent(
+    belongsToOptions,
+    watchedBelongsTo,
+    watchedBelongsTo,
+  );
+
+  const typeSelectOptions = withCurrent(TYPE_OPTIONS, watchedType, watchedType);
+
+  const fgItemSelectOptions = withCurrent(
+    fgItemOptions,
+    watchedFgItemId,
+    watchedFgItemCode,
+  );
+
+  const indentNoOptions = withCurrent(
+    indentRows.map((row) => ({
+      value: row.docId,
+      label: row.docId,
+    })),
+    watchedIndentNo,
+    watchedIndentNo,
+  );
+
+  const fromLocationOptions = withCurrent(
+    locationOptions,
+    watchedFromLocation,
+    watchedFromLabel,
+  );
+
+  const toLocationOptions = withCurrent(
+    locationOptions.filter(
+      (loc) => String(loc.value) !== String(watchedFromLocation),
+    ),
+    watchedToLocation,
+    watchedToLabel,
+  );
 
   /* ===================================================================== */
   /* DOCUMENT NUMBER                                                       */
@@ -803,7 +1024,7 @@ const ProductionIssueForm = ({ data, editData, onBack }) => {
   }, [isEditMode, ORG_ID, FIN_YEAR]);
 
   /* ===================================================================== */
-  /* EDIT MODE HYDRATION                                                   */
+  /* EDIT MODE HYDRATION  (getProductionIssueById)                         */
   /* ===================================================================== */
 
   useEffect(() => {
@@ -814,12 +1035,40 @@ const ProductionIssueForm = ({ data, editData, onBack }) => {
     dataLoadedRef.current = issueId;
 
     const load = async () => {
+      setLoadingRecord(true);
+
       try {
-        const issue = (await productionIssueAPI.getById(issueId)) || record;
-        reset(getDefaultValues(issue));
+        const issue = await productionIssueAPI.getById(issueId);
+        const merged = mergeRecord(record, issue);
+        const values = getDefaultValues(merged);
+        const branchId = toInteger(values.plant || BRANCH_ID);
+
+        /* Saved issue has no detail rows (itemDetails empty) — rebuild them
+           from the saved indent so the grid isn't blank. */
+        const hasSavedRows = values.productionIssueDetails.some(
+          (r) => r.itemId,
+        );
+
+        if (!hasSavedRows && values.indentNo) {
+          const lines = await productionIssueAPI.getIndentDetails(
+            branchId,
+            values.indentNo,
+            ORG_ID,
+          );
+
+          if (lines.length) {
+            values.productionIssueDetails = lines.map(mapIndentLine);
+          }
+        }
+
+        reset(values);
+
+        await loadGrnOptionsForRows(values.productionIssueDetails, branchId);
       } catch (error) {
         console.error("Error loading production issue:", error);
         addToast("Failed to load Production Issue data", "error");
+      } finally {
+        setLoadingRecord(false);
       }
     };
 
@@ -831,9 +1080,6 @@ const ProductionIssueForm = ({ data, editData, onBack }) => {
   /* FG ITEM / INDENT CASCADE                                              */
   /* ===================================================================== */
 
-  /* Selecting an FG item only sets its description and clears everything
-       that depends on an indent — the Indent No options themselves come from
-       the loadIndentRows effect above. */
   const applyFgItem = useCallback(
     (fgItemId) => {
       const row = fgItemMap[fgItemId];
@@ -841,6 +1087,7 @@ const ProductionIssueForm = ({ data, editData, onBack }) => {
       setValue("fgItemDescription", row?.itemDescription || "", {
         shouldDirty: true,
       });
+      setValue("fgItemCode", row?.itemCode || "", { shouldDirty: true });
       setValue("indentNo", "", { shouldDirty: true });
       setValue("issueRefDate", "", { shouldDirty: true });
       setValue("scheduleOrderNo", "", { shouldDirty: true });
@@ -851,9 +1098,6 @@ const ProductionIssueForm = ({ data, editData, onBack }) => {
     [fgItemMap, setValue, detailsArray],
   );
 
-  /* Selecting an Indent No resolves Issue Date + Sch. Order No from the
-       already-loaded indentRows, then pulls the indent's line items and,
-       per item, its available GRNs. */
   const applyIndentNo = useCallback(
     async (indentNoValue) => {
       const row = indentRows.find((r) => r.docId === indentNoValue);
@@ -882,25 +1126,7 @@ const ProductionIssueForm = ({ data, editData, onBack }) => {
           return;
         }
 
-        detailsArray.replace(
-          lines.map((line) => ({
-            id: 0,
-            itemId: line.itemId ?? "",
-            itemCode: line.itemCode || "",
-            itemDescription: line.itemDescription || "",
-            unit: line.unit ?? "",
-            unitLabel: line.unitDescription || "",
-            availableQty: "",
-            grnNo: "",
-            grnDate: "",
-            internalRequiredQty: line.requiredQty ?? "",
-            internalFundedQty: "",
-            issueQty: "",
-            itemMinimumQty: "",
-            rate: "",
-            amount: "",
-          })),
-        );
+        detailsArray.replace(lines.map(mapIndentLine));
 
         const grnEntries = await Promise.all(
           lines.map(async (line) => {
@@ -938,11 +1164,14 @@ const ProductionIssueForm = ({ data, editData, onBack }) => {
   };
 
   const grnOptionsFor = (index) => {
-    const itemId = watchDetails?.[index]?.itemId;
-    return (grnOptionsMap[itemId] || []).map((g) => ({
+    const row = watchDetails?.[index];
+
+    const options = (grnOptionsMap[row?.itemId] || []).map((g) => ({
       value: g.docId,
       label: g.docId,
     }));
+
+    return withCurrent(options, row?.grnNo, row?.grnNo);
   };
 
   const handleGrnChange = (index, grnDocId) => {
@@ -953,72 +1182,67 @@ const ProductionIssueForm = ({ data, editData, onBack }) => {
     setValue(
       `productionIssueDetails.${index}.grnDate`,
       isoToDisplay(match?.docDate),
-      {
-        shouldDirty: true,
-      },
+      { shouldDirty: true },
     );
   };
 
-  /* Rate has no source API in the spec, so it stays a manual entry that
-       feeds the Amount calculation, same as Issue Qty. */
   /* ===================================================================== */
   /* AUTO CALCULATION                                                      */
   /* ===================================================================== */
 
   /*
-   * Details:
-   * Amount = Issue Qty × Rate
-   *
+   * Per row:
+   *   Amount        = Issue Qty × Rate
+   *   Int. Pend Qty = Int. Req. Qty − Issue Qty   (never below 0)
    * Summary:
-   * Total Value = Sum of all detail Amounts
+   *   Total Value   = sum of all row Amounts
    */
   useEffect(() => {
     const details = watchDetails || [];
 
-    let totalValue = 0;
+    let total = 0;
 
     details.forEach((row, index) => {
       const issueQty = toNumber(row?.issueQty);
       const rate = toNumber(row?.rate);
 
-      const amount = issueQty * rate;
+      /* Amount */
+      const amount = Number((issueQty * rate).toFixed(2));
+      total += amount;
 
-      totalValue += amount;
+      if (String(row?.amount ?? "") !== String(amount)) {
+        setValue(`productionIssueDetails.${index}.amount`, amount, {
+          shouldDirty: true,
+          shouldValidate: false,
+        });
+      }
 
-      const currentAmount = toNumber(row?.amount);
+      /* Int. Pend. Qty */
+      const req = row?.internalRequiredQty;
+      const hasReq = req !== "" && req !== null && req !== undefined;
 
-      // Update Amount only when the calculated value actually changes.
-      if (currentAmount !== Number(amount.toFixed(2))) {
-        setValue(
-          `productionIssueDetails.${index}.amount`,
-          Number(amount.toFixed(2)),
-          {
-            shouldDirty: true,
-            shouldValidate: false,
-          },
-        );
+      const pending = hasReq
+        ? Number(Math.max(toNumber(req) - issueQty, 0).toFixed(3))
+        : "";
+
+      if (String(row?.internalFundedQty ?? "") !== String(pending)) {
+        setValue(`productionIssueDetails.${index}.internalFundedQty`, pending, {
+          shouldDirty: true,
+          shouldValidate: false,
+        });
       }
     });
 
-    // Production Issues Summary
-    setValue("totalValue", Number(totalValue.toFixed(2)), {
-      shouldDirty: true,
-      shouldValidate: false,
-    });
-  }, [watchDetails, setValue]);
+    /* Total Value (Summary tab) */
+    const totalValue = Number(total.toFixed(2));
 
-  const calculateTotalValue = useCallback(() => {
-    const details = watchDetails || [];
-    let total = 0;
-    details.forEach((row) => {
-      total += parseFloat(row.amount) || 0;
-    });
-    setValue("totalValue", Number(total.toFixed(2)), { shouldDirty: true });
-  }, [watchDetails, setValue]);
-
-  useEffect(() => {
-    calculateTotalValue();
-  }, [watchDetails, calculateTotalValue]);
+    if (toNumber(getValues("totalValue")) !== totalValue) {
+      setValue("totalValue", totalValue, {
+        shouldDirty: true,
+        shouldValidate: false,
+      });
+    }
+  }, [watchDetails, setValue, getValues]);
 
   /* ===================================================================== */
   /* VALIDATION & SAVE                                                     */
@@ -1066,43 +1290,42 @@ const ProductionIssueForm = ({ data, editData, onBack }) => {
     setSaving(true);
     const isUpdate = Boolean(record?.id);
 
+    /* Payload follows the createUpdateProductionIssue schema exactly. */
     const payload = {
       active: true,
       belongsTo: formData.belongsTo || "",
       branch: effectiveBranchId,
+      cancel: record?.cancel === true || record?.cancel === "T",
+      cancelRemarks: record?.cancelRemarks || "",
       createdBy: (isUpdate ? record?.createdBy : usersId) || "SYSTEM",
-      ...(isUpdate && { updatedBy: usersId || "SYSTEM" }),
-      date: displayToIso(formData.date) || "",
       fgItem: toInteger(formData.fgItemId),
+      financialYear: record?.financialYear || FIN_YEAR,
       fromLocation: toInteger(formData.fromLocation),
       ...(isUpdate && { id: toInteger(record.id) }),
       indentNo: formData.indentNo || "",
-      issueNo: formData.issueNo || "",
-      issueRefDate: displayToIso(formData.issueRefDate) || "",
-      issueType: formData.type || "",
-      narration: formData.narration || "",
-      orgId: ORG_ID,
-      plant: toInteger(formData.plant),
-      scheduleOrderNo: formData.scheduleOrderNo || "",
-      toLocation: toInteger(formData.toLocation),
-      totalValue: formData.totalValue || 0,
-      productionIssueDetailsDTO: (formData.productionIssueDetails || [])
+      issueDate: displayToIso(formData.date) || "",
+      itemDetails: (formData.productionIssueDetails || [])
         .filter((row) => row.itemId)
         .map((row) => ({
           ...(row.id ? { id: toInteger(row.id) } : {}),
-          item: toInteger(row.itemId),
-          unit: toInteger(row.unit),
           availableQty: toNumber(row.availableQty),
-          grnNo: row.grnNo || "",
           grnDate: displayToIso(row.grnDate) || "",
-          internalRequiredQty: toNumber(row.internalRequiredQty),
-          internalFundedQty: toNumber(row.internalFundedQty),
+          grnNo: row.grnNo || "",
+          intReqQty: toNumber(row.internalRequiredQty),
           issueQty: toNumber(row.issueQty),
-          itemMinimumQty: toNumber(row.itemMinimumQty),
+          item: toInteger(row.itemId),
+          itemMinQty: toNumber(row.itemMinimumQty),
           rate: toNumber(row.rate),
-          amount: toNumber(row.amount),
+          unit: toInteger(row.unit),
         })),
+      narration: formData.narration || "",
+      orgId: ORG_ID,
+      schOrderNo: formData.scheduleOrderNo || "",
+      toLocation: toInteger(formData.toLocation),
+      type: formData.type || "",
     };
+
+    console.log("createUpdateProductionIssue payload ->", payload);
 
     try {
       const response = await productionIssueAPI.createUpdate(payload);
@@ -1148,9 +1371,6 @@ const ProductionIssueForm = ({ data, editData, onBack }) => {
   /* RENDER                                                                */
   /* ===================================================================== */
 
-  /* `width` here is a Tailwind min-width class applied to both the <th>
-       and its matching <td> (passed through to InputCell/SelectCell below)
-       so header and body line up without fighting a fixed table layout. */
   const detailColumns = [
     { key: "itemCode", label: "Item Code", width: "min-w-[110px]" },
     {
@@ -1210,6 +1430,12 @@ const ProductionIssueForm = ({ data, editData, onBack }) => {
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
           {isEditMode ? "Edit Production Issue" : "Add Production Issue"}
         </h2>
+
+        {loadingRecord && (
+          <span className="text-[11px] text-gray-500 dark:text-gray-400">
+            Loading...
+          </span>
+        )}
       </div>
 
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
@@ -1221,7 +1447,7 @@ const ProductionIssueForm = ({ data, editData, onBack }) => {
               control={control}
               name="plant"
               label="Plant ID"
-              options={plantOptions}
+              options={plantSelectOptions}
               required
               errors={errors}
             />
@@ -1239,7 +1465,7 @@ const ProductionIssueForm = ({ data, editData, onBack }) => {
               control={control}
               name="belongsTo"
               label="Belongs To"
-              options={belongsToOptions}
+              options={belongsToSelectOptions}
               required
               errors={errors}
             />
@@ -1256,7 +1482,7 @@ const ProductionIssueForm = ({ data, editData, onBack }) => {
               control={control}
               name="fgItemId"
               label="FG Item ID"
-              options={fgItemOptions}
+              options={fgItemSelectOptions}
               required
               errors={errors}
               onChange={applyFgItem}
@@ -1300,7 +1526,7 @@ const ProductionIssueForm = ({ data, editData, onBack }) => {
               control={control}
               name="type"
               label="Type"
-              options={TYPE_OPTIONS}
+              options={typeSelectOptions}
               required
               errors={errors}
             />
@@ -1309,7 +1535,7 @@ const ProductionIssueForm = ({ data, editData, onBack }) => {
               control={control}
               name="fromLocation"
               label="From Location"
-              options={locationOptions}
+              options={fromLocationOptions}
               required
               errors={errors}
             />
@@ -1318,9 +1544,7 @@ const ProductionIssueForm = ({ data, editData, onBack }) => {
               control={control}
               name="toLocation"
               label="To Location"
-              options={locationOptions.filter(
-                (loc) => String(loc.value) !== String(watchedFromLocation),
-              )}
+              options={toLocationOptions}
               required
               errors={errors}
             />
@@ -1448,7 +1672,7 @@ const ProductionIssueForm = ({ data, editData, onBack }) => {
                         type="number"
                         step="0.001"
                         align="right"
-                        placeholder="0.000"
+                        readOnly
                         errors={errors}
                         width={detailColumns[7].width}
                       />
@@ -1549,7 +1773,7 @@ const ProductionIssueForm = ({ data, editData, onBack }) => {
           <button
             type="button"
             onClick={handleSubmit(onSubmit)}
-            disabled={saving || isSubmitting}
+            disabled={saving || isSubmitting || loadingRecord}
             className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
           >
             <Save className="h-3 w-3" />

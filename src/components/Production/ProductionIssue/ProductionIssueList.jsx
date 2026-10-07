@@ -22,12 +22,6 @@ const ProductionIssueList = ({ onAddNew, onEdit, onBack }) => {
 
       const response = await productionIssueAPI.getByOrgId(orgId, branchId);
 
-      console.log("Production Issues API Response:", response);
-
-      /* ---------------------------------------------------------------------- */
-      /* API Error Check                                                        */
-      /* ---------------------------------------------------------------------- */
-
       if (response?.status === false) {
         const msg =
           response?.paramObjectsMap?.errorMessage ||
@@ -39,44 +33,22 @@ const ProductionIssueList = ({ onAddNew, onEdit, onBack }) => {
         return;
       }
 
-      /* ---------------------------------------------------------------------- */
-      /* Get Production Issue List                                             */
-      /* ---------------------------------------------------------------------- */
-
       const issues = Array.isArray(
         response?.paramObjectsMap?.productionIssueResponseVO,
       )
         ? response.paramObjectsMap.productionIssueResponseVO
         : [];
 
-      console.log("Production Issues:", issues);
-
       if (issues.length === 0) {
         setItemData([]);
         return;
       }
 
-      /* ---------------------------------------------------------------------- */
-      /* Transform API Response                                                 */
-      /* ---------------------------------------------------------------------- */
-
       const transformedData = issues.map((item) => ({
-        /* ------------------------------------------------------------------ */
-        /* Main ID                                                            */
-        /* ------------------------------------------------------------------ */
-
         id: item.id,
 
-        /* ------------------------------------------------------------------ */
-        /* Document                                                            */
-        /* ------------------------------------------------------------------ */
-
-        /*
-         * Backend currently returns docId = null.
-         *
-         * Therefore use a temporary display number based on ID.
-         * If docId is returned later, it will automatically be used.
-         */
+        /* Backend may return docId = null; show a temporary PI-<id>.
+           The form strips this placeholder before saving. */
         issueNo:
           item.docId !== null && item.docId !== undefined
             ? item.docId
@@ -86,141 +58,71 @@ const ProductionIssueList = ({ onAddNew, onEdit, onBack }) => {
 
         docId: item.docId || "",
 
-        /* ------------------------------------------------------------------ */
-        /* Dates                                                               */
-        /* ------------------------------------------------------------------ */
-
-        issueDate: item.issueDate || item.docDate || "",
-
+        /* Raw backend values — the form reads these when editing.
+           issueDate is the indent reference date, so it must NOT fall
+           back to docDate here. */
+        issueDate: item.issueDate || "",
         docDate: item.docDate || "",
 
-        /* ------------------------------------------------------------------ */
-        /* Branch / Plant                                                      */
-        /* ------------------------------------------------------------------ */
+        /* Column display only */
+        displayDate: item.issueDate || item.docDate || "",
 
         plant: item.branch?.branchName || item.branch?.branchCode || "",
-
         plantCode: item.branch?.branchCode || "",
-
         plantId: item.branch?.id || null,
 
-        /* ------------------------------------------------------------------ */
-        /* Basic Information                                                   */
-        /* ------------------------------------------------------------------ */
+        /* Keep the nested object so the form can read branch.id directly */
+        branch: item.branch || null,
 
         belongsTo: item.belongsTo || "",
 
-        /* ------------------------------------------------------------------ */
-        /* FG Item                                                              */
-        /* ------------------------------------------------------------------ */
-
         fgItemCode: item.fgItem?.itemCode || "",
-
         fgItemDescription: item.fgItem?.itemDescription || "",
-
         fgItemId: item.fgItem?.id || null,
-
-        /* ------------------------------------------------------------------ */
-        /* Indent                                                               */
-        /* ------------------------------------------------------------------ */
+        fgItem: item.fgItem || null,
 
         indentNo: item.indentNo || "",
 
-        /* ------------------------------------------------------------------ */
-        /* Schedule Order                                                      */
-        /* Backend field = schOrderNo                                         */
-        /* ------------------------------------------------------------------ */
-
         scheduleOrderNo: item.schOrderNo || "",
-
-        /* ------------------------------------------------------------------ */
-        /* Type                                                                 */
-        /* ------------------------------------------------------------------ */
+        schOrderNo: item.schOrderNo || "",
 
         issueType: item.type || "",
+        type: item.type || "",
 
-        /* ------------------------------------------------------------------ */
-        /* From Location                                                        */
-        /* ------------------------------------------------------------------ */
-
-        fromLocation:
+        fromLocationName:
           item.fromLocation?.locationName ||
           item.fromLocation?.locationCode ||
           "",
-
         fromLocationCode: item.fromLocation?.locationCode || "",
-
         fromLocationId: item.fromLocation?.id || null,
+        fromLocationObj: item.fromLocation || null,
 
-        /* ------------------------------------------------------------------ */
-        /* To Location                                                          */
-        /* ------------------------------------------------------------------ */
-
-        toLocation:
+        toLocationName:
           item.toLocation?.locationName || item.toLocation?.locationCode || "",
-
         toLocationCode: item.toLocation?.locationCode || "",
-
         toLocationId: item.toLocation?.id || null,
-
-        /* ------------------------------------------------------------------ */
-        /* Amount                                                               */
-        /* ------------------------------------------------------------------ */
+        toLocationObj: item.toLocation || null,
 
         totalValue: item.totalValue ?? 0,
-
-        /* ------------------------------------------------------------------ */
-        /* Narration                                                            */
-        /* ------------------------------------------------------------------ */
-
         narration: item.narration || "",
 
-        /* ------------------------------------------------------------------ */
-        /* Created / Updated By                                                 */
-        /* ------------------------------------------------------------------ */
-
         createdBy: item.createdBy || "",
-
         updatedBy: item.updatedBy || "",
-
-        /* ------------------------------------------------------------------ */
-        /* Status                                                               */
-        /* ------------------------------------------------------------------ */
 
         active:
           item.active === true ||
           String(item.active).toLowerCase() === "active",
-
         activeStatus: item.active || "",
-
-        /* ------------------------------------------------------------------ */
-        /* Cancel                                                               */
-        /* ------------------------------------------------------------------ */
 
         cancel:
           item.cancel === true || String(item.cancel).toUpperCase() === "T",
-
         cancelRemarks: item.cancelRemarks || "",
 
-        /* ------------------------------------------------------------------ */
-        /* Screen Information                                                   */
-        /* ------------------------------------------------------------------ */
-
         screenName: item.screenName || "",
-
         screenCode: item.screenCode || "",
 
-        /* ------------------------------------------------------------------ */
-        /* Organization                                                         */
-        /* ------------------------------------------------------------------ */
-
         orgId: item.orgId || null,
-
         financialYear: item.financialYear || "",
-
-        /* ------------------------------------------------------------------ */
-        /* Item Details                                                         */
-        /* ------------------------------------------------------------------ */
 
         itemDetails: Array.isArray(item.itemDetails) ? item.itemDetails : [],
 
@@ -231,18 +133,11 @@ const ProductionIssueList = ({ onAddNew, onEdit, onBack }) => {
           : [],
       }));
 
-      /* ---------------------------------------------------------------------- */
-      /* Sort Newest First                                                      */
-      /* ---------------------------------------------------------------------- */
-
       transformedData.sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
-
-      console.log("Production Issues Transformed:", transformedData);
 
       setItemData(transformedData);
     } catch (error) {
       console.error("Error loading production issues:", error);
-
       setItemData([]);
     } finally {
       setLoading(false);
@@ -250,23 +145,27 @@ const ProductionIssueList = ({ onAddNew, onEdit, onBack }) => {
   }, []);
 
   /* -------------------------------------------------------------------------- */
-  /* Initial Load                                                               */
+  /* Initial Load + Refresh                                                     */
   /* -------------------------------------------------------------------------- */
 
-  useEffect(() => {
-    const orgId = localStorage.getItem("orgId");
-    const branchId = localStorage.getItem("branchId");
+  const handleRefresh = useCallback(
+    () =>
+      loadItems(
+        localStorage.getItem("orgId"),
+        localStorage.getItem("branchId"),
+      ),
+    [loadItems],
+  );
 
-    loadItems(orgId, branchId);
-  }, [loadItems]);
+  useEffect(() => {
+    handleRefresh();
+  }, [handleRefresh]);
 
   /* -------------------------------------------------------------------------- */
   /* Edit                                                                       */
   /* -------------------------------------------------------------------------- */
 
   const handleEdit = (item) => {
-    console.log("Editing Production Issue:", item);
-
     onEdit(item);
   };
 
@@ -282,42 +181,31 @@ const ProductionIssueList = ({ onAddNew, onEdit, onBack }) => {
       type: "text",
       noWrap: true,
     },
-
     {
-      key: "issueDate",
+      key: "displayDate",
       label: "Issue Date",
-      accessor: "issueDate",
+      accessor: "displayDate",
       type: "date",
     },
-
-    {
-      key: "plant",
-      label: "Plant",
-      accessor: "plant",
-      type: "text",
-    },
-
+    { key: "plant", label: "Plant", accessor: "plant", type: "text" },
     {
       key: "belongsTo",
       label: "Belongs To",
       accessor: "belongsTo",
       type: "text",
     },
-
     {
       key: "fgItemCode",
       label: "FG Item Code",
       accessor: "fgItemCode",
       type: "text",
     },
-
     {
       key: "fgItemDescription",
       label: "FG Item Description",
       accessor: "fgItemDescription",
       type: "text",
     },
-
     {
       key: "indentNo",
       label: "Indent No",
@@ -325,42 +213,31 @@ const ProductionIssueList = ({ onAddNew, onEdit, onBack }) => {
       type: "text",
       noWrap: true,
     },
-
     {
       key: "scheduleOrderNo",
       label: "Sch. Order No",
       accessor: "scheduleOrderNo",
       type: "text",
     },
-
+    { key: "issueType", label: "Type", accessor: "issueType", type: "text" },
     {
-      key: "issueType",
-      label: "Type",
-      accessor: "issueType",
-      type: "text",
-    },
-
-    {
-      key: "fromLocation",
+      key: "fromLocationName",
       label: "From Location",
-      accessor: "fromLocation",
+      accessor: "fromLocationName",
       type: "text",
     },
-
     {
-      key: "toLocation",
+      key: "toLocationName",
       label: "To Location",
-      accessor: "toLocation",
+      accessor: "toLocationName",
       type: "text",
     },
-
     {
       key: "totalValue",
       label: "Total Value",
       accessor: "totalValue",
       type: "text",
     },
-
     {
       key: "createdBy",
       label: "Created By",
@@ -373,14 +250,12 @@ const ProductionIssueList = ({ onAddNew, onEdit, onBack }) => {
       label: "Status",
       accessor: "active",
       type: "status",
-
       statusVariants: {
         true: {
           label: "Active",
           className:
             "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
         },
-
         false: {
           label: "Inactive",
           className:
@@ -404,7 +279,7 @@ const ProductionIssueList = ({ onAddNew, onEdit, onBack }) => {
 
   const searchFields = [
     "issueNo",
-    "issueDate",
+    "displayDate",
     "plant",
     "belongsTo",
     "fgItemCode",
@@ -412,8 +287,8 @@ const ProductionIssueList = ({ onAddNew, onEdit, onBack }) => {
     "indentNo",
     "scheduleOrderNo",
     "issueType",
-    "fromLocation",
-    "toLocation",
+    "fromLocationName",
+    "toLocationName",
     "totalValue",
     "createdBy",
   ];
@@ -423,12 +298,7 @@ const ProductionIssueList = ({ onAddNew, onEdit, onBack }) => {
   /* -------------------------------------------------------------------------- */
 
   const filterOptions = [
-    {
-      value: "all",
-      label: "All",
-      field: null,
-    },
-
+    { value: "all", label: "All", field: null },
     {
       value: "active",
       label: "Active",
@@ -436,7 +306,6 @@ const ProductionIssueList = ({ onAddNew, onEdit, onBack }) => {
       filterValue: true,
       activeValue: true,
     },
-
     {
       value: "inactive",
       label: "Inactive",
@@ -469,7 +338,7 @@ const ProductionIssueList = ({ onAddNew, onEdit, onBack }) => {
       emptyMessage="No Production Issues found"
       loadingMessage="Loading Production Issues..."
       enableRefresh={true}
-      onRefresh={loadItems}
+      onRefresh={handleRefresh}
       enableExport={true}
       exportFileName="ProductionIssues"
     />

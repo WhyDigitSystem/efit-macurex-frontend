@@ -67,6 +67,44 @@ const getFieldError = (errors, name) => {
   return error?.message;
 };
 
+/* The by-id API returns relations as objects ({ id, ... }); selects need the id. */
+const idOf = (value) => {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "object") return value.id ?? "";
+  return value;
+};
+
+/* Keeps the saved value visible in a select even when the option list
+   (loaded from another API) does not contain it. */
+const withCurrent = (options, value, label) => {
+  if (value === "" || value === null || value === undefined) return options;
+
+  const exists = options.some((opt) => String(opt.value) === String(value));
+
+  if (exists) return options;
+
+  return [...options, { value, label: label || String(value) }];
+};
+
+/* Detail rows can come back under different keys depending on the backend VO. */
+const pickDetailRows = (indent) => {
+  const candidates = [
+    indent?.materialIndentForProductionDetailsResponseDTO,
+    indent?.materialIndentForProductionDetailsDTO,
+    indent?.materialIndentForProductionDetailsVO,
+    indent?.materialIndentForProductionDetails,
+    indent?.itemDetails,
+    indent?.details,
+  ];
+
+  /* Prefer the first non-empty list; fall back to the first array found. */
+  return (
+    candidates.find((rows) => Array.isArray(rows) && rows.length) ||
+    candidates.find((rows) => Array.isArray(rows)) ||
+    []
+  );
+};
+
 /* ========================================================================= */
 /* SHARED COMPONENTS                                                         */
 /* ========================================================================= */
@@ -506,7 +544,7 @@ const getDefaultValues = () => ({
   indentTime: dayjs().format("HH:mm:ss"),
   toLocation: "",
   fromLocation: "",
-  approvedBy: "No",
+  approvedByPM: "No",
   preparedBy: "",
   authorisedBy: "",
   remarks: "",
@@ -564,6 +602,9 @@ const MaterialIndentForProductionForm = ({ data, onBack }) => {
   const itemDetailsArray = useFieldArray({ control, name: "itemDetails" });
 
   const watchedPlant = watch("plantId");
+  const watchedFgItemId = watch("fgItemId");
+  const watchedFgItemCode = watch("fgItemCode");
+  const watchedSchOrderNo = watch("schOrderNo");
   const effectiveBranchId = toInteger(watchedPlant || BRANCH_ID);
 
   /* ===================================================================== */
@@ -764,7 +805,11 @@ const MaterialIndentForProductionForm = ({ data, onBack }) => {
   }, [isEditMode, ORG_ID, FIN_YEAR]);
 
   /* ===================================================================== */
-  /* EDIT MODE HYDRATION                                                   */
+  /* EDIT MODE HYDRATION  (BY ID API)                                      */
+  /*                                                                       */
+  /* by-id response:                                                       */
+  /*   paramObjectsMap.materialIndentForProductionResponseVO               */
+  /*   with rows in materialIndentForProductionDetailsResponseDTO          */
   /* ===================================================================== */
 
   useEffect(() => {
@@ -776,45 +821,89 @@ const MaterialIndentForProductionForm = ({ data, onBack }) => {
 
     const load = async () => {
       try {
-        const indent =
-          (await materialIndentForProductionAPI.getMaterialIndentById(
-            indentId,
-          )) || data;
+        const res =
+          await materialIndentForProductionAPI.getMaterialIndentById(indentId);
+
+        console.log("Material Indent By ID Response:", res);
+
+        /* Accept the already-unwrapped VO, the raw response, or an array. */
+        let indent =
+          res?.paramObjectsMap?.materialIndentForProductionResponseVO ||
+          res?.paramObjectsMap?.materialIndentForProductionVO ||
+          res?.materialIndentForProductionResponseVO ||
+          res?.materialIndentForProductionVO ||
+          res;
+
+        if (Array.isArray(indent)) indent = indent[0];
+
+        if (!indent || typeof indent !== "object") {
+          console.warn(
+            "getMaterialIndentById returned no record; falling back to list row",
+          );
+          indent = data;
+        }
+
+        const detailRows = pickDetailRows(indent);
+
+        const fgItemId = idOf(indent.fgItem);
+
+        const approvedFlag = indent.approvedByPM ?? indent.approvedBy;
 
         reset({
           ...getDefaultValues(),
-          plantId: indent.branch?.id ?? indent.branch ?? indent.plant ?? "",
+          plantId: idOf(indent.branch ?? indent.plant),
           indentNo: indent.docId || indent.indentNo || "",
           indentDate: isoToDisplay(indent.docDate || indent.indentDate),
-          department: indent.department?.id ?? indent.department ?? "",
+          department: idOf(indent.department),
           schOrderNo: indent.schOrderNo || "",
           /* The select is keyed by fgItemId, so drive it from fgItem. */
-          scheduleOrderNo: indent.fgItem?.id ?? indent.fgItem ?? "",
-          fgItemId: indent.fgItem?.id ?? indent.fgItem ?? "",
+          scheduleOrderNo: fgItemId,
+          fgItemId,
           fgItemCode: indent.fgItem?.itemCode || indent.fgItemCode || "",
-          itemDescription: indent.itemDescription || "",
+          /* Description lives on the fgItem object in the by-id response. */
+          itemDescription:
+            indent.itemDescription || indent.fgItem?.itemDescription || "",
           belongsTo: indent.belongsTo || "",
           schQty: indent.schQty ?? "",
           scheduledDate: isoToDisplay(indent.scheduledDate),
           indentTime: indent.indentTime || dayjs().format("HH:mm:ss"),
-          toLocation: indent.toLocation?.id ?? indent.toLocation ?? "",
-          fromLocation: indent.fromLocation?.id ?? indent.fromLocation ?? "",
-          approvedBy: indent.approvedBy || "No",
-          preparedBy: indent.preparedBy?.id ?? indent.preparedBy ?? "",
-          authorisedBy: indent.authorisedBy?.id ?? indent.authorisedBy ?? "",
+          toLocation: idOf(indent.toLocation),
+          fromLocation: idOf(indent.fromLocation),
+          approvedByPM:
+            approvedFlag === 1 ||
+            approvedFlag === true ||
+            approvedFlag === "1" ||
+            approvedFlag === "Yes"
+              ? "Yes"
+              : "No",
+          preparedBy: idOf(indent.preparedBy),
+          authorisedBy: idOf(indent.authorisedBy),
           remarks: indent.remarks || "",
           cancelRemarks: indent.cancelRemarks || "",
-          itemDetails: indent.materialIndentForProductionDetailsDTO?.length
-            ? indent.materialIndentForProductionDetailsDTO.map((row) => ({
-                itemId: row.item?.id ?? row.item ?? row.itemId ?? "",
-                itemCode: row.item?.itemCode || row.itemCode || "",
-                itemDescription:
-                  row.item?.itemDescription || row.itemDescription || "",
-                unit: row.unit?.id ?? row.unit ?? "",
-                schQty: row.schQty ?? "",
-                stockAvailable: row.stockAvailable ?? 0,
-                requiredQty: row.requiredQty ?? "",
-              }))
+          itemDetails: detailRows.length
+            ? detailRows.map((row) => {
+                /* The backend sends the item object under `itemCode`
+                   ({ id, itemCode, itemDescription }), not `item`. */
+                const itemObj =
+                  (row.item && typeof row.item === "object" && row.item) ||
+                  (row.itemCode &&
+                    typeof row.itemCode === "object" &&
+                    row.itemCode) ||
+                  null;
+
+                return {
+                  itemId: itemObj?.id ?? row.itemId ?? idOf(row.item) ?? "",
+                  itemCode:
+                    itemObj?.itemCode ||
+                    (typeof row.itemCode === "string" ? row.itemCode : ""),
+                  itemDescription:
+                    itemObj?.itemDescription || row.itemDescription || "",
+                  unit: idOf(row.unit),
+                  schQty: row.schQty ?? row.qty ?? "",
+                  stockAvailable: row.stockAvailable ?? 0,
+                  requiredQty: row.requiredQty ?? "",
+                };
+              })
             : [getDefaultItemDetailRow()],
         });
       } catch (error) {
@@ -894,15 +983,25 @@ const MaterialIndentForProductionForm = ({ data, onBack }) => {
     [fgRows, effectiveBranchId, ORG_ID, setValue, itemDetailsArray, addToast],
   );
 
-  const scheduleOrderOptions = fgRows.map((row) => ({
-    value: row.fgItemId,
-    label: row.docId || `FG ${row.fgItemId}`,
-  }));
+  /* Saved FG item / schedule order stay visible on edit even when the
+     FG/SFG lookup does not list them. */
+  const scheduleOrderOptions = withCurrent(
+    fgRows.map((row) => ({
+      value: row.fgItemId,
+      label: row.docId || `FG ${row.fgItemId}`,
+    })),
+    watchedFgItemId,
+    watchedSchOrderNo || watchedFgItemCode,
+  );
 
-  const fgItemOptions = fgRows.map((row) => ({
-    value: row.fgItemId,
-    label: row.itemCode || `Item ${row.fgItemId}`,
-  }));
+  const fgItemOptions = withCurrent(
+    fgRows.map((row) => ({
+      value: row.fgItemId,
+      label: row.itemCode || `Item ${row.fgItemId}`,
+    })),
+    watchedFgItemId,
+    watchedFgItemCode,
+  );
 
   /* ===================================================================== */
   /* ROW HANDLERS                                                          */
@@ -923,6 +1022,16 @@ const MaterialIndentForProductionForm = ({ data, onBack }) => {
     setSaving(true);
 
     try {
+      const detailRows = (formData.itemDetails || [])
+        .filter((row) => row.itemId || row.itemCode)
+        .map((row) => ({
+          item: toInteger(row.itemId),
+          schQty: toNumber(row.schQty),
+          stockAvailable: toNumber(row.stockAvailable),
+          requiredQty: toNumber(row.requiredQty),
+          unit: toInteger(row.unit),
+        }));
+
       const payload = {
         ...(isEditMode && { id: toInteger(data.id) }),
 
@@ -937,6 +1046,14 @@ const MaterialIndentForProductionForm = ({ data, onBack }) => {
         department: toInteger(formData.department),
         financialYear: FIN_YEAR,
         scheduleOrder: toInteger(formData.scheduleOrderNo),
+        /* Schedule order DOC ID string (e.g. BLR/PSO/26-27/00011). It was
+           never being sent, so the backend stored null. Falls back to the
+           FG/SFG lookup row when the form value is empty (old records). */
+        schOrderNo:
+          formData.schOrderNo ||
+          fgRows.find((r) => String(r.fgItemId) === String(formData.fgItemId))
+            ?.docId ||
+          "",
         fgItem: toInteger(formData.fgItemId),
         itemDescription: formData.itemDescription || "",
         belongsTo: formData.belongsTo || "",
@@ -951,21 +1068,18 @@ const MaterialIndentForProductionForm = ({ data, onBack }) => {
         authorisedBy: toInteger(formData.authorisedBy),
         remarks: formData.remarks || "",
 
-        itemDetails: (formData.itemDetails || [])
-          .filter((row) => row.itemId || row.itemCode)
-          .map((row) => ({
-            item: toInteger(row.itemId),
-            schQty: toNumber(row.schQty),
-            stockAvailable: toNumber(row.stockAvailable),
-            requiredQty: toNumber(row.requiredQty),
-            unit: toInteger(row.unit),
-          })),
+        /* The by-id response names the rows
+           materialIndentForProductionDetailsResponseDTO, so the request DTO
+           field is materialIndentForProductionDetailsDTO. `itemDetails` is
+           kept alongside it until the backend field name is confirmed. */
+        materialIndentForProductionDetailsDTO: detailRows,
+        itemDetails: detailRows,
 
         createdBy: (isEditMode ? data?.createdBy : usersId) || "SYSTEM",
         ...(isEditMode && { updatedBy: usersId || "SYSTEM" }),
       };
 
-      if (!payload.itemDetails.length) {
+      if (!detailRows.length) {
         addToast("Please add at least one item", "error");
         setSaving(false);
         return;

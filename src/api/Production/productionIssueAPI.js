@@ -6,10 +6,7 @@ import apiClient from "../apiClient";
  * ========================================================================= */
 
 const productionIssueAPI = {
-  /* -----------------------------------------------------------------------
-   * GET PRODUCTION ISSUES BY ORGANIZATION
-   * GET /api/purchaseOrder/getProductionIssueByOrgId
-   * --------------------------------------------------------------------- */
+  /* GET /api/purchaseOrder/getProductionIssueByOrgId */
   getByOrgId: async (orgId, branch) => {
     try {
       const res = await apiClient.get(
@@ -32,6 +29,10 @@ const productionIssueAPI = {
   /* -----------------------------------------------------------------------
    * GET PRODUCTION ISSUE BY ID
    * GET /api/purchaseOrder/getProductionIssueById
+   *
+   * The backend returns paramObjectsMap.productionIssueResponseVO as an
+   * ARRAY (it can contain more than one issue), so the entry whose id
+   * matches the requested id is picked — never blindly the first one.
    * --------------------------------------------------------------------- */
   getById: async (id) => {
     try {
@@ -44,25 +45,35 @@ const productionIssueAPI = {
         },
       );
 
-      return (
-        res?.paramObjectsMap?.productionIssueVO || res?.paramObjectsMap || null
-      );
+      if (res?.status === false) return null;
+
+      const map = res?.paramObjectsMap || {};
+
+      const found =
+        map.productionIssueResponseVO ??
+        map.productionIssueVO ??
+        map.productionIssue ??
+        map.productionIssueDTO ??
+        (map.id ? map : null);
+
+      if (!found) return null;
+
+      const list = Array.isArray(found) ? found : [found];
+
+      const match =
+        list.find((item) => String(item?.id) === String(id)) ||
+        (list.length === 1 ? list[0] : null);
+
+      console.log("getProductionIssueById ->", match);
+
+      return match || null;
     } catch (error) {
       console.error("Error fetching production issue by id:", error);
       throw error;
     }
   },
 
-  /* -----------------------------------------------------------------------
-   * CREATE / UPDATE PRODUCTION ISSUE
-   *
-   * Swagger:
-   * PUT /api/purchaseOrder/createUpdateProductionIssue
-   *
-   * IMPORTANT:
-   * This was previously POST, which caused:
-   * 405 Method Not Allowed
-   * --------------------------------------------------------------------- */
+  /* PUT /api/purchaseOrder/createUpdateProductionIssue */
   createUpdate: async (data) => {
     try {
       const res = await apiClient.put(
@@ -77,10 +88,7 @@ const productionIssueAPI = {
     }
   },
 
-  /* -----------------------------------------------------------------------
-   * GET PRODUCTION ISSUE DOCUMENT ID
-   * GET /api/purchaseOrder/getProductionIssueDocId
-   * --------------------------------------------------------------------- */
+  /* GET /api/purchaseOrder/getProductionIssueDocId */
   getDocId: async ({ financialYear, orgId }) => {
     try {
       const res = await apiClient.get(
@@ -100,10 +108,7 @@ const productionIssueAPI = {
     }
   },
 
-  /* -----------------------------------------------------------------------
-   * GET FG / SFG ITEMS
-   * GET /api/purchaseOrder/getFgPartNoDetails
-   * --------------------------------------------------------------------- */
+  /* GET /api/purchaseOrder/getFgPartNoDetails */
   getFgItems: async (branch, orgId) => {
     try {
       if (!branch || !orgId) {
@@ -124,10 +129,7 @@ const productionIssueAPI = {
     }
   },
 
-  /* -----------------------------------------------------------------------
-   * GET INDENTS FOR FG ITEM
-   * GET /api/purchaseOrder/getIndentNoForProductionIssue
-   * --------------------------------------------------------------------- */
+  /* GET /api/purchaseOrder/getIndentNoForProductionIssue */
   getIndentsForFgItem: async (branch, fgItem, orgId) => {
     try {
       if (!branch || !fgItem || !orgId) {
@@ -152,10 +154,7 @@ const productionIssueAPI = {
     }
   },
 
-  /* -----------------------------------------------------------------------
-   * GET INDENT DETAILS
-   * GET /api/purchaseOrder/getIndentNoDetailsForProductionIssue
-   * --------------------------------------------------------------------- */
+  /* GET /api/purchaseOrder/getIndentNoDetailsForProductionIssue */
   getIndentDetails: async (branch, indentNo, orgId) => {
     try {
       if (!branch || !indentNo || !orgId) {
@@ -180,10 +179,7 @@ const productionIssueAPI = {
     }
   },
 
-  /* -----------------------------------------------------------------------
-   * GET GRN DETAILS FOR ITEM
-   * GET /api/purchaseOrder/getGrnNoForProductionIssue
-   * --------------------------------------------------------------------- */
+  /* GET /api/purchaseOrder/getGrnNoForProductionIssue */
   getGrnForItem: async (branch, item, orgId) => {
     try {
       if (!branch || !item || !orgId) {
