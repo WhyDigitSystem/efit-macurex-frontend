@@ -34,6 +34,9 @@ const productionTransferSlipAPI = {
 
   // ============================================================================
   // PRODUCTION TRANSFER SLIP - GET BY ID
+  //
+  // Response shape:
+  // paramObjectsMap.productionTransferSlipResponseVO  (single object)
   // ============================================================================
 
   getById: async (id) => {
@@ -47,12 +50,19 @@ const productionTransferSlipAPI = {
         },
       );
 
-      return (
-        res?.paramObjectsMap?.productionTransferSlipVO ||
-        res?.paramObjectsMap?.productionTransferSlip ||
-        res?.paramObjectsMap?.mapp?.[0] ||
-        null
-      );
+      console.log("getProductionTransferSlipById raw response:", res);
+
+      const map = res?.paramObjectsMap || {};
+
+      const slip =
+        map.productionTransferSlipResponseVO ||
+        map.productionTransferSlipVO ||
+        map.productionTransferSlip ||
+        map.mapp?.[0] ||
+        null;
+
+      // Backend may wrap the single record in an array
+      return Array.isArray(slip) ? slip[0] || null : slip;
     } catch (error) {
       console.error("Error fetching Production Transfer Slip by ID:", error);
       throw error;

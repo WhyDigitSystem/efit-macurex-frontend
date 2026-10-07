@@ -545,6 +545,74 @@ const toNum = (value) => {
   return Number.isFinite(number) ? number : 0;
 };
 
+/**
+ * The by-id API may return a relation either as a plain id or as an object
+ * ({ id, itemCode, ... }). The selects need the plain id.
+ */
+const idOf = (value) => {
+  if (value === null || value === undefined) return "";
+
+  if (typeof value === "object") {
+    return value.id ?? value.itemId ?? "";
+  }
+
+  return value;
+};
+
+/**
+ * For free-text style fields (unit, item type, sch order no) where the API
+ * may send an object instead of a string.
+ */
+const textOf = (value) => {
+  if (value === null || value === undefined) return "";
+
+  if (typeof value === "object") {
+    return (
+      value.docId ??
+      value.unitId ??
+      value.valuesDescription ??
+      value.itemType ??
+      value.id ??
+      ""
+    );
+  }
+
+  return value;
+};
+
+/**
+ * Keeps the currently saved value visible in a select even when the
+ * option list (loaded from another API) does not contain it.
+ */
+const withCurrent = (options, value, label) => {
+  if (value === "" || value === null || value === undefined) return options;
+
+  const exists = options.some((opt) => String(opt.value) === String(value));
+
+  if (exists) return options;
+
+  return [...options, { value, label: label ?? String(value) }];
+};
+
+/**
+ * Detail rows can come back under different keys depending on the backend VO.
+ */
+const pickDetailRows = (slip) => {
+  const candidates = [
+    slip?.productionTransferSlipDetailsResponseDTO,
+    slip?.productionTransferSlipDetailsVO,
+    slip?.productionTransferSlipDetailsVOs,
+    slip?.productionTransferSlipDetails,
+    slip?.productionTransferSlipDetailsDTO,
+    slip?.inputBOM,
+    slip?.details,
+  ];
+
+  const found = candidates.find((rows) => Array.isArray(rows));
+
+  return found || [];
+};
+
 // ============================================================================
 // DEFAULT VALUES
 // ============================================================================
@@ -626,7 +694,7 @@ const ProductionTransferSlipForm = ({ data, onBack }) => {
 
   const [saving, setSaving] = useState(false);
 
-  const dataLoadedRef = useRef(false);
+  const dataLoadedRef = useRef(null);
 
   // ==========================================================================
   // LOOKUP DATA
@@ -664,67 +732,11 @@ const ProductionTransferSlipForm = ({ data, onBack }) => {
   // FORM
   // ==========================================================================
 
-  const defaults = useCallback(() => {
-    const base = getDefaultValues();
-
-    if (data) {
-      base.plantId = data.branch?.id ?? data.plant?.id ?? data.plantId ?? "";
-
-      base.issueNo = data.issueNo || data.docId || "";
-
-      base.belongsTo = data.belongsTo || "";
-
-      base.issueDate = fmtDate(data.issueDate || data.docDate);
-
-      base.fromLocation = data.fromLocation?.id ?? data.fromLocation ?? "";
-
-      base.toLocation = data.toLocation?.id ?? data.toLocation ?? "";
-
-      base.scrapToLocation =
-        data.scrapToLocation?.id ?? data.scrapToLocation ?? "";
-
-      base.fgPartNo = data.fgPartNo || data.fgItem?.id || "";
-
-      base.sfgPartNo = data.sfgPartNo || data.sfgItem?.id || "";
-
-      base.sfgDescription = data.sfgDescription || "";
-
-      base.scheduleOrderNo =
-        data.schOrderNo ?? data.scheduleOrder?.id ?? data.scheduleOrderNo ?? "";
-
-      base.bomId = data.bom || data.bomId || "";
-
-      base.schDates = data.schDates || "";
-
-      base.alterInputItem =
-        data.alterInputItem === true
-          ? "Yes"
-          : data.alterInputItem === false
-            ? "No"
-            : data.alterInputItem || "No";
-
-      base.issueQty = data.issueQty || "";
-
-      base.rate = data.rate || "";
-
-      base.itemType = data.itemType || "";
-
-      base.unit = data.unit || "";
-
-      base.value = data.value || "";
-
-      base.totalValue = data.totalValue || 0;
-
-      base.remarks = data.remarks || "";
-
-      base.inputBOM = data.inputBOM?.length
-        ? data.inputBOM
-        : [getDefaultInputBOMRow()];
-    }
-
-    return base;
-  }, [data]);
-
+  /*
+   * The row coming from the list screen is NOT used to fill the form any more.
+   * In edit mode the record is fetched with the by-id API and the form is
+   * populated from that response (see loadTransferSlipData below).
+   */
   const {
     control,
     handleSubmit,
@@ -735,12 +747,8 @@ const ProductionTransferSlipForm = ({ data, onBack }) => {
     formState: { errors, isSubmitting },
   } = useForm({
     mode: "onTouched",
-    defaultValues: defaults(),
+    defaultValues: getDefaultValues(),
   });
-
-  useEffect(() => {
-    reset(defaults());
-  }, [data, defaults, reset]);
 
   const inputBOMArray = useFieldArray({
     control,
@@ -753,117 +761,13 @@ const ProductionTransferSlipForm = ({ data, onBack }) => {
 
   const issueQty = watch("issueQty");
 
+  const watchScheduleOrderNo = watch("scheduleOrderNo");
+
+  const watchBomId = watch("bomId");
+
+  const watchSchDates = watch("schDates");
+
   const canAlterRows = alterInputItem === "Yes";
-
-  // ==========================================================================
-  // LOAD EDIT DATA
-  // ==========================================================================
-
-  const loadTransferSlipData = useCallback(
-    async (slipId) => {
-      if (!slipId) return;
-
-      setLoading(true);
-
-      try {
-        const response = await productionTransferSlipAPI.getById(slipId);
-
-        console.log("Production Transfer Slip Data:", response);
-
-        if (!response) {
-          addToast("Failed to load Production Transfer Slip data", "error");
-          return;
-        }
-
-        const slip = response;
-
-        setValue("plantId", slip.branch?.id || slip.plant?.id || "");
-
-        setValue("issueNo", slip.docId || "");
-
-        setValue("belongsTo", slip.belongsTo || "");
-
-        setValue(
-          "issueDate",
-          slip.docDate ? dayjs(slip.docDate).format("DD-MM-YYYY") : "",
-        );
-
-        setValue("fromLocation", slip.fromLocation?.id || "");
-
-        setValue("toLocation", slip.toLocation?.id || "");
-
-        setValue("scrapToLocation", slip.scrapToLocation?.id || "");
-
-        setValue("fgPartNo", slip.fgPartNo || slip.fgItem?.id || "");
-
-        setValue("sfgPartNo", slip.sfgPartNo || slip.sfgItem?.id || "");
-
-        setValue("sfgDescription", slip.sfgDescription || "");
-
-        setValue(
-          "scheduleOrderNo",
-          slip.schOrderNo || slip.scheduleOrder?.id || "",
-        );
-
-        setValue("bomId", slip.bom || slip.bomId || "");
-
-        setValue("schDates", slip.schDates || "");
-
-        setValue("alterInputItem", slip.alterInputItem ? "Yes" : "No");
-
-        setValue("issueQty", slip.issueQty || "");
-
-        setValue("rate", slip.rate || "");
-
-        setValue("itemType", slip.itemType || "");
-
-        setValue("unit", slip.unit || "");
-
-        setValue("value", slip.value || "");
-
-        setValue("totalValue", slip.totalValue || 0);
-
-        setValue("remarks", slip.remarks || "");
-
-        setFinancialYear(slip.financialYear || "");
-
-        if (slip.inputBOM?.length > 0) {
-          inputBOMArray.replace(slip.inputBOM);
-        }
-
-        const fgItem = slip.fgPartNo || slip.fgItem?.id;
-
-        const sfgItem = slip.sfgPartNo || slip.sfgItem?.id;
-
-        if (fgItem && sfgItem) {
-          await loadSchAndBomOptions(fgItem, sfgItem);
-        }
-
-        addToast("Production Transfer Slip loaded successfully", "success");
-      } catch (error) {
-        console.error("Error loading production transfer slip:", error);
-
-        addToast("Failed to load Production Transfer Slip data", "error");
-      } finally {
-        setLoading(false);
-      }
-    },
-    [setValue, inputBOMArray, addToast],
-  );
-
-  useEffect(() => {
-    const slipId = data?.id;
-
-    if (!slipId) return;
-
-    if (dataLoadedRef.current === slipId) {
-      return;
-    }
-
-    dataLoadedRef.current = slipId;
-
-    loadTransferSlipData(slipId);
-  }, [data?.id, loadTransferSlipData]);
 
   // ==========================================================================
   // FINANCIAL YEAR / ISSUE NO
@@ -1274,6 +1178,216 @@ const ProductionTransferSlipForm = ({ data, onBack }) => {
     },
     [branch, orgId],
   );
+
+  // ==========================================================================
+  // LOAD EDIT DATA  (BY ID API)
+  //
+  // GET /api/purchaseOrder/getProductionTransferSlipById?id=<id>
+  //
+  // The whole form (header + Input BOM rows) is filled from this response with
+  // a single reset(), instead of using the row that came from the list.
+  // ==========================================================================
+
+  const loadTransferSlipData = useCallback(
+    async (slipId) => {
+      if (!slipId) return;
+
+      setLoading(true);
+
+      try {
+        const response = await productionTransferSlipAPI.getById(slipId);
+
+        console.log("Production Transfer Slip By ID Response:", response);
+
+        // paramObjectsMap value can be an object or a one-item array
+        const slip = Array.isArray(response) ? response[0] : response;
+
+        if (!slip) {
+          addToast("Failed to load Production Transfer Slip data", "error");
+          return;
+        }
+
+        // ------------------------------------------------------------------
+        // Header values
+        // ------------------------------------------------------------------
+
+        const fgItemId = idOf(slip.fgPartNo ?? slip.fgItem);
+
+        const sfgItemId = idOf(slip.sfgPartNo ?? slip.sfgItem);
+
+        const alterValue =
+          slip.alterInputItem === true || slip.alterInputItem === "Yes"
+            ? "Yes"
+            : "No";
+
+        // ------------------------------------------------------------------
+        // Input BOM rows
+        // ------------------------------------------------------------------
+
+        const rows = pickDetailRows(slip).map((detail) => {
+          const itemId = idOf(detail.item ?? detail.inputItem ?? detail.itemId);
+
+          const itemObj =
+            typeof detail.item === "object" && detail.item
+              ? detail.item
+              : typeof detail.inputItem === "object" && detail.inputItem
+                ? detail.inputItem
+                : null;
+
+          return {
+            ...getDefaultInputBOMRow(),
+
+            inputItemCode: itemId,
+
+            inputItemDesc:
+              itemObj?.itemDescription ||
+              detail.itemDescription ||
+              detail.inputItemDesc ||
+              "",
+
+            itemType: itemObj?.itemType || detail.itemType || "",
+
+            stock: detail.stock ?? "",
+
+            bomQty: detail.bomQty ?? detail.qty ?? "",
+
+            inputQty: detail.inputQty ?? 0,
+
+            rate: detail.rate ?? "",
+
+            value: detail.value ?? 0,
+
+            primaryUnit: idOf(detail.primaryUnit ?? detail.unit),
+
+            scrapId: idOf(detail.scrap ?? detail.scrapId),
+
+            scrapQty: detail.scrapQty ?? "",
+
+            scrapTotal: detail.scrapTotal ?? 0,
+
+            lcoequal:
+              detail.lcoequal === true ||
+              detail.lcoequal === "Yes" ||
+              detail.lcoequal === "true",
+          };
+        });
+
+        // ------------------------------------------------------------------
+        // Fill the whole form
+        // ------------------------------------------------------------------
+
+        reset({
+          ...getDefaultValues(),
+
+          plantId: idOf(slip.branch ?? slip.plant ?? slip.plantId),
+
+          issueNo: slip.docId || slip.issueNo || "",
+
+          belongsTo: slip.belongsTo || "",
+
+          issueDate: fmtDate(slip.docDate || slip.issueDate),
+
+          fromLocation: idOf(slip.fromLocation),
+
+          toLocation: idOf(slip.toLocation),
+
+          scrapToLocation: idOf(slip.scrapToLocation),
+
+          fgPartNo: fgItemId,
+
+          sfgPartNo: sfgItemId,
+
+          sfgDescription:
+            slip.sfgDescription ||
+            (typeof slip.sfgPartNo === "object"
+              ? slip.sfgPartNo?.itemDescription
+              : "") ||
+            "",
+
+          scheduleOrderNo: textOf(slip.schOrderNo ?? slip.scheduleOrderNo),
+
+          bomId: idOf(slip.bom ?? slip.bomId),
+
+          schDates: slip.schDates || "",
+
+          alterInputItem: alterValue,
+
+          issueQty: slip.issueQty ?? "",
+
+          rate: slip.rate ?? "",
+
+          itemType: textOf(slip.itemType),
+
+          unit: textOf(slip.unit),
+
+          value: slip.value ?? "",
+
+          totalValue: slip.totalValue ?? 0,
+
+          remarks: slip.remarks || "",
+
+          inputBOM: rows.length ? rows : [getDefaultInputBOMRow()],
+        });
+
+        setFinancialYear(slip.financialYear || "");
+
+        // ------------------------------------------------------------------
+        // Dependent dropdowns (Sch Order / Sch Dates / BOM)
+        // ------------------------------------------------------------------
+
+        if (fgItemId && sfgItemId) {
+          await loadSchAndBomOptions(fgItemId, sfgItemId);
+        }
+      } catch (error) {
+        console.error("Error loading production transfer slip:", error);
+
+        addToast("Failed to load Production Transfer Slip data", "error");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [reset, addToast, loadSchAndBomOptions],
+  );
+
+  useEffect(() => {
+    const slipId = data?.id;
+
+    if (!slipId) return;
+
+    if (dataLoadedRef.current === slipId) {
+      return;
+    }
+
+    dataLoadedRef.current = slipId;
+
+    loadTransferSlipData(slipId);
+  }, [data?.id, loadTransferSlipData]);
+
+  // ==========================================================================
+  // BACK-FILL ITEM DESCRIPTIONS (items master may load after by-id response)
+  // ==========================================================================
+
+  useEffect(() => {
+    if (!Object.keys(itemMap).length) return;
+
+    (getValues("inputBOM") || []).forEach((row, index) => {
+      const item = itemMap[row?.inputItemCode];
+
+      if (!item) return;
+
+      if (!row.inputItemDesc && item.itemDescription) {
+        setValue(`inputBOM.${index}.inputItemDesc`, item.itemDescription);
+      }
+
+      if (!row.itemType && item.itemType) {
+        setValue(`inputBOM.${index}.itemType`, item.itemType);
+      }
+
+      if (!row.primaryUnit && item.primaryUnits?.id) {
+        setValue(`inputBOM.${index}.primaryUnit`, item.primaryUnits.id);
+      }
+    });
+  }, [itemMap, getValues, setValue]);
 
   // ==========================================================================
   // INITIAL LOAD
@@ -1850,7 +1964,7 @@ const ProductionTransferSlipForm = ({ data, onBack }) => {
         control={control}
         name="scheduleOrderNo"
         label="Sch.Order No."
-        options={scheduleOrderOptions}
+        options={withCurrent(scheduleOrderOptions, watchScheduleOrderNo)}
         required
         errors={errors}
         placeholder="Select an option"
@@ -1860,7 +1974,7 @@ const ProductionTransferSlipForm = ({ data, onBack }) => {
         control={control}
         name="bomId"
         label="BOM ID"
-        options={bomOptions}
+        options={withCurrent(bomOptions, watchBomId)}
         errors={errors}
         onChange={handleBomChange}
         placeholder="Select an option"
@@ -1870,7 +1984,13 @@ const ProductionTransferSlipForm = ({ data, onBack }) => {
         control={control}
         name="schDates"
         label="Sch. Dates"
-        options={schDateOptions}
+        options={withCurrent(
+          schDateOptions,
+          watchSchDates,
+          dayjs(watchSchDates).isValid()
+            ? dayjs(watchSchDates).format("DD-MM-YYYY")
+            : watchSchDates,
+        )}
         errors={errors}
         placeholder="Select an option"
       />
@@ -2196,6 +2316,12 @@ const ProductionTransferSlipForm = ({ data, onBack }) => {
             ? "Edit Production Transfer Slip"
             : "Add Production Transfer Slip"}
         </h2>
+
+        {loading && (
+          <span className="text-[11px] text-gray-500 dark:text-gray-400">
+            Loading...
+          </span>
+        )}
       </div>
 
       {/* Main Card */}

@@ -312,6 +312,13 @@ const fmtDate = (value) => (value ? dayjs(value).format("YYYY-MM-DD") : "");
 const toNum = (v) => Number(v) || 0;
 const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
 
+/* The by-id API returns relations as objects ({ id, ... }); selects need the id */
+const idOf = (value) => {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "object") return value.id ?? "";
+  return value;
+};
+
 // Indian financial year (Apr-Mar): Sep 2026 -> "2026"
 const defaultFinYear = () => {
   const d = dayjs();
@@ -336,8 +343,21 @@ const StockOrderForm = ({ data, onBack }) => {
   const branch = Number(localStorage.getItem("branchId")) || 0;
   const usersId = localStorage.getItem("usersId");
   const isUpdate = Boolean(data?.id);
+
+  // Full record fetched with getStockOrderById (edit mode only)
+  const [record, setRecord] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  // Items / units that exist on the saved record but may be missing from the
+  // master lists, so the selects can still show them on edit
+  const [extraItemOptions, setExtraItemOptions] = useState([]);
+  const [extraUnitOptions, setExtraUnitOptions] = useState([]);
+
   const financialYear =
-    data?.financialYear || localStorage.getItem("finYear") || defaultFinYear();
+    record?.financialYear ||
+    data?.financialYear ||
+    localStorage.getItem("finYear") ||
+    defaultFinYear();
 
   const userData = JSON.parse(localStorage.getItem("userData") || "{}");
   const orgName = (
@@ -351,46 +371,118 @@ const StockOrderForm = ({ data, onBack }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
 
-  /* ---------- Header state ---------- */
+  /* ---------- Header state ----------
+     In edit mode the values are filled from the by-id API (see effect below),
+     not from the row passed in by the list screen. */
   const [header, setHeader] = useState({
-    plantId: data?.plantId?.id ?? data?.plantId ?? "",
-    branch: data?.branch?.id ?? data?.branch ?? (branch || ""),
-    stockOrderNo: data?.docId || data?.stockOrderNo || "",
-    date:
-      data?.date || data?.docDate
-        ? fmtDate(data.date || data.docDate)
-        : fmtDate(dayjs()),
+    plantId: "",
+    branch: branch || "",
+    stockOrderNo: "",
+    date: fmtDate(dayjs()),
     itemCode: "",
   });
 
-  const [stockDetailRows, setStockDetailRows] = useState(() => {
-    const raw = data?.details || data?.stockDetails;
-    if (raw?.length) {
-      return raw.map((d) => {
-        const qty = d.requiredQty ?? "";
-        const rate = d.rate ?? "";
-        return {
-          itemCode: d.item?.id ?? d.item ?? d.itemCode?.id ?? d.itemCode ?? "",
-          itemDescription:
-            d.itemDescription || d.item?.itemDescription || d.itemName || "",
-          unit: d.unit?.id ?? d.unit ?? "",
-          requiredQty: qty,
-          rate,
-          amount: round2(toNum(qty) * toNum(rate)),
-        };
-      });
-    }
-    return [emptyStockDetailRow()];
-  });
+  const [stockDetailRows, setStockDetailRows] = useState([
+    emptyStockDetailRow(),
+  ]);
 
   const [summary, setSummary] = useState({
-    remarks: data?.remarks || data?.summary?.remarks || "",
+    remarks: "",
   });
 
   // Summary is always derived from the rows
   const totalAmount = round2(
     stockDetailRows.reduce((sum, r) => sum + toNum(r.amount), 0),
   );
+
+  /* ---------- Load record by ID (edit mode) ---------- */
+  useEffect(() => {
+    if (!data?.id) return;
+
+    let cancelled = false;
+
+    (async () => {
+      setLoading(true);
+
+      try {
+        const res = await stockOrderAPI.getById(data.id);
+        const so = Array.isArray(res) ? res[0] : res;
+
+        if (cancelled) return;
+
+        if (!so) {
+          addToast("Failed to load Stock Order data");
+          return;
+        }
+
+        setRecord(so);
+
+        const branchId = idOf(so.branch);
+
+        const rawDetails = so.details || so.stockDetails || [];
+
+        // Header Item Code = item of the first detail row
+        setHeader({
+          plantId: branchId,
+          branch: branchId || branch || "",
+          stockOrderNo: so.docId || "",
+          date: fmtDate(so.docDate),
+          itemCode: idOf(rawDetails[0]?.item),
+        });
+
+        setExtraItemOptions(
+          rawDetails
+            .filter((d) => idOf(d.item) !== "")
+            .map((d) => ({
+              value: idOf(d.item),
+              label: d.item?.itemCode || String(idOf(d.item)),
+              itemDescription: d.item?.itemDescription || "",
+            })),
+        );
+
+        setExtraUnitOptions(
+          rawDetails
+            .filter((d) => idOf(d.unit) !== "")
+            .map((d) => ({
+              value: idOf(d.unit),
+              label: d.unit?.unitId || String(idOf(d.unit)),
+            })),
+        );
+
+        setStockDetailRows(
+          rawDetails.length
+            ? rawDetails.map((d) => {
+                const qty = d.requiredQty ?? "";
+                const rate = d.rate ?? "";
+
+                return {
+                  itemCode: idOf(d.item),
+                  itemDescription:
+                    d.item?.itemDescription || d.itemDescription || "",
+                  // row unit (not the item's default unit)
+                  unit: idOf(d.unit),
+                  requiredQty: qty,
+                  rate,
+                  amount: round2(toNum(qty) * toNum(rate)),
+                };
+              })
+            : [emptyStockDetailRow()],
+        );
+
+        setSummary({ remarks: so.remarks || "" });
+      } catch (error) {
+        console.error("Failed to load Stock Order by ID:", error);
+        if (!cancelled) addToast("Failed to load Stock Order data");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.id]);
 
   /* ---------- Lookup loading ---------- */
 
@@ -602,14 +694,16 @@ const StockOrderForm = ({ data, onBack }) => {
     // Matches stockOrderDTO (PUT /api/subContract/createUpdateStockOrder)
     const payload = {
       ...(isUpdate ? { id: data.id } : {}),
-      active: data?.active ?? true,
+      active: record?.active ?? data?.active ?? true,
       branch: Number(header.branch) || branch,
       orgId,
       financialYear: String(financialYear),
       remarks: summary.remarks || "",
-      cancelRemarks: data?.cancelRemarks || "",
+      cancelRemarks: record?.cancelRemarks || data?.cancelRemarks || "",
       totalAmount,
-      createdBy: isUpdate ? data?.createdBy || usersId : usersId,
+      createdBy: isUpdate
+        ? record?.createdBy || data?.createdBy || usersId
+        : usersId,
       details: stockDetailRows.map((r) => ({
         item: Number(r.itemCode),
         unit: Number(r.unit),
@@ -659,6 +753,21 @@ const StockOrderForm = ({ data, onBack }) => {
 
   const activeTabMeta = CHILD_TABS.find((t) => t.key === activeChildTab);
 
+  // Master options + any saved value missing from them (no duplicates)
+  const mergeOptions = (base, extras) => {
+    const seen = new Set(base.map((o) => String(o.value)));
+    const missing = extras.filter((o) => {
+      const key = String(o.value);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    return missing.length ? [...base, ...missing] : base;
+  };
+
+  const itemSelectOptions = mergeOptions(itemOptions, extraItemOptions);
+  const unitSelectOptions = mergeOptions(unitOptions, extraUnitOptions);
+
   return (
     <div className="w-full p-2">
       {/* Header */}
@@ -672,6 +781,12 @@ const StockOrderForm = ({ data, onBack }) => {
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
           {isUpdate ? "Edit Stock Order" : "Add Stock Order"}
         </h2>
+
+        {loading && (
+          <span className="text-[11px] text-gray-500 dark:text-gray-400">
+            Loading...
+          </span>
+        )}
       </div>
 
       {/* Main Card */}
@@ -715,7 +830,7 @@ const StockOrderForm = ({ data, onBack }) => {
               value={header.itemCode}
               onChange={handleHeaderChange}
               error={fieldErrors.itemCode}
-              options={itemOptions}
+              options={itemSelectOptions}
             />
           </div>
         </div>
@@ -761,7 +876,7 @@ const StockOrderForm = ({ data, onBack }) => {
                     key: "itemCode",
                     label: "Item Code",
                     type: "select",
-                    options: itemOptions,
+                    options: itemSelectOptions,
                   },
                   {
                     key: "itemDescription",
@@ -773,7 +888,7 @@ const StockOrderForm = ({ data, onBack }) => {
                     key: "unit",
                     label: "Units",
                     type: "select",
-                    options: unitOptions,
+                    options: unitSelectOptions,
                   },
                   { key: "requiredQty", label: "Required Qty", type: "number" },
                   { key: "rate", label: "Rate", type: "number" },
