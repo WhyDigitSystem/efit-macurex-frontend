@@ -19,14 +19,6 @@ const toolsFixtureAPI = {
         });
       }
 
-      for (const [key, value] of formData.entries()) {
-        if (value instanceof File) {
-          console.log(key, "FILE:", value.name, value.type, value.size);
-        } else {
-          console.log(key, value);
-        }
-      }
-
       const response = await apiClient.post(
         "/api/toolmaster/updateCreateToolMaster",
         formData,
@@ -35,12 +27,10 @@ const toolsFixtureAPI = {
       return response?.data ?? response;
     } catch (error) {
       console.error("================ TOOL MASTER SAVE ERROR ================");
-
       console.error("Status:", error?.response?.status);
       console.error("Data:", error?.response?.data);
       console.error("Message:", error?.message);
       console.error("Request URL:", error?.config?.url);
-      console.error("Request Headers:", error?.config?.headers);
 
       throw error;
     }
@@ -82,12 +72,44 @@ const toolsFixtureAPI = {
     return response?.data ?? response;
   },
 
+  /*
+   * PM Check List Master (used for "PM Check List No" on the Tools tab)
+   * GET /api/vendorComplaintEntry/getPMCheckListMasterByOrgId?branch=..&orgId=..
+   *
+   * Response: paramObjectsMap.pmCheckListMasterVO = [
+   *   { id, pmCheckListNo, branch, department, ... }
+   * ]
+   */
+  getPMCheckListMasterByOrgId: async (branch, orgId) => {
+    const response = await apiClient.get(
+      "/api/vendorComplaintEntry/getPMCheckListMasterByOrgId",
+      {
+        params: {
+          branch,
+          orgId,
+        },
+      },
+    );
+
+    return response?.data ?? response;
+  },
+
   getViewFileUrl: (filePath) => {
     if (!filePath) return "";
 
     const cleanPath = String(filePath).replace(/\\/g, "/").replace(/^\/+/, "");
 
-    return `${API_BASE_URL}/api/toolmaster/viewFile/${cleanPath}`;
+    /*
+     * API_BASE_URL was referenced here but never defined/imported,
+     * which throws a ReferenceError when attachments are mapped on
+     * edit. Use the axios client's baseURL instead.
+     */
+    const baseUrl = String(apiClient?.defaults?.baseURL || "").replace(
+      /\/+$/,
+      "",
+    );
+
+    return `${baseUrl}/api/toolmaster/viewFile/${cleanPath}`;
   },
 };
 

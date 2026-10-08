@@ -22,9 +22,6 @@ const ToolsFixturesList = ({ onAddNew, onEdit, onBack }) => {
         orgId,
       );
 
-      // "No Tool Master Details Found" comes back as a well-formed error
-      // response, not a thrown error, so handle it gracefully rather than
-      // letting it fall through to the catch block below.
       if (response?.status === false) {
         setToolData([]);
         return;
@@ -36,7 +33,6 @@ const ToolsFixturesList = ({ onAddNew, onEdit, onBack }) => {
         response?.paramObjectsMap?.toolMasterList ||
         (Array.isArray(response) ? response : []);
 
-      // Transform API response to match the table format
       const transformedData = (list || []).map((item) => ({
         id: item.id || 0,
         plantName: item.branch?.branchName || "",
@@ -56,7 +52,10 @@ const ToolsFixturesList = ({ onAddNew, onEdit, onBack }) => {
         madeIn: item.madeIn?.description || item.madeIn || "",
         toolOwnerName:
           item.toolIncharge?.description || item.toolOwnerName || "",
-        presentLocation: item.presentLocation?.description || "",
+        presentLocation:
+          item.presentLocation?.locationName ||
+          item.presentLocation?.description ||
+          "",
         totalCost: item.toolCost ?? item.totalToolCost ?? 0,
         cavityNumber: item.cavityNumber || "",
         active: item.active === "Active" || item.active === true,
@@ -77,26 +76,15 @@ const ToolsFixturesList = ({ onAddNew, onEdit, onBack }) => {
     loadTools();
   }, []);
 
-  const handleEdit = async (row) => {
-    try {
-      const response = await toolsFixtureAPI.getToolMasterById(row.id);
-
-      if (response?.status === false) {
-        onEdit({ id: row.id });
-        return;
-      }
-
-      const record =
-        response?.paramObjectsMap?.toolMasterVO ||
-        response?.paramObjectsMap?.mapp ||
-        response?.paramObjectsMap ||
-        response;
-
-      onEdit(record && typeof record === "object" ? record : { id: row.id });
-    } catch (error) {
-      console.error("Failed to load Tool/Fixture for edit:", error);
-      onEdit({ id: row.id });
-    }
+  /*
+   * Edit: only the id is passed to the form. The form itself calls
+   * getToolMasterById(id) and fills every tab (basic, tools, technical,
+   * spare, component output, history, image, attachments). Previously the
+   * list fetched the record AND the form fetched it again, which was
+   * redundant.
+   */
+  const handleEdit = (row) => {
+    onEdit({ id: row.id });
   };
 
   const columns = [
@@ -113,18 +101,8 @@ const ToolsFixturesList = ({ onAddNew, onEdit, onBack }) => {
       accessor: "toolDescription",
       type: "text",
     },
-    {
-      key: "plantName",
-      label: "Plant",
-      accessor: "plantName",
-      type: "text",
-    },
-    {
-      key: "type",
-      label: "Type",
-      accessor: "type",
-      type: "text",
-    },
+    { key: "plantName", label: "Plant", accessor: "plantName", type: "text" },
+    { key: "type", label: "Type", accessor: "type", type: "text" },
     {
       key: "department",
       label: "Department",
@@ -157,12 +135,7 @@ const ToolsFixturesList = ({ onAddNew, onEdit, onBack }) => {
       accessor: "manufacturedBy",
       type: "text",
     },
-    {
-      key: "madeIn",
-      label: "Made In",
-      accessor: "madeIn",
-      type: "text",
-    },
+    { key: "madeIn", label: "Made In", accessor: "madeIn", type: "text" },
     {
       key: "presentLocation",
       label: "Present Location",
@@ -176,12 +149,7 @@ const ToolsFixturesList = ({ onAddNew, onEdit, onBack }) => {
       type: "text",
       align: "right",
     },
-    {
-      key: "status",
-      label: "Status",
-      accessor: "status",
-      type: "text",
-    },
+    { key: "status", label: "Status", accessor: "status", type: "text" },
     {
       key: "active",
       label: "Active",
