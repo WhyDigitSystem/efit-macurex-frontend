@@ -230,13 +230,12 @@ const TableHead = ({ headers }) => (
       {headers.map((h, i) => (
         <th
           key={i}
-          className={`p-2 whitespace-nowrap ${
-            i === 0
+          className={`p-2 whitespace-nowrap ${i === 0
               ? "w-8 text-center"
               : i === headers.length - 1
                 ? "w-20 text-left"
                 : "text-left"
-          } dark:text-white`}
+            } dark:text-white`}
         >
           {h}
         </th>
@@ -254,11 +253,10 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
         type="button"
         onClick={onRemove}
         disabled={disabled}
-        className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-          disabled
+        className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
             ? "bg-gray-400 cursor-not-allowed"
             : "bg-red-600 hover:bg-red-700"
-        }`}
+          }`}
       >
         <Trash2 size={10} />
       </button>
@@ -669,18 +667,18 @@ const PreDeliveryInspectionReportForm = ({ data, onBack }) => {
       if (response?.status) {
         addToast(
           response?.paramObjectsMap?.message ||
-            (isUpdate
-              ? "Pre-Delivery Inspection Report updated successfully!"
-              : "Pre-Delivery Inspection Report created successfully!"),
+          (isUpdate
+            ? "Pre-Delivery Inspection Report updated successfully!"
+            : "Pre-Delivery Inspection Report created successfully!"),
         );
         onBack?.();
       } else {
         addToast(
           response?.errors?.[0]?.shortMessage ||
-            response?.errors?.[0]?.longMessage ||
-            response?.message ||
-            response?.paramObjectsMap?.message ||
-            "Failed to save Pre-Delivery Inspection Report.",
+          response?.errors?.[0]?.longMessage ||
+          response?.message ||
+          response?.paramObjectsMap?.message ||
+          "Failed to save Pre-Delivery Inspection Report.",
         );
       }
     } catch (err) {
@@ -688,9 +686,9 @@ const PreDeliveryInspectionReportForm = ({ data, onBack }) => {
       if (err.response?.data) {
         addToast(
           err.response.data.message ||
-            err.response.data.statusMessage ||
-            err.response.data.error ||
-            JSON.stringify(err.response.data),
+          err.response.data.statusMessage ||
+          err.response.data.error ||
+          JSON.stringify(err.response.data),
         );
       } else {
         addToast("Something went wrong.");
@@ -745,6 +743,19 @@ const PreDeliveryInspectionReportForm = ({ data, onBack }) => {
               error={fieldErrors.belongsTo}
               options={BELONGS_TO}
               required
+            />
+            <Field
+              label="Inspection No"
+              name="inspectionNo"
+              value={header.inspectionNo}
+              onChange={handleHeaderChange}
+            />
+            <Field
+              type="date"
+              label="Inspection Date"
+              name="inspectionDate"
+              value={header.inspectionDate}
+              onChange={handleHeaderChange}
             />
             <Field
               label="Transfer Slip No"
@@ -902,11 +913,10 @@ const PreDeliveryInspectionReportForm = ({ data, onBack }) => {
                   key={tab.key}
                   type="button"
                   onClick={() => setActiveChildTab(tab.key)}
-                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${
-                    activeChildTab === tab.key
+                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${activeChildTab === tab.key
                       ? "bg-blue-600 text-white"
                       : "text-gray-600 dark:text-gray-300"
-                  }`}
+                    }`}
                 >
                   {tab.label}
                 </button>

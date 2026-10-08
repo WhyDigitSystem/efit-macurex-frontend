@@ -1,33 +1,44 @@
 import { useCallback, useEffect, useState } from "react";
-
 import CommonListViewTable from "../../../utils/CommonListViewTable";
-import { toast } from "../../../utils/toast";
+import fgTransferSlipAPI from "../../../api/Production/fgTransferSlipAPI";
+import { useToast } from "../../Toast/ToastContext";
 
 const FGTransferSlipList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   const [transferData, setTransferData] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  const { addToast } = useToast();
+
   const ORG_ID = Number(localStorage.getItem("orgId"));
+  const BRANCH_ID = Number(localStorage.getItem("branchId"));
 
   const loadTransferSlips = useCallback(async () => {
+    if (!ORG_ID || !BRANCH_ID) {
+      setTransferData([]);
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
-
-      const response = await fgTransferSlipAPI.getFGTransferSlipByOrgId(ORG_ID);
-
-      const sortedData = (response || []).sort(
-        (a, b) => (b.id || 0) - (a.id || 0),
+      const list = await fgTransferSlipAPI.getFGTransferSlipByOrgId(
+        BRANCH_ID,
+        ORG_ID
       );
 
-      setTransferData(sortedData);
+      const sorted = (list || []).sort(
+        (a, b) => Number(b.id || 0) - Number(a.id || 0)
+      );
+
+      setTransferData(sorted);
     } catch (error) {
       console.error("Failed to load FG transfer slips:", error);
+      addToast("Failed to fetch FG transfer slips", "error");
       setTransferData([]);
-      toast.error("Failed to fetch FG transfer slips");
     } finally {
       setLoading(false);
     }
-  }, [ORG_ID]);
+  }, [ORG_ID, BRANCH_ID, addToast]);
 
   useEffect(() => {
     loadTransferSlips();
@@ -37,50 +48,81 @@ const FGTransferSlipList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     {
       key: "transferNo",
       label: "Transfer No",
-      accessor: (row) => row.header?.transferNo,
+      accessor: (row) => row.transferNo || row.docId || "-",
       type: "text",
+      noWrap: true,
     },
     {
-      key: "date",
-      label: "Date",
-      accessor: (row) => row.header?.date,
+      key: "transferDate",
+      label: "Transfer Date",
+      accessor: (row) => row.transferDate || row.docDate || "-",
       type: "date",
     },
     {
-      key: "plant",
-      label: "Plant ID",
-      accessor: (row) => row.header?.plant,
+      key: "branchName",
+      label: "Plant",
+      accessor: (row) => row.branch?.branchName || "-",
       type: "text",
     },
     {
       key: "fromLocation",
       label: "From Location",
-      accessor: (row) => row.header?.fromLocation,
+      accessor: (row) => row.fromLocation?.locationName || "-",
       type: "text",
     },
     {
       key: "toLocation",
       label: "To Location",
-      accessor: (row) => row.header?.toLocation,
+      accessor: (row) => row.toLocation?.locationName || "-",
       type: "text",
     },
     {
       key: "fgItemCode",
-      label: "FG Item Code",
-      accessor: (row) => row.header?.fgItemCode,
+      label: "FG Item",
+      accessor: (row) =>
+        row.fgItem?.itemCode
+          ? `${row.fgItem.itemCode} - ${row.fgItem.itemDescription || ""}`
+          : "-",
+      type: "text",
+    },
+    {
+      key: "customerName",
+      label: "Customer",
+      accessor: (row) => row.customer?.customerName || "-",
       type: "text",
     },
     {
       key: "scheduledQty",
       label: "Scheduled Qty",
-      accessor: (row) => row.header?.scheduledQty,
+      accessor: (row) => row.scheduledQty ?? "-",
       type: "text",
+      align: "right",
+    },
+    {
+      key: "totalQty",
+      label: "Total Qty",
+      accessor: (row) => row.totalQty ?? "-",
+      type: "text",
+      align: "right",
     },
     {
       key: "active",
       label: "Status",
-      accessor: "active",
+      accessor: (row) =>
+        row.active === "Active" || row.active === true ? "Active" : "Inactive",
       type: "status",
+      statusVariants: {
+        Active: {
+          label: "Active",
+          className:
+            "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+        },
+        Inactive: {
+          label: "Inactive",
+          className:
+            "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+        },
+      },
     },
     {
       key: "actions",
@@ -91,10 +133,24 @@ const FGTransferSlipList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     },
   ];
 
-  const searchFields = [
-    "header.transferNo",
-    "header.fgItemCode",
-    "header.itemDesc",
+  const searchFields = ["transferNo", "fgItem.itemCode", "scheduleNo"];
+
+  const filterOptions = [
+    { value: "all", label: "All", field: null },
+    {
+      value: "active",
+      label: "Active",
+      field: "active",
+      filterValue: "active",
+      activeValue: "Active",
+    },
+    {
+      value: "inactive",
+      label: "Inactive",
+      field: "active",
+      filterValue: "inactive",
+      activeValue: "Active",
+    },
   ];
 
   return (
@@ -105,6 +161,8 @@ const FGTransferSlipList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
         loading={loading}
         columns={columns}
         searchFields={searchFields}
+        filterOptions={filterOptions}
+        defaultFilter="all"
         onBack={onBack}
         onAddNew={onAddNew}
         onEdit={onEdit}

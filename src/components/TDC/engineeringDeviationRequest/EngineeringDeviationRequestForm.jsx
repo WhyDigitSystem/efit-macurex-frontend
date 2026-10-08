@@ -13,7 +13,8 @@ import engineeringDeviationRequestAPI from "../../../api/TDC/engineeringDeviatio
 // import { departmentAPI } from "../../../api/departmentAPI";
 import { employeeAPI } from "../../../api/employeeAPI";
 import partyMasterAPI from "../../../api/partyMasterAPI";
- 
+import { departmentAPI } from "../../../api/departmentAPI";
+
 /* ---------------------------------------------------------------------------- */
 /* Shared design tokens                                                        */
 
@@ -84,11 +85,22 @@ const Field = ({
           className={`${controlClasses} ${error ? controlErrClasses : ""}`}
         >
           <option value="">-- Select --</option>
-          {(options || []).map((opt) => (
-            <option key={opt.value ?? opt} value={opt.value ?? opt}>
-              {opt.label ?? opt}
-            </option>
-          ))}
+          {(options || []).map((opt, index) => {
+            const optionValue =
+              typeof opt === "object" ? opt.value : opt;
+
+            const optionLabel =
+              typeof opt === "object" ? opt.label : opt;
+
+            return (
+              <option
+                key={optionValue ?? index}
+                value={optionValue ?? ""}
+              >
+                {optionLabel ?? ""}
+              </option>
+            );
+          })}
         </select>
 
         {error && (
@@ -469,17 +481,23 @@ const EngineeringDeviationRequestForm = ({ data, onBack }) => {
   const loadDepartments = useCallback(async () => {
     try {
       const res = await departmentAPI.getAllDepartments(orgId);
+
       const departments = res?.paramObjectsMap?.departmentVO || [];
+
       if (departments.length) {
         setDepartmentOptions(
-          departments.map((d) => ({ value: d.id, label: d.departmentName })),
+          departments.map((d) => ({
+            value: String(d.id),
+            label: d.departmentName || "",
+          }))
         );
       } else {
-        setDepartmentOptions(["Design", "Purchase", "Stores", "Quality", "Production"]);
+        setDepartmentOptions([]);
       }
     } catch (error) {
       console.error("Failed to load department options:", error);
-      setDepartmentOptions(["Design", "Purchase", "Stores", "Quality", "Production"]);
+
+      setDepartmentOptions([]);
     }
   }, [orgId]);
 

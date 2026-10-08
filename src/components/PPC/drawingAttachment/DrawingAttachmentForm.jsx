@@ -187,10 +187,10 @@ const TableHead = ({ headers }) => (
         <th
           key={i}
           className={`p-1 whitespace-nowrap ${i === 0
-              ? "w-8 text-center"
-              : i === headers.length - 1
-                ? "w-20 text-left"
-                : "text-left"
+            ? "w-8 text-center"
+            : i === headers.length - 1
+              ? "w-20 text-left"
+              : "text-left"
             } dark:text-white`}
         >
           {h}
@@ -210,8 +210,8 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
         onClick={onRemove}
         disabled={disabled}
         className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
-            ? "bg-gray-400 cursor-not-allowed"
-            : "bg-red-600 hover:bg-red-700"
+          ? "bg-gray-400 cursor-not-allowed"
+          : "bg-red-600 hover:bg-red-700"
           }`}
       >
         <Trash2 size={10} />
@@ -247,8 +247,8 @@ const FileUploadCell = ({ file, existingFileName, error, onFileChange }) => {
         }}
         onClick={() => document.getElementById("drawing-file-input")?.click()}
         className={`flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed px-3 py-2 cursor-pointer transition-colors ${dragOver
-            ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
-            : "border-gray-300 dark:border-gray-600 hover:border-blue-400"
+          ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
+          : "border-gray-300 dark:border-gray-600 hover:border-blue-400"
           }`}
       >
         <Upload className="h-4 w-4 text-gray-400 dark:text-gray-500" />
@@ -290,8 +290,8 @@ const PreviewCell = ({ disabled, onPreview }) => (
       onClick={onPreview}
       disabled={disabled}
       className={`h-6 w-6 rounded text-white flex items-center justify-center mx-auto ${disabled
-          ? "bg-gray-400 cursor-not-allowed"
-          : "bg-sky-600 hover:bg-sky-700"
+        ? "bg-gray-400 cursor-not-allowed"
+        : "bg-sky-600 hover:bg-sky-700"
         }`}
       title={disabled ? "No file to preview" : "Preview"}
     >
@@ -344,10 +344,20 @@ const DrawingAttachmentForm = ({ data, onBack }) => {
     error: "",
   });
 
-  const [header, setHeader] = useState(() => ({
-    ...emptyHeader(),
-    ...data?.header,
-  }));
+  // Always keep fgPartNo / typeOfItem as strings in state.
+  const [header, setHeader] = useState(() => {
+    const base = emptyHeader();
+    const incoming = data?.header || {};
+    return {
+      ...base,
+      ...incoming,
+      typeOfItem:
+        incoming.typeOfItem != null ? String(incoming.typeOfItem) : "",
+      fgPartNo:
+        incoming.fgPartNo != null ? String(incoming.fgPartNo) : "",
+      fgPartDescription: incoming.fgPartDescription || "",
+    };
+  });
 
   const [attachmentRows, setAttachmentRows] = useState(() =>
     data?.attachments?.length
@@ -413,9 +423,15 @@ const DrawingAttachmentForm = ({ data, onBack }) => {
   useEffect(() => {
     if (!data) return;
 
+    const incoming = data.header || {};
     setHeader({
       ...emptyHeader(),
-      ...(data.header || {}),
+      ...incoming,
+      typeOfItem:
+        incoming.typeOfItem != null ? String(incoming.typeOfItem) : "",
+      fgPartNo:
+        incoming.fgPartNo != null ? String(incoming.fgPartNo) : "",
+      fgPartDescription: incoming.fgPartDescription || "",
     });
 
     setAttachmentRows(
@@ -435,8 +451,11 @@ const DrawingAttachmentForm = ({ data, onBack }) => {
   /* ---------------- Normalize fgPartNo on edit ---------------- */
   useEffect(() => {
     const current = header.fgPartNo;
-    if (!current) return;
-    if (Number.isFinite(Number(current))) return;
+    if (current === null || current === undefined || current === "") return;
+    // Already a valid numeric id present in the itemMap → nothing to do.
+    if (itemMap[current]) return;
+    // If it's a numeric string but map keyed by number, coerce to same type
+    if (Number.isFinite(Number(current)) && itemMap[Number(current)]) return;
 
     const match = Object.values(itemMap).find(
       (it) =>
@@ -446,7 +465,7 @@ const DrawingAttachmentForm = ({ data, onBack }) => {
     if (match) {
       setHeader((prev) => ({
         ...prev,
-        fgPartNo: match.id,
+        fgPartNo: String(match.id), // keep as string
         fgPartDescription: match.itemDescription || prev.fgPartDescription,
       }));
     }
@@ -458,16 +477,19 @@ const DrawingAttachmentForm = ({ data, onBack }) => {
   const handleHeaderChange = (e) => {
     const { name, value } = e.target;
     if (fieldErrors[name]) setFieldErrors((prev) => ({ ...prev, [name]: "" }));
-    setHeader((prev) => ({ ...prev, [name]: value }));
 
     if (name === "fgPartNo") {
-      const item = itemMap[value];
+      const item = itemMap[value] || itemMap[Number(value)];
       setHeader((prev) => ({
         ...prev,
         fgPartNo: value,
-        fgPartDescription: item?.itemDescription || prev.fgPartDescription,
+        fgPartDescription:
+          item?.itemDescription || prev.fgPartDescription,
       }));
+      return;
     }
+
+    setHeader((prev) => ({ ...prev, [name]: value }));
   };
 
   /* ---------------- Attachment row handlers ---------------- */
@@ -563,11 +585,19 @@ const DrawingAttachmentForm = ({ data, onBack }) => {
     const errors = {};
 
     if (!header.typeOfItem) errors.typeOfItem = "Type of Item is required";
-    if (!header.fgPartNo?.trim()) errors.fgPartNo = "FG Part No is required";
+
+    // Safe for both string and number values
+    const fgPartNoStr =
+      header.fgPartNo === null || header.fgPartNo === undefined
+        ? ""
+        : String(header.fgPartNo).trim();
+    if (!fgPartNoStr) errors.fgPartNo = "FG Part No is required";
 
     setFieldErrors(errors);
 
-    const validRows = attachmentRows.every((r) => r.file || r.existingFileName);
+    const validRows = attachmentRows.every(
+      (r) => r.file || r.existingFileName,
+    );
 
     if (!validRows)
       setTableError(

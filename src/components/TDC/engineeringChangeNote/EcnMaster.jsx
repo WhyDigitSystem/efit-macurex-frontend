@@ -18,18 +18,22 @@ const EcnMaster = () => {
     setView("form");
   };
 
-  // Pencil icon click -> fetch the single record fresh by id, then open the form.
   const handleEdit = useCallback(
     async (row) => {
       try {
-        const fresh = await engineeringChangeNoteAPI.getEcnById(row.id);
-        setEditData(fresh || row);
+        const response = await engineeringChangeNoteAPI.getEcnById(row.id);
+
+        const record =
+          response?.paramObjectsMap?.engineeringChangeNoteVO ||
+          response?.paramObjectsMap?.engineeringChangeNoteEntryVO ||
+          response?.paramObjectsMap?.mapp ||
+          response;
+
+        setEditData(record || row);
         setView("form");
       } catch (error) {
         console.error("Failed to fetch ECN for edit:", error);
         addToast("Failed to load Engineering Change Note details", "error");
-
-        // Fall back to the row data already in the list rather than blocking the user.
         setEditData(row);
         setView("form");
       }

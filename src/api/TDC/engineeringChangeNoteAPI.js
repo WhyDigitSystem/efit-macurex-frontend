@@ -91,20 +91,24 @@ const engineeringChangeNoteAPI = {
     try {
       const response = await apiClient.get(
         `/api/engineeringchangenote/getEngineeringChangeNoteById`,
-        {
-          params: {
-            id,
-          },
-        },
+        { params: { id } },
       );
 
-      return response?.data ?? response;
+      const data = response?.data ?? response;
+
+      // Unwrap the VO so callers get the flat record directly
+      const record =
+        data?.paramObjectsMap?.engineeringChangeNoteVO ||
+        data?.paramObjectsMap?.engineeringChangeNoteEntryVO ||
+        data?.paramObjectsMap?.mapp ||
+        data;
+
+      return record ?? null;
     } catch (error) {
       console.error(
         "Error fetching engineering change note:",
         error?.response?.data || error,
       );
-
       throw error;
     }
   },

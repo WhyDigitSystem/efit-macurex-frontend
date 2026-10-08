@@ -1,17 +1,24 @@
 import { ArrowLeft, Save, Trash2, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import dayjs from "dayjs";
 
-import flashNcReportAPI from "../../../api/quality/flashNcReportAPI";
+import branchAPI from "../../../api/branchAPI";
+import { departmentAPI } from "../../../api/departmentAPI";
 import { useToast } from "../../Toast/ToastContext";
+import flashNcReportAPI from "../../../api/quality/flashNcReportAPI";
 
-const todayISO = () => {
-  const date = new Date();
+/* =========================================================
+   HELPERS
+========================================================= */
 
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
+const todayISO = () => dayjs().format("YYYY-MM-DD");
+const fmtDate = (v) => (v ? dayjs(v).format("YYYY-MM-DD") : "");
 
-  return `${year}-${month}-${day}`;
+const currentFinancialYear = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  return month >= 4 ? String(year) : String(year - 1);
 };
 
 const initialForm = {
@@ -22,6 +29,7 @@ const initialForm = {
   frDate: todayISO(),
   reference: "",
   supplierName: "",
+  supplierCode: "",
   from: "",
   to: "",
   description: "",
@@ -32,7 +40,6 @@ const initialForm = {
   occ: "",
   invoiceNo: "",
   poNo: "",
-  supplierCode: "",
   operationNo: "",
   itemCode: "",
   lotQty: "",
@@ -50,6 +57,7 @@ const initialForm = {
   active: true,
   cancel: false,
   cancelRemarks: "",
+  financialYear: currentFinancialYear(),
 };
 
 /* =========================================================
@@ -66,107 +74,63 @@ const Field = ({
   type = "text",
   options = [],
   disabled = false,
-}) => {
-  return (
-    <div className="min-w-0">
-      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-        {label}
+}) => (
+  <div className="min-w-0">
+    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+      {label}
+      {required && <span className="text-red-500 ml-1">*</span>}
+    </label>
 
-        {required && <span className="text-red-500 ml-1">*</span>}
-      </label>
+    {type === "select" ? (
+      <select
+        name={name}
+        value={value ?? ""}
+        onChange={onChange}
+        disabled={disabled}
+        className={`w-full h-9 px-2 rounded border ${error ? "border-red-500" : "border-gray-300 dark:border-gray-600"
+          } bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 dark:disabled:bg-gray-800`}
+      >
+        <option value="">-- Select --</option>
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    ) : type === "textarea" ? (
+      <textarea
+        name={name}
+        value={value ?? ""}
+        onChange={onChange}
+        rows={4}
+        disabled={disabled}
+        className={`w-full px-2 py-2 rounded border ${error ? "border-red-500" : "border-gray-300 dark:border-gray-600"
+          } bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 dark:disabled:bg-gray-800`}
+      />
+    ) : (
+      <input
+        type={type}
+        name={name}
+        value={value ?? ""}
+        onChange={onChange}
+        disabled={disabled}
+        className={`w-full h-9 px-2 rounded border ${error ? "border-red-500" : "border-gray-300 dark:border-gray-600"
+          } bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 dark:disabled:bg-gray-800`}
+      />
+    )}
 
-      {type === "select" ? (
-        <select
-          name={name}
-          value={value ?? ""}
-          onChange={onChange}
-          disabled={disabled}
-          className={`
-            w-full
-            h-9
-            px-2
-            rounded
-            border
-            ${error ? "border-red-500" : "border-gray-300 dark:border-gray-600"}
-            bg-white
-            dark:bg-gray-900
-            text-gray-900
-            dark:text-gray-100
-            text-sm
-            focus:outline-none
-            focus:ring-1
-            focus:ring-blue-500
-            disabled:bg-gray-100
-            dark:disabled:bg-gray-800
-          `}
-        >
-          <option value="">-- Select --</option>
+    {error && <p className="text-[11px] text-red-500 mt-1">{error}</p>}
+  </div>
+);
 
-          {options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      ) : type === "textarea" ? (
-        <textarea
-          name={name}
-          value={value ?? ""}
-          onChange={onChange}
-          rows={4}
-          disabled={disabled}
-          className={`
-            w-full
-            px-2
-            py-2
-            rounded
-            border
-            ${error ? "border-red-500" : "border-gray-300 dark:border-gray-600"}
-            bg-white
-            dark:bg-gray-900
-            text-gray-900
-            dark:text-gray-100
-            text-sm
-            resize-none
-            focus:outline-none
-            focus:ring-1
-            focus:ring-blue-500
-            disabled:bg-gray-100
-            dark:disabled:bg-gray-800
-          `}
-        />
-      ) : (
-        <input
-          type={type}
-          name={name}
-          value={value ?? ""}
-          onChange={onChange}
-          disabled={disabled}
-          className={`
-            w-full
-            h-9
-            px-2
-            rounded
-            border
-            ${error ? "border-red-500" : "border-gray-300 dark:border-gray-600"}
-            bg-white
-            dark:bg-gray-900
-            text-gray-900
-            dark:text-gray-100
-            text-sm
-            focus:outline-none
-            focus:ring-1
-            focus:ring-blue-500
-            disabled:bg-gray-100
-            dark:disabled:bg-gray-800
-          `}
-        />
-      )}
-
-      {error && <p className="text-[11px] text-red-500 mt-1">{error}</p>}
-    </div>
-  );
-};
+/* Small section heading used to visually split the form */
+const SectionTitle = ({ children }) => (
+  <div className="col-span-full mt-1 mb-1 border-b border-gray-200 dark:border-gray-700 pb-1">
+    <h3 className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+      {children}
+    </h3>
+  </div>
+);
 
 /* =========================================================
    FLASH NC REPORT FORM
@@ -175,201 +139,289 @@ const Field = ({
 const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
   const { addToast } = useToast();
 
-  const [form, setForm] = useState(initialForm);
+  const ORG_ID = Number(localStorage.getItem("orgId")) || 0;
+  const BRANCH_ID = Number(localStorage.getItem("branchId")) || 0;
+
+  const [form, setForm] = useState(() => ({
+    ...initialForm,
+    branch: BRANCH_ID ? String(BRANCH_ID) : "",
+  }));
 
   const [fieldErrors, setFieldErrors] = useState({});
-
   const [isSubmitting, setIsSubmitting] = useState(false);
-
   const [imagePreview, setImagePreview] = useState("");
+  const [generatingDocId, setGeneratingDocId] = useState(false);
 
-  /* =======================================================
-     CAPA GRID
-  ======================================================= */
+  /* -------- master data -------- */
+  const [branchOptions, setBranchOptions] = useState([]);
+  const [mrinGrnOptions, setMrinGrnOptions] = useState([]);
+  const [inspectedByOptions, setInspectedByOptions] = useState([]);
+  const [fromDeptOptions, setFromDeptOptions] = useState([]);
+  const [allDeptOptions, setAllDeptOptions] = useState([]);
+  const [mrinGrnLookup, setMrinGrnLookup] = useState({});
 
+  /* -------- CAPA grid (images) -------- */
   const [capaRows, setCapaRows] = useState([
-    {
-      id: Date.now(),
-      file: null,
-      fileName: "",
-      preview: "",
-    },
+    { id: Date.now(), file: null, fileName: "", preview: "" },
   ]);
 
-  /* =======================================================
-     OPTIONS
-  ======================================================= */
+  /* -------- FILE upload grid (documents) -------- */
+  const [fileRows, setFileRows] = useState([
+    { id: Date.now() + 1, file: null, fileName: "" },
+  ]);
 
-  const branchOptions = [
-    { value: "1", label: "Branch 1" },
-    { value: "2", label: "Branch 2" },
-  ];
-
+  /* -------- static options -------- */
   const belongsToOptions = [
-    {
-      value: "Appliances",
-      label: "APPLIANCES",
-    },
-    {
-      value: "Bosch",
-      label: "BOSCH",
-    },
+    { value: "1", label: "APPLIANCES" },
+    { value: "2", label: "BOSCH" },
   ];
 
   const referenceOptions = [
-    {
-      value: "1",
-      label: "1",
-    },
-    {
-      value: "2",
-      label: "2",
-    },
-    {
-      value: "3",
-      label: "3",
-    },
-  ];
-
-  const fromOptions = [
-    {
-      value: "Quality",
-      label: "Quality",
-    },
-    {
-      value: "Production",
-      label: "Production",
-    },
-    {
-      value: "Quality Inward",
-      label: "Quality Inward",
-    },
-    {
-      value: "Quality Outward",
-      label: "Quality Outward",
-    },
-    {
-      value: "Purchase",
-      label: "Purchase",
-    },
-  ];
-
-  const toOptions = [
-    {
-      value: "Quality",
-      label: "Quality",
-    },
-    {
-      value: "Production",
-      label: "Production",
-    },
-    {
-      value: "Quality Inward",
-      label: "Quality Inward",
-    },
-    {
-      value: "Quality Outward",
-      label: "Quality Outward",
-    },
-    {
-      value: "Purchase",
-      label: "Purchase",
-    },
-  ];
-
-  const mrnOptions = [
-    {
-      value: "MRN001",
-      label: "MRN001",
-    },
-    {
-      value: "MRN002",
-      label: "MRN002",
-    },
-    {
-      value: "GRN001",
-      label: "GRN001",
-    },
-  ];
-
-  const itemCodeOptions = [
-    {
-      value: "ITEM001",
-      label: "ITEM001",
-    },
-    {
-      value: "ITEM002",
-      label: "ITEM002",
-    },
-    {
-      value: "ITEM003",
-      label: "ITEM003",
-    },
+    { value: "1", label: "1" },
+    { value: "2", label: "2" },
+    { value: "3", label: "3" },
   ];
 
   const disposalOptions = [
-    {
-      value: "Rework",
-      label: "Rework",
-    },
-    {
-      value: "Reject",
-      label: "Reject",
-    },
-    {
-      value: "Return To Supplier",
-      label: "Return To Supplier",
-    },
-    {
-      value: "Use As Is",
-      label: "Use As Is",
-    },
+    { value: "1", label: "Rework" },
+    { value: "2", label: "Concessional Acceptance" },
+    { value: "3", label: "Reject" },
+    { value: "4", label: "Segregation" },
   ];
 
   const problemStatusOptions = [
-    {
-      value: "Open",
-      label: "Open",
-    },
-    {
-      value: "Under Review",
-      label: "Under Review",
-    },
-    {
-      value: "Closed",
-      label: "Closed",
-    },
-  ];
-
-  const inspectedByOptions = [
-    {
-      value: "Inspector 1",
-      label: "Inspector 1",
-    },
-    {
-      value: "Inspector 2",
-      label: "Inspector 2",
-    },
+    { value: "Open", label: "Open" },
+    { value: "Under Review", label: "Under Review" },
+    { value: "Closed", label: "Closed" },
   ];
 
   const statusOptions = [
-    {
-      value: "Open",
-      label: "Open",
-    },
-    {
-      value: "Approved",
-      label: "Approved",
-    },
-    {
-      value: "Rejected",
-      label: "Rejected",
-    },
-    {
-      value: "Closed",
-      label: "Closed",
-    },
+    { value: "1", label: "Open" },
+    { value: "2", label: "Close" },
   ];
+
+  /* =======================================================
+     DERIVED
+  ======================================================= */
+
+  const toDeptOptions = useMemo(
+    () =>
+      allDeptOptions.filter(
+        (opt) => String(opt.value) !== String(form.from || ""),
+      ),
+    [allDeptOptions, form.from],
+  );
+
+  const itemOptions = useMemo(() => {
+    const entry = mrinGrnLookup[form.mrnScGrnNo];
+    const items = entry?.items || [];
+    const seen = new Set();
+    return items
+      .filter((it) => it.itemCode && !seen.has(it.itemCode))
+      .map((it) => {
+        seen.add(it.itemCode);
+        return {
+          value: it.itemCode,
+          label: it.itemDescription
+            ? `${it.itemCode} — ${it.itemDescription}`
+            : it.itemCode,
+        };
+      });
+  }, [mrinGrnLookup, form.mrnScGrnNo]);
+
+  /* =======================================================
+     LOAD MASTER DATA
+  ======================================================= */
+
+  const loadBranches = useCallback(async () => {
+    try {
+      if (!ORG_ID) return;
+
+      const response = await branchAPI.getBranchByOrgId(ORG_ID);
+
+      const list = Array.isArray(response)
+        ? response
+        : response?.paramObjectsMap?.branches ||
+        response?.paramObjectsMap?.branchVO ||
+        [];
+
+      setBranchOptions(
+        list.map((b) => ({
+          value: String(b.id),
+          label: b.branchName || b.name || b.branchCode || `Branch ${b.id}`,
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to load branches:", error);
+      setBranchOptions([]);
+    }
+  }, [ORG_ID]);
+
+  const loadMrinGrnDropdown = useCallback(async () => {
+    try {
+      if (!form.branch || !ORG_ID) {
+        setMrinGrnOptions([]);
+        setMrinGrnLookup({});
+        return;
+      }
+
+      const response =
+        await flashNcReportAPI.getMRINGRNDropdownForFlashNCReport({
+          branch: Number(form.branch),
+          orgId: ORG_ID,
+        });
+
+      const list = response?.paramObjectsMap?.mrinGrnDropdown || [];
+
+      const lookup = {};
+      list.forEach((entry) => {
+        lookup[entry.mrinGrnNo] = entry;
+      });
+      setMrinGrnLookup(lookup);
+
+      setMrinGrnOptions(
+        list.map((entry) => ({
+          value: entry.mrinGrnNo,
+          label: `${entry.mrinGrnNo}${entry.sourceType ? ` (${entry.sourceType})` : ""
+            }`,
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to load MRIN/GRN dropdown:", error);
+      setMrinGrnOptions([]);
+      setMrinGrnLookup({});
+    }
+  }, [form.branch, ORG_ID]);
+
+  const loadQualityEmployees = useCallback(async () => {
+    try {
+      if (!form.branch || !ORG_ID) {
+        setInspectedByOptions([]);
+        return;
+      }
+
+      const response =
+        await flashNcReportAPI.getQualityEmployeesForFlashNCReport({
+          branch: Number(form.branch),
+          orgId: ORG_ID,
+        });
+
+      const list = response?.paramObjectsMap?.employeeDetails || [];
+
+      setInspectedByOptions(
+        list.map((e) => ({
+          value: String(e.employeeId),
+          label: e.employeeName || e.employeeCode || `Emp ${e.employeeId}`,
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to load quality employees:", error);
+      setInspectedByOptions([]);
+    }
+  }, [form.branch, ORG_ID]);
+
+  const loadFromDepartments = useCallback(async () => {
+    try {
+      if (!form.branch || !ORG_ID) {
+        setFromDeptOptions([]);
+        return;
+      }
+
+      const response =
+        await flashNcReportAPI.getFromDeptDropdownForFlashNCReport({
+          branch: Number(form.branch),
+          orgId: ORG_ID,
+        });
+
+      const list = response?.paramObjectsMap?.fromDepartment || [];
+
+      setFromDeptOptions(
+        list.map((d) => ({
+          value: String(d.id),
+          label: d.name || `Dept ${d.id}`,
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to load From departments:", error);
+      setFromDeptOptions([]);
+    }
+  }, [form.branch, ORG_ID]);
+
+  const loadAllDepartments = useCallback(async () => {
+    try {
+      if (!ORG_ID) return;
+
+      const response = await departmentAPI.getAllDepartments(ORG_ID);
+
+      const list =
+        response?.paramObjectsMap?.departmentVO ||
+        response?.paramObjectsMap?.departmentMasterVO ||
+        response?.paramObjectsMap?.departments ||
+        (Array.isArray(response) ? response : []);
+
+      setAllDeptOptions(
+        list.map((d) => ({
+          value: String(d.id),
+          label: d.departmentName || d.name || `Dept ${d.id}`,
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to load all departments:", error);
+      setAllDeptOptions([]);
+    }
+  }, [ORG_ID]);
+
+  useEffect(() => {
+    loadBranches();
+    loadAllDepartments();
+  }, [loadBranches, loadAllDepartments]);
+
+  useEffect(() => {
+    loadMrinGrnDropdown();
+    loadQualityEmployees();
+    loadFromDepartments();
+  }, [loadMrinGrnDropdown, loadQualityEmployees, loadFromDepartments]);
+
+  /* =======================================================
+     DOC ID (FR NO)
+  ======================================================= */
+
+  useEffect(() => {
+    if (editId || editData?.id) return;
+    if (!ORG_ID) return;
+
+    let cancelled = false;
+
+    const generate = async () => {
+      setGeneratingDocId(true);
+      try {
+        const response = await flashNcReportAPI.getFlashNCReportDocId({
+          financialYear: form.financialYear,
+          orgId: ORG_ID,
+        });
+
+        const docId = response?.paramObjectsMap?.docId || "";
+
+        if (!cancelled && docId) {
+          setForm((prev) => ({ ...prev, frNo: docId }));
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error("Failed to generate FR No:", error);
+          addToast("Failed to generate FR No", "error");
+        }
+      } finally {
+        if (!cancelled) setGeneratingDocId(false);
+      }
+    };
+
+    generate();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.financialYear, editId, editData, ORG_ID]);
 
   /* =======================================================
      INITIALIZE
@@ -380,102 +432,79 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
       populateForm(editData);
       return;
     }
-
     if (editId) {
       loadReport(editId);
       return;
     }
 
-    setForm({
+    setForm((prev) => ({
       ...initialForm,
+      branch: prev.branch || (BRANCH_ID ? String(BRANCH_ID) : ""),
+      frNo: prev.frNo,
       frDate: todayISO(),
-    });
-
+    }));
     setImagePreview("");
-
-    setCapaRows([
-      {
-        id: Date.now(),
-        file: null,
-        fileName: "",
-        preview: "",
-      },
-    ]);
+    setCapaRows([{ id: Date.now(), file: null, fileName: "", preview: "" }]);
+    setFileRows([{ id: Date.now() + 1, file: null, fileName: "" }]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editData, editId]);
 
-  /* =======================================================
-     POPULATE EDIT DATA
-  ======================================================= */
-  const populateForm = (data) => {
+  const populateForm = (d) => {
     setForm({
       ...initialForm,
-      id: data?.id || 0,
-      branch: data?.branch || "",
-      belongsTo: data?.belongsTo || "",
-      frNo: data?.frNo || "",
-      frDate: data?.frDate || todayISO(),
-      reference: data?.reference || "",
-      supplierName: data?.supplierName || "",
-      from: data?.from || "",
-      to: data?.to || "",
-      description: data?.description || "",
-      itemDescription: data?.itemDescription || "",
-      mrnScGrnNo: data?.mrnScGrnNo || "",
-      mrnDate: data?.mrnDate || "",
-      drawingNo: data?.drawingNo || "",
-      occ: data?.occ ?? "",
-      invoiceNo: data?.invoiceNo || "",
-      poNo: data?.poNo || "",
-      supplierCode: data?.supplierCode || "",
-      operationNo: data?.operationNo || "",
-      itemCode: data?.itemCode || "",
-      lotQty: data?.lotQty ?? "",
-      sampleQty: data?.sampleQty ?? "",
-      ncQty: data?.ncQty ?? "",
-      disposal: data?.disposal || "",
-      problemDefectSeen: data?.problemDefectSeen || "",
-      problemStatus: data?.problemStatus || "",
-      actionOnDefectiveLot: data?.actionOnDefectiveLot || "",
-      inspectedBy: data?.inspectedBy || "",
-      status: data?.status || "",
-      narration: data?.narration || "",
+      id: d?.id || 0,
+      branch: d?.branch ?? d?.branchId ?? "",
+      belongsTo: d?.belongsTo ?? "",
+      frNo: d?.frNo || d?.docId || "",
+      frDate: fmtDate(d?.frDate) || todayISO(),
+      reference: d?.reference ?? "",
+      supplierName: d?.supplierName || "",
+      supplierCode: d?.supplierCode || "",
+      from: d?.fromDept ?? d?.from ?? "",
+      to: d?.toDept ?? d?.to ?? "",
+      description: d?.description || "",
+      itemDescription: d?.itemDescription || "",
+      mrnScGrnNo: d?.mrinSCGRNNO || d?.mrnScGrnNo || "",
+      mrnDate: fmtDate(d?.mrinDate) || "",
+      drawingNo: d?.drawingNo || "",
+      occ: d?.occPercentage ?? d?.occ ?? "",
+      invoiceNo: d?.invoiceNo || "",
+      poNo: d?.poNo || "",
+      operationNo: d?.operationNo || "",
+      itemCode: d?.item ?? d?.itemCode ?? "",
+      lotQty: d?.lotQty ?? "",
+      sampleQty: d?.sampleQty ?? "",
+      ncQty: d?.ncQty ?? "",
+      disposal: d?.disposal ?? "",
+      problemDefectSeen: d?.defectSeen || d?.problemDefectSeen || "",
+      problemStatus: d?.problemStatus || "",
+      actionOnDefectiveLot: d?.actionOnDefectiveLot || "",
+      inspectedBy: d?.inspectedBy ?? "",
+      status: d?.status ?? "",
+      narration: d?.narration || "",
       active:
-        data?.active === true ||
-        data?.active === "true" ||
-        data?.active === "Active",
-
+        d?.active === true || d?.active === "true" || d?.active === "Active",
       cancel:
-        data?.cancel === true ||
-        data?.cancel === "true" ||
-        data?.cancel === "T",
-      cancelRemarks: data?.cancelRemarks || "",
+        d?.cancel === true || d?.cancel === "true" || d?.cancel === "T",
+      cancelRemarks: d?.cancelRemarks || "",
+      financialYear: d?.financialYear || currentFinancialYear(),
     });
 
-    if (data?.imageUrl) {
-      setImagePreview(data.imageUrl);
-    } else {
-      setImagePreview("");
-    }
+    setImagePreview(d?.imageUrl || "");
   };
-  /* =======================================================
-     LOAD REPORT
-  ======================================================= */
+
   const loadReport = async (id) => {
     try {
       const response = await flashNcReportAPI.getById(id);
-
-      const data =
+      const d =
         response?.data ||
         response?.paramObjectsMap?.flashNcReportVO ||
         response?.flashNcReportVO ||
         response;
 
-      if (data) {
-        populateForm(data);
-      }
+      if (d) populateForm(d);
     } catch (error) {
       console.error("Failed to load Flash NC Report:", error);
-
       addToast("Failed to load Flash NC Report", "error");
     }
   };
@@ -486,102 +515,108 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
+
     if (fieldErrors[name]) {
-      setFieldErrors((prev) => ({
-        ...prev,
-        [name]: "",
-      }));
+      setFieldErrors((prev) => ({ ...prev, [name]: "" }));
     }
 
     if (type === "checkbox") {
-      setForm((prev) => ({
-        ...prev,
-        [name]: checked,
-      }));
-
+      setForm((prev) => ({ ...prev, [name]: checked }));
       return;
     }
 
-    /* Numeric validation */
-
-    if (["lotQty", "sampleQty", "ncQty", "occ"].includes(name)) {
-      if (value !== "" && !/^\d*\.?\d*$/.test(value)) {
-        return;
-      }
+    if (["lotQty", "sampleQty", "ncQty"].includes(name)) {
+      if (value !== "" && !/^\d*\.?\d*$/.test(value)) return;
     }
 
-    /* Supplier Code */
+    if (name === "supplierCode" && value.length > 30) return;
+    if (name === "operationNo" && value.length > 20) return;
+    if (name === "drawingNo" && value.length > 50) return;
 
-    if (name === "supplierCode") {
-      if (!/^[A-Za-z0-9-]*$/.test(value)) {
-        return;
+    setForm((prev) => {
+      const next = { ...prev, [name]: value };
+
+      if (name === "sampleQty" || name === "ncQty") {
+        const s = Number(name === "sampleQty" ? value : next.sampleQty);
+        const n = Number(name === "ncQty" ? value : next.ncQty);
+
+        if (Number.isFinite(s) && Number.isFinite(n) && s > 0 && n > 0) {
+          next.occ = ((s * n) / 100).toFixed(2);
+        } else {
+          next.occ = "";
+        }
       }
 
-      if (value.length > 30) {
-        return;
-      }
-    }
-
-    /* Operation Number */
-
-    if (name === "operationNo") {
-      if (!/^[A-Za-z0-9-]*$/.test(value)) {
-        return;
-      }
-
-      if (value.length > 20) {
-        return;
-      }
-    }
-
-    /* Drawing Number */
-
-    if (name === "drawingNo") {
-      if (!/^[A-Za-z0-9./-]*$/.test(value)) {
-        return;
-      }
-
-      if (value.length > 50) {
-        return;
-      }
-    }
-
-    /* FR Number */
-
-    if (name === "frNo") {
-      if (!/^[A-Za-z0-9-]*$/.test(value)) {
-        return;
-      }
-
-      if (value.length > 20) {
-        return;
-      }
-    }
-
-    setForm((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+      return next;
+    });
   };
-
-  /* =======================================================
-     SELECT CHANGE
-  ======================================================= */
 
   const handleSelectChange = (e) => {
     const { name, value } = e.target;
 
     if (fieldErrors[name]) {
-      setFieldErrors((prev) => ({
-        ...prev,
-        [name]: "",
-      }));
+      setFieldErrors((prev) => ({ ...prev, [name]: "" }));
     }
 
-    setForm((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setForm((prev) => {
+      const next = { ...prev, [name]: value };
+
+      if (name === "mrnScGrnNo") {
+        const entry = mrinGrnLookup[value];
+        if (entry) {
+          next.supplierName = entry.supplierName || "";
+          next.supplierCode = entry.supplierCode || "";
+          next.poNo = entry.poNo || "";
+          next.invoiceNo = entry.invoiceNo || "";
+          next.lotQty = entry.qty || "";
+          next.mrnDate = fmtDate(entry.mrinGrnDate) || "";
+        } else {
+          next.supplierName = "";
+          next.supplierCode = "";
+          next.poNo = "";
+          next.invoiceNo = "";
+          next.mrnDate = "";
+        }
+        next.itemCode = "";
+        next.itemDescription = "";
+      }
+
+      if (name === "branch") {
+        next.mrnScGrnNo = "";
+        next.supplierName = "";
+        next.supplierCode = "";
+        next.poNo = "";
+        next.invoiceNo = "";
+        next.mrnDate = "";
+        next.inspectedBy = "";
+        next.itemCode = "";
+        next.itemDescription = "";
+        next.from = "";
+        next.to = "";
+      }
+
+      if (name === "from" && String(value) === String(next.to)) {
+        next.to = "";
+      }
+
+      return next;
+    });
+  };
+
+  const handleItemChange = (e) => {
+    const { value } = e.target;
+
+    if (fieldErrors.itemCode) {
+      setFieldErrors((prev) => ({ ...prev, itemCode: "" }));
+    }
+
+    setForm((prev) => {
+      const next = { ...prev, itemCode: value };
+      const entry = mrinGrnLookup[prev.mrnScGrnNo];
+      const match = (entry?.items || []).find((it) => it.itemCode === value);
+      next.itemDescription = match?.itemDescription || prev.itemDescription;
+      return next;
+    });
   };
 
   /* =======================================================
@@ -590,80 +625,48 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
 
   const handleImageChange = (e) => {
     const file = e.target.files?.[0];
-
-    if (!file) {
-      return;
-    }
+    if (!file) return;
 
     if (!file.type.startsWith("image/")) {
       addToast("Only image files are allowed", "error");
-
       e.target.value = "";
-
       return;
     }
 
     if (file.size > 5 * 1024 * 1024) {
       addToast("Image size must be less than 5 MB", "error");
-
       e.target.value = "";
-
       return;
     }
 
-    setForm((prev) => ({
-      ...prev,
-      image: file,
-    }));
-
+    setForm((prev) => ({ ...prev, image: file }));
     setImagePreview(URL.createObjectURL(file));
   };
 
   /* =======================================================
-     CAPA - ADD ROW
+     CAPA GRID (images)
   ======================================================= */
 
   const handleAddCapaRow = () => {
     setCapaRows((prev) => [
       ...prev,
-      {
-        id: Date.now() + Math.random(),
-
-        file: null,
-        fileName: "",
-        preview: "",
-      },
+      { id: Date.now() + Math.random(), file: null, fileName: "", preview: "" },
     ]);
   };
 
-  /* =======================================================
-     CAPA - FILE CHANGE
-  ======================================================= */
-
   const handleCapaFileChange = (e, rowId) => {
     const file = e.target.files?.[0];
-
-    if (!file) {
-      return;
-    }
-
-    /* Image validation */
+    if (!file) return;
 
     if (!file.type.startsWith("image/")) {
       addToast("Only image files are allowed for CAPA", "error");
-
       e.target.value = "";
-
       return;
     }
 
-    /* File size */
-
     if (file.size > 5 * 1024 * 1024) {
       addToast("CAPA image size must be less than 5 MB", "error");
-
       e.target.value = "";
-
       return;
     }
 
@@ -672,183 +675,196 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
     setCapaRows((prev) =>
       prev.map((row) =>
         row.id === rowId
-          ? {
-              ...row,
-              file: file,
-              fileName: file.name,
-              preview: preview,
-            }
+          ? { ...row, file, fileName: file.name, preview }
           : row,
       ),
     );
   };
 
-  /* =======================================================
-     CAPA - REMOVE ROW
-  ======================================================= */
-
   const handleRemoveCapaRow = (rowId) => {
     setCapaRows((prev) => {
       const row = prev.find((item) => item.id === rowId);
-
-      if (row?.preview) {
-        URL.revokeObjectURL(row.preview);
-      }
-
-      /* Keep minimum one row */
+      if (row?.preview) URL.revokeObjectURL(row.preview);
 
       if (prev.length === 1) {
         return [
           {
             id: Date.now() + Math.random(),
-
             file: null,
             fileName: "",
             preview: "",
           },
         ];
       }
-
       return prev.filter((item) => item.id !== rowId);
     });
   };
 
-  const ToggleButton = ({ value, onChange }) => (
-    <button
-      type="button"
-      onClick={() => onChange(!value)}
-      className={`relative flex items-center w-12 h-6 rounded-full transition-colors ${
-        value ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
-      }`}
-    >
-      <span
-        className={`absolute h-5 w-5 bg-white rounded-full shadow transition-transform ${
-          value ? "translate-x-6" : "translate-x-0.5"
-        }`}
-      />
-    </button>
-  );
+  /* =======================================================
+     FILE GRID (documents / attachments)
+  ======================================================= */
 
-  //  VALIDATION
+  const handleAddFileRow = () => {
+    setFileRows((prev) => [
+      ...prev,
+      { id: Date.now() + Math.random(), file: null, fileName: "" },
+    ]);
+  };
+
+  const handleFileChange = (e, rowId) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Allow most document types; block obvious size overflows
+    if (file.size > 10 * 1024 * 1024) {
+      addToast("File size must be less than 10 MB", "error");
+      e.target.value = "";
+      return;
+    }
+
+    setFileRows((prev) =>
+      prev.map((row) =>
+        row.id === rowId ? { ...row, file, fileName: file.name } : row,
+      ),
+    );
+  };
+
+  const handleRemoveFileRow = (rowId) => {
+    setFileRows((prev) => {
+      if (prev.length === 1) {
+        return [{ id: Date.now() + Math.random(), file: null, fileName: "" }];
+      }
+      return prev.filter((item) => item.id !== rowId);
+    });
+  };
+
+  /* =======================================================
+     VALIDATION
+  ======================================================= */
+
   const validateForm = () => {
     const errors = {};
 
-    if (!form.branch) {
-      errors.branch = "Plant is required";
-    }
-    if (!form.reference) {
-      errors.reference = "Reference is required";
-    }
-    if (!form.frNo?.trim()) {
-      errors.frNo = "FR No is required";
-    }
-    if (!form.frDate) {
-      errors.frDate = "FR Date is required";
-    }
-    if (!form.itemCode) {
-      errors.itemCode = "Item Code is required";
-    }
-    if (!form.disposal) {
-      errors.disposal = "Disposal is required";
-    }
-    if (!form.problemStatus) {
+    if (!form.branch) errors.branch = "Plant is required";
+    if (!form.reference) errors.reference = "Reference is required";
+    if (!form.frNo?.trim()) errors.frNo = "FR No is required";
+    if (!form.frDate) errors.frDate = "FR Date is required";
+    if (!form.itemCode) errors.itemCode = "Item Code is required";
+    if (!form.disposal) errors.disposal = "Disposal is required";
+    if (!form.problemStatus)
       errors.problemStatus = "Problem Status is required";
-    }
-    if (form.lotQty !== "" && Number(form.lotQty) < 0) {
+
+    if (form.lotQty !== "" && Number(form.lotQty) < 0)
       errors.lotQty = "Lot Qty cannot be negative";
-    }
-    if (form.sampleQty !== "" && Number(form.sampleQty) < 0) {
+    if (form.sampleQty !== "" && Number(form.sampleQty) < 0)
       errors.sampleQty = "Sample Qty cannot be negative";
-    }
-    if (form.ncQty !== "" && Number(form.ncQty) < 0) {
+    if (form.ncQty !== "" && Number(form.ncQty) < 0)
       errors.ncQty = "NC Qty cannot be negative";
-    }
+
     if (
       form.lotQty !== "" &&
       form.sampleQty !== "" &&
       Number(form.sampleQty) > Number(form.lotQty)
-    ) {
+    )
       errors.sampleQty = "Sample Qty cannot be greater than Lot Qty";
-    }
+
     if (
       form.sampleQty !== "" &&
       form.ncQty !== "" &&
       Number(form.ncQty) > Number(form.sampleQty)
-    ) {
+    )
       errors.ncQty = "NC Qty cannot be greater than Sample Qty";
-    }
-    if (form.occ !== "" && (Number(form.occ) < 0 || Number(form.occ) > 100)) {
-      errors.occ = "OCC % must be between 0 and 100";
-    }
-    //    FROM / TO
-    if (form.from && form.to && form.from === form.to) {
+
+    if (form.from && form.to && String(form.from) === String(form.to))
       errors.to = "From and To cannot be the same";
-    }
-    //    DATE
-    if (form.frDate) {
-      const selectedDate = new Date(form.frDate);
-      const today = new Date();
-      selectedDate.setHours(0, 0, 0, 0);
-      today.setHours(0, 0, 0, 0);
-      if (selectedDate > today) {
-        errors.frDate = "FR Date cannot be a future date";
-      }
+
+    if (form.frDate && dayjs(form.frDate).isAfter(dayjs(), "day")) {
+      errors.frDate = "FR Date cannot be a future date";
     }
 
     setFieldErrors(errors);
     return errors;
   };
 
-  //  HANDLE SAVE
+  /* =======================================================
+     SAVE
+  ======================================================= */
+
   const handleSave = async () => {
     const errors = validateForm();
-
     if (Object.keys(errors).length > 0) {
-      const firstField = Object.keys(errors)[0];
-      addToast(errors[firstField], "error");
+      addToast(errors[Object.keys(errors)[0]], "error");
       return;
     }
 
     try {
       setIsSubmitting(true);
 
-      const payload = new FormData();
+      const fd = new FormData();
 
-      /* ID */
-      if (form.id && form.id > 0) {
-        payload.append("id", String(form.id));
-      }
-      /* Main form fields */
-      Object.entries(form).forEach(([key, value]) => {
-        if (key === "id" || key === "image") {
-          return;
-        }
+      const isEdit = Boolean(form.id && Number(form.id) > 0);
 
-        payload.append(
-          key,
-          value === null || value === undefined ? "" : String(value),
-        );
+      const dto = {
+        ...(isEdit ? { id: Number(form.id) } : {}),
+        orgId: ORG_ID,
+        branch: Number(form.branch) || 0,
+        financialYear: form.financialYear,
+        belongsTo: Number(form.belongsTo) || 0,
+        reference: Number(form.reference) || 0,
+        fromDept: Number(form.from) || 0,
+        toDept: Number(form.to) || 0,
+        supplier: Number(form.supplier) || 0,
+        item: Number(form.itemCode) || 0,
+        inspectedBy: Number(form.inspectedBy) || 0,
+        disposal: Number(form.disposal) || 0,
+        status: Number(form.status) || 0,
+        mrinSCGRNNO: form.mrnScGrnNo || "",
+        mrinDate: form.mrnDate || null,
+        poNo: form.poNo || "",
+        invoiceNo: form.invoiceNo || "",
+        drawingNo: form.drawingNo || "",
+        operationNo: form.operationNo || "",
+        description: form.description || "",
+        defectSeen: form.problemDefectSeen || "",
+        problemStatus: form.problemStatus || "",
+        actionOnDefectiveLot: form.actionOnDefectiveLot || "",
+        narration: form.narration || "",
+        lotQty: Number(form.lotQty) || 0,
+        sampleQty: Number(form.sampleQty) || 0,
+        ncQty: Number(form.ncQty) || 0,
+        occPercentage: Number(form.occ) || 0,
+        active: form.active !== false,
+        cancel: form.cancel === true,
+        cancelRemarks: form.cancelRemarks || "",
+        createdBy: localStorage.getItem("userName") || "SYSTEM",
+      };
+
+      // ⬇️ Send DTO as JSON Blob (binary format)
+      const dtoBlob = new Blob([JSON.stringify(dto)], {
+        type: "application/json",
+      });
+      fd.append("flashNCReportDTO", dtoBlob, "flashNCReportDTO.json");
+
+      // ⬇️ Main image
+      if (form.image) fd.append("image", form.image);
+
+      // ⬇️ CAPA images → "images" array
+      capaRows.forEach((row) => {
+        if (row.file) fd.append("images", row.file);
       });
 
-      /* Main image */
-
-      if (form.image) {
-        payload.append("image", form.image);
-      }
-
-      /* ===================================================
-         CAPA FILES
-      =================================================== */
-
-      capaRows.forEach((row, index) => {
-        if (row.file) {
-          payload.append(`capa_${index + 1}`, row.file);
-        }
+      // ⬇️ NEW: Documents → "files" array
+      fileRows.forEach((row) => {
+        if (row.file) fd.append("files", row.file);
       });
 
-      /* API */
+      console.log("Sending Flash/NC Report DTO:", dto);
+      console.log("FormData entries:");
+      for (let pair of fd.entries()) {
+        console.log(pair[0], pair[1]);
+      }
 
-      const response = await flashNcReportAPI.save(payload);
+      const response = await flashNcReportAPI.save(fd);
 
       const success =
         response?.status === true ||
@@ -857,28 +873,23 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
 
       if (success) {
         addToast(
-          form.id
+          isEdit
             ? "Flash/NC Report updated successfully"
             : "Flash/NC Report created successfully",
           "success",
         );
-
-        if (onSave) {
-          onSave(response);
-        } else if (onBack) {
-          onBack();
-        }
+        if (onSave) onSave(response);
+        else if (onBack) onBack();
       } else {
         addToast(
           response?.message ||
-            response?.paramObjectsMap?.message ||
-            "Failed to save Flash/NC Report",
+          response?.paramObjectsMap?.message ||
+          "Failed to save Flash/NC Report",
           "error",
         );
       }
     } catch (error) {
       console.error("Flash NC save error:", error);
-
       addToast(
         error?.response?.data?.message || "Failed to save Flash/NC Report",
         "error",
@@ -895,8 +906,7 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
         disabled={isSubmitting}
         className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
       >
-        <X className="h-3 w-3" />
-        Cancel
+        <X className="h-3 w-3" /> Cancel
       </button>
 
       <button
@@ -909,30 +919,13 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
       </button>
     </div>
   );
+
+  /* =======================================================
+     RENDER
+  ======================================================= */
+
   return (
     <div className="w-full">
-      {/* <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onBack}
-            className="p-1 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </button>
-
-          <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-            {data ? "Edit Flash NC Report" : "Add Flash NC Report"}
-          </h2>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <label className={labelClasses}>Active</label>
-          <ToggleButton
-            value={header.active}
-            onChange={(v) => setHeader((prev) => ({ ...prev, active: v }))}
-          />
-        </div>
-      </div> */}
       <div className="flex items-center gap-2 mb-3">
         <button
           onClick={onBack}
@@ -940,36 +933,15 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
-
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
           {data ? "Edit Flash NC Report" : "Add Flash NC Report"}
         </h2>
       </div>
 
-      <div
-        className="
-          bg-white
-          dark:bg-gray-800
-          border
-          border-gray-200
-          dark:border-gray-700
-          rounded-lg
-          p-4
-        "
-      >
-        {/* HEADER FIELDS */}
-
-        <div
-          className="
-            grid
-            grid-cols-1
-            md:grid-cols-2
-            lg:grid-cols-4
-            gap-3
-            mb-4
-          "
-        >
-          {/* Branch */}
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+          {/* ---------- 1. Identification ---------- */}
+          <SectionTitle>Identification</SectionTitle>
 
           <Field
             label="Plant"
@@ -982,19 +954,15 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
             error={fieldErrors.branch}
           />
 
-          {/* FR No */}
-
           <Field
             label="FR No"
             name="frNo"
-            value={form.frNo}
-            onChange={handleChange}
-            disabled={true}
+            value={generatingDocId ? "Generating..." : form.frNo}
+            onChange={() => { }}
+            disabled
             required
             error={fieldErrors.frNo}
           />
-
-          {/* FR Date */}
 
           <Field
             label="FR Date"
@@ -1006,8 +974,6 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
             error={fieldErrors.frDate}
           />
 
-          {/* Belongs To */}
-
           <Field
             label="Belongs To"
             name="belongsTo"
@@ -1017,8 +983,6 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
             type="select"
             error={fieldErrors.belongsTo}
           />
-
-          {/* Reference */}
 
           <Field
             label="Reference"
@@ -1031,7 +995,50 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
             error={fieldErrors.reference}
           />
 
-          {/* Supplier Name */}
+          <Field
+            label="From Department"
+            name="from"
+            value={form.from}
+            onChange={handleSelectChange}
+            options={fromDeptOptions}
+            type="select"
+            required
+            error={fieldErrors.from}
+          />
+
+          <Field
+            label="To Department"
+            name="to"
+            value={form.to}
+            onChange={handleSelectChange}
+            options={toDeptOptions}
+            type="select"
+            required
+            error={fieldErrors.to}
+          />
+
+          {/* ---------- 2. Supplier & Document Info ---------- */}
+          <SectionTitle>Supplier & Document Info</SectionTitle>
+
+          <Field
+            label="MRIN / SC GRN No"
+            name="mrnScGrnNo"
+            value={form.mrnScGrnNo}
+            onChange={handleSelectChange}
+            type="select"
+            options={mrinGrnOptions}
+            error={fieldErrors.mrnScGrnNo}
+          />
+
+          <Field
+            label="MRIN Date"
+            name="mrnDate"
+            value={form.mrnDate}
+            onChange={handleChange}
+            type="date"
+            error={fieldErrors.mrnDate}
+            disabled
+          />
 
           <Field
             label="Supplier Name"
@@ -1039,30 +1046,35 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
             value={form.supplierName}
             onChange={handleChange}
             error={fieldErrors.supplierName}
-            disabled={true}
+            disabled
           />
-
-          {/* Description */}
 
           <Field
-            label="Description"
-            name="description"
-            value={form.description}
+            label="Supplier Code"
+            name="supplierCode"
+            value={form.supplierCode}
             onChange={handleChange}
-            error={fieldErrors.description}
+            error={fieldErrors.supplierCode}
+            disabled
           />
-
-          {/* Item Description */}
 
           <Field
-            label="Item Description"
-            name="itemDescription"
-            value={form.itemDescription}
+            label="P.O. No."
+            name="poNo"
+            value={form.poNo}
             onChange={handleChange}
-            error={fieldErrors.itemDescription}
+            error={fieldErrors.poNo}
+            disabled
           />
 
-          {/* Drawing No */}
+          <Field
+            label="Invoice No."
+            name="invoiceNo"
+            value={form.invoiceNo}
+            onChange={handleChange}
+            error={fieldErrors.invoiceNo}
+            disabled
+          />
 
           <Field
             label="Drawing No."
@@ -1072,98 +1084,6 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
             error={fieldErrors.drawingNo}
           />
 
-          {/* From */}
-
-          <Field
-            label="From"
-            name="from"
-            value={form.from}
-            onChange={handleSelectChange}
-            options={fromOptions}
-            type="select"
-            error={fieldErrors.from}
-          />
-
-          {/* To */}
-
-          <Field
-            label="To"
-            name="to"
-            value={form.to}
-            onChange={handleSelectChange}
-            options={toOptions}
-            type="select"
-            error={fieldErrors.to}
-          />
-
-          {/* MRIN / SC GRN */}
-
-          <Field
-            label="MRIN/SC GRN No"
-            name="mrnScGrnNo"
-            value={form.mrnScGrnNo}
-            onChange={handleSelectChange}
-            type="select"
-            options={mrnOptions}
-            error={fieldErrors.mrnScGrnNo}
-          />
-
-          {/* MRIN Date */}
-
-          <Field
-            label="MRIN Date"
-            name="mrnDate"
-            value={form.mrnDate}
-            onChange={handleChange}
-            type="date"
-            error={fieldErrors.mrnDate}
-          />
-
-          {/* OCC */}
-
-          <Field
-            label="OCC %"
-            name="occ"
-            value={form.occ}
-            onChange={handleChange}
-            error={fieldErrors.occ}
-          />
-
-          {/* Invoice */}
-
-          <Field
-            label="Invoice No."
-            name="invoiceNo"
-            value={form.invoiceNo}
-            onChange={handleChange}
-            error={fieldErrors.invoiceNo}
-            disabled={true}
-          />
-
-          {/* PO */}
-
-          <Field
-            label="P.O. No."
-            name="poNo"
-            value={form.poNo}
-            onChange={handleChange}
-            error={fieldErrors.poNo}
-            disabled={true}
-          />
-
-          {/* Supplier Code */}
-
-          <Field
-            label="Supplier Code"
-            name="supplierCode"
-            value={form.supplierCode}
-            onChange={handleChange}
-            error={fieldErrors.supplierCode}
-            disabled={true}
-          />
-
-          {/* Operation */}
-
           <Field
             label="Operation No."
             name="operationNo"
@@ -1172,20 +1092,38 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
             error={fieldErrors.operationNo}
           />
 
-          {/* Item Code */}
+          {/* ---------- 3. Item Details ---------- */}
+          <SectionTitle>Item Details</SectionTitle>
 
           <Field
             label="Item Code"
             name="itemCode"
             value={form.itemCode}
-            onChange={handleSelectChange}
-            options={itemCodeOptions}
+            onChange={handleItemChange}
+            options={itemOptions}
             type="select"
             required
             error={fieldErrors.itemCode}
           />
 
-          {/* Lot Qty */}
+          <Field
+            label="Item Description"
+            name="itemDescription"
+            value={form.itemDescription}
+            onChange={handleChange}
+            error={fieldErrors.itemDescription}
+          />
+
+          <Field
+            label="Description"
+            name="description"
+            value={form.description}
+            onChange={handleChange}
+            error={fieldErrors.description}
+          />
+
+          {/* ---------- 4. Quantity & Disposition ---------- */}
+          <SectionTitle>Quantity & Disposition</SectionTitle>
 
           <Field
             label="Lot Qty"
@@ -1195,8 +1133,6 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
             error={fieldErrors.lotQty}
           />
 
-          {/* Sample Qty */}
-
           <Field
             label="Sample Qty"
             name="sampleQty"
@@ -1204,8 +1140,6 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
             onChange={handleChange}
             error={fieldErrors.sampleQty}
           />
-
-          {/* NC Qty */}
 
           <Field
             label="NC Qty"
@@ -1215,7 +1149,14 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
             error={fieldErrors.ncQty}
           />
 
-          {/* Disposal */}
+          <Field
+            label="OCC %"
+            name="occ"
+            value={form.occ}
+            onChange={handleChange}
+            error={fieldErrors.occ}
+            disabled
+          />
 
           <Field
             label="Disposal"
@@ -1228,8 +1169,6 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
             error={fieldErrors.disposal}
           />
 
-          {/* Problem Status */}
-
           <Field
             label="Problem Status"
             name="problemStatus"
@@ -1240,15 +1179,12 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
             required
             error={fieldErrors.problemStatus}
           />
+
+          {/* ---------- 5. Responsibility ---------- */}
+          <SectionTitle>Responsibility</SectionTitle>
+
           <Field
-            label="Action On Defective Lot"
-            name="actionOnDefectiveLot"
-            value={form.actionOnDefectiveLot}
-            onChange={handleChange}
-            error={fieldErrors.actionOnDefectiveLot}
-          />
-          <Field
-            label="Inspected by"
+            label="Inspected By"
             name="inspectedBy"
             value={form.inspectedBy}
             onChange={handleSelectChange}
@@ -1256,6 +1192,7 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
             type="select"
             error={fieldErrors.inspectedBy}
           />
+
           <Field
             label="Status"
             name="status"
@@ -1265,6 +1202,18 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
             type="select"
             error={fieldErrors.status}
           />
+
+          <Field
+            label="Action On Defective Lot"
+            name="actionOnDefectiveLot"
+            value={form.actionOnDefectiveLot}
+            onChange={handleChange}
+            error={fieldErrors.actionOnDefectiveLot}
+          />
+
+          {/* ---------- 6. Notes ---------- */}
+          <SectionTitle>Notes</SectionTitle>
+
           <Field
             label="Problem / Defect Seen"
             name="problemDefectSeen"
@@ -1272,7 +1221,9 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
             onChange={handleChange}
             type="text"
             error={fieldErrors.problemDefectSeen}
+            className="md:col-span-2"
           />
+
           <Field
             label="Narration"
             name="narration"
@@ -1280,273 +1231,87 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
             onChange={handleChange}
             type="textarea"
             error={fieldErrors.narration}
+            className="md:col-span-2 lg:col-span-4"
           />
         </div>
 
-        {/* GRID Table */}
-        <div
-          className="
-            mt-4
-            border-slate-700
-            rounded-md
-            overflow-hidden
-            bg-slate-900
-          "
-        >
-          <div
-            className="
-              relative
-              bg-slate-800
-              border-b
-              border-slate-700
-              h-8
-            "
-          >
+        {/* ==================================================
+            CAPA GRID (Images → "images" field)
+        ================================================== */}
+        <div className="mt-4 border-slate-700 rounded-md overflow-hidden bg-slate-900">
+          <div className="relative bg-slate-800 border-b border-slate-700 h-8">
             <div className="flex items-center h-full">
-              <div
-                className="
-                  px-4
-                  h-full
-                  flex
-                  items-center
-                  bg-blue-600
-                  text-white
-                  text-xs
-                  font-medium
-                "
-              >
+              <div className="px-4 h-full flex items-center bg-blue-600 text-white text-xs font-medium">
                 CAPA
               </div>
             </div>
-
-            {/* ADD BUTTON */}
             <button
               type="button"
               onClick={handleAddCapaRow}
               disabled={isSubmitting}
-              className="
-                absolute
-                right-1
-                top-1
-                w-7
-                h-7
-                flex
-                items-center
-                justify-center
-                rounded
-                bg-blue-600
-                hover:bg-blue-700
-                text-white
-                text-base
-                font-bold
-                disabled:opacity-50
-              "
+              className="absolute right-1 top-1 w-7 h-7 flex items-center justify-center rounded bg-blue-600 hover:bg-blue-700 text-white text-base font-bold disabled:opacity-50"
               title="Add CAPA"
             >
               +
             </button>
           </div>
 
-          {/* ===============================================
-              CAPA TABLE
-          =============================================== */}
-
           <div className="overflow-x-auto">
-            <table
-              className="
-                w-full
-                border-collapse
-                text-xs
-              "
-            >
-              {/* TABLE HEADER */}
-
+            <table className="w-full border-collapse text-xs">
               <thead>
-                <tr
-                  className="
-                    bg-slate-700
-                    text-white
-                  "
-                >
-                  <th
-                    className="
-                      w-10
-                      px-2
-                      py-1.5
-                      text-left
-                      font-semibold
-                      border-r
-                      border-slate-600
-                    "
-                  >
+                <tr className="bg-slate-700 text-white">
+                  <th className="w-10 px-2 py-1.5 text-left font-semibold border-r border-slate-600">
                     #
                   </th>
-
-                  <th
-                    className="
-                      px-2
-                      py-1.5
-                      text-left
-                      font-semibold
-                      border-r
-                      border-slate-600
-                    "
-                  >
+                  <th className="px-2 py-1.5 text-left font-semibold border-r border-slate-600">
                     CAPA
                   </th>
-
-                  <th
-                    className="
-                      w-20
-                      px-2
-                      py-1.5
-                      text-center
-                      font-semibold
-                    "
-                  >
+                  <th className="w-20 px-2 py-1.5 text-center font-semibold">
                     Action
                   </th>
                 </tr>
               </thead>
-
-              {/* TABLE BODY */}
-
               <tbody>
                 {capaRows.map((row, index) => (
                   <tr
                     key={row.id}
-                    className="
-                        bg-slate-900
-                        hover:bg-slate-800
-                        border-b
-                        border-slate-700
-                      "
+                    className="bg-slate-900 hover:bg-slate-800 border-b border-slate-700"
                   >
-                    {/* S.NO */}
-
-                    <td
-                      className="
-                          w-10
-                          px-2
-                          py-1
-                          text-white
-                          text-center
-                          border-r
-                          border-slate-700
-                        "
-                    >
+                    <td className="w-10 px-2 py-1 text-white text-center border-r border-slate-700">
                       {index + 1}
                     </td>
-
-                    {/* CAPA FILE */}
-
-                    <td
-                      className="
-                          px-2
-                          py-1
-                          border-r
-                          border-slate-700
-                        "
-                    >
-                      <div
-                        className="
-                            flex
-                            items-center
-                            gap-2
-                          "
-                      >
-                        {/* Hidden File Input */}
-
+                    <td className="px-2 py-1 border-r border-slate-700">
+                      <div className="flex items-center gap-2">
                         <input
                           id={`capa-file-${row.id}`}
                           type="file"
-                          accept="
-                              .png,
-                              .jpg,
-                              .jpeg,
-                              .gif,
-                              .webp,
-                              .bmp,
-                              .svg
-                            "
+                          accept=".png,.jpg,.jpeg,.gif,.webp,.bmp,.svg"
                           className="hidden"
                           onChange={(e) => handleCapaFileChange(e, row.id)}
                         />
-
-                        {/* Choose File */}
-
                         <label
                           htmlFor={`capa-file-${row.id}`}
-                          className="
-                              inline-flex
-                              items-center
-                              justify-center
-                              px-3
-                              h-7
-                              rounded
-                              bg-blue-600
-                              hover:bg-blue-700
-                              text-white
-                              text-xs
-                              font-medium
-                              cursor-pointer
-                              whitespace-nowrap
-                            "
+                          className="inline-flex items-center justify-center px-3 h-7 rounded bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium cursor-pointer whitespace-nowrap"
                         >
                           Choose File
                         </label>
-
-                        {/* File Name */}
-
                         <span
-                          className="
-                              text-gray-300
-                              text-xs
-                              truncate
-                              max-w-[600px]
-                            "
+                          className="text-gray-300 text-xs truncate max-w-[600px]"
                           title={row.fileName || "No file chosen"}
                         >
                           {row.fileName || "No file chosen"}
                         </span>
                       </div>
                     </td>
-
-                    {/* ACTION */}
-
-                    <td
-                      className="
-                          w-20
-                          px-2
-                          py-1
-                          text-center
-                        "
-                    >
+                    <td className="w-20 px-2 py-1 text-center">
                       <button
                         type="button"
                         onClick={() => handleRemoveCapaRow(row.id)}
                         disabled={isSubmitting}
-                        className="
-                            inline-flex
-                            items-center
-                            justify-center
-                            w-7
-                            h-7
-                            rounded
-                            bg-slate-600
-                            hover:bg-red-600
-                            text-white
-                            transition-colors
-                            disabled:opacity-50
-                          "
+                        className="inline-flex items-center justify-center w-7 h-7 rounded bg-slate-600 hover:bg-red-600 text-white transition-colors disabled:opacity-50"
                         title="Remove CAPA"
                       >
-                        <Trash2
-                          className="
-                              w-3.5
-                              h-3.5
-                            "
-                        />
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </td>
                   </tr>
@@ -1556,30 +1321,92 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
           </div>
         </div>
 
-        {/* SAVE / CANCEL */}
-        {/* <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
-          <button
-            onClick={onBack}
-            disabled={isSubmitting}
-            className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-          >
-            <X className="h-3 w-3" /> Cancel
-          </button>
-          <button
-            type="submit"
-            onClick={handleSave}
-            disabled={isSubmitting}
-            className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-          >
-            <Save className="h-3 w-3" />{" "}
-           
-            {isSubmitting
-              ? "Saving..."
-              : editData || editId
-                ? "Update"
-                : "Save"}
-          </button>
-        </div> */}
+        {/* ==================================================
+            FILE UPLOAD GRID (Documents → "files" field)
+        ================================================== */}
+        <div className="mt-4 border-slate-700 rounded-md overflow-hidden bg-slate-900">
+          <div className="relative bg-slate-800 border-b border-slate-700 h-8">
+            <div className="flex items-center h-full">
+              <div className="px-4 h-full flex items-center bg-blue-600 text-white text-xs font-medium">
+                File Upload
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleAddFileRow}
+              disabled={isSubmitting}
+              className="absolute right-1 top-1 w-7 h-7 flex items-center justify-center rounded bg-blue-600 hover:bg-blue-700 text-white text-base font-bold disabled:opacity-50"
+              title="Add File"
+            >
+              +
+            </button>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-xs">
+              <thead>
+                <tr className="bg-slate-700 text-white">
+                  <th className="w-10 px-2 py-1.5 text-left font-semibold border-r border-slate-600">
+                    #
+                  </th>
+                  <th className="px-2 py-1.5 text-left font-semibold border-r border-slate-600">
+                    File
+                  </th>
+                  <th className="w-20 px-2 py-1.5 text-center font-semibold">
+                    Action
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {fileRows.map((row, index) => (
+                  <tr
+                    key={row.id}
+                    className="bg-slate-900 hover:bg-slate-800 border-b border-slate-700"
+                  >
+                    <td className="w-10 px-2 py-1 text-white text-center border-r border-slate-700">
+                      {index + 1}
+                    </td>
+                    <td className="px-2 py-1 border-r border-slate-700">
+                      <div className="flex items-center gap-2">
+                        <input
+                          id={`doc-file-${row.id}`}
+                          type="file"
+                          accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.png,.jpg,.jpeg,.gif,.webp,.bmp,.svg,.zip,.rar,.txt"
+                          className="hidden"
+                          onChange={(e) => handleFileChange(e, row.id)}
+                        />
+                        <label
+                          htmlFor={`doc-file-${row.id}`}
+                          className="inline-flex items-center justify-center px-3 h-7 rounded bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium cursor-pointer whitespace-nowrap"
+                        >
+                          Choose File
+                        </label>
+                        <span
+                          className="text-gray-300 text-xs truncate max-w-[600px]"
+                          title={row.fileName || "No file chosen"}
+                        >
+                          {row.fileName || "No file chosen"}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="w-20 px-2 py-1 text-center">
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveFileRow(row.id)}
+                        disabled={isSubmitting}
+                        className="inline-flex items-center justify-center w-7 h-7 rounded bg-slate-600 hover:bg-red-600 text-white transition-colors disabled:opacity-50"
+                        title="Remove File"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         <FormButtons
           onCancel={onBack}
           onSave={handleSave}

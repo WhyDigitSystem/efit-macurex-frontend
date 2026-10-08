@@ -56,6 +56,23 @@ const fieldGrid =
 const subTabFieldGrid =
   "grid grid-cols-[repeat(auto-fit,minmax(210px,1fr))] gap-x-5 gap-y-4 items-start";
 
+const normalizeOption = (value, label) => {
+  const optionValue =
+    typeof value === "object"
+      ? value?.value ?? value?.id ?? ""
+      : value ?? "";
+
+  let optionLabel =
+    typeof label === "object"
+      ? label?.label ?? label?.value ?? label?.name ?? ""
+      : label ?? "";
+
+  return {
+    value: optionValue,
+    label: String(optionLabel),
+  };
+};
+
 /* ---------------------------------------------------------------------------- */
 /* Shared building blocks                                                      */
 
@@ -87,11 +104,33 @@ const Field = ({
           className={`${controlClasses} ${error ? controlErrClasses : ""}`}
         >
           <option value="">-- Select --</option>
-          {(options || []).map((opt) => (
-            <option key={opt.value ?? opt} value={opt.value ?? opt}>
-              {opt.label ?? opt}
-            </option>
-          ))}
+          {(options || []).map((opt, index) => {
+            const optionValue =
+              typeof opt === "object"
+                ? opt?.value ?? ""
+                : opt ?? "";
+
+            let optionLabel =
+              typeof opt === "object"
+                ? opt?.label ?? ""
+                : opt ?? "";
+
+            if (typeof optionLabel === "object") {
+              optionLabel =
+                optionLabel?.label ??
+                optionLabel?.value ??
+                "";
+            }
+
+            return (
+              <option
+                key={String(optionValue || index)}
+                value={optionValue}
+              >
+                {String(optionLabel)}
+              </option>
+            );
+          })}
         </select>
 
         {error && (
@@ -176,11 +215,10 @@ const ToggleField = ({
           key={opt}
           type="button"
           onClick={() => onChange(name, opt)}
-          className={`h-[30px] px-3 rounded border text-xs transition-colors ${
-            value === opt
-              ? "bg-blue-600 text-white border-blue-600"
-              : "bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
-          }`}
+          className={`h-[30px] px-3 rounded border text-xs transition-colors ${value === opt
+            ? "bg-blue-600 text-white border-blue-600"
+            : "bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+            }`}
         >
           {opt}
         </button>
@@ -232,13 +270,12 @@ const TableHead = ({ headers }) => (
       {headers.map((h, i) => (
         <th
           key={i}
-          className={`p-2 whitespace-nowrap ${
-            i === 0
-              ? "w-8 text-center"
-              : i === headers.length - 1
-                ? "w-20 text-left"
-                : "text-left"
-          } dark:text-white`}
+          className={`p-2 whitespace-nowrap ${i === 0
+            ? "w-8 text-center"
+            : i === headers.length - 1
+              ? "w-20 text-left"
+              : "text-left"
+            } dark:text-white`}
         >
           {h}
         </th>
@@ -256,11 +293,10 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
         type="button"
         onClick={onRemove}
         disabled={disabled}
-        className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-          disabled
-            ? "bg-gray-400 cursor-not-allowed"
-            : "bg-red-600 hover:bg-red-700"
-        }`}
+        className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
+          ? "bg-gray-400 cursor-not-allowed"
+          : "bg-red-600 hover:bg-red-700"
+          }`}
       >
         <Trash2 size={10} />
       </button>
@@ -290,11 +326,33 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
                   className={cellInputClasses}
                 >
                   <option value="">-- Select --</option>
-                  {(col.options || []).map((opt) => (
-                    <option key={opt.value ?? opt} value={opt.value ?? opt}>
-                      {opt.label ?? opt}
-                    </option>
-                  ))}
+                  {(col.options || []).map((opt, index) => {
+                    const optionValue =
+                      typeof opt === "object"
+                        ? opt?.value ?? ""
+                        : opt ?? "";
+
+                    let optionLabel =
+                      typeof opt === "object"
+                        ? opt?.label ?? ""
+                        : opt ?? "";
+
+                    if (typeof optionLabel === "object") {
+                      optionLabel =
+                        optionLabel?.label ??
+                        optionLabel?.value ??
+                        "";
+                    }
+
+                    return (
+                      <option
+                        key={String(optionValue || index)}
+                        value={optionValue}
+                      >
+                        {String(optionLabel)}
+                      </option>
+                    );
+                  })}
                 </select>
               </td>
             ) : (
@@ -358,9 +416,9 @@ const DeliveryChallanCumGatePassForm = ({ data, onBack }) => {
   const branch = Number(localStorage.getItem("branchId")) || 0;
   const usersId = localStorage.getItem("usersId");
   const username = localStorage.getItem("employeeName");
-  const financialYear = localStorage.getItem("finYear") || "";  
+  const financialYear = localStorage.getItem("finYear") || "";
 
-  
+
 
   const userData = JSON.parse(localStorage.getItem("userData") || "{}");
   const orgName = (
@@ -388,7 +446,7 @@ const DeliveryChallanCumGatePassForm = ({ data, onBack }) => {
   const [unitOptions, setUnitOptions] = useState([]);
   const [employeeOptions, setEmployeeOptions] = useState([]);
 
-   const [docNoGenerated, setDocNoGenerated] = useState(false);
+  const [docNoGenerated, setDocNoGenerated] = useState(false);
 
   const generateDocNo = useCallback(async () => {
     if (docNoGenerated) return;
@@ -416,7 +474,7 @@ const DeliveryChallanCumGatePassForm = ({ data, onBack }) => {
       partyPlantName: data?.partyPlantName || "",
       refNo: data?.refNo || "",
       refDate: fmtDate(data?.refDate),
-      fromLocation: parseInt(data?.fromLocation?.id ?? data?.fromLocation ?? 0) || 0  ,
+      fromLocation: parseInt(data?.fromLocation?.id ?? data?.fromLocation ?? 0) || 0,
       modeOfTransport: data?.modeOfTransport || "",
       vehicleNo: data?.vehicleNo || "",
       workOrderNo: data?.workOrderNo || "",
@@ -444,7 +502,7 @@ const DeliveryChallanCumGatePassForm = ({ data, onBack }) => {
 
   /* ---------------- Lookup loading ---------------- */
 
- 
+
 
   const loadPlants = useCallback(async () => {
     try {
@@ -548,22 +606,32 @@ const DeliveryChallanCumGatePassForm = ({ data, onBack }) => {
     try {
       const res = await departmentAPI.getAllDepartments(orgId);
       const departments = res?.paramObjectsMap?.departmentVO || [];
-      if (departments.length) {
+
+      if (Array.isArray(departments) && departments.length > 0) {
         setDepartmentOptions(
-          departments.map((d) => ({ value: d.id, label: d.departmentName })),
+          departments.map((d) => ({
+            value:
+              typeof d?.id === "object"
+                ? d.id?.value ?? d.id?.id ?? ""
+                : d?.id ?? "",
+
+            label:
+              typeof d?.departmentName === "object"
+                ? d.departmentName?.label ??
+                d.departmentName?.value ??
+                d.departmentName?.name ??
+                ""
+                : d?.departmentName ?? "",
+          }))
         );
       } else {
-        setDepartmentOptions([
-         ""
-        ]);
+        setDepartmentOptions([]);
       }
     } catch (error) {
       console.error("Failed to load department options:", error);
-      setDepartmentOptions([
-       ""
-      ]);
+      setDepartmentOptions([]);
     }
-  }, [orgId, branch]);
+  }, [orgId]);
 
   const loadParties = useCallback(async () => {
     try {
@@ -931,18 +999,18 @@ const DeliveryChallanCumGatePassForm = ({ data, onBack }) => {
       if (response?.status) {
         addToast(
           response?.paramObjectsMap?.message ||
-            (isUpdate
-              ? "Delivery Challan Cum Gate Pass updated successfully!"
-              : "Delivery Challan Cum Gate Pass created successfully!"),
+          (isUpdate
+            ? "Delivery Challan Cum Gate Pass updated successfully!"
+            : "Delivery Challan Cum Gate Pass created successfully!"),
         );
         onBack?.();
       } else {
         addToast(
           response?.errors?.[0]?.shortMessage ||
-            response?.errors?.[0]?.longMessage ||
-            response?.message ||
-            response?.paramObjectsMap?.message ||
-            "Failed to save Delivery Challan Cum Gate Pass.",
+          response?.errors?.[0]?.longMessage ||
+          response?.message ||
+          response?.paramObjectsMap?.message ||
+          "Failed to save Delivery Challan Cum Gate Pass.",
         );
       }
     } catch (err) {
@@ -950,9 +1018,9 @@ const DeliveryChallanCumGatePassForm = ({ data, onBack }) => {
       if (err.response?.data) {
         addToast(
           err.response.data.message ||
-            err.response.data.statusMessage ||
-            err.response.data.error ||
-            JSON.stringify(err.response.data),
+          err.response.data.statusMessage ||
+          err.response.data.error ||
+          JSON.stringify(err.response.data),
         );
       } else {
         addToast("Something went wrong.");
@@ -1098,7 +1166,7 @@ const DeliveryChallanCumGatePassForm = ({ data, onBack }) => {
                 options={workOrderOptions}
               />
             )}
-            
+
             <div>
               <ToggleField
                 label="Is IGST Applicable"
@@ -1131,11 +1199,10 @@ const DeliveryChallanCumGatePassForm = ({ data, onBack }) => {
                   key={tab.key}
                   type="button"
                   onClick={() => setActiveChildTab(tab.key)}
-                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${
-                    activeChildTab === tab.key
-                      ? "bg-blue-600 text-white"
-                      : "text-gray-600 dark:text-gray-300"
-                  }`}
+                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${activeChildTab === tab.key
+                    ? "bg-blue-600 text-white"
+                    : "text-gray-600 dark:text-gray-300"
+                    }`}
                 >
                   {tab.label}
                 </button>
@@ -1213,7 +1280,7 @@ const DeliveryChallanCumGatePassForm = ({ data, onBack }) => {
                   onChange={handleSummaryChange}
                   disabled
                 />
-                 <Field
+                <Field
                   type="select"
                   label="Prepared By"
                   name="preparedBy"

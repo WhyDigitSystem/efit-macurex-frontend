@@ -5,6 +5,7 @@ import FGTransferSlipForm from "./FGTransferSlipForm";
 const FGTransferSlipMaster = () => {
   const [screen, setScreen] = useState("list");
   const [editData, setEditData] = useState(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const handleAddNew = () => {
     setEditData(null);
@@ -18,16 +19,13 @@ const FGTransferSlipMaster = () => {
 
   const handleBack = () => {
     setScreen("list");
+    setEditData(null);
+    setRefreshTrigger((n) => n + 1); // refresh list after save/cancel
   };
 
-  const handleSave = async (payload) => {
-    try {
-      await fgTransferSlipAPI.updateCreateFGTransferSlip(payload); // Create/Update
-      handleBack();
-    } catch (error) {
-      console.error("Error saving FG transfer slip:", error);
-      throw error;
-    }
+  // The form already persists the record and calls onSave on success.
+  const handleSave = () => {
+    handleBack();
   };
 
   return (
@@ -37,6 +35,7 @@ const FGTransferSlipMaster = () => {
           onAddNew={handleAddNew}
           onEdit={handleEdit}
           onBack={() => window.history.back()}
+          refreshTrigger={refreshTrigger}
         />
       )}
 

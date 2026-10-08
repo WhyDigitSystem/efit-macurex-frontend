@@ -249,9 +249,8 @@ const TableHead = ({ columns }) => (
       {columns.map((col) => (
         <th
           key={col.key}
-          className={`p-2 whitespace-nowrap text-[10px] font-medium dark:text-white ${
-            col.type === "number" ? "text-right" : "text-left"
-          }`}
+          className={`p-2 whitespace-nowrap text-[10px] font-medium dark:text-white ${col.type === "number" ? "text-right" : "text-left"
+            }`}
         >
           {col.label}
         </th>
@@ -277,11 +276,10 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
         type="button"
         onClick={onRemove}
         disabled={disabled}
-        className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-          disabled
+        className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
             ? "bg-gray-400 cursor-not-allowed"
             : "bg-red-600 hover:bg-red-700"
-        }`}
+          }`}
       >
         <Trash2 size={10} />
       </button>
@@ -435,7 +433,9 @@ const EcnForm = ({ data, onBack }) => {
   /* ---------------- header ---------------- */
 
   const [header, setHeader] = useState(() => ({
-    branch: data?.branch ?? BRANCH_ID ?? "",
+    /* `branch` comes back as an object from the API, so unwrap to its id
+       to match the <option value={branch.id}> in the select. */
+    branch: data?.branch?.id ?? BRANCH_ID ?? "",
     docId: data?.docId || "",
     docDate: fmtDate(data?.docDate) || todayISO(),
     financialYear: data?.financialYear || String(new Date().getFullYear()),
@@ -466,27 +466,31 @@ const EcnForm = ({ data, onBack }) => {
   });
 
   /* ---------------- tabs 3-7: array sub-DTOs ---------------- */
+  /* NOTE: the GET response uses the `*ResponseDTO` key names (e.g.
+     `changeRequiredResponseDTO`), so read them with those names. */
 
   const [changeRequiredRows, setChangeRequiredRows] = useState(
-    data?.changeRequiredDTO?.length
-      ? data.changeRequiredDTO
+    data?.changeRequiredResponseDTO?.length
+      ? data.changeRequiredResponseDTO
       : [emptyChangeRequiredRow()],
   );
 
   const [processChangeRows, setProcessChangeRows] = useState(
-    data?.processChangesDTO?.length
-      ? data.processChangesDTO
+    data?.processChangesResponseDTO?.length
+      ? data.processChangesResponseDTO
       : [emptyProcessChangeRow()],
   );
 
   const [inspectionRows, setInspectionRows] = useState(
-    data?.inspectionTestingDTO?.length
-      ? data.inspectionTestingDTO
+    data?.inspectionTestingResponseDTO?.length
+      ? data.inspectionTestingResponseDTO
       : [emptyInspectionRow()],
   );
 
   const [documentRows, setDocumentRows] = useState(
-    data?.documentsDTO?.length ? data.documentsDTO : [emptyDocumentRow()],
+    data?.documentsResponseDTO?.length
+      ? data.documentsResponseDTO
+      : [emptyDocumentRow()],
   );
 
   /* PDF attachments for the Documents/Drawings tab. These sit alongside the
@@ -495,23 +499,31 @@ const EcnForm = ({ data, onBack }) => {
      come through as URLs/filenames on `data`; a freshly chosen file is a
      browser File object until it's uploaded. */
   const [documentAttachments, setDocumentAttachments] = useState({
-    pdfAttachmentDrawing: data?.pdfAttachmentDrawing || null,
-    pdfAttachmentBOM: data?.pdfAttachmentBOM || null,
+    pdfAttachmentDrawing:
+      data?.pdfAttachmentDrawingResponseDTO?.[0]?.fileName ||
+      data?.pdfAttachmentDrawing ||
+      null,
+    pdfAttachmentBOM:
+      data?.pdfAttachmentBomResponseDTO?.[0]?.fileName ||
+      data?.pdfAttachmentBOM ||
+      null,
   });
 
   const [documentChangeRows, setDocumentChangeRows] = useState(
-    data?.documentsChangesDTO?.length
-      ? data.documentsChangesDTO.map((row) => ({
-          ...row,
-          completionDate: fmtDate(row.completionDate),
-        }))
+    data?.documentsChangesResponseDTO?.length
+      ? data.documentsChangesResponseDTO.map((row) => ({
+        ...row,
+        completionDate: fmtDate(row.completionDate),
+      }))
       : [emptyDocumentChangeRow()],
   );
 
   /* ---------------- tab 8: remarks ---------------- */
 
   const [remarksRows, setRemarksRows] = useState(
-    data?.remarksDTO?.length ? data.remarksDTO : [emptyRemarksRow()],
+    data?.remarksResponseDTO?.length
+      ? data.remarksResponseDTO
+      : [emptyRemarksRow()],
   );
 
   const [remarksMeta, setRemarksMeta] = useState({
@@ -593,8 +605,8 @@ const EcnForm = ({ data, onBack }) => {
       const list = Array.isArray(response)
         ? response
         : response?.paramObjectsMap?.branches ||
-          response?.paramObjectsMap?.branchVO ||
-          [];
+        response?.paramObjectsMap?.branchVO ||
+        [];
 
       setBranchOptions(
         list.map((branch) => ({
@@ -843,7 +855,7 @@ const EcnForm = ({ data, onBack }) => {
         changesCanBeImplementedBy:
           changeOverview.changesCanBeImplementedBy || "",
 
-        changeRequiredDTO: changeRequiredRows
+        changeRequiredResponseDTO: changeRequiredRows
           .filter(rowHasValue)
           .map((row) => ({
             anyChanges: row.anyChanges || "",
@@ -852,26 +864,32 @@ const EcnForm = ({ data, onBack }) => {
             leadTime: toInteger(row.leadTime),
           })),
 
-        processChangesDTO: processChangeRows.filter(rowHasValue).map((row) => ({
-          processChange: row.processChange || "",
-          layOut: row.layOut || "",
-          actions: row.actions || "",
-          estimatedCost: toNumber(row.estimatedCost),
-          leadTime: toInteger(row.leadTime),
-        })),
+        processChangesResponseDTO: processChangeRows
+          .filter(rowHasValue)
+          .map((row) => ({
+            processChange: row.processChange || "",
+            layOut: row.layOut || "",
+            actions: row.actions || "",
+            estimatedCost: toNumber(row.estimatedCost),
+            leadTime: toInteger(row.leadTime),
+          })),
 
-        inspectionTestingDTO: inspectionRows.filter(rowHasValue).map((row) => ({
-          newGauge: row.newGauge || "",
-          estimatedCost: toNumber(row.estimatedCost),
-          leadTime: toInteger(row.leadTime),
-        })),
+        inspectionTestingResponseDTO: inspectionRows
+          .filter(rowHasValue)
+          .map((row) => ({
+            newGauge: row.newGauge || "",
+            estimatedCost: toNumber(row.estimatedCost),
+            leadTime: toInteger(row.leadTime),
+          })),
 
-        documentsDTO: documentRows.filter(rowHasValue).map((row) => ({
-          drawing: row.drawing || "",
-          partNo: row.partNo || "",
-          issue: row.issue || "",
-          remarks: row.remarks || "",
-        })),
+        documentsResponseDTO: documentRows
+          .filter(rowHasValue)
+          .map((row) => ({
+            drawing: row.drawing || "",
+            partNo: row.partNo || "",
+            issue: row.issue || "",
+            remarks: row.remarks || "",
+          })),
 
         /* NOTE: these are raw File objects when the user just picked a new
            PDF (or a string/URL when carried over from an existing record in
@@ -881,7 +899,7 @@ const EcnForm = ({ data, onBack }) => {
         pdfAttachmentDrawing: documentAttachments.pdfAttachmentDrawing || null,
         pdfAttachmentBOM: documentAttachments.pdfAttachmentBOM || null,
 
-        documentsChangesDTO: documentChangeRows
+        documentsChangesResponseDTO: documentChangeRows
           .filter(rowHasValue)
           .map((row) => ({
             stationNo: row.stationNo || "",
@@ -890,10 +908,12 @@ const EcnForm = ({ data, onBack }) => {
             remarks: row.remarks || "",
           })),
 
-        remarksDTO: remarksRows.filter(rowHasValue).map((row) => ({
-          indicate1: row.indicate1 || "",
-          indicate2: row.indicate2 || "",
-        })),
+        remarksResponseDTO: remarksRows
+          .filter(rowHasValue)
+          .map((row) => ({
+            indicate1: row.indicate1 || "",
+            indicate2: row.indicate2 || "",
+          })),
 
         changesAccepted: remarksMeta.changesAccepted || "",
         changesRejected: remarksMeta.changesRejected || "",
@@ -981,8 +1001,8 @@ const EcnForm = ({ data, onBack }) => {
 
       addToast(
         error?.response?.data?.message ||
-          error?.response?.data?.errorMessage ||
-          "Failed to save Engineering Change Note.",
+        error?.response?.data?.errorMessage ||
+        "Failed to save Engineering Change Note.",
         "error",
       );
     } finally {
@@ -1054,7 +1074,7 @@ const EcnForm = ({ data, onBack }) => {
               label="ECN No"
               name="docId"
               value={generatingDocId ? "Generating..." : header.docId}
-              onChange={() => {}}
+              onChange={() => { }}
               error={fieldErrors.docId}
               disabled
               required
@@ -1101,11 +1121,10 @@ const EcnForm = ({ data, onBack }) => {
                     key={tab.key}
                     type="button"
                     onClick={() => setActiveChildTab(tab.key)}
-                    className={`shrink-0 px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap transition-colors ${
-                      activeChildTab === tab.key
+                    className={`shrink-0 px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap transition-colors ${activeChildTab === tab.key
                         ? "bg-blue-600 text-white"
                         : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                    }`}
+                      }`}
                   >
                     {tab.label}
                   </button>
@@ -1115,14 +1134,14 @@ const EcnForm = ({ data, onBack }) => {
 
             {(activeTabMeta.kind === "table" ||
               activeTabMeta.kind === "remarks") && (
-              <button
-                type="button"
-                onClick={addRowForTab}
-                className="shrink-0 h-6 w-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center"
-              >
-                <Plus size={12} />
-              </button>
-            )}
+                <button
+                  type="button"
+                  onClick={addRowForTab}
+                  className="shrink-0 h-6 w-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center"
+                >
+                  <Plus size={12} />
+                </button>
+              )}
           </div>
 
           {/* Tab 1: Part Details */}

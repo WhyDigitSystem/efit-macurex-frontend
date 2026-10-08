@@ -18,7 +18,7 @@ const EcrList = ({ onAddNew, onEdit, onBack, refreshTrigger, loadingEdit }) => {
       );
       const transformedData = (data || []).map((item) => ({
         id: item.id,
-        ecrNo: item.ecrNo || item.id,
+        ecrNo: item.docId,
         ecrDate: item.docDate
           ? String(item.docDate).slice(0, 10)
           : item.ecrDate
