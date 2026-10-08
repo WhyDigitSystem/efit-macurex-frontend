@@ -6,10 +6,6 @@ const ProductionBulkIssueList = ({ onAddNew, onEdit, onBack }) => {
   const [itemData, setItemData] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  /* -------------------------------------------------------------------------- */
-  /* Load Production (Bulk) Issues                                              */
-  /* -------------------------------------------------------------------------- */
-
   const loadItems = useCallback(async (orgId, branchId) => {
     setLoading(true);
 
@@ -22,26 +18,15 @@ const ProductionBulkIssueList = ({ onAddNew, onEdit, onBack }) => {
 
       const response = await productionBulkIssueAPI.getByOrgId(orgId, branchId);
 
-      console.log("Production Bulk Issues API Response:", response);
-
-      /* ---------------------------------------------------------------------- */
-      /* API Error Check                                                        */
-      /* ---------------------------------------------------------------------- */
-
       if (response?.status === false) {
-        const msg =
+        console.warn(
           response?.paramObjectsMap?.errorMessage ||
-          response?.paramObjectsMap?.message ||
-          "Failed to load production bulk issues";
-
-        console.warn(msg);
+            response?.paramObjectsMap?.message ||
+            "Failed to load production bulk issues",
+        );
         setItemData([]);
         return;
       }
-
-      /* ---------------------------------------------------------------------- */
-      /* Get Production Bulk Issues                                             */
-      /* ---------------------------------------------------------------------- */
 
       const issues = Array.isArray(
         response?.paramObjectsMap?.productionBulkIssues,
@@ -49,230 +34,125 @@ const ProductionBulkIssueList = ({ onAddNew, onEdit, onBack }) => {
         ? response.paramObjectsMap.productionBulkIssues
         : [];
 
-      console.log("Production Bulk Issues:", issues);
-
       if (issues.length === 0) {
         setItemData([]);
         return;
       }
 
-      /* ---------------------------------------------------------------------- */
-      /* Transform API Response                                                 */
-      /* ---------------------------------------------------------------------- */
+      const transformedData = issues.map((item) => ({
+        id: item.id,
 
-      const transformedData = issues.map((item) => {
-        return {
-          /* ------------------------------------------------------------------ */
-          /* Main ID                                                            */
-          /* ------------------------------------------------------------------ */
+        /* Backend may return docId = null; show a temporary PBI-<id>.
+           The form strips this placeholder before saving. */
+        issueNo:
+          item.docId !== null && item.docId !== undefined
+            ? item.docId
+            : item.id
+              ? `PBI-${item.id}`
+              : "",
+        docId: item.docId || "",
 
-          id: item.id,
+        /* Raw backend values — the form reads these when editing. */
+        date: item.date || "",
+        docDate: item.docDate || "",
+        issueDate: item.issueDate || "",
 
-          /* ------------------------------------------------------------------ */
-          /* Issue / Document Number                                            */
-          /* ------------------------------------------------------------------ */
+        /* Column display only */
+        displayDate: item.docDate || item.date || "",
 
-          /*
-           * Backend currently returns:
-           *
-           * "docId": null
-           *
-           * Therefore use the database ID as a temporary display fallback.
-           *
-           * If backend starts returning docId, it will automatically be used.
-           */
-          issueNo:
-            item.docId !== null && item.docId !== undefined
-              ? item.docId
-              : item.id
-                ? `PBI-${item.id}`
-                : "",
+        plant: item.branch?.branchName || item.branch?.branchCode || "",
+        plantCode: item.branch?.branchCode || "",
+        plantId: item.branch?.id || null,
+        branch: item.branch || null,
 
-          docId: item.docId || "",
+        belongsTo: item.belongsTo || "",
 
-          /* ------------------------------------------------------------------ */
-          /* Date                                                               */
-          /* ------------------------------------------------------------------ */
+        fgItemCode: item.fgItem?.itemCode || "",
+        fgItemDescription: item.fgItem?.itemDescription || "",
+        fgItemId: item.fgItem?.id || null,
+        fgItemUnit: item.fgItem?.unit || "",
+        fgItem: item.fgItem || null,
 
-          date: item.date || item.docDate || "",
-          docDate: item.docDate || "",
+        indentNo: item.indentNo || "",
+        purchaseMaterialRef: item.purchaseMaterialRef || "",
 
-          /* ------------------------------------------------------------------ */
-          /* Plant / Branch                                                     */
-          /* ------------------------------------------------------------------ */
+        /* Backend names are refNo / type */
+        refNo: item.refNo || "",
+        referenceNo: item.refNo || "",
+        type: item.type || "",
+        issueType: item.type || "",
 
-          plant: item.branch?.branchName || item.branch?.branchCode || "",
+        /* Display names are separate from the objects the form reads */
+        fromLocationName:
+          item.fromLocation?.locationName ||
+          item.fromLocation?.locationCode ||
+          "",
+        fromLocationCode: item.fromLocation?.locationCode || "",
+        fromLocationId: item.fromLocation?.id || null,
+        fromLocation: item.fromLocation || null,
 
-          plantCode: item.branch?.branchCode || "",
+        toLocationName:
+          item.toLocation?.locationName || item.toLocation?.locationCode || "",
+        toLocationCode: item.toLocation?.locationCode || "",
+        toLocationId: item.toLocation?.id || null,
+        toLocation: item.toLocation || null,
 
-          plantId: item.branch?.id || null,
+        remarks: item.remarks || "",
 
-          /* ------------------------------------------------------------------ */
-          /* Belongs To                                                         */
-          /* ------------------------------------------------------------------ */
+        createdBy: item.createdBy || "",
+        updatedBy: item.updatedBy || "",
 
-          belongsTo: item.belongsTo || "",
+        active:
+          item.active === true ||
+          String(item.active).toLowerCase() === "active",
+        activeStatus: item.active,
 
-          /* ------------------------------------------------------------------ */
-          /* FG Item                                                             */
-          /* ------------------------------------------------------------------ */
+        cancel:
+          item.cancel === true || String(item.cancel).toUpperCase() === "T",
+        cancelRemarks: item.cancelRemarks || "",
 
-          fgItemCode: item.fgItem?.itemCode || "",
+        screenName: item.screenName || "",
+        screenCode: item.screenCode || "",
 
-          fgItemDescription: item.fgItem?.itemDescription || "",
+        orgId: item.orgId || null,
+        financialYear: item.financialYear || "",
 
-          fgItemId: item.fgItem?.id || null,
-
-          fgItemUnit: item.fgItem?.unit || "",
-
-          /* ------------------------------------------------------------------ */
-          /* Indent                                                              */
-          /* ------------------------------------------------------------------ */
-
-          indentNo: item.indentNo || "",
-
-          /* ------------------------------------------------------------------ */
-          /* Purchase Material Reference                                         */
-          /* ------------------------------------------------------------------ */
-
-          purchaseMaterialRef: item.purchaseMaterialRef || "",
-
-          /* ------------------------------------------------------------------ */
-          /* Reference Number                                                    */
-          /* Backend field is refNo, NOT referenceNo                           */
-          /* ------------------------------------------------------------------ */
-
-          referenceNo: item.refNo || "",
-
-          /* ------------------------------------------------------------------ */
-          /* Type                                                               */
-          /* Backend field is type                                              */
-          /* ------------------------------------------------------------------ */
-
-          issueType: item.type || "",
-
-          /* ------------------------------------------------------------------ */
-          /* From Location                                                       */
-          /* ------------------------------------------------------------------ */
-
-          fromLocation:
-            item.fromLocation?.locationName ||
-            item.fromLocation?.locationCode ||
-            "",
-
-          fromLocationCode: item.fromLocation?.locationCode || "",
-
-          fromLocationId: item.fromLocation?.id || null,
-
-          /* ------------------------------------------------------------------ */
-          /* To Location                                                         */
-          /* ------------------------------------------------------------------ */
-
-          toLocation:
-            item.toLocation?.locationName ||
-            item.toLocation?.locationCode ||
-            "",
-
-          toLocationCode: item.toLocation?.locationCode || "",
-
-          toLocationId: item.toLocation?.id || null,
-
-          /* ------------------------------------------------------------------ */
-          /* Created / Updated By                                                */
-          /* ------------------------------------------------------------------ */
-
-          createdBy: item.createdBy || "",
-
-          updatedBy: item.updatedBy || "",
-
-          /* ------------------------------------------------------------------ */
-          /* Active / Status                                                     */
-          /* ------------------------------------------------------------------ */
-
-          active: item.active === true,
-
-          activeStatus: item.active,
-
-          /* ------------------------------------------------------------------ */
-          /* Cancel                                                              */
-          /* ------------------------------------------------------------------ */
-
-          cancel: item.cancel === true,
-
-          cancelRemarks: item.cancelRemarks || "",
-
-          /* ------------------------------------------------------------------ */
-          /* Screen Information                                                  */
-          /* ------------------------------------------------------------------ */
-
-          screenName: item.screenName || "",
-
-          screenCode: item.screenCode || "",
-
-          /* ------------------------------------------------------------------ */
-          /* Organization                                                        */
-          /* ------------------------------------------------------------------ */
-
-          orgId: item.orgId || null,
-
-          financialYear: item.financialYear || "",
-
-          /* ------------------------------------------------------------------ */
-          /* Details                                                             */
-          /* ------------------------------------------------------------------ */
-
-          details: Array.isArray(item.details) ? item.details : [],
-
-          productionBulkIssueDetailsResponseDTO: Array.isArray(
-            item.productionBulkIssueDetailsResponseDTO,
-          )
-            ? item.productionBulkIssueDetailsResponseDTO
-            : [],
-        };
-      });
-
-      /* ---------------------------------------------------------------------- */
-      /* Sort Newest First                                                      */
-      /* ---------------------------------------------------------------------- */
+        details: Array.isArray(item.details) ? item.details : [],
+        productionBulkIssueDetailsResponseDTO: Array.isArray(
+          item.productionBulkIssueDetailsResponseDTO,
+        )
+          ? item.productionBulkIssueDetailsResponseDTO
+          : [],
+      }));
 
       transformedData.sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
-
-      console.log("Production Bulk Issues Transformed:", transformedData);
 
       setItemData(transformedData);
     } catch (error) {
       console.error("Error loading production bulk issues:", error);
-
       setItemData([]);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  /* -------------------------------------------------------------------------- */
-  /* Initial Load                                                               */
-  /* -------------------------------------------------------------------------- */
+  /* Initial load + refresh button (which calls with no arguments) */
+  const handleRefresh = useCallback(
+    () =>
+      loadItems(
+        localStorage.getItem("orgId"),
+        localStorage.getItem("branchId"),
+      ),
+    [loadItems],
+  );
 
   useEffect(() => {
-    const orgId = localStorage.getItem("orgId");
-    const branchId = localStorage.getItem("branchId");
-
-    loadItems(orgId, branchId);
-  }, [loadItems]);
-
-  /* -------------------------------------------------------------------------- */
-  /* Edit                                                                       */
-  /* -------------------------------------------------------------------------- */
+    handleRefresh();
+  }, [handleRefresh]);
 
   const handleEdit = (item) => {
-    console.log("Editing Production Bulk Issue:", item);
-
     onEdit(item);
   };
-
-  /* -------------------------------------------------------------------------- */
-  /* Columns                                                                    */
-  /* -------------------------------------------------------------------------- */
 
   const columns = [
     {
@@ -282,42 +162,31 @@ const ProductionBulkIssueList = ({ onAddNew, onEdit, onBack }) => {
       type: "text",
       noWrap: true,
     },
-
     {
-      key: "date",
+      key: "displayDate",
       label: "Date",
-      accessor: "date",
+      accessor: "displayDate",
       type: "date",
     },
-
-    {
-      key: "plant",
-      label: "Plant",
-      accessor: "plant",
-      type: "text",
-    },
-
+    { key: "plant", label: "Plant", accessor: "plant", type: "text" },
     {
       key: "belongsTo",
       label: "Belongs To",
       accessor: "belongsTo",
       type: "text",
     },
-
     {
       key: "fgItemCode",
       label: "FG Item Code",
       accessor: "fgItemCode",
       type: "text",
     },
-
     {
       key: "fgItemDescription",
       label: "FG Item Description",
       accessor: "fgItemDescription",
       type: "text",
     },
-
     {
       key: "indentNo",
       label: "Indent No",
@@ -325,28 +194,24 @@ const ProductionBulkIssueList = ({ onAddNew, onEdit, onBack }) => {
       type: "text",
       noWrap: true,
     },
-
     {
       key: "purchaseMaterialRef",
       label: "Purchase Material Ref",
       accessor: "purchaseMaterialRef",
       type: "text",
     },
-
     {
-      key: "fromLocation",
+      key: "fromLocationName",
       label: "From Location",
-      accessor: "fromLocation",
+      accessor: "fromLocationName",
       type: "text",
     },
-
     {
-      key: "toLocation",
+      key: "toLocationName",
       label: "To Location",
-      accessor: "toLocation",
+      accessor: "toLocationName",
       type: "text",
     },
-
     {
       key: "createdBy",
       label: "Created By",
@@ -359,14 +224,12 @@ const ProductionBulkIssueList = ({ onAddNew, onEdit, onBack }) => {
       label: "Status",
       accessor: "active",
       type: "status",
-
       statusVariants: {
         true: {
           label: "Active",
           className:
             "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
         },
-
         false: {
           label: "Inactive",
           className:
@@ -384,35 +247,22 @@ const ProductionBulkIssueList = ({ onAddNew, onEdit, onBack }) => {
     },
   ];
 
-  /* -------------------------------------------------------------------------- */
-  /* Search Fields                                                              */
-  /* -------------------------------------------------------------------------- */
-
   const searchFields = [
     "issueNo",
-    "date",
+    "displayDate",
     "plant",
     "belongsTo",
     "fgItemCode",
     "fgItemDescription",
     "indentNo",
     "purchaseMaterialRef",
-    "fromLocation",
-    "toLocation",
+    "fromLocationName",
+    "toLocationName",
     "createdBy",
   ];
 
-  /* -------------------------------------------------------------------------- */
-  /* Filters                                                                    */
-  /* -------------------------------------------------------------------------- */
-
   const filterOptions = [
-    {
-      value: "all",
-      label: "All",
-      field: null,
-    },
-
+    { value: "all", label: "All", field: null },
     {
       value: "active",
       label: "Active",
@@ -420,7 +270,6 @@ const ProductionBulkIssueList = ({ onAddNew, onEdit, onBack }) => {
       filterValue: true,
       activeValue: true,
     },
-
     {
       value: "inactive",
       label: "Inactive",
@@ -429,10 +278,6 @@ const ProductionBulkIssueList = ({ onAddNew, onEdit, onBack }) => {
       activeValue: false,
     },
   ];
-
-  /* -------------------------------------------------------------------------- */
-  /* Render                                                                     */
-  /* -------------------------------------------------------------------------- */
 
   return (
     <CommonListViewTable
@@ -453,7 +298,7 @@ const ProductionBulkIssueList = ({ onAddNew, onEdit, onBack }) => {
       emptyMessage="No Production (Bulk) Issues found"
       loadingMessage="Loading Production (Bulk) Issues..."
       enableRefresh={true}
-      onRefresh={loadItems}
+      onRefresh={handleRefresh}
       enableExport={true}
       exportFileName="ProductionBulkIssues"
     />

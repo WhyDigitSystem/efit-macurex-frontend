@@ -15,6 +15,8 @@ const productionBulkIssueAPI = {
     }
   },
 
+  /* The backend may return a single object or an array; the entry whose id
+     matches the requested id is picked, never blindly the first one. */
   getById: async (id) => {
     try {
       const res = await apiClient.get(
@@ -22,19 +24,35 @@ const productionBulkIssueAPI = {
         { params: { id } },
       );
 
-      return (
-        res?.paramObjectsMap?.productionBulkIssuesVO ||
-        res?.paramObjectsMap ||
-        null
-      );
+      if (res?.status === false) return null;
+
+      const map = res?.paramObjectsMap || {};
+
+      const found =
+        map.productionBulkIssuesVO ??
+        map.productionBulkIssues ??
+        map.productionBulkIssue ??
+        map.productionBulkIssuesResponseVO ??
+        (map.id ? map : null);
+
+      if (!found) return null;
+
+      const list = Array.isArray(found) ? found : [found];
+
+      const match =
+        list.find((item) => String(item?.id) === String(id)) ||
+        (list.length === 1 ? list[0] : null);
+
+      console.log("getProductionBulkIssuesById ->", match);
+
+      return match || null;
     } catch (error) {
       console.error("Error fetching production bulk issue by id:", error);
       throw error;
     }
   },
 
-  // CREATE / UPDATE
-  // Backend Swagger requires PUT
+  // CREATE / UPDATE (Swagger requires PUT)
   createUpdate: async (data) => {
     try {
       const res = await apiClient.put(
@@ -53,12 +71,7 @@ const productionBulkIssueAPI = {
     try {
       const res = await apiClient.get(
         "/api/subContract/getProductionBulkIssuesDocId",
-        {
-          params: {
-            financialYear,
-            orgId,
-          },
-        },
+        { params: { financialYear, orgId } },
       );
 
       return res?.paramObjectsMap?.docId || "";
@@ -75,12 +88,7 @@ const productionBulkIssueAPI = {
 
       const res = await apiClient.get(
         "/api/subContract/getFGItemsforBOMCorrectionRequestNote",
-        {
-          params: {
-            branch,
-            orgId,
-          },
-        },
+        { params: { branch, orgId } },
       );
 
       return res?.paramObjectsMap?.itemDetails || [];
@@ -97,13 +105,7 @@ const productionBulkIssueAPI = {
 
       const res = await apiClient.get(
         "/api/subContract/getIndentByItemForProductionBulkIssues",
-        {
-          params: {
-            branch,
-            itemId,
-            orgId,
-          },
-        },
+        { params: { branch, itemId, orgId } },
       );
 
       return res?.paramObjectsMap?.indentList || [];

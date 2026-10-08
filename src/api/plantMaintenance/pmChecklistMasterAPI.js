@@ -25,11 +25,16 @@ export const pmChecklistMasterAPI = {
    * vendorComplaintEntry screens (Machine/Tool Rectification, Internal Indent).
    */
   getChecklists: async (branch, orgId) => {
+    // Endpoint requires BOTH params; skip the call rather than get an empty/400 response.
+    if (!branch || !orgId) return [];
     try {
       const res = await apiClient.get(
         "/api/vendorComplaintEntry/getPMCheckListMasterByOrgId",
         { params: { branch, orgId } },
       );
+      // apiClient unwrap behavior is inconsistent across endpoints:
+      // accept an already-unwrapped array as well as the full envelope.
+      if (Array.isArray(res)) return res;
       return res?.paramObjectsMap?.pmCheckListMasterVO || [];
     } catch (error) {
       console.error("getPMCheckListMasterByOrgId failed:", error);
