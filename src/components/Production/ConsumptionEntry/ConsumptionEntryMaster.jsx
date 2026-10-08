@@ -5,14 +5,15 @@ import ConsumptionEntryForm from "./ConsumptionEntryForm";
 const ConsumptionEntryMaster = () => {
   const [screen, setScreen] = useState("list");
   const [editData, setEditData] = useState(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const handleAddNew = () => {
     setEditData(null);
     setScreen("form");
   };
 
-  const handleEdit = (data) => {
-    setEditData(data);
+  const handleEdit = (row) => {
+    setEditData(row);
     setScreen("form");
   };
 
@@ -20,14 +21,11 @@ const ConsumptionEntryMaster = () => {
     setScreen("list");
   };
 
-  const handleSave = async (payload) => {
-    try {
-      await consumptionEntryAPI.updateCreateConsumptionEntry(payload); // Create/Update
-      handleBack();
-    } catch (error) {
-      console.error("Error saving consumption entry:", error);
-      throw error;
-    }
+  // The form already calls the save API itself - here we only return to the
+  // list and refresh it (calling the API again here would save twice).
+  const handleSaved = () => {
+    setRefreshTrigger((n) => n + 1);
+    setScreen("list");
   };
 
   return (
@@ -37,6 +35,7 @@ const ConsumptionEntryMaster = () => {
           onAddNew={handleAddNew}
           onEdit={handleEdit}
           onBack={() => window.history.back()}
+          refreshTrigger={refreshTrigger}
         />
       )}
 
@@ -44,7 +43,7 @@ const ConsumptionEntryMaster = () => {
         <ConsumptionEntryForm
           editData={editData}
           onBack={handleBack}
-          onSave={handleSave}
+          onSave={handleSaved}
         />
       )}
     </>

@@ -2,25 +2,57 @@ import { useCallback, useEffect, useState } from "react";
 
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import { toast } from "../../../utils/toast";
+import consumptionEntryAPI from "../../../api/Production/consumptionEntryAPI";
+
+const formatDate = (value) => {
+  if (!value) return "";
+  if (Array.isArray(value)) {
+    const [y, m, d] = value;
+    return `${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}/${y}`;
+  }
+  const s = String(value).slice(0, 10);
+  const [y, m, d] = s.split("-");
+  return y && m && d ? `${d}/${m}/${y}` : s;
+};
 
 const ConsumptionEntryList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   const [consumptionData, setConsumptionData] = useState([]);
   const [loading, setLoading] = useState(false);
 
   const ORG_ID = Number(localStorage.getItem("orgId"));
+  // Logged-in branch (see getCurrentBranch in consumptionEntryAPI)
+  const BRANCH_ID = consumptionEntryAPI.getCurrentBranch().id;
 
   const loadConsumptionEntries = useCallback(async () => {
     try {
       setLoading(true);
 
-      const response =
-        await consumptionEntryAPI.getConsumptionEntryByOrgId(ORG_ID);
+      // No branch stored locally -> fall back to the first branch of the org
+      let branchId = BRANCH_ID;
+      if (!branchId) {
+        const branches = await consumptionEntryAPI.getBranches(ORG_ID);
+        branchId = branches[0]?.id || 0;
+      }
 
-      const sortedData = (response || []).sort(
-        (a, b) => (b.id || 0) - (a.id || 0),
+      const response = await consumptionEntryAPI.getConsumptionEntryByOrgId(
+        branchId,
+        ORG_ID,
       );
 
-      setConsumptionData(sortedData);
+      // Flatten nested objects so search / columns are simple
+      const rows = (response || [])
+        .map((r) => ({
+          ...r,
+          // backend returns "Active"/"Inactive" strings
+          active: r.active === true || r.active === "Active",
+          plantName: r.branch?.branchName || r.branch?.branchCode || "",
+          locationName: r.location?.locationName || "",
+          entryTypeName: r.entryType?.listDescription || "",
+          docDateText: formatDate(r.docDate),
+        }))
+        .sort((a, b) => (b.id || 0) - (a.id || 0));
+
+      setConsumptionData(rows);
     } catch (error) {
       console.error("Failed to load consumption entries:", error);
       setConsumptionData([]);
@@ -28,7 +60,7 @@ const ConsumptionEntryList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     } finally {
       setLoading(false);
     }
-  }, [ORG_ID]);
+  }, [ORG_ID, BRANCH_ID]);
 
   useEffect(() => {
     loadConsumptionEntries();
@@ -38,45 +70,38 @@ const ConsumptionEntryList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     {
       key: "docId",
       label: "Doc Id",
-      accessor: (row) => row.header?.docId,
+      accessor: "docId",
       type: "text",
+      noWrap: true,
     },
     {
       key: "docDate",
       label: "Doc Date",
-      accessor: (row) => row.header?.docDate,
-      type: "date",
+      accessor: "docDateText",
+      type: "text",
+      noWrap: true,
     },
+    { key: "plant", label: "Plant", accessor: "plantName", type: "text" },
+    { key: "type", label: "Type", accessor: "type", type: "text" },
     {
-      key: "plant",
-      label: "Plant",
-      accessor: (row) => row.header?.plant,
+      key: "consumption",
+      label: "Consumption ?",
+      accessor: "consumption",
       type: "text",
     },
     {
       key: "location",
       label: "Location",
-      accessor: (row) => row.header?.location,
+      accessor: "locationName",
       type: "text",
     },
     {
-      key: "consumption",
-      label: "Consumption ?",
-      accessor: (row) => row.header?.consumption,
-      type: "badge",
-    },
-    {
-      key: "type",
-      label: "Type",
-      accessor: (row) => row.header?.itemType,
+      key: "entryType",
+      label: "Type (List)",
+      accessor: "entryTypeName",
       type: "text",
     },
-    {
-      key: "active",
-      label: "Status",
-      accessor: "active",
-      type: "status",
-    },
+    { key: "active", label: "Status", accessor: "active", type: "status" },
     {
       key: "actions",
       label: "Actions",
@@ -86,7 +111,14 @@ const ConsumptionEntryList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     },
   ];
 
-  const searchFields = ["header.docId", "header.location"];
+  const searchFields = [
+    "docId",
+    "plantName",
+    "locationName",
+    "entryTypeName",
+    "consumption",
+    "type",
+  ];
 
   return (
     <div className="h-full flex flex-col">
