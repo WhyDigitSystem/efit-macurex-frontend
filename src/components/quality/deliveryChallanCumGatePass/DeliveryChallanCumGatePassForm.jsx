@@ -549,7 +549,7 @@ const DeliveryChallanCumGatePassForm = ({ data, onBack }) => {
   const loadBelongsTo = useCallback(async () => {
     try {
       const res = await locationMasterAPI.getListValuesGroup(
-        "Delivery Challan Cum Gate Pass",
+        "BELONGS TO",
         orgId,
       );
       setBelongsToOptions(
@@ -587,7 +587,7 @@ const DeliveryChallanCumGatePassForm = ({ data, onBack }) => {
   const loadMot = useCallback(async () => {
     try {
       const res = await locationMasterAPI.getListValuesGroup(
-        "Delivery Challan Cum Gate Pass MOT",
+        "SHIP MODE",
         orgId,
       );
       setMotOptions(
@@ -637,7 +637,7 @@ const DeliveryChallanCumGatePassForm = ({ data, onBack }) => {
     try {
       const map = {};
       let options = [];
-      if (header.type === "PARTY") {
+      if (header.type == "PARTY") {
         const res = await partyMasterAPI.getCustomerDetails(branch, orgId);
         options = (res || []).map((c) => {
           const label = c.customerName || c.customerCode || c.customerId;
@@ -648,7 +648,7 @@ const DeliveryChallanCumGatePassForm = ({ data, onBack }) => {
           };
           return { value: c.customerId, label };
         });
-      } else if (header.type === "PLANT") {
+      } else if (header.type == "PLANT") {
         const res = await branchAPI.getBranchByOrgId(orgId);
         options = (res || []).map((b) => {
           const label = b.branchName || b.branchCode || b.id;
@@ -1247,7 +1247,6 @@ const DeliveryChallanCumGatePassForm = ({ data, onBack }) => {
                   {
                     key: "availableQty",
                     label: "Available Qty",
-                    readOnly: true,
                   },
                   { key: "qty", label: "Qty", type: "number" },
                   { key: "dueDate", label: "Due Date", type: "date" },

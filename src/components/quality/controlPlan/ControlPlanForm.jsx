@@ -6,6 +6,7 @@ import branchAPI from "../../../api/branchAPI";
 import listOfValuesAPI from "../../../api/listOfValuesAPI";
 import { useToast } from "../../Toast/ToastContext";
 import employeeAPI from "../../../api/employeeAPI";
+
 /* ---------------------------------------------------------------------------- */
 /* Shared design tokens                                                        */
 
@@ -178,13 +179,12 @@ const TableHead = ({ headers }) => (
       {headers.map((h, i) => (
         <th
           key={i}
-          className={`p-2 whitespace-nowrap ${
-            i === 0
+          className={`p-2 whitespace-nowrap ${i === 0
               ? "w-8 text-center"
               : i === headers.length - 1
                 ? "w-20 text-left"
                 : "text-left"
-          } dark:text-white`}
+            } dark:text-white`}
         >
           {h}
         </th>
@@ -202,11 +202,10 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
         type="button"
         onClick={onRemove}
         disabled={disabled}
-        className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-          disabled
+        className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
             ? "bg-gray-400 cursor-not-allowed"
             : "bg-red-600 hover:bg-red-700"
-        }`}
+          }`}
       >
         <Trash2 size={10} />
       </button>
@@ -300,10 +299,6 @@ const CHILD_TABS = [
   { key: "summary", label: "Control Plan Summary", kind: "fields" },
 ];
 
-// NOTE: operationDesc has no slot in controlPlanDetailDTO — kept here for
-// on-screen reference only, never sent in the save payload. machineOptions
-// is UI-only state: the per-row Machine/Device choices for whichever
-// Operation No is currently selected on that row.
 const emptyDetailRow = () => ({
   id: 0,
   operationNo: "",
@@ -316,7 +311,7 @@ const emptyDetailRow = () => ({
   riskClassSpecialCharacter: "",
   evaluationTechnique: "",
   sampling: "",
-  controlMethod: "",
+  controlMethod: "", // LOV id (controlMethodOptions)
   reactionPlan: "",
   record: "",
 });
@@ -336,7 +331,7 @@ const emptySampleRow = () => ({
 
 const emptyFixtureRow = () => ({
   id: 0,
-  machineFixtureNo: "", // holds the machineFixtureId (DTO expects a number here)
+  machineFixtureNo: "",
   machineFixtureName: "",
 });
 
@@ -357,14 +352,16 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
   const [fieldErrors, setFieldErrors] = useState({});
   const [tableErrors, setTableErrors] = useState({});
   const [employeeList, setEmployeeList] = useState([]);
+
   /* ---------------- Lookup options ---------------- */
   const [branchOptions, setBranchOptions] = useState([]);
   const [planTypeOptions, setPlanTypeOptions] = useState([]);
-  const [fgItemList, setFgItemList] = useState([]); // raw list, for id -> details lookup
-  const [operationList, setOperationList] = useState([]); // raw operationMasterVO list, for Operation No auto-fill (Operation Desc + Machine/Device options)
-  const [locationList, setLocationList] = useState([]); // raw list, for Process Sheet No dropdown (label: locationId, value: id)
-  const [machineFixtureList, setMachineFixtureList] = useState([]); // raw, for id -> name lookup
-  const [parameterList, setParameterList] = useState([]); // raw, for id -> type lookup
+  const [controlMethodOptions, setControlMethodOptions] = useState([]);
+  const [fgItemList, setFgItemList] = useState([]);
+  const [operationList, setOperationList] = useState([]);
+  const [locationList, setLocationList] = useState([]);
+  const [machineFixtureList, setMachineFixtureList] = useState([]);
+  const [parameterList, setParameterList] = useState([]);
 
   const isTableTab =
     CHILD_TABS.find((t) => t.key === activeChildTab)?.kind === "table";
@@ -381,11 +378,11 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
     planNo: "",
     fgItemCode: "",
     itemDescription: "",
-    itemGrade: "", // numeric gradeMasterId — sent to backend
-    itemGradeCode: "", // display-only text (gradeCode)
+    itemGrade: "",
+    itemGradeCode: "",
     itemSize: "",
-    processSheetNo: "", // holds the numeric location id — sent to backend
-    originDate: "", // UI-only, no slot in controlPlanDTO
+    processSheetNo: "",
+    originDate: "",
     revisionDate: "",
     preparedBy: "",
     checkedBy: "",
@@ -411,8 +408,8 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
       const list = Array.isArray(response)
         ? response
         : response?.paramObjectsMap?.branches ||
-          response?.paramObjectsMap?.branchVO ||
-          [];
+        response?.paramObjectsMap?.branchVO ||
+        [];
       setBranchOptions(
         list.map((b) => ({
           value: b.id,
@@ -461,6 +458,32 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
     }
   }, [ORG_ID]);
 
+  /* -------- Control Method LOV --------
+     Adjust the group string to match the actual LOV group code
+     stored in your backend master. */
+  const loadControlMethodOptions = useCallback(async () => {
+    try {
+      if (!ORG_ID) return;
+
+      const res = await listOfValuesAPI.getListValuesGroup(
+        "CONTROLPLANTYPE",
+        ORG_ID,
+      );
+
+      const list = Array.isArray(res) ? res : [];
+
+      setControlMethodOptions(
+        list.map((v) => ({
+          value: String(v.id),
+          label: v.valuesDescription || v.valueDescription || String(v.id),
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to load Control Method LOV:", error);
+      setControlMethodOptions([]);
+    }
+  }, [ORG_ID]);
+
   const loadFgItems = useCallback(async () => {
     try {
       const res = await controlPlanAPI.getFGItemDropdown(BRANCH_ID, ORG_ID);
@@ -471,8 +494,6 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
     }
   }, [BRANCH_ID, ORG_ID]);
 
-  // Operation Master — drives Operation No, Operation Desc, and the
-  // per-row Machine/Device options on the Control Plan Detail table.
   const loadOperations = useCallback(async () => {
     try {
       const res = await controlPlanAPI.getOperationMasterByOrgId(ORG_ID);
@@ -483,8 +504,6 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
     }
   }, [ORG_ID]);
 
-  // Locations — drives the Process Sheet No dropdown. Label shown is
-  // locationId, but the value stored/sent to the backend is the numeric id.
   const loadLocations = useCallback(async () => {
     try {
       const res =
@@ -525,6 +544,7 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
   useEffect(() => {
     loadBranches();
     loadPlanTypes();
+    loadControlMethodOptions();
     loadFgItems();
     loadOperations();
     loadLocations();
@@ -534,6 +554,7 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
   }, [
     loadBranches,
     loadPlanTypes,
+    loadControlMethodOptions,
     loadFgItems,
     loadOperations,
     loadLocations,
@@ -566,13 +587,11 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
     label: p.parameterCode || p.parameterDescription || p.id,
   }));
 
-  // Process Sheet No — shows locationId, sends the numeric id.
   const processSheetOptions = locationList.map((loc) => ({
     value: loc.id,
     label: loc.locationId,
   }));
 
-  // Operation No — sourced from Operation Master.
   const operationOptions = operationList
     .filter((op) => op.operationId)
     .map((op) => ({ value: op.operationId, label: op.operationId }));
@@ -627,7 +646,7 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
       fgItemCode: data.fgItemCode ?? "",
       itemDescription: data.itemDescription || "",
       itemGrade: data.itemGrade ?? "",
-      itemGradeCode: "", // resolved once fgItemList / this item's grade is known
+      itemGradeCode: "",
       itemSize: data.itemSize || "",
       processSheetNo: data.processSheetNo || "",
       originDate: "",
@@ -645,52 +664,54 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
     setDetailRows(
       data.controlPlanDetailDTO?.length
         ? data.controlPlanDetailDTO.map((d) => ({
-            id: d.id || 0,
-            operationNo: d.operationNo || "",
-            operationDesc: "",
-            machineDevice: d.machineDevice ?? "",
-            machineOptions: [], // backfilled once Operation Master loads
-            product: "",
-            process: d.process || "",
-            specification: d.specification || "",
-            riskClassSpecialCharacter: d.riskClassSpecialCharacter || "",
-            evaluationTechnique: d.evaluationTechnique || "",
-            sampling: "",
-            controlMethod: d.controlMethod ?? "",
-            reactionPlan: d.reactionPlan || "",
-            record: d.record || "",
-          }))
+          id: d.id || 0,
+          operationNo: d.operationNo || "",
+          operationDesc: "",
+          machineDevice: d.machineDevice ?? "",
+          machineOptions: [],
+          product: "",
+          process: d.process || "",
+          specification: d.specification || "",
+          riskClassSpecialCharacter: d.riskClassSpecialCharacter || "",
+          evaluationTechnique: d.evaluationTechnique || "",
+          sampling: "",
+          // Normalize to string so the <select> can match the option value
+          controlMethod:
+            d.controlMethod != null ? String(d.controlMethod) : "",
+          reactionPlan: d.reactionPlan || "",
+          record: d.record || "",
+        }))
         : [emptyDetailRow()],
     );
 
     setParameterRows(
       data.controlPlanParameterDTO?.length
         ? data.controlPlanParameterDTO.map((p) => ({
-            id: p.id || 0,
-            parameter: p.parameter ?? "",
-            parameterType: p.parameterType || "",
-            tol: p.tol ?? "",
-          }))
+          id: p.id || 0,
+          parameter: p.parameter ?? "",
+          parameterType: p.parameterType || "",
+          tol: p.tol ?? "",
+        }))
         : [emptyParameterRow()],
     );
 
     setSampleRows(
       data.controlPlanSampleDTO?.length
         ? data.controlPlanSampleDTO.map((s) => ({
-            id: s.id || 0,
-            sampleFrequency: s.sampleFrequency ?? "",
-            size: s.size ?? "",
-          }))
+          id: s.id || 0,
+          sampleFrequency: s.sampleFrequency ?? "",
+          size: s.size ?? "",
+        }))
         : [emptySampleRow()],
     );
 
     setFixtureRows(
       data.controlPlanMachineFixtureDTO?.length
         ? data.controlPlanMachineFixtureDTO.map((f) => ({
-            id: f.id || 0,
-            machineFixtureNo: f.machineFixtureNo ?? "",
-            machineFixtureName: f.machineFixtureName || "",
-          }))
+          id: f.id || 0,
+          machineFixtureNo: f.machineFixtureNo ?? "",
+          machineFixtureName: f.machineFixtureName || "",
+        }))
         : [emptyFixtureRow()],
     );
   };
@@ -717,7 +738,7 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editId, editData]);
 
-  // Once FG items are loaded, backfill the display-only grade code for edit mode
+  // Backfill grade code once FG items load
   useEffect(() => {
     if (!fgItemList.length || !header.fgItemCode) return;
     const match = fgItemList.find(
@@ -729,10 +750,7 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fgItemList]);
 
-  // Once Operation Master is loaded, backfill Operation Desc + the
-  // Machine/Device options for any detail rows that already have an
-  // Operation No selected (edit mode, where rows load before the master
-  // data arrives).
+  // Backfill Operation Desc + Machine options once Operation Master loads
   useEffect(() => {
     if (!operationList.length) return;
     setDetailRows((prev) =>
@@ -799,8 +817,6 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
             value: m.machine?.id,
             label: m.machine?.machineNo || m.machine?.machineName,
           }));
-          // The previously picked machine belonged to the old operation's
-          // option list, so it's no longer valid — clear it.
           next.machineDevice = "";
         }
 
@@ -1002,6 +1018,7 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
         .filter((r) => r.operationNo?.trim())
         .map((r) => ({
           ...(r.id > 0 && { id: r.id }),
+          // LOV id from controlMethodOptions
           controlMethod: Number(r.controlMethod) || 0,
           evaluationTechnique: r.evaluationTechnique || "",
           machineDevice: Number(r.machineDevice) || 0,
@@ -1044,8 +1061,6 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
       orgId: header.orgId,
       planNo: header.planNo || "",
       preparedBy: Number(header.preparedBy) || 0,
-      // header.processSheetNo holds the numeric location id from the
-      // Process Sheet No dropdown — sent to the backend as-is.
       processSheetNo: header.processSheetNo || "",
       revisionDate: header.revisionDate || "",
       ...(isEditMode && { updatedBy: CREATED_BY }),
@@ -1154,7 +1169,7 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
               label="Plan No"
               name="planNo"
               value={generatingDocId ? "Generating..." : header.planNo}
-              onChange={() => {}}
+              onChange={() => { }}
               disabled
             />
             <Field
@@ -1218,7 +1233,6 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
 
         {/* ---------------- Child Tabs ---------------- */}
         <section className="mt-0 bg-white dark:bg-gray-800">
-          {/* Tabs */}
           <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 mb-0">
             <div className="flex flex-wrap">
               {CHILD_TABS.map((tab) => (
@@ -1226,11 +1240,10 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
                   key={tab.key}
                   type="button"
                   onClick={() => setActiveChildTab(tab.key)}
-                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${
-                    activeChildTab === tab.key
+                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${activeChildTab === tab.key
                       ? "bg-blue-600 text-white"
                       : "text-gray-600 dark:text-gray-300"
-                  }`}
+                    }`}
                 >
                   {tab.label}
                 </button>
@@ -1268,7 +1281,6 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
                     key: "machineDevice",
                     label: "Machine/Device",
                     type: "select",
-                    // Options depend on the operation picked on this row
                     options: (row) => row.machineOptions || [],
                   },
                   { key: "product", label: "Product" },
@@ -1281,9 +1293,11 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
                   { key: "evaluationTechnique", label: "Eval. Technique" },
                   { key: "sampling", label: "Sampling" },
                   {
+                    // LOV-backed select — value is the LOV id
                     key: "controlMethod",
                     label: "Control Method",
-                    type: "number",
+                    type: "select",
+                    options: controlMethodOptions,
                   },
                   {
                     key: "reactionPlan",

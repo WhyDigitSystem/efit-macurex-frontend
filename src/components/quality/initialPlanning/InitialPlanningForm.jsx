@@ -16,6 +16,7 @@ import employeeAPI from "../../../api/employeeAPI";
 import listOfValuesAPI from "../../../api/listOfValuesAPI";
 import partyMasterAPI from "../../../api/partyMasterAPI";
 import { useToast } from "../../Toast/ToastContext";
+import machineMasterAPI from "../../../api/Production/machineMasterAPI";
 
 /* ---------------------------------------------------------------------------- */
 /* Shared design tokens                                                        */
@@ -263,7 +264,13 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
   </tr>
 );
 
-const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow, showInstrumentView = false, onViewInstruments }) => (
+const DynamicTable = ({
+  columns,
+  rows,
+  onCellChange,
+  onRemoveRow,
+  onViewInstruments,
+}) => (
   <TableWrapper>
     <TableHead headers={["#", ...columns.map((c) => c.label), "Action"]} />
     <tbody>
@@ -331,6 +338,9 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow, showInstrument
   </TableWrapper>
 );
 
+/* ---------------------------------------------------------------------------- */
+/* Instruments popup — Instrument No. is a dropdown from Machine Master        */
+
 const InstrumentsPopup = ({
   isOpen,
   onClose,
@@ -338,12 +348,19 @@ const InstrumentsPopup = ({
   onInstrumentCellChange,
   onAddInstrumentRow,
   onRemoveInstrumentRow,
+  machineOptions,
+  machineMap,
 }) => {
   if (!isOpen) return null;
 
   const columns = [
-    { key: "instrumentNo", label: "Instrument No. *" },
-    { key: "instrumentName", label: "Instrument Name *" },
+    {
+      key: "instrumentNo",
+      label: "Instrument No. *",
+      type: "select",
+      options: machineOptions,
+    },
+    { key: "instrumentName", label: "Instrument Name", readOnly: true },
     { key: "range", label: "Range" },
   ];
 
@@ -377,7 +394,9 @@ const InstrumentsPopup = ({
           </div>
 
           <TableWrapper>
-            <TableHead headers={["S.No", ...columns.map((c) => c.label), "Action"]} />
+            <TableHead
+              headers={["S.No", ...columns.map((c) => c.label), "Action"]}
+            />
             <tbody>
               {instrumentRows.map((row, index) => (
                 <TableRow
@@ -386,19 +405,73 @@ const InstrumentsPopup = ({
                   onRemove={() => onRemoveInstrumentRow(index)}
                   disabled={instrumentRows.length <= 1}
                 >
-                  {columns.map((col) => (
-                    <td className="p-2 align-top" key={col.key}>
-                      <input
-                        type="text"
-                        value={row[col.key] || ""}
-                        onChange={(e) =>
-                          onInstrumentCellChange(index, col.key, e.target.value)
-                        }
-                        className={cellInputClasses}
-                        placeholder={`Enter ${col.label}`}
-                      />
-                    </td>
-                  ))}
+                  {columns.map((col) => {
+                    if (col.type === "select") {
+                      return (
+                        <td className="p-2 align-top" key={col.key}>
+                          <select
+                            value={row[col.key] ?? ""}
+                            onChange={(e) =>
+                              onInstrumentCellChange(
+                                index,
+                                col.key,
+                                e.target.value,
+                              )
+                            }
+                            className={cellInputClasses}
+                          >
+                            <option value="">-- Select --</option>
+                            {(col.options || []).map((opt) => (
+                              <option
+                                key={opt.value ?? opt}
+                                value={opt.value ?? opt}
+                              >
+                                {opt.label ?? opt}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                      );
+                    }
+
+                    // Instrument Name — always derived from machineMap by
+                    // instrumentNo, so it stays correct even after an edit load.
+                    if (col.key === "instrumentName") {
+                      const machine = machineMap[row.instrumentNo];
+                      return (
+                        <td className="p-2 align-top" key={col.key}>
+                          <input
+                            type="text"
+                            value={machine?.machineInstrumentName || ""}
+                            readOnly
+                            className={cellReadOnlyClasses}
+                          />
+                        </td>
+                      );
+                    }
+
+                    return (
+                      <td className="p-2 align-top" key={col.key}>
+                        <input
+                          type="text"
+                          value={row[col.key] || ""}
+                          readOnly={col.readOnly}
+                          onChange={(e) =>
+                            onInstrumentCellChange(
+                              index,
+                              col.key,
+                              e.target.value,
+                            )
+                          }
+                          className={
+                            col.readOnly
+                              ? cellReadOnlyClasses
+                              : cellInputClasses
+                          }
+                        />
+                      </td>
+                    );
+                  })}
                 </TableRow>
               ))}
             </tbody>
@@ -431,7 +504,7 @@ const emptyDetailRow = () => ({
   parameterTypeDescription: "",
   specification: "",
   uom: "",
-  uomId: "", // Store the UOM ID
+  uomId: "",
   accCriteria: "",
   inspectionMethod: "",
   instrumentsUsed: "",
@@ -439,14 +512,13 @@ const emptyDetailRow = () => ({
 });
 
 const emptyInstrumentRow = () => ({
-  instrumentNo: "",
-  instrumentName: "",
+  instrumentNo: "", // machine id (from machine master)
+  instrumentName: "", // display only — derived from machineMap at render time
   range: "",
 });
 
 const fmtDate = (value) => (value ? dayjs(value).format("YYYY-MM-DD") : "");
 
-// Get current financial year
 const getFinancialYear = () => {
   const now = new Date();
   const year = now.getFullYear();
@@ -483,6 +555,8 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
   const [parameterOptions, setParameterOptions] = useState([]);
   const [parameterMap, setParameterMap] = useState({});
   const [employeeOptions, setEmployeeOptions] = useState([]);
+  const [machineOptions, setMachineOptions] = useState([]);
+  const [machineMap, setMachineMap] = useState({});
 
   /* ---------------- State ---------------- */
   const [header, setHeader] = useState(() => ({
@@ -521,7 +595,7 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
       const currentYear = dayjs().year();
       const response = await initialPlanningAPI.getInitialPlanningDocId(
         currentYear,
-        ORG_ID
+        ORG_ID,
       );
 
       if (response?.paramObjectsMap?.initialPlanningDocId) {
@@ -537,45 +611,54 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
 
   /* ---------------- Lookup loading ---------------- */
 
-  const loadLov = useCallback(async (group, setter) => {
-    try {
-      const res = await listOfValuesAPI.getListValuesGroup(group, ORG_ID);
-      if (Array.isArray(res) && res.length) {
-        setter(
-          res.map((v) => ({
-            value: v.id,
-            label: v.valuesDescription || v.valueDescription || v.id,
-          })),
-        );
+  const loadLov = useCallback(
+    async (group, setter) => {
+      try {
+        const res = await listOfValuesAPI.getListValuesGroup(group, ORG_ID);
+        if (Array.isArray(res) && res.length) {
+          setter(
+            res.map((v) => ({
+              value: v.id,
+              label: v.valuesDescription || v.valueDescription || v.id,
+            })),
+          );
+        }
+      } catch (error) {
+        console.error(`Failed to load ${group}:`, error);
+        setter([]);
       }
-    } catch (error) {
-      console.error(`Failed to load ${group}:`, error);
-      setter([]);
-    }
-  }, [ORG_ID]);
+    },
+    [ORG_ID],
+  );
 
-  const loadItems = useCallback(async (itemType) => {
-    try {
-      const res = await initialPlanningAPI.getItemDropdownForInitialPlanning(itemType, ORG_ID);
-      const map = {};
-      const options = (res || []).map((it) => {
-        map[it.itemCode] = it;
-        return {
-          value: it.itemCode,
-          label: it.itemCode,
-          itemGrade: it.gradeDescription,
-          id: it.id, // Store the item ID
-          gradeId: it.gradeId, // Store the grade ID
-        };
-      });
-      setItemOptions(options);
-      setItemMap(map);
-    } catch (error) {
-      console.error("Failed to load items:", error);
-      setItemOptions([]);
-      setItemMap({});
-    }
-  }, [ORG_ID]);
+  const loadItems = useCallback(
+    async (itemType) => {
+      try {
+        const res = await initialPlanningAPI.getItemDropdownForInitialPlanning(
+          itemType,
+          ORG_ID,
+        );
+        const map = {};
+        const options = (res || []).map((it) => {
+          map[it.itemCode] = it;
+          return {
+            value: it.itemCode,
+            label: it.itemCode,
+            itemGrade: it.gradeDescription,
+            id: it.id,
+            gradeId: it.gradeId,
+          };
+        });
+        setItemOptions(options);
+        setItemMap(map);
+      } catch (error) {
+        console.error("Failed to load items:", error);
+        setItemOptions([]);
+        setItemMap({});
+      }
+    },
+    [ORG_ID],
+  );
 
   const loadGrades = useCallback(async () => {
     try {
@@ -595,7 +678,6 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
   const loadUoms = useCallback(async () => {
     try {
       const res = await unitMasterAPI.getUnits(ORG_ID);
-      console.log("UOM options loaded:", res);
       const map = {};
       const options = (res || []).map((u) => {
         const unitId = u.unitId || u.id;
@@ -603,7 +685,7 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
         return {
           value: unitId,
           label: unitId || u.id,
-          id: u.id, // Store the UOM ID
+          id: u.id,
         };
       });
       setUomOptions(options);
@@ -617,8 +699,10 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
 
   const loadParameters = useCallback(async () => {
     try {
-      const res = await initialPlanningAPI.getParameterDropdownForInitialPlanning(ORG_ID);
-      console.log("Parameters loaded:", res);
+      const res =
+        await initialPlanningAPI.getParameterDropdownForInitialPlanning(
+          ORG_ID,
+        );
       const map = {};
       const options = (res || []).map((p) => {
         map[p.id] = p;
@@ -640,7 +724,6 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
   const loadEmployees = useCallback(async () => {
     try {
       const res = await employeeAPI.getEmployeeByOrgId(ORG_ID);
-      console.log("Employees loaded:", res);
       setEmployeeOptions(
         (res || []).map((emp) => ({
           value: emp.id,
@@ -657,7 +740,6 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
   const loadSourceOptions = useCallback(async () => {
     try {
       const res = await partyMasterAPI.getPartyByOrgId(ORG_ID, BRANCH_ID);
-      console.log("Source options loaded:", res);
       setSourceOptions(
         (res || []).map((party) => ({
           value: party.id,
@@ -670,6 +752,43 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
     }
   }, [ORG_ID, BRANCH_ID]);
 
+  const loadMachines = useCallback(async () => {
+    try {
+      const response = await machineMasterAPI.getMachineMaster(
+        ORG_ID,
+        BRANCH_ID,
+      );
+
+      // axios response → .data ; then unwrap the API envelope
+      const data = response?.data ?? response;
+
+      const list =
+        data?.paramObjectsMap?.machineMasterResponseVO ||
+        data?.paramObjectsMap?.machineMasterVO ||
+        (Array.isArray(data) ? data : []);
+
+      const map = {};
+      const options = (list || []).map((m) => {
+        map[m.id] = m;
+        return {
+          value: m.id, // send machine id as instrumentNo
+          label: m.machineInstrumentName
+            ? `${m.machineInstrumentNo} — ${m.machineInstrumentName}`
+            : m.machineInstrumentNo || `Machine ${m.id}`,
+          machineInstrumentNo: m.machineInstrumentNo,
+          machineInstrumentName: m.machineInstrumentName,
+        };
+      });
+
+      setMachineOptions(options);
+      setMachineMap(map);
+    } catch (error) {
+      console.error("Failed to load machines:", error);
+      setMachineOptions([]);
+      setMachineMap({});
+    }
+  }, [ORG_ID, BRANCH_ID]);
+
   useEffect(() => {
     loadLov("ITEM TYPE", setItemTypeOptions);
     loadSourceOptions();
@@ -677,7 +796,16 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
     loadUoms();
     loadParameters();
     loadEmployees();
-  }, [loadLov, loadSourceOptions, loadGrades, loadUoms, loadParameters, loadEmployees]);
+    loadMachines();
+  }, [
+    loadLov,
+    loadSourceOptions,
+    loadGrades,
+    loadUoms,
+    loadParameters,
+    loadEmployees,
+    loadMachines,
+  ]);
 
   useEffect(() => {
     if (header.itemType) {
@@ -701,8 +829,6 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
   /* ---------------- Edit data loading ---------------- */
 
   const populateFormFromEditData = (data) => {
-    console.log("Populating form with edit data:", data);
-
     setHeader({
       id: data.id || 0,
       docNo: data.docId || "",
@@ -727,7 +853,7 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
           parameterTypeDescription: "",
           specification: d.specification || "",
           uom: d.uom?.unitId || "",
-          uomId: d.uom?.id || "", // Store the UOM ID
+          uomId: d.uom?.id || "",
           accCriteria: d.accCriteria || "",
           inspectionMethod: d.inspectionMethod || "",
           instrumentsUsed: d.noOfInstrumentsUsed ?? "",
@@ -736,13 +862,18 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
         : [emptyDetailRow()],
     );
 
+    // Instrument No. is an id; Instrument Name is derived from machineMap
+    // at render time, so we don't need to store the name here.
     setInstrumentRows(
-      data.initialPlanningDetailsResponseDTO?.[0]?.initialPlanningInstrumentDetailsResponseDTO?.length
-        ? data.initialPlanningDetailsResponseDTO[0].initialPlanningInstrumentDetailsResponseDTO.map((i) => ({
-          instrumentNo: i.instrumentNo || "",
-          instrumentName: i.instrumentName || "",
-          range: i.range || "",
-        }))
+      data.initialPlanningDetailsResponseDTO?.[0]
+        ?.initialPlanningInstrumentDetailsResponseDTO?.length
+        ? data.initialPlanningDetailsResponseDTO[0].initialPlanningInstrumentDetailsResponseDTO.map(
+          (i) => ({
+            instrumentNo: i.instrumentNo ?? "",
+            instrumentName: "",
+            range: i.range || "",
+          }),
+        )
         : [emptyInstrumentRow()],
     );
 
@@ -760,8 +891,8 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
   const loadPlanningData = async (planningId) => {
     try {
       setLoading(true);
-      const response = await initialPlanningAPI.getInitialPlanningById(planningId);
-      console.log("Get By ID Response:", response);
+      const response =
+        await initialPlanningAPI.getInitialPlanningById(planningId);
 
       if (response) {
         populateFormFromEditData(response);
@@ -832,7 +963,10 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
     const value = e.target.value;
 
     if (value && summary.approvedBy === value) {
-      addToast("This employee is already selected as Approved By. Please select a different employee.", "warning");
+      addToast(
+        "This employee is already selected as Approved By. Please select a different employee.",
+        "warning",
+      );
       return;
     }
 
@@ -846,7 +980,10 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
     const value = e.target.value;
 
     if (value && summary.preparedBy === value) {
-      addToast("This employee is already selected as Prepared By. Please select a different employee.", "warning");
+      addToast(
+        "This employee is already selected as Prepared By. Please select a different employee.",
+        "warning",
+      );
       return;
     }
 
@@ -864,11 +1001,12 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
 
           if (key === "parameter") {
             const selectedParam = parameterMap[value];
-            updatedRow.parameterTypeDescription = selectedParam?.parameterTypeDescription || "";
-            updatedRow.inspectionMethod = selectedParam?.parameterTypeDescription || "";
+            updatedRow.parameterTypeDescription =
+              selectedParam?.parameterTypeDescription || "";
+            updatedRow.inspectionMethod =
+              selectedParam?.parameterTypeDescription || "";
           }
 
-          // If UOM is selected, store its ID
           if (key === "uom") {
             const selectedUom = uomMap[value];
             updatedRow.uomId = selectedUom?.id || value;
@@ -877,14 +1015,31 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
           return updatedRow;
         }
         return row;
-      })
+      }),
     );
   };
 
-  const handleInstrumentCellChange = (idx, key, value) =>
+  const handleInstrumentCellChange = (idx, key, value) => {
     setInstrumentRows((prev) =>
-      prev.map((row, i) => (i === idx ? { ...row, [key]: value } : row)),
+      prev.map((row, i) => {
+        if (i !== idx) return row;
+
+        if (key === "instrumentNo") {
+          const machine = machineMap[value];
+          return {
+            ...row,
+            instrumentNo: value,
+            instrumentName: machine?.machineInstrumentName || "",
+            // Pre-fill range from machine master only if the user hasn't
+            // typed one yet; they can still override.
+            range: row.range || machine?.range || "",
+          };
+        }
+
+        return { ...row, [key]: value };
+      }),
     );
+  };
 
   const handleAddDetailRow = () =>
     setDetailRows((prev) => [...prev, emptyDetailRow()]);
@@ -953,8 +1108,13 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
     if (!summary.preparedBy) errors.preparedBy = "Prepared By is required";
     if (!summary.approvedBy) errors.approvedBy = "Approved By is required";
 
-    if (summary.preparedBy && summary.approvedBy && summary.preparedBy === summary.approvedBy) {
-      errors.approvedBy = "Prepared By and Approved By cannot be the same person";
+    if (
+      summary.preparedBy &&
+      summary.approvedBy &&
+      summary.preparedBy === summary.approvedBy
+    ) {
+      errors.approvedBy =
+        "Prepared By and Approved By cannot be the same person";
     }
 
     setFieldErrors(errors);
@@ -969,7 +1129,7 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
       instrumentRows.length === 0 ||
       instrumentRows.every((r) => !r.instrumentNo);
     const validInstruments = instrumentRows.every(
-      (r) => r.instrumentNo?.trim() && r.instrumentName?.trim(),
+      (r) => r.instrumentNo && String(r.instrumentNo).trim(),
     );
 
     const nextTableErrors = {
@@ -982,7 +1142,7 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
         ? "Add at least one Instrument row"
         : validInstruments
           ? ""
-          : "Complete mandatory columns (Instrument No, Instrument Name) in Fill Instruments",
+          : "Select Instrument No. in Fill Instruments",
     };
 
     setTableErrors(nextTableErrors);
@@ -1015,7 +1175,6 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
 
     setIsSubmitting(true);
 
-    // Get the selected item to get its ID and gradeId
     const selectedItem = itemMap[header.itemCode];
 
     const payload = {
@@ -1024,8 +1183,8 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
       docId: header.docNo,
       docDate: header.docDate,
       itemType: Number(header.itemType),
-      item: selectedItem?.id || Number(header.itemCode), // Send item ID (from the API response)
-      item_grade: selectedItem?.gradeId || 0, // Send grade ID (from the API response)
+      item: selectedItem?.id || Number(header.itemCode),
+      item_grade: selectedItem?.gradeId || 0,
       drawingNo: header.drawingNo || "",
       source: Number(header.source),
       materialCharacteristics: header.materialCharacteristics || "",
@@ -1042,20 +1201,28 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
       approvedBy: summary.approvedBy ? Number(summary.approvedBy) : 0,
       approved: summary.approved || "",
       initialPlanningDetailsDTO: detailRows
-        .filter((r) => r.parameter?.trim() && r.specification?.trim() && r.uom?.trim())
+        .filter(
+          (r) =>
+            r.parameter?.trim() && r.specification?.trim() && r.uom?.trim(),
+        )
         .map((r) => ({
           parameter: r.parameter || "",
           specification: r.specification || "",
-          uom: Number(r.uomId) || 0, // Send UOM ID
+          uom: Number(r.uomId) || 0,
           accCriteria: r.accCriteria || "",
           inspectionMethod: r.inspectionMethod || "",
-          noOfInstrumentsUsed: r.instrumentsUsed ? Number(r.instrumentsUsed) : 0,
+          noOfInstrumentsUsed: r.instrumentsUsed
+            ? Number(r.instrumentsUsed)
+            : 0,
           remarks: r.remarks || "",
           initialPlanningInstrumentDetailsDTO: instrumentRows
-            .filter((inst) => inst.instrumentNo?.trim() && inst.instrumentName?.trim())
+            .filter(
+              (inst) =>
+                inst.instrumentNo && String(inst.instrumentNo).trim() !== "",
+            )
             .map((inst) => ({
-              instrumentNo: inst.instrumentNo || "",
-              instrumentName: inst.instrumentName || "",
+              // Backend wants the machine id as a number.
+              instrumentNo: Number(inst.instrumentNo) || 0,
               range: inst.range || "",
             })),
         })),
@@ -1120,12 +1287,16 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
 
   const getPreparedByOptions = () => {
     if (!summary.approvedBy) return employeeOptions;
-    return employeeOptions.filter(opt => String(opt.value) !== String(summary.approvedBy));
+    return employeeOptions.filter(
+      (opt) => String(opt.value) !== String(summary.approvedBy),
+    );
   };
 
   const getApprovedByOptions = () => {
     if (!summary.preparedBy) return employeeOptions;
-    return employeeOptions.filter(opt => String(opt.value) !== String(summary.preparedBy));
+    return employeeOptions.filter(
+      (opt) => String(opt.value) !== String(summary.preparedBy),
+    );
   };
 
   return (
@@ -1260,9 +1431,7 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
           {activeChildTab === "details" && (
             <div className="pt-3 space-y-5">
               <div>
-                <GridSectionHeader
-                  onAdd={handleAddDetailRow}
-                >
+                <GridSectionHeader onAdd={handleAddDetailRow}>
                   Initial Planning Details
                 </GridSectionHeader>
 
@@ -1395,6 +1564,8 @@ const InitialPlanningForm = ({ onBack, onSave, editData, editId }) => {
         onInstrumentCellChange={handleInstrumentCellChange}
         onAddInstrumentRow={handleAddInstrumentRow}
         onRemoveInstrumentRow={handleRemoveInstrumentRow}
+        machineOptions={machineOptions}
+        machineMap={machineMap}
       />
     </div>
   );

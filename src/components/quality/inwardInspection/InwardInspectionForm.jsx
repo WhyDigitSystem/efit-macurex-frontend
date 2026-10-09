@@ -21,6 +21,17 @@ import { employeeAPI } from "../../../api/employeeAPI";
 import { PARAMETER_TYPES } from "../../../api/quality/parameterMasterAPI";
 
 /* ---------------------------------------------------------------------------- */
+/* Helpers                                                                     */
+
+// Normalize any value that might be a nested object ({ id, ... }) to its id.
+// Leaves scalars (string/number/null/undefined) untouched.
+const toId = (v) => {
+  if (v === null || v === undefined) return "";
+  if (typeof v === "object") return v.id ?? "";
+  return v;
+};
+
+/* ---------------------------------------------------------------------------- */
 /* Shared design tokens                                                        */
 
 const controlClasses =
@@ -90,8 +101,11 @@ const Field = ({
           className={`${controlClasses} ${error ? controlErrClasses : ""}`}
         >
           <option value="">-- Select --</option>
-          {(options || []).map((opt) => (
-            <option key={opt.value ?? opt} value={opt.value ?? opt}>
+          {(options || []).map((opt, i) => (
+            <option
+              key={`${opt.value ?? opt}-${i}`}
+              value={opt.value ?? opt}
+            >
               {opt.label ?? opt}
             </option>
           ))}
@@ -402,8 +416,11 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow, onViewMeasurem
                     className={cellInputClasses}
                   >
                     <option value="">-- Select --</option>
-                    {(col.options || []).map((opt) => (
-                      <option key={opt.value ?? opt} value={opt.value ?? opt}>
+                    {(col.options || []).map((opt, i) => (
+                      <option
+                        key={`${opt.value ?? opt}-${i}`}
+                        value={opt.value ?? opt}
+                      >
                         {opt.label ?? opt}
                       </option>
                     ))}
@@ -610,7 +627,8 @@ const emptyInspectionRow = () => ({
   rate: "",
   amount: "",
   toatlReceivedQty: "",
-  inspection: "", // Add this field
+  inspection: "",
+  stk: "",
 });
 
 const emptyMeasurementRow = () => ({
@@ -693,10 +711,11 @@ const InwardInspectionForm = ({ data, onBack }) => {
   const [grnItemOptions, setGrnItemOptions] = useState(() => {
     if (data?.inwardInspectionDetailsResponseDTO?.[0]?.item) {
       const item = data.inwardInspectionDetailsResponseDTO[0];
+      const itemId = toId(item.item);
       const label = item.itemDescription
-        ? `${item.item} - ${item.itemDescription}`
-        : item.item;
-      return [{ value: item.item, label: label }];
+        ? `${itemId} - ${item.itemDescription}`
+        : String(itemId);
+      return [{ value: itemId, label }];
     }
     return [];
   });
@@ -704,9 +723,10 @@ const InwardInspectionForm = ({ data, onBack }) => {
   const [grnItemDetailsMap, setGrnItemDetailsMap] = useState(() => {
     if (data?.inwardInspectionDetailsResponseDTO?.[0]?.item) {
       const item = data.inwardInspectionDetailsResponseDTO[0];
+      const itemId = toId(item.item);
       const map = {};
-      map[item.item] = {
-        itemCode: item.item,
+      map[itemId] = {
+        itemCode: itemId,
         itemDescription: item.itemDescription || "",
         drawingNo: item.drawingNo || "",
         poQty: item.orderQty || "",
@@ -723,11 +743,11 @@ const InwardInspectionForm = ({ data, onBack }) => {
 
   const [header, setHeader] = useState(() => {
     const base = {
-      plantId: data?.plantId?.id ?? data?.plantId ?? "",
+      plantId: toId(data?.plantId) || "",
       docNo: data?.docNo || (data ? "" : ""),
       inwardType: data?.inwardType || "",
       docDate: data?.docDate || dayjs().format("YYYY-MM-DD"),
-      supplierCode: data?.supplierCode?.id ?? data?.supplierCode ?? "",
+      supplierCode: toId(data?.supplierCode) || "",
       supplierName: data?.supplierName || "",
       mrnNo: data?.mrnNo || data?.mrinGrnNo || "",
       approved: data?.approved || "No",
@@ -750,33 +770,34 @@ const InwardInspectionForm = ({ data, onBack }) => {
   });
 
   const [inspectionRows, setInspectionRows] = useState(() => {
-    // Check if we have data from props (editing)
+    // Editing: normalize every object-typed field to its id so React can
+    // render the row in the table without ever seeing an object as a child.
     if (data?.inwardInspectionDetailsResponseDTO?.length) {
       return data.inwardInspectionDetailsResponseDTO.map((d) => ({
-        itemCode: d.item || "",
-        itemDescription: d.itemDescription || "",
+        itemCode: toId(d.item),
+        itemDescription: d.item?.itemDescription || d.itemDescription || "",
         drawingNo: d.drawingNo || "",
         orderQty: d.orderQty || "",
-        purchaseUnit: d.purchaseUnit || "",
-        primaryUnit: d.primaryUnit || "",
+        purchaseUnit: toId(d.purchaseUnit),
+        primaryUnit: toId(d.primaryUnit),
         receivedQty: d.receivedQty || "",
-        receivedUnit: d.receivedUnit || "",
+        receivedUnit: toId(d.receivedUnit),
         acceptedQty: d.acceptQty || "",
-        acceptedUnit: d.acceptUnit?.id || "",
-        receivedLocation: d.receivedLocation?.id || "",
+        acceptedUnit: toId(d.acceptUnit),
+        receivedLocation: toId(d.receivedLocation),
         batchNo: d.batchNo || "",
         qtyAcceptedOnDeviation: d.qtyAccOnDevtn || "",
         acceptedAfterSegregation: d.accQtyAfterSegn || "",
         reworkQty: d.reworkQty || "",
-        reworkLocation: d.reworkLocation?.id || "",
+        reworkLocation: toId(d.reworkLocation),
         totalAcceptedQty: d.totAccQty || "",
         conversionFactor: d.conversionFactor || "",
         toatlAccQty: d.totalAccQtyInPrimaryUnit || "",
-        reworkUnit: d.reworkUnit?.id || "",
+        reworkUnit: toId(d.reworkUnit),
         rejectedQty: d.rejectQty || "",
-        rejectedLocation: d.rejectedLocation?.id || "",
+        rejectedLocation: toId(d.rejectedLocation),
         reasonForRejection: d.reason || "",
-        rejectUnit: d.rejectUnit?.id || "",
+        rejectUnit: toId(d.rejectUnit),
         rate: d.rate || "",
         amount: d.amount || "",
         toatlReceivedQty: d.totalReceivedQty || "",
@@ -784,11 +805,9 @@ const InwardInspectionForm = ({ data, onBack }) => {
         inspection: d.inspection || "",
       }));
     }
-    // Check if we have data from inspectionDetails (another format)
     if (data?.inspectionDetails?.length) {
       return data.inspectionDetails;
     }
-    // Default empty row
     return [emptyInspectionRow()];
   });
 
@@ -802,18 +821,14 @@ const InwardInspectionForm = ({ data, onBack }) => {
     disposalAction:
       data?.summary?.disposalAction || data?.inwardSummary?.disposalAction || data?.disposalAction || "",
     checkedBy:
-      data?.summary?.checkedBy?.id ??
-      data?.summary?.checkedBy ??
-      data?.inwardSummary?.checkedBy?.id ??
-      data?.inwardSummary?.checkedBy ??
-      data?.checkedBy?.id ??
+      toId(data?.summary?.checkedBy) ||
+      toId(data?.inwardSummary?.checkedBy) ||
+      toId(data?.checkedBy) ||
       "",
     approvedBy:
-      data?.summary?.approvedBy?.id ??
-      data?.summary?.approvedBy ??
-      data?.inwardSummary?.approvedBy?.id ??
-      data?.inwardSummary?.approvedBy ??
-      data?.approvedBy?.id ??
+      toId(data?.summary?.approvedBy) ||
+      toId(data?.inwardSummary?.approvedBy) ||
+      toId(data?.approvedBy) ||
       "",
     result:
       data?.summary?.result ??
@@ -828,7 +843,11 @@ const InwardInspectionForm = ({ data, onBack }) => {
   });
 
   const [reportRows, setReportRows] = useState(
-    data?.supplierReports?.length ? data.supplierReports : data?.inwardInspectionFileUploadDetailsResponseDTO?.length ? data.inwardInspectionFileUploadDetailsResponseDTO.map((f) => ({ fileName: f })) : [emptyReportRow()],
+    data?.supplierReports?.length
+      ? data.supplierReports
+      : data?.inwardInspectionFileUploadDetailsResponseDTO?.length
+        ? data.inwardInspectionFileUploadDetailsResponseDTO.map((f) => ({ fileName: f }))
+        : [emptyReportRow()],
   );
 
   // Ref to track if data has been loaded
@@ -848,11 +867,11 @@ const InwardInspectionForm = ({ data, onBack }) => {
 
         // Set header data
         setHeader({
-          plantId: inspection.branch?.id || "",
+          plantId: toId(inspection.branch) || "",
           docNo: inspection.docId || "",
           inwardType: inspection.inwardType || "",
           docDate: fmtDate(inspection.docDate) || dayjs().format("YYYY-MM-DD"),
-          supplierCode: inspection.supplierCode?.id || "",
+          supplierCode: toId(inspection.supplierCode) || "",
           supplierName: inspection.supplierCode?.supplierName || "",
           mrnNo: inspection.mrinGrnNo || "",
           approved: inspection.approved ? "Yes" : "No",
@@ -887,7 +906,7 @@ const InwardInspectionForm = ({ data, onBack }) => {
           });
         }
 
-        // ---- FIX: Call GRN Item Details API to get item details ----
+        // ---- Call GRN Item Details API to get item details ----
         if (inspection.mrinGrnNo && inspection.supplierCode?.id && inspection.poPcJoNo) {
           try {
             setLoadingItemDetails(true);
@@ -902,23 +921,33 @@ const InwardInspectionForm = ({ data, onBack }) => {
             if (grnItemResponse?.paramObjectsMap?.grnDetails) {
               const itemList = grnItemResponse.paramObjectsMap.grnDetails;
               const map = {};
-              const options = itemList.map((item) => {
-                map[item.itemCode] = item;
-                return {
-                  value: item.itemCode,
-                  label: `${item.itemCode} - ${item.itemDescription || ''}`,
-                };
+              const seen = new Set();
+              const options = [];
+
+              itemList.forEach((item) => {
+                const itemId = toId(item.item);
+                if (itemId === "") return;
+
+                if (!map[itemId]) map[itemId] = item;
+
+                if (!seen.has(itemId)) {
+                  seen.add(itemId);
+                  options.push({
+                    value: itemId,
+                    label: `${item.itemCode || itemId} - ${item.itemDescription || ''}`,
+                  });
+                }
               });
 
               // Merge with existing options to keep the selected one
               const existingItem = inspection.inwardInspectionDetailsResponseDTO?.[0];
               if (existingItem && existingItem.item) {
-                // Add existing item if not in the list
-                const exists = options.some(opt => String(opt.value) === String(existingItem.item));
-                if (!exists) {
+                const existingId = toId(existingItem.item);
+                const exists = options.some(opt => String(opt.value) === String(existingId));
+                if (!exists && existingId !== "") {
                   options.unshift({
-                    value: existingItem.item,
-                    label: `${existingItem.item} - ${existingItem.itemDescription || ''}`,
+                    value: existingId,
+                    label: `${existingId} - ${existingItem.itemDescription || ''}`,
                   });
                 }
               }
@@ -937,78 +966,48 @@ const InwardInspectionForm = ({ data, onBack }) => {
         setSummary({
           considerations: inspection.considerations || "",
           disposalAction: inspection.disposalAction || "",
-          checkedBy: inspection.checkedBy?.id || "",
-          approvedBy: inspection.approvedBy?.id || "",
+          checkedBy: toId(inspection.checkedBy) || "",
+          approvedBy: toId(inspection.approvedBy) || "",
           result: inspection.result || "",
           notes: inspection.notes || "",
         });
 
-        // Set inspection details
-        // Set inspection details
+        // Set inspection details — normalize every object-typed field to id
         if (inspection.inwardInspectionDetailsResponseDTO?.length) {
           const details = inspection.inwardInspectionDetailsResponseDTO.map((d) => ({
-            itemCode: d.item || "", // This should be the numeric ID like 1000000006
-            itemDescription: d.itemDescription || "",
+            itemCode: toId(d.item),
+            itemDescription: d.item?.itemDescription || d.itemDescription || "",
             drawingNo: d.drawingNo || "",
             orderQty: d.orderQty || "",
-            purchaseUnit: d.purchaseUnit || "",
-            primaryUnit: d.primaryUnit || "",
+            purchaseUnit: toId(d.purchaseUnit),
+            primaryUnit: toId(d.primaryUnit),
             receivedQty: d.receivedQty || "",
-            receivedUnit: d.receivedUnit || "",
+            receivedUnit: toId(d.receivedUnit),
             acceptedQty: d.acceptQty || "",
-            acceptedUnit: d.acceptUnit?.id || "",
-            receivedLocation: d.receivedLocation?.id || "",
+            acceptedUnit: toId(d.acceptUnit),
+            receivedLocation: toId(d.receivedLocation),
             batchNo: d.batchNo || "",
             qtyAcceptedOnDeviation: d.qtyAccOnDevtn || "",
             acceptedAfterSegregation: d.accQtyAfterSegn || "",
             reworkQty: d.reworkQty || "",
-            reworkLocation: d.reworkLocation?.id || "",
+            reworkLocation: toId(d.reworkLocation),
             totalAcceptedQty: d.totAccQty || "",
             conversionFactor: d.conversionFactor || "",
             toatlAccQty: d.totalAccQtyInPrimaryUnit || "",
-            reworkUnit: d.reworkUnit?.id || "",
+            reworkUnit: toId(d.reworkUnit),
             rejectedQty: d.rejectQty || "",
-            rejectedLocation: d.rejectedLocation?.id || "",
+            rejectedLocation: toId(d.rejectedLocation),
             reasonForRejection: d.reason || "",
-            rejectUnit: d.rejectUnit?.id || "",
+            rejectUnit: toId(d.rejectUnit),
             rate: d.rate || "",
             amount: d.amount || "",
             toatlReceivedQty: d.totalReceivedQty || "",
             stk: d.stk || "",
             inspection: d.inspection || "",
           }));
+
           setInspectionRows(details);
-
           console.log("Inspection Details from API:", details);
-
-          // Update the first row with GRN item details if available
-          const existingDetail = inspection.inwardInspectionDetailsResponseDTO[0];
-          if (existingDetail && existingDetail.item) {
-            // Get the GRN item details from the map
-            const grnItem = grnItemDetailsMap[existingDetail.item];
-            console.log("GRN Item for existing detail:", grnItem);
-
-            setInspectionRows(prev => {
-              const updated = [...prev];
-              if (updated.length > 0) {
-                updated[0] = {
-                  ...updated[0],
-                  itemCode: existingDetail.item, // Set the numeric ID
-                  itemDescription: grnItem?.itemDescription || existingDetail.itemDescription || "",
-                  drawingNo: grnItem?.drawingNo || existingDetail.drawingNo || "",
-                  orderQty: grnItem?.poQty || existingDetail.orderQty || "",
-                  receivedQty: grnItem?.receivedQty || existingDetail.receivedQty || "",
-                  purchaseUnit: grnItem?.purchaseUnitDescription || existingDetail.purchaseUnit || "",
-                  primaryUnit: grnItem?.primaryUnitDescription || existingDetail.primaryUnit || "",
-                  acceptedQty: grnItem?.acceptQty || existingDetail.acceptQty || "",
-                  inspection: grnItem?.inspectionDescription || existingDetail.inspection || "",
-                  toatlReceivedQty: grnItem?.receivedQty || existingDetail.receivedQty || "",
-                };
-              }
-              console.log("Updated inspection rows:", updated);
-              return updated;
-            });
-          }
         }
 
         // Set measurements
@@ -1019,7 +1018,7 @@ const InwardInspectionForm = ({ data, onBack }) => {
               type: m.type || "",
               specification: m.spec || "",
               acceptanceCriteria: m.accCriteria || "",
-              uom: m.uom || "",
+              uom: toId(m.uom) || m.uom || "",
               mv1: m.test1 || "",
               mv2: m.test2 || "",
               mv3: m.test3 || "",
@@ -1124,19 +1123,23 @@ const InwardInspectionForm = ({ data, onBack }) => {
       const response = await inwardInspectionAPI.getGrnNoDetails(
         branch,
         orgId,
-        supplierCode
+        supplierCode,
       );
 
       if (response?.paramObjectsMap?.grnDetails) {
         const grnList = response.paramObjectsMap.grnDetails;
         const map = {};
-        const options = grnList.map((grn) => {
-          map[grn.grnNo] = grn;
-          return {
-            value: grn.grnNo,
-            label: grn.grnNo,
-          };
+        const seen = new Set();
+        const options = [];
+
+        grnList.forEach((grn) => {
+          if (!map[grn.grnNo]) map[grn.grnNo] = grn;
+          if (grn.grnNo && !seen.has(grn.grnNo)) {
+            seen.add(grn.grnNo);
+            options.push({ value: grn.grnNo, label: grn.grnNo });
+          }
         });
+
         setGrnOptions(options);
         setGrnDetailsMap(map);
       } else {
@@ -1167,38 +1170,44 @@ const InwardInspectionForm = ({ data, onBack }) => {
         branch,
         orgId,
         purchaseOrderNo,
-        supplierCode
+        supplierCode,
       );
-
-      console.log("GRN Item Details Response:", response);
 
       if (response?.paramObjectsMap?.grnDetails) {
         const itemList = response.paramObjectsMap.grnDetails;
         const map = {};
-        const options = itemList.map((item) => {
-          // Store item details with numeric item ID as key
-          const itemId = item.item; // This is the numeric ID like 1000000006
-          map[itemId] = {
-            itemCode: itemId, // Store the numeric ID
-            itemDescription: item.itemDescription || "",
-            drawingNo: item.drawingNo || "",
-            poQty: item.poQty || "",
-            receivedQty: item.receivedQty || "",
-            purchaseUnitDescription: item.purchaseUnitDescription || "",
-            primaryUnitDescription: item.primaryUnitDescription || "",
-            acceptQty: item.acceptQty || "",
-            inspectionDescription: item.inspectionDescription || "",
-          };
-          return {
-            value: itemId, // Use numeric ID as the value
-            label: `${item.itemCode} - ${item.itemDescription || ''}`,
-          };
+        const seen = new Set();
+        const options = [];
+
+        itemList.forEach((item) => {
+          const itemId = toId(item.item);
+          if (itemId === "") return;
+
+          if (!map[itemId]) {
+            map[itemId] = {
+              itemCode: itemId,
+              itemDescription: item.itemDescription || "",
+              drawingNo: item.drawingNo || "",
+              poQty: item.poQty || "",
+              receivedQty: item.receivedQty || "",
+              purchaseUnitDescription: item.purchaseUnitDescription || "",
+              primaryUnitDescription: item.primaryUnitDescription || "",
+              acceptQty: item.acceptQty || "",
+              inspectionDescription: item.inspectionDescription || "",
+            };
+          }
+
+          if (!seen.has(itemId)) {
+            seen.add(itemId);
+            options.push({
+              value: itemId,
+              label: `${item.itemCode || itemId} - ${item.itemDescription || ""}`,
+            });
+          }
         });
+
         setGrnItemDetailsMap(map);
         setGrnItemOptions(options);
-
-        console.log("GRN Item Options:", options);
-        console.log("GRN Item Details Map:", map);
       } else {
         setGrnItemDetailsMap({});
         setGrnItemOptions([]);
@@ -1330,7 +1339,6 @@ const InwardInspectionForm = ({ data, onBack }) => {
     if (header.supplierCode && !data?.id) {
       loadGrnDetails(header.supplierCode);
     } else {
-      // Don't reset grnOptions if we're editing and have data
       if (!data?.id) {
         setGrnOptions([]);
         setGrnDetailsMap({});
@@ -1360,10 +1368,8 @@ const InwardInspectionForm = ({ data, onBack }) => {
           (s) => String(s.value) === String(value),
         );
         next.supplierName = supplier?.supplierName || "";
-        // Reset MRN when supplier changes
         next.mrnNo = "";
       }
-      // Auto-fill GRN details when MRN is selected
       if (name === "mrnNo") {
         const grnDetail = grnDetailsMap[value];
         if (grnDetail) {
@@ -1385,13 +1391,12 @@ const InwardInspectionForm = ({ data, onBack }) => {
         let next = { ...row, [key]: value };
 
         if (key === "itemCode") {
-          // value is the numeric item ID from the dropdown
           const grnItem = grnItemDetailsMap[value];
           console.log("Selected item value:", value);
           console.log("GRN Item details:", grnItem);
 
           if (grnItem) {
-            next.itemCode = value; // Store the numeric ID
+            next.itemCode = value;
             next.itemDescription = grnItem.itemDescription || "";
             next.drawingNo = grnItem.drawingNo || "";
             next.orderQty = grnItem.poQty || "";
@@ -1402,7 +1407,6 @@ const InwardInspectionForm = ({ data, onBack }) => {
             next.inspection = grnItem.inspectionDescription || "";
             next.toatlReceivedQty = grnItem.receivedQty || "";
           } else {
-            // If no GRN item found, keep existing values
             next.itemDescription = row.itemDescription || "";
             next.drawingNo = row.drawingNo || "";
             next.orderQty = row.orderQty || "";
@@ -1500,7 +1504,7 @@ const InwardInspectionForm = ({ data, onBack }) => {
     if (!header.mrnNo) errors.mrnNo = "MRN/SC GRN No is required";
     if (!header.approved) errors.approved = "Approved is required";
 
-    const validInspection = inspectionRows.filter((r) => r.itemCode?.trim());
+    const validInspection = inspectionRows.filter((r) => r.itemCode?.toString().trim());
     if (!validInspection.length)
       errors.inspectionDetails =
         "Add at least one item with Item Code in Inspection Details";
@@ -1509,28 +1513,16 @@ const InwardInspectionForm = ({ data, onBack }) => {
         errors[`inspection.${i}.itemCode`] = "Item Code is required";
       if (!r.acceptedQty && Number(r.acceptedQty) !== 0)
         errors[`inspection.${i}.acceptedQty`] = "Accepted Qty is required";
-      if (!r.acceptedUnit) errors[`inspection.${i}.acceptedUnit`] = "Accepted Unit is required";
-    });
-
-    const validMeasurements = measurementRows.filter(
-      (r) => r.parameter?.trim(),
-    );
-    if (!validMeasurements.length)
-      errors.measurements =
-        "Add at least one measurement row with a Parameter";
-    validMeasurements.forEach((r, i) => {
-      if (!r.parameter?.trim()) errors[`measurement.${i}.parameter`] = "Parameter is required";
-      if (!r.status) errors[`measurement.${i}.status`] = "Status is required";
+      if (!r.acceptedUnit)
+        errors[`inspection.${i}.acceptedUnit`] = "Accepted Unit is required";
     });
 
     if (!summary.checkedBy) errors.checkedBy = "Checked By is required";
     if (!summary.approvedBy) errors.approvedBy = "Approved By is required";
     if (!summary.result) errors.result = "Result is required";
 
-    // ---- FIX: Check for valid reports (File objects or strings) ----
     const validReports = reportRows.filter((r) => {
       if (!r.fileName) return false;
-      // Check if it's a File object, a string, or an object with filePath
       if (r.fileName instanceof File) return true;
       if (typeof r.fileName === 'string' && r.fileName.trim()) return true;
       if (typeof r.fileName === 'object' && r.fileName.filePath) return true;
@@ -1553,7 +1545,6 @@ const InwardInspectionForm = ({ data, onBack }) => {
     try {
       const isUpdate = Boolean(data?.id);
 
-      // Build the payload
       const payload = {
         ...(isUpdate ? { id: data.id } : {}),
         active: true,
@@ -1585,11 +1576,11 @@ const InwardInspectionForm = ({ data, onBack }) => {
         inwardInspectionDetailsDTO: inspectionRows
           .filter((r) => r.itemCode && String(r.itemCode).trim())
           .map((r) => {
-            const itemId = Number(r.itemCode); // This should be the numeric ID
+            const itemId = Number(r.itemCode);
             console.log("Saving item ID:", itemId, "from itemCode:", r.itemCode);
 
             return {
-              item: itemId || 0, // Use the numeric ID
+              item: itemId || 0,
               itemDescription: r.itemDescription || "",
               drawingNo: r.drawingNo || "",
               orderQty: Number(r.orderQty) || 0,
@@ -1644,16 +1635,13 @@ const InwardInspectionForm = ({ data, onBack }) => {
 
       console.log("Saving Payload:", payload);
 
-      // Create FormData for file upload
       const formData = new FormData();
 
-      // Add payload as JSON
       const payloadBlob = new Blob([JSON.stringify(payload)], {
         type: "application/json",
       });
       formData.append("inwardInspection", payloadBlob, "inwardInspection.json");
 
-      // Add report files (only new files, not existing ones)
       const validReports = reportRows.filter((r) => {
         if (!r.fileName) return false;
         return r.fileName instanceof File;
@@ -2149,7 +2137,6 @@ const InwardInspectionForm = ({ data, onBack }) => {
                                 e.target.value,
                               )
                             }
-                            required
                             error={
                               fieldErrors[`report.${idx}.fileName`]
                                 ? "Required"
