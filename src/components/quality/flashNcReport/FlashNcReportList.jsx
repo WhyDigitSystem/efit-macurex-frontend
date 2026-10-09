@@ -7,57 +7,70 @@ const FlashNcReportList = ({ onAddNew, onEdit, onBack }) => {
   const [reportData, setReportData] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const ORG_ID = parseInt(localStorage.getItem("orgId"));
+  const ORG_ID = parseInt(localStorage.getItem("orgId"), 10);
+  const BRANCH_ID = parseInt(localStorage.getItem("branchId"), 10);
 
-  /*
-   * Load reports.
-   */
+  /* ---------------------------------------------------------
+     Load reports.
+     Response shape:
+       response.data.paramObjectsMap.flashNCReportList = [ ... ]
+  --------------------------------------------------------- */
   const loadReports = useCallback(async () => {
     try {
       setLoading(true);
 
-      const response = await flashNcReportAPI.getAll(ORG_ID);
+      const response = await flashNcReportAPI.getByOrgId(ORG_ID, BRANCH_ID);
 
-      let reports = [];
+      const data = response?.data ?? response;
 
-      if (Array.isArray(response)) {
-        reports = response;
-      } else if (response?.paramObjectsMap?.flashNcReportVO) {
-        reports = response.paramObjectsMap.flashNcReportVO;
-      } else if (Array.isArray(response?.data)) {
-        reports = response.data;
-      } else if (Array.isArray(response?.data?.data)) {
-        reports = response.data.data;
-      }
+      const raw =
+        data?.paramObjectsMap?.flashNCReportList ||
+        data?.paramObjectsMap?.flashNCReportVO ||
+        (Array.isArray(data) ? data : []);
+
+      // Flatten nested objects into plain fields for the table.
+      const reports = (raw || []).map((r) => ({
+        ...r,
+        frNo: r.docId || "",
+        frDate: r.docDate || "",
+        branchName: r.branch?.branchName || "",
+        belongsToDesc: r.belongsTo?.description || "",
+        referenceDesc: r.reference?.description || "",
+        fromDeptName: r.fromDept?.departmentName || "",
+        toDeptName: r.toDept?.departmentName || "",
+        itemCode: r.item?.itemCode || "",
+        itemDescription: r.item?.itemDescription || "",
+        disposalDesc: r.disposal?.description || "",
+        inspectedByName: r.inspectedBy?.employeeName || "",
+        supplierName: r.supplierName || r.supplier || "",
+      }));
 
       reports.sort((a, b) => (b.id || 0) - (a.id || 0));
 
       setReportData(reports);
     } catch (error) {
       console.error("Failed to load Flash/NC Reports:", error);
-
       setReportData([]);
-
       toast.error("Failed to fetch Flash/NC Reports");
     } finally {
       setLoading(false);
     }
-  }, [ORG_ID]);
+  }, [ORG_ID, BRANCH_ID]);
 
   useEffect(() => {
     loadReports();
   }, [loadReports]);
 
-  /*
-   * Edit.
-   */
+  /* ---------------------------------------------------------
+     Edit.
+  --------------------------------------------------------- */
   const handleEdit = (report) => {
     onEdit(report);
   };
 
-  /*
-   * Table columns.
-   */
+  /* ---------------------------------------------------------
+     Table columns.
+  --------------------------------------------------------- */
   const columns = [
     {
       key: "frNo",
@@ -66,7 +79,6 @@ const FlashNcReportList = ({ onAddNew, onEdit, onBack }) => {
       type: "text",
       noWrap: true,
     },
-
     {
       key: "frDate",
       label: "FR Date",
@@ -74,7 +86,6 @@ const FlashNcReportList = ({ onAddNew, onEdit, onBack }) => {
       type: "text",
       noWrap: true,
     },
-
     {
       key: "itemCode",
       label: "Item Code",
@@ -82,21 +93,18 @@ const FlashNcReportList = ({ onAddNew, onEdit, onBack }) => {
       type: "text",
       noWrap: true,
     },
-
     {
       key: "supplierName",
-      label: "Supplier Name",
+      label: "Supplier",
       accessor: "supplierName",
       type: "text",
     },
-
     {
       key: "problemStatus",
       label: "Problem Status",
       accessor: "problemStatus",
       type: "text",
     },
-
     {
       key: "ncQty",
       label: "NC Qty",
@@ -104,62 +112,28 @@ const FlashNcReportList = ({ onAddNew, onEdit, onBack }) => {
       type: "text",
       align: "right",
     },
-
     {
-      key: "disposal",
+      key: "disposalDesc",
       label: "Disposal",
-      accessor: "disposal",
+      accessor: "disposalDesc",
       type: "text",
     },
-
-    {
-      key: "status",
-      label: "Status",
-      accessor: "status",
-      type: "status",
-
-      statusVariants: {
-        Open: {
-          label: "Open",
-          className: "bg-yellow-100 text-yellow-700",
-        },
-
-        Approved: {
-          label: "Approved",
-          className: "bg-green-100 text-green-700",
-        },
-
-        Rejected: {
-          label: "Rejected",
-          className: "bg-red-100 text-red-700",
-        },
-
-        Closed: {
-          label: "Closed",
-          className: "bg-gray-100 text-gray-700",
-        },
-      },
-    },
-
     {
       key: "active",
-      label: "Status",
+      label: "Active",
       accessor: "active",
       type: "status",
-
       statusVariants: {
-        true: {
+        Active: {
           label: "Active",
           className: "bg-green-100 text-green-700",
         },
-
-        false: {
+        Inactive: {
           label: "Inactive",
           className: "bg-red-100 text-red-700",
         },
       },
     },
-
     {
       key: "actions",
       label: "Actions",
@@ -169,30 +143,28 @@ const FlashNcReportList = ({ onAddNew, onEdit, onBack }) => {
     },
   ];
 
-  /*
-   * Search.
-   */
+  /* ---------------------------------------------------------
+     Search.
+  --------------------------------------------------------- */
   const searchFields = [
     "frNo",
     "itemCode",
     "supplierName",
-    "supplierCode",
-    "mrnScGrnNo",
+    "mrinSCGRNNO",
     "poNo",
     "problemStatus",
-    "disposal",
+    "disposalDesc",
   ];
 
-  /*
-   * Filters.
-   */
+  /* ---------------------------------------------------------
+     Filters.
+  --------------------------------------------------------- */
   const filterOptions = [
     {
       value: "all",
       label: "All",
       field: null,
     },
-
     {
       value: "active",
       label: "Active",
@@ -200,7 +172,6 @@ const FlashNcReportList = ({ onAddNew, onEdit, onBack }) => {
       filterValue: "active",
       activeValue: "Active",
     },
-
     {
       value: "inactive",
       label: "Inactive",
@@ -237,4 +208,3 @@ const FlashNcReportList = ({ onAddNew, onEdit, onBack }) => {
 };
 
 export default FlashNcReportList;
- 

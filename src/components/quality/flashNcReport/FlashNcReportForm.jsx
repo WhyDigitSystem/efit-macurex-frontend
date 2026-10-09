@@ -6,6 +6,7 @@ import branchAPI from "../../../api/branchAPI";
 import { departmentAPI } from "../../../api/departmentAPI";
 import { useToast } from "../../Toast/ToastContext";
 import flashNcReportAPI from "../../../api/quality/flashNcReportAPI";
+import listOfValuesAPI from "../../../api/listOfValuesAPI";
 
 /* =========================================================
    HELPERS
@@ -123,7 +124,6 @@ const Field = ({
   </div>
 );
 
-/* Small section heading used to visually split the form */
 const SectionTitle = ({ children }) => (
   <div className="col-span-full mt-1 mb-1 border-b border-gray-200 dark:border-gray-700 pb-1">
     <h3 className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
@@ -160,6 +160,11 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
   const [allDeptOptions, setAllDeptOptions] = useState([]);
   const [mrinGrnLookup, setMrinGrnLookup] = useState({});
 
+  /* -------- LOV-backed options -------- */
+  const [belongsToOptions, setBelongsToOptions] = useState([]);
+  const [referenceOptions, setReferenceOptions] = useState([]);
+  const [disposalOptions, setDisposalOptions] = useState([]);
+
   /* -------- CAPA grid (images) -------- */
   const [capaRows, setCapaRows] = useState([
     { id: Date.now(), file: null, fileName: "", preview: "" },
@@ -170,25 +175,7 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
     { id: Date.now() + 1, file: null, fileName: "" },
   ]);
 
-  /* -------- static options -------- */
-  const belongsToOptions = [
-    { value: "1", label: "APPLIANCES" },
-    { value: "2", label: "BOSCH" },
-  ];
-
-  const referenceOptions = [
-    { value: "1", label: "1" },
-    { value: "2", label: "2" },
-    { value: "3", label: "3" },
-  ];
-
-  const disposalOptions = [
-    { value: "1", label: "Rework" },
-    { value: "2", label: "Concessional Acceptance" },
-    { value: "3", label: "Reject" },
-    { value: "4", label: "Segregation" },
-  ];
-
+  /* -------- static options (not LOV-backed) -------- */
   const problemStatusOptions = [
     { value: "Open", label: "Open" },
     { value: "Under Review", label: "Under Review" },
@@ -196,8 +183,8 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
   ];
 
   const statusOptions = [
-    { value: "1", label: "Open" },
-    { value: "2", label: "Close" },
+    { value: "Open", label: "Open" },
+    { value: "Close", label: "Close" },
   ];
 
   /* =======================================================
@@ -212,16 +199,19 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
     [allDeptOptions, form.from],
   );
 
+  /* Item options: `value` is `itemid` from the MRIN/GRN dropdown.
+     (The dropdown returns `itemid`, not `id`.) */
   const itemOptions = useMemo(() => {
     const entry = mrinGrnLookup[form.mrnScGrnNo];
     const items = entry?.items || [];
     const seen = new Set();
+
     return items
-      .filter((it) => it.itemCode && !seen.has(it.itemCode))
+      .filter((it) => it.itemid != null && it.itemCode && !seen.has(it.itemCode))
       .map((it) => {
         seen.add(it.itemCode);
         return {
-          value: it.itemCode,
+          value: String(it.itemid),
           label: it.itemDescription
             ? `${it.itemCode} — ${it.itemDescription}`
             : it.itemCode,
@@ -257,6 +247,50 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
     }
   }, [ORG_ID]);
 
+  /* -------- Generic LOV loader --------
+     Adjust the group strings to match the actual LOV group codes
+     in your backend master. */
+  const loadLovOptions = useCallback(
+    async (group, setter) => {
+      try {
+        if (!ORG_ID) return;
+
+        const res = await listOfValuesAPI.getListValuesGroup(group, ORG_ID);
+
+        if (Array.isArray(res) && res.length) {
+          setter(
+            res.map((v) => ({
+              value: String(v.id),
+              label:
+                v.valuesDescription || v.valueDescription || String(v.id),
+            })),
+          );
+        } else {
+          setter([]);
+        }
+      } catch (error) {
+        console.error(`Failed to load LOV ${group}:`, error);
+        setter([]);
+      }
+    },
+    [ORG_ID],
+  );
+
+  const loadBelongsToOptions = useCallback(
+    () => loadLovOptions("SDS BELONGS TO", setBelongsToOptions),
+    [loadLovOptions],
+  );
+
+  const loadReferenceOptions = useCallback(
+    () => loadLovOptions("REFERENCE", setReferenceOptions),
+    [loadLovOptions],
+  );
+
+  const loadDisposalOptions = useCallback(
+    () => loadLovOptions("DISPOSAL", setDisposalOptions),
+    [loadLovOptions],
+  );
+
   const loadMrinGrnDropdown = useCallback(async () => {
     try {
       if (!form.branch || !ORG_ID) {
@@ -271,7 +305,8 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
           orgId: ORG_ID,
         });
 
-      const list = response?.paramObjectsMap?.mrinGrnDropdown || [];
+      const data = response?.data ?? response;
+      const list = data?.paramObjectsMap?.mrinGrnDropdown || [];
 
       const lookup = {};
       list.forEach((entry) => {
@@ -306,13 +341,17 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
           orgId: ORG_ID,
         });
 
-      const list = response?.paramObjectsMap?.employeeDetails || [];
+      const data = response?.data ?? response;
+      const list = data?.paramObjectsMap?.employeeDetails || [];
 
       setInspectedByOptions(
-        list.map((e) => ({
-          value: String(e.employeeId),
-          label: e.employeeName || e.employeeCode || `Emp ${e.employeeId}`,
-        })),
+        list.map((e) => {
+          const id = e.employeeId ?? e.id;
+          return {
+            value: String(id),
+            label: e.employeeName || e.employeeCode || `Emp ${id}`,
+          };
+        }),
       );
     } catch (error) {
       console.error("Failed to load quality employees:", error);
@@ -333,12 +372,13 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
           orgId: ORG_ID,
         });
 
-      const list = response?.paramObjectsMap?.fromDepartment || [];
+      const data = response?.data ?? response;
+      const list = data?.paramObjectsMap?.fromDepartment || [];
 
       setFromDeptOptions(
         list.map((d) => ({
           value: String(d.id),
-          label: d.name || `Dept ${d.id}`,
+          label: d.name || d.departmentName || `Dept ${d.id}`,
         })),
       );
     } catch (error) {
@@ -353,11 +393,13 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
 
       const response = await departmentAPI.getAllDepartments(ORG_ID);
 
+      const data = response?.data ?? response;
+
       const list =
-        response?.paramObjectsMap?.departmentVO ||
-        response?.paramObjectsMap?.departmentMasterVO ||
-        response?.paramObjectsMap?.departments ||
-        (Array.isArray(response) ? response : []);
+        data?.paramObjectsMap?.departmentVO ||
+        data?.paramObjectsMap?.departmentMasterVO ||
+        data?.paramObjectsMap?.departments ||
+        (Array.isArray(data) ? data : []);
 
       setAllDeptOptions(
         list.map((d) => ({
@@ -374,7 +416,16 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
   useEffect(() => {
     loadBranches();
     loadAllDepartments();
-  }, [loadBranches, loadAllDepartments]);
+    loadBelongsToOptions();
+    loadReferenceOptions();
+    loadDisposalOptions();
+  }, [
+    loadBranches,
+    loadAllDepartments,
+    loadBelongsToOptions,
+    loadReferenceOptions,
+    loadDisposalOptions,
+  ]);
 
   useEffect(() => {
     loadMrinGrnDropdown();
@@ -400,7 +451,8 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
           orgId: ORG_ID,
         });
 
-        const docId = response?.paramObjectsMap?.docId || "";
+        const data = response?.data ?? response;
+        const docId = data?.paramObjectsMap?.docId || "";
 
         if (!cancelled && docId) {
           setForm((prev) => ({ ...prev, frNo: docId }));
@@ -428,12 +480,12 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
   ======================================================= */
 
   useEffect(() => {
-    if (editData) {
-      populateForm(editData);
-      return;
-    }
     if (editId) {
       loadReport(editId);
+      return;
+    }
+    if (editData) {
+      populateForm(editData);
       return;
     }
 
@@ -449,60 +501,99 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editData, editId]);
 
-  const populateForm = (d) => {
+  /* Unwrap the GetById response shape and map nested objects to ids. */
+  const populateForm = (raw) => {
+    const v =
+      raw?.data?.paramObjectsMap?.flashNCReportVO ||
+      raw?.paramObjectsMap?.flashNCReportVO ||
+      raw?.flashNCReportVO ||
+      raw?.data ||
+      raw ||
+      {};
+
     setForm({
       ...initialForm,
-      id: d?.id || 0,
-      branch: d?.branch ?? d?.branchId ?? "",
-      belongsTo: d?.belongsTo ?? "",
-      frNo: d?.frNo || d?.docId || "",
-      frDate: fmtDate(d?.frDate) || todayISO(),
-      reference: d?.reference ?? "",
-      supplierName: d?.supplierName || "",
-      supplierCode: d?.supplierCode || "",
-      from: d?.fromDept ?? d?.from ?? "",
-      to: d?.toDept ?? d?.to ?? "",
-      description: d?.description || "",
-      itemDescription: d?.itemDescription || "",
-      mrnScGrnNo: d?.mrinSCGRNNO || d?.mrnScGrnNo || "",
-      mrnDate: fmtDate(d?.mrinDate) || "",
-      drawingNo: d?.drawingNo || "",
-      occ: d?.occPercentage ?? d?.occ ?? "",
-      invoiceNo: d?.invoiceNo || "",
-      poNo: d?.poNo || "",
-      operationNo: d?.operationNo || "",
-      itemCode: d?.item ?? d?.itemCode ?? "",
-      lotQty: d?.lotQty ?? "",
-      sampleQty: d?.sampleQty ?? "",
-      ncQty: d?.ncQty ?? "",
-      disposal: d?.disposal ?? "",
-      problemDefectSeen: d?.defectSeen || d?.problemDefectSeen || "",
-      problemStatus: d?.problemStatus || "",
-      actionOnDefectiveLot: d?.actionOnDefectiveLot || "",
-      inspectedBy: d?.inspectedBy ?? "",
-      status: d?.status ?? "",
-      narration: d?.narration || "",
-      active:
-        d?.active === true || d?.active === "true" || d?.active === "Active",
-      cancel:
-        d?.cancel === true || d?.cancel === "true" || d?.cancel === "T",
-      cancelRemarks: d?.cancelRemarks || "",
-      financialYear: d?.financialYear || currentFinancialYear(),
+
+      id: v?.id || 0,
+
+      branch: v?.branch?.id != null ? String(v.branch.id) : "",
+      belongsTo: v?.belongsTo?.id != null ? String(v.belongsTo.id) : "",
+      frNo: v?.docId || v?.frNo || "",
+      frDate: fmtDate(v?.docDate || v?.frDate) || todayISO(),
+
+      reference: v?.reference?.id != null ? String(v.reference.id) : "",
+
+      // Supplier is returned as a code string; keep both for display.
+      supplierCode: v?.supplier || "",
+      supplierName: v?.supplierName || "",
+
+      from: v?.fromDept?.id != null ? String(v.fromDept.id) : "",
+      to: v?.toDept?.id != null ? String(v.toDept.id) : "",
+
+      description: v?.description || "",
+      itemDescription: v?.item?.itemDescription || "",
+
+      mrnScGrnNo: v?.mrinSCGRNNO || "",
+      mrnDate: v?.mrinDate ? fmtDate(v.mrinDate) : "",
+
+      drawingNo: v?.drawingNo || "",
+      occ: v?.occPercentage ?? "",
+      invoiceNo: v?.invoiceNo || "",
+      poNo: v?.poNo || "",
+      operationNo: v?.operationNo || "",
+
+      itemCode: v?.item?.id != null ? String(v.item.id) : "",
+
+      lotQty: v?.lotQty ?? "",
+      sampleQty: v?.sampleQty ?? "",
+      ncQty: v?.ncQty ?? "",
+
+      disposal: v?.disposal?.id != null ? String(v.disposal.id) : "",
+
+      problemDefectSeen: v?.defectSeen || "",
+      problemStatus: v?.problemStatus || "",
+      actionOnDefectiveLot: v?.actionOnDefectiveLot || "",
+
+      inspectedBy:
+        v?.inspectedBy?.employeeId != null
+          ? String(v.inspectedBy.employeeId)
+          : v?.inspectedBy?.id != null
+            ? String(v.inspectedBy.id)
+            : "",
+
+      status: v?.status != null ? String(v.status) : "",
+      narration: v?.narration || "",
+
+      active: v?.active === true || v?.active === "Active",
+      cancel: v?.cancel === true || v?.cancel === "T",
+      cancelRemarks: v?.cancelRemarks || "",
+      financialYear: v?.financialYear || currentFinancialYear(),
     });
 
-    setImagePreview(d?.imageUrl || "");
+    // Main image preview (full URL from the API)
+    setImagePreview(v?.flashNCImageName || v?.imageUrl || "");
+
+    // Existing attachments — prefill file rows so the user sees them.
+    const attachments = v?.flashNCReportAttachmentResponseDTO || [];
+    if (attachments.length) {
+      setFileRows(
+        attachments.map((a, i) => ({
+          id: Date.now() + i,
+          file: null,
+          fileName: a.name || a.fileName || "",
+          existingId: a.id,
+          existingPath: a.filePath,
+        })),
+      );
+    } else {
+      setFileRows([{ id: Date.now(), file: null, fileName: "" }]);
+    }
   };
 
   const loadReport = async (id) => {
     try {
       const response = await flashNcReportAPI.getById(id);
-      const d =
-        response?.data ||
-        response?.paramObjectsMap?.flashNcReportVO ||
-        response?.flashNcReportVO ||
-        response;
-
-      if (d) populateForm(d);
+      populateForm(response);
     } catch (error) {
       console.error("Failed to load Flash NC Report:", error);
       addToast("Failed to load Flash NC Report", "error");
@@ -612,9 +703,13 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
 
     setForm((prev) => {
       const next = { ...prev, itemCode: value };
+
       const entry = mrinGrnLookup[prev.mrnScGrnNo];
-      const match = (entry?.items || []).find((it) => it.itemCode === value);
-      next.itemDescription = match?.itemDescription || prev.itemDescription;
+      const match = (entry?.items || []).find(
+        (it) => String(it.itemid) === String(value),
+      );
+
+      next.itemDescription = match?.itemDescription || "";
       return next;
     });
   };
@@ -715,7 +810,6 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Allow most document types; block obvious size overflows
     if (file.size > 10 * 1024 * 1024) {
       addToast("File size must be less than 10 MB", "error");
       e.target.value = "";
@@ -809,17 +903,23 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
         orgId: ORG_ID,
         branch: Number(form.branch) || 0,
         financialYear: form.financialYear,
+        // LOV ids (numbers)
         belongsTo: Number(form.belongsTo) || 0,
         reference: Number(form.reference) || 0,
+        disposal: Number(form.disposal) || 0,
         fromDept: Number(form.from) || 0,
         toDept: Number(form.to) || 0,
-        supplier: Number(form.supplier) || 0,
-        item: Number(form.itemCode) || 0,
+        // supplier as string (code preferred, fall back to name)
+        supplier: form.supplierCode || form.supplierName || "",
+        // dynamic ids (numbers)
+        item: Number(form.itemCode) || 0, // form.itemCode holds itemid
         inspectedBy: Number(form.inspectedBy) || 0,
-        disposal: Number(form.disposal) || 0,
-        status: Number(form.status) || 0,
+        // status as string
+        status: form.status || "",
+
         mrinSCGRNNO: form.mrnScGrnNo || "",
-        mrinDate: form.mrnDate || null,
+        mrinDate: form.mrnDate || "",
+
         poNo: form.poNo || "",
         invoiceNo: form.invoiceNo || "",
         drawingNo: form.drawingNo || "",
@@ -834,26 +934,21 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
         ncQty: Number(form.ncQty) || 0,
         occPercentage: Number(form.occ) || 0,
         active: form.active !== false,
-        cancel: form.cancel === true,
         cancelRemarks: form.cancelRemarks || "",
         createdBy: localStorage.getItem("userName") || "SYSTEM",
       };
 
-      // ⬇️ Send DTO as JSON Blob (binary format)
       const dtoBlob = new Blob([JSON.stringify(dto)], {
         type: "application/json",
       });
-      fd.append("flashNCReportDTO", dtoBlob, "flashNCReportDTO.json");
+      fd.append("flashNCReportVO", dtoBlob, "flashNCReportVO.json");
 
-      // ⬇️ Main image
       if (form.image) fd.append("image", form.image);
 
-      // ⬇️ CAPA images → "images" array
       capaRows.forEach((row) => {
         if (row.file) fd.append("images", row.file);
       });
 
-      // ⬇️ NEW: Documents → "files" array
       fileRows.forEach((row) => {
         if (row.file) fd.append("files", row.file);
       });
@@ -934,7 +1029,7 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
           <ArrowLeft className="h-4 w-4" />
         </button>
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-          {data ? "Edit Flash NC Report" : "Add Flash NC Report"}
+          {editId || data ? "Edit Flash NC Report" : "Add Flash NC Report"}
         </h2>
       </div>
 
@@ -1411,7 +1506,7 @@ const FlashNcReportForm = ({ onBack, onSave, editData, editId, data }) => {
           onCancel={onBack}
           onSave={handleSave}
           isSubmitting={isSubmitting}
-          saveLabel={data ? "Update" : "Save"}
+          saveLabel={editId || data ? "Update" : "Save"}
         />
       </div>
     </div>
