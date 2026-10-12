@@ -197,13 +197,12 @@ const TableHead = ({ headers }) => (
       {headers.map((h, i) => (
         <th
           key={i}
-          className={`p-2 whitespace-nowrap ${
-            i === 0
-              ? "w-8 text-center"
-              : i === headers.length - 1
-                ? "w-20 text-left"
-                : "text-left"
-          } dark:text-white`}
+          className={`p-2 whitespace-nowrap ${i === 0
+            ? "w-8 text-center"
+            : i === headers.length - 1
+              ? "w-20 text-left"
+              : "text-left"
+            } dark:text-white`}
         >
           {h}
         </th>
@@ -221,11 +220,10 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
         type="button"
         onClick={onRemove}
         disabled={disabled}
-        className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-          disabled
-            ? "bg-gray-400 cursor-not-allowed"
-            : "bg-red-600 hover:bg-red-700"
-        }`}
+        className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
+          ? "bg-gray-400 cursor-not-allowed"
+          : "bg-red-600 hover:bg-red-700"
+          }`}
       >
         <Trash2 size={10} />
       </button>
@@ -233,11 +231,21 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
   </tr>
 );
 
+
 /* Generic dynamic table. Supports text / number / date / select / readonly
    columns. Options may be plain strings or { value, label } objects. */
-const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
+
+const DynamicTable = ({
+  columns,
+  rows,
+  onCellChange,
+  onRemoveRow,
+}) => (
   <TableWrapper>
-    <TableHead headers={["#", ...columns.map((c) => c.label), "Action"]} />
+    <TableHead
+      headers={["#", ...columns.map((col) => col.label), "Action"]}
+    />
+
     <tbody>
       {rows.map((row, idx) => (
         <TableRow
@@ -246,23 +254,48 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
           onRemove={() => onRemoveRow(idx)}
           disabled={rows.length <= 1}
         >
-          {columns.map((col) =>
-            col.type === "select" ? (
-              <td className="p-2 align-top" key={col.key}>
-                <select
-                  value={row[col.key]}
-                  onChange={(e) => onCellChange(idx, col.key, e.target.value)}
-                  className={cellInputClasses}
-                >
-                  <option value="">-- Select --</option>
-                  {(col.options || []).map((opt) => (
-                    <option key={opt.value ?? opt} value={opt.value ?? opt}>
-                      {opt.label ?? opt}
-                    </option>
-                  ))}
-                </select>
-              </td>
-            ) : (
+          {columns.map((col) => {
+            // Handle dropdown columns
+            if (col.type === "select") {
+              return (
+                <td className="p-2 align-top" key={col.key}>
+                  <select
+                    value={String(row[col.key] ?? "")}
+                    onChange={(e) =>
+                      onCellChange(
+                        idx,
+                        col.key,
+                        e.target.value
+                      )
+                    }
+                    className={cellInputClasses}
+                  >
+                    <option value="">-- Select --</option>
+
+                    {(col.options || []).map((opt) => {
+                      const optionValue = String(
+                        opt?.value ?? opt
+                      );
+
+                      const optionLabel =
+                        opt?.label ?? opt;
+
+                      return (
+                        <option
+                          key={optionValue}
+                          value={optionValue}
+                        >
+                          {optionLabel}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </td>
+              );
+            }
+
+            // Handle text, number, date and readonly columns
+            return (
               <td className="p-2 align-top" key={col.key}>
                 <input
                   type={
@@ -272,16 +305,24 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
                         ? "date"
                         : "text"
                   }
-                  value={row[col.key]}
-                  readOnly={col.readOnly}
-                  onChange={(e) => onCellChange(idx, col.key, e.target.value)}
+                  value={row[col.key] ?? ""}
+                  readOnly={Boolean(col.readOnly)}
+                  onChange={(e) =>
+                    onCellChange(
+                      idx,
+                      col.key,
+                      e.target.value
+                    )
+                  }
                   className={
-                    col.readOnly ? cellReadOnlyClasses : cellInputClasses
+                    col.readOnly
+                      ? cellReadOnlyClasses
+                      : cellInputClasses
                   }
                 />
               </td>
-            ),
-          )}
+            );
+          })}
         </TableRow>
       ))}
     </tbody>
@@ -332,19 +373,23 @@ const getFinancialYear = () => {
   return String(now.month() >= 3 ? now.year() : now.year() - 1);
 };
 
-// Edit mode: API detail rows -> table rows
 const mapDetailRows = (details) =>
   details?.length
     ? details.map((d) => ({
-        itemCode: d.item?.itemCode || "",
-        itemDescription: d.item?.itemDescription || "",
-        primaryUnit: d.item?.unit?.id ?? "",
-        stock: d.stock ?? "",
-        quantity: d.quantity ?? "",
-        rate: d.rate ?? "",
-        value: d.value != null ? Number(d.value).toFixed(2) : "",
-      }))
+      itemCode: d.item?.itemCode ?? "",
+      itemDescription: d.item?.itemDescription ?? "",
+      // API response provides unit inside item.unit
+      primaryUnit:
+        d.item?.unit?.id != null
+          ? String(d.item.unit.id)
+          : "",
+      stock: d.stock ?? "",
+      quantity: d.quantity ?? "",
+      rate: d.rate ?? "",
+      value: d.value != null ? Number(d.value).toFixed(2) : "",
+    }))
     : [emptyScrapRow()];
+
 
 /* ---------------------------------------------------------------------------- */
 
@@ -491,17 +536,19 @@ const QualityScrapNoteForm = ({ data, onBack }) => {
   const loadUnits = useCallback(async () => {
     try {
       const res = await unitMasterAPI.getUnits(branch, orgId);
+
       setUnitOptions(
         (res || []).map((u) => ({
-          value: u.id,
-          label: u.unitId,
-        })),
+          value: String(u.id),
+          label: u.unitId || u.unitDescription || String(u.id),
+        }))
       );
     } catch (error) {
       console.error("Failed to load unit options:", error);
       setUnitOptions([]);
     }
   }, [orgId, branch]);
+
 
   const loadEmployees = useCallback(async () => {
     try {
@@ -573,12 +620,22 @@ const QualityScrapNoteForm = ({ data, onBack }) => {
 
         const next = { ...row, [key]: value };
 
+
         if (key === "itemCode") {
           const item = itemMasterMap[value];
+
           next.itemDescription = item?.itemDescription || "";
-          next.primaryUnit = item?.primaryUnits?.id || "";
+
+          next.primaryUnit =
+            item?.unit?.id != null
+              ? String(item.unit.id)
+              : item?.primaryUnits?.id != null
+                ? String(item.primaryUnits.id)
+                : "";
+
           next.stock = item?.stock ?? "";
         }
+
 
         // Quantity * Rate = Value
         if (key === "quantity" || key === "rate") {
@@ -689,18 +746,18 @@ const QualityScrapNoteForm = ({ data, onBack }) => {
       if (response?.status) {
         addToast(
           response?.paramObjectsMap?.message ||
-            (isUpdate
-              ? "Quality Scrap Note updated successfully!"
-              : "Quality Scrap Note created successfully!"),
+          (isUpdate
+            ? "Quality Scrap Note updated successfully!"
+            : "Quality Scrap Note created successfully!"),
         );
         onBack?.();
       } else {
         addToast(
           response?.errors?.[0]?.shortMessage ||
-            response?.errors?.[0]?.longMessage ||
-            response?.message ||
-            response?.paramObjectsMap?.message ||
-            "Failed to save Quality Scrap Note.",
+          response?.errors?.[0]?.longMessage ||
+          response?.message ||
+          response?.paramObjectsMap?.message ||
+          "Failed to save Quality Scrap Note.",
         );
       }
     } catch (err) {
@@ -713,11 +770,11 @@ const QualityScrapNoteForm = ({ data, onBack }) => {
       if (body) {
         addToast(
           body.errors?.[0]?.longMessage ||
-            body.errors?.[0]?.shortMessage ||
-            body.message ||
-            body.statusMessage ||
-            body.error ||
-            JSON.stringify(body),
+          body.errors?.[0]?.shortMessage ||
+          body.message ||
+          body.statusMessage ||
+          body.error ||
+          JSON.stringify(body),
         );
       } else {
         addToast("Something went wrong.");
@@ -847,11 +904,10 @@ const QualityScrapNoteForm = ({ data, onBack }) => {
                   key={tab.key}
                   type="button"
                   onClick={() => setActiveChildTab(tab.key)}
-                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${
-                    activeChildTab === tab.key
-                      ? "bg-blue-600 text-white"
-                      : "text-gray-600 dark:text-gray-300"
-                  }`}
+                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${activeChildTab === tab.key
+                    ? "bg-blue-600 text-white"
+                    : "text-gray-600 dark:text-gray-300"
+                    }`}
                 >
                   {tab.label}
                 </button>
@@ -931,7 +987,7 @@ const QualityScrapNoteForm = ({ data, onBack }) => {
                       ? computedTotalScrapValue.toFixed(2)
                       : ""
                   }
-                  onChange={() => {}}
+                  onChange={() => { }}
                   disabled
                 />
                 <Field

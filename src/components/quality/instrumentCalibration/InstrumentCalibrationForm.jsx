@@ -190,13 +190,12 @@ const TableHead = ({ headers }) => (
       {headers.map((h, i) => (
         <th
           key={i}
-          className={`p-2 whitespace-nowrap ${
-            i === 0
+          className={`p-2 whitespace-nowrap ${i === 0
               ? "w-8 text-center"
               : i === headers.length - 1
                 ? "w-20 text-left"
                 : "text-left"
-          } dark:text-white`}
+            } dark:text-white`}
         >
           {h}
         </th>
@@ -214,11 +213,10 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
         type="button"
         onClick={onRemove}
         disabled={disabled}
-        className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-          disabled
+        className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
             ? "bg-gray-400 cursor-not-allowed"
             : "bg-red-600 hover:bg-red-700"
-        }`}
+          }`}
       >
         <Trash2 size={10} />
       </button>
@@ -298,12 +296,12 @@ const emptyDetailRow = () => ({
 });
 
 /* ---------------------------------------------------------------------------- */
-/* Instrument Calibration Form                                                    */
+/* Instrument Calibration Form                                                  */
 
 const InstrumentCalibrationForm = ({ data, onBack }) => {
   const { addToast } = useToast();
   const orgId = Number(localStorage.getItem("orgId")) || 0;
-const branch = Number(localStorage.getItem("branchId")) || 0;
+  const branch = Number(localStorage.getItem("branchId")) || 0;
   const employeeName = localStorage.getItem("employeeName") || "admin";
   const financialYear =
     localStorage.getItem("finYear") || String(dayjs().year());
@@ -429,8 +427,9 @@ const branch = Number(localStorage.getItem("branchId")) || 0;
   const loadMachineTypes = useCallback(async () => {
     try {
       const res = await machineMasterAPI.getMachineMaster(orgId, branch);
+      const data = res?.data ?? res;
       const machines =
-        res?.paramObjectsMap?.machineMasterResponseVO || [];
+        data?.paramObjectsMap?.machineMasterResponseVO || [];
       setMachineTypeOptions(
         (machines || [])
           .filter((m) => m?.type?.id != null)
@@ -462,12 +461,11 @@ const branch = Number(localStorage.getItem("branchId")) || 0;
             m.machineInstrumentNo || m.machineNo || String(m.id);
           return {
             value: machineNo,
-            label: `${machineNo}${
-              m.machineInstrumentName || m.machineName
+            label: `${machineNo}${m.machineInstrumentName || m.machineName
                 ? ` - ${m.machineInstrumentName || m.machineName}`
                 : ""
-            }`,
-locationId: (m.location?.id ?? m.locationId) || Number(m.location) || 0,
+              }`,
+            locationId: (m.location?.id ?? m.locationId) || Number(m.location) || 0,
             locationName: m.location?.locationName || m.locationName || "",
           };
         }),
@@ -478,24 +476,33 @@ locationId: (m.location?.id ?? m.locationId) || Number(m.location) || 0,
     }
   }, [orgId, branch, header.machineInstrument]);
 
+  /* -------- Calibration Agency: fetch from subContract API -------- */
   const loadAgencies = useCallback(async () => {
     try {
-      const res = await locationMasterAPI.getListValuesGroup(
-        "Instrument Calibration Agency",
+      const res = await instrumentCalibrationAPI.getCustomerForSupplierRateContract(
+        branch,
         orgId,
       );
+
+      const data = res?.data ?? res;
+      const list = data?.paramObjectsMap?.customerList || [];
+
       setAgencyOptions(
-        (res || []).map((v) => ({
-          value: v.valuesDescription,
-          label: v.valuesDescription || v.id,
+        list.map((c) => ({
+          // Send the customerId (number) as the option value.
+          value: c.customerId,
+          label: c.customerName
+            ? `${c.customerCode ? `${c.customerCode} - ` : ""}${c.customerName}`
+            : c.customerCode || String(c.customerId),
         })),
       );
     } catch (error) {
-      console.error("Failed to load calibration agency options:", error);
+      console.error("Failed to load calibration agency (customers):", error);
       setAgencyOptions([]);
     }
-  }, [orgId]);
+  }, [orgId, branch]);
 
+  /* -------- Frequency: LOV, value = id -------- */
   const loadFrequencies = useCallback(async () => {
     try {
       const res = await locationMasterAPI.getListValuesGroup(
@@ -526,7 +533,14 @@ locationId: (m.location?.id ?? m.locationId) || Number(m.location) || 0,
       loadAgencies();
       loadFrequencies();
     }
-  }, [orgId, loadDepartments, loadEmployees, loadMachineTypes, loadAgencies, loadFrequencies]);
+  }, [
+    orgId,
+    loadDepartments,
+    loadEmployees,
+    loadMachineTypes,
+    loadAgencies,
+    loadFrequencies,
+  ]);
 
   useEffect(() => {
     if (header.machineInstrument) loadMachines();
@@ -590,7 +604,7 @@ locationId: (m.location?.id ?? m.locationId) || Number(m.location) || 0,
       errors.machineInstrumentNo = "Machine/Instrument No is required";
     if (!header.location && !header.locationId)
       errors.location = "Location is required";
-    if (!header.calibrationAgency?.trim())
+    if (!String(header.calibrationAgency || "").trim())
       errors.calibrationAgency = "Calibration Agency is required";
     if (!header.certificateNo?.trim())
       errors.certificateNo = "Certificate No is required";
@@ -626,7 +640,10 @@ locationId: (m.location?.id ?? m.locationId) || Number(m.location) || 0,
       active: true,
       approvedBy: Number(header.approvedBy),
       branch: Number(header.plantId),
-      calibrationAgency: header.calibrationAgency,
+      // Send the customer id (number). Fallback keeps the raw value if the
+      // backend happens to expect the customer name instead.
+      calibrationAgency:
+        Number(header.calibrationAgency) || header.calibrationAgency,
       cancelRemarks: "",
       certificateNo: header.certificateNo,
       checkedBy: Number(header.checkedBy),
@@ -654,18 +671,18 @@ locationId: (m.location?.id ?? m.locationId) || Number(m.location) || 0,
       if (response?.status) {
         addToast(
           response?.paramObjectsMap?.message ||
-            (isUpdate
-              ? "Instrument Calibration updated successfully!"
-              : "Instrument Calibration created successfully!"),
+          (isUpdate
+            ? "Instrument Calibration updated successfully!"
+            : "Instrument Calibration created successfully!"),
         );
         onBack?.();
       } else {
         addToast(
           response?.errors?.[0]?.shortMessage ||
-            response?.errors?.[0]?.longMessage ||
-            response?.message ||
-            response?.paramObjectsMap?.message ||
-            "Failed to save Instrument Calibration.",
+          response?.errors?.[0]?.longMessage ||
+          response?.message ||
+          response?.paramObjectsMap?.message ||
+          "Failed to save Instrument Calibration.",
         );
       }
     } catch (err) {
@@ -673,9 +690,9 @@ locationId: (m.location?.id ?? m.locationId) || Number(m.location) || 0,
       if (err.response?.data) {
         addToast(
           err.response.data.message ||
-            err.response.data.statusMessage ||
-            err.response.data.error ||
-            JSON.stringify(err.response.data),
+          err.response.data.statusMessage ||
+          err.response.data.error ||
+          JSON.stringify(err.response.data),
         );
       } else {
         addToast("Something went wrong.");
@@ -838,8 +855,6 @@ locationId: (m.location?.id ?? m.locationId) || Number(m.location) || 0,
                 {
                   key: "frequency",
                   label: "Frequency",
-                  type: "select",
-                  options: frequencyOptions,
                 },
                 {
                   key: "nextScheduleDate",

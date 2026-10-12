@@ -43,6 +43,19 @@ const instrumentCalibrationAPI = {
     }
   },
 
+  getCustomerForSupplierRateContract: async (branch, orgId) => {
+    try {
+      const response = await apiClient.get(
+        `/api/subContract/getCustomerForSupplierRateContract`,
+        { params: { branch, orgId } },
+      );
+      return response?.data ?? response;
+    } catch (error) {
+      console.error("Error fetching customers for supplier rate contract:", error);
+      throw error;
+    }
+  },
+
   // Get Machine/Instrument No options filtered by the selected machine master id
   getMachineNo: async (machineId, branch, orgId) => {
     try {

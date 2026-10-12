@@ -191,13 +191,12 @@ const TableHead = ({ headers }) => (
       {headers.map((h, i) => (
         <th
           key={i}
-          className={`p-2 whitespace-nowrap ${
-            i === 0
-              ? "w-8 text-center"
-              : i === headers.length - 1
-                ? "w-20 text-left"
-                : "text-left"
-          } dark:text-white`}
+          className={`p-2 whitespace-nowrap ${i === 0
+            ? "w-8 text-center"
+            : i === headers.length - 1
+              ? "w-20 text-left"
+              : "text-left"
+            } dark:text-white`}
         >
           {h}
         </th>
@@ -215,11 +214,10 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
         type="button"
         onClick={onRemove}
         disabled={disabled}
-        className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-          disabled
-            ? "bg-gray-400 cursor-not-allowed"
-            : "bg-red-600 hover:bg-red-700"
-        }`}
+        className={`h-5 w-5 rounded text-white flex items-center justify-center ${disabled
+          ? "bg-gray-400 cursor-not-allowed"
+          : "bg-red-600 hover:bg-red-700"
+          }`}
       >
         <Trash2 size={10} />
       </button>
@@ -382,11 +380,25 @@ const ZeroKmFailureForm = ({ data, onBack }) => {
     active: data?.active !== false,
   }));
 
-  const [detailRows, setDetailRows] = useState(
-    data?.zeroEntryDetailDTO?.length
-      ? data.zeroEntryDetailDTO
-      : [emptyDetailRow()],
-  );
+  /* Fix 1: GetById returns `zeroEntryDetailResponseDTO` (not `...DTO`), and
+     `partNo` is a nested object — normalize to its id here so the <select>
+     can match an option and the input shows the label. */
+  const [detailRows, setDetailRows] = useState(() => {
+    if (data?.zeroEntryDetailResponseDTO?.length) {
+      return data.zeroEntryDetailResponseDTO.map((d) => ({
+        id: d.id,
+        partNo: d.partNo?.id ?? d.partNo ?? "",
+        partName:
+          d.partName ||
+          d.partNo?.itemDescription ||
+          d.partNo?.itemCode ||
+          "",
+        failureQty: d.failureQty ?? "",
+        reason: d.reason || "",
+      }));
+    }
+    return [emptyDetailRow()];
+  });
 
   const [summary, setSummary] = useState({
     remarks: data?.remarks || "",
@@ -406,8 +418,8 @@ const ZeroKmFailureForm = ({ data, onBack }) => {
       const list = Array.isArray(res)
         ? res
         : res?.paramObjectsMap?.branches ||
-          res?.paramObjectsMap?.branchVO ||
-          [];
+        res?.paramObjectsMap?.branchVO ||
+        [];
       setBranchOptions(
         list.map((b) => ({
           value: b.id,
@@ -466,6 +478,39 @@ const ZeroKmFailureForm = ({ data, onBack }) => {
     loadParts();
   }, [loadBranches, loadCustomers, loadParts]);
 
+  /* Fix 2: Backfill partOptions / partMasterMap with the row's partNo when
+     editing, so the <select> can display the correct label even if the item
+     master list doesn't contain (or hasn't yet loaded) that particular id. */
+  useEffect(() => {
+    if (!isEditMode || !data?.zeroEntryDetailResponseDTO?.length) return;
+
+    setPartOptions((prev) => {
+      const existing = new Set(prev.map((o) => String(o.value)));
+      const extras = [];
+      const extraMap = {};
+
+      data.zeroEntryDetailResponseDTO.forEach((d) => {
+        const id = d.partNo?.id ?? d.partNo;
+        if (id == null || existing.has(String(id))) return;
+        existing.add(String(id));
+        extras.push({
+          value: id,
+          label:
+            d.partNo?.itemCode ||
+            d.partNo?.itemDescription ||
+            String(id),
+        });
+        extraMap[id] = d.partNo;
+      });
+
+      if (extras.length) {
+        setPartMasterMap((m) => ({ ...m, ...extraMap }));
+        return [...extras, ...prev];
+      }
+      return prev;
+    });
+  }, [isEditMode, data]);
+
   useEffect(() => {
     if (isEditMode) return;
 
@@ -488,11 +533,11 @@ const ZeroKmFailureForm = ({ data, onBack }) => {
             "Error generating Zero Km Failure Entry doc id:",
             error,
           );
-        
+
           addToast(
             error?.message ||
-              error?.response?.data?.paramObjectsMap?.errorMessage ||
-              "Failed to generate Doc No",
+            error?.response?.data?.paramObjectsMap?.errorMessage ||
+            "Failed to generate Doc No",
             "error",
           );
           setDocIdGenerationFailed(true);
@@ -573,7 +618,7 @@ const ZeroKmFailureForm = ({ data, onBack }) => {
         "Add at least one Zero Entry Details row with Part No";
     }
     validRows.forEach((r, i) => {
-      if (!r.partNo?.trim())
+      if (!r.partNo?.toString().trim())
         errors[`detail.${i}.partNo`] = "Part No is required";
       if (
         r.failureQty === "" ||
@@ -628,18 +673,18 @@ const ZeroKmFailureForm = ({ data, onBack }) => {
       if (response?.status) {
         addToast(
           response?.paramObjectsMap?.message ||
-            (isEditMode
-              ? "Zero Km Failure Entry updated successfully!"
-              : "Zero Km Failure Entry created successfully!"),
+          (isEditMode
+            ? "Zero Km Failure Entry updated successfully!"
+            : "Zero Km Failure Entry created successfully!"),
         );
         onBack?.();
       } else {
         addToast(
           response?.errors?.[0]?.shortMessage ||
-            response?.errors?.[0]?.longMessage ||
-            response?.message ||
-            response?.paramObjectsMap?.message ||
-            "Failed to save Zero Km Failure Entry.",
+          response?.errors?.[0]?.longMessage ||
+          response?.message ||
+          response?.paramObjectsMap?.message ||
+          "Failed to save Zero Km Failure Entry.",
         );
       }
     } catch (err) {
@@ -647,9 +692,9 @@ const ZeroKmFailureForm = ({ data, onBack }) => {
       if (err.response?.data) {
         addToast(
           err.response.data.message ||
-            err.response.data.statusMessage ||
-            err.response.data.error ||
-            JSON.stringify(err.response.data),
+          err.response.data.statusMessage ||
+          err.response.data.error ||
+          JSON.stringify(err.response.data),
         );
       } else {
         addToast("Something went wrong.");
@@ -699,7 +744,7 @@ const ZeroKmFailureForm = ({ data, onBack }) => {
               label="Doc No"
               name="docId"
               value={generatingDocId ? "Generating..." : header.docId}
-              onChange={docIdGenerationFailed ? handleHeaderChange : () => {}}
+              onChange={docIdGenerationFailed ? handleHeaderChange : () => { }}
               error={
                 fieldErrors.docId ||
                 (docIdGenerationFailed
@@ -757,11 +802,10 @@ const ZeroKmFailureForm = ({ data, onBack }) => {
                   key={tab.key}
                   type="button"
                   onClick={() => setActiveChildTab(tab.key)}
-                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${
-                    activeChildTab === tab.key
-                      ? "bg-blue-600 text-white"
-                      : "text-gray-600 dark:text-gray-300"
-                  }`}
+                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${activeChildTab === tab.key
+                    ? "bg-blue-600 text-white"
+                    : "text-gray-600 dark:text-gray-300"
+                    }`}
                 >
                   {tab.label}
                 </button>
@@ -811,10 +855,10 @@ const ZeroKmFailureForm = ({ data, onBack }) => {
               {detailRows.some(
                 (r, i) => fieldErrors[`detail.${i}.failureQty`],
               ) && (
-                <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
-                  Failure Qty is required in every row
-                </p>
-              )}
+                  <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
+                    Failure Qty is required in every row
+                  </p>
+                )}
               {detailRows.some((r, i) => fieldErrors[`detail.${i}.reason`]) && (
                 <p className="text-[11px] text-red-500 dark:text-red-400 mt-1">
                   Reason is required in every row
