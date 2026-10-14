@@ -57,10 +57,8 @@ const Field = ({
         >
           <option value="">-- Select --</option>
           {(options || []).map((opt) => {
-            const optValue =
-              typeof opt === "object" ? opt.value : opt;
-            const optLabel =
-              typeof opt === "object" ? opt.label : opt;
+            const optValue = typeof opt === "object" ? opt.value : opt;
+            const optLabel = typeof opt === "object" ? opt.label : opt;
             return (
               <option key={optValue} value={optValue}>
                 {optLabel}
@@ -312,7 +310,7 @@ const MaintenanceServiceRequestForm = ({ onBack, onSave, editData }) => {
     try {
       const list = await listOfValuesAPI.getListValuesGroup(
         "SDS BELONGS TO",
-        ORG_ID
+        ORG_ID,
       );
       const mapped = (list || []).map((item) => ({
         value: item.id || item.value,
@@ -333,10 +331,7 @@ const MaintenanceServiceRequestForm = ({ onBack, onSave, editData }) => {
   const loadPriorities = useCallback(async () => {
     if (!ORG_ID) return [];
     try {
-      const list = await listOfValuesAPI.getListValuesGroup(
-        "PRIORITY",
-        ORG_ID
-      );
+      const list = await listOfValuesAPI.getListValuesGroup("PRIORITY", ORG_ID);
       const mapped = (list || []).map((item) => ({
         value: item.id || item.value,
         label: item.valuesDescription || item.label || item.name,
@@ -361,9 +356,9 @@ const MaintenanceServiceRequestForm = ({ onBack, onSave, editData }) => {
       const rawArray = Array.isArray(res)
         ? res
         : res?.paramObjectsMap?.departmentVO ||
-        res?.paramObjectsMap?.departmentList ||
-        res?.paramObjectsMap?.departments ||
-        [];
+          res?.paramObjectsMap?.departmentList ||
+          res?.paramObjectsMap?.departments ||
+          [];
 
       const mapped = rawArray.map((d) => ({
         value: d.id,
@@ -414,7 +409,7 @@ const MaintenanceServiceRequestForm = ({ onBack, onSave, editData }) => {
       const docId =
         await maintenanceServiceRequestAPI.getMaintenanceServiceRequestDocId(
           ORG_ID,
-          financialYear
+          financialYear,
         );
       if (docId) {
         setHeader((p) => ({ ...p, mpNo: docId }));
@@ -434,7 +429,7 @@ const MaintenanceServiceRequestForm = ({ onBack, onSave, editData }) => {
       try {
         const data =
           await maintenanceServiceRequestAPI.getMaintenanceServiceRequestById(
-            id
+            id,
           );
         if (!data) {
           addToast("Failed to load Maintenance Service Request", "error");
@@ -467,7 +462,7 @@ const MaintenanceServiceRequestForm = ({ onBack, onSave, editData }) => {
         setLoading(false);
       }
     },
-    [addToast]
+    [addToast],
   );
 
   /* ---------------------------------------------------------------- */
@@ -517,8 +512,7 @@ const MaintenanceServiceRequestForm = ({ onBack, onSave, editData }) => {
 
     if (!header.belongTo) errors.belongTo = "Belong To is required";
     if (!header.department) errors.department = "Department is required";
-    if (!header.reportedDate)
-      errors.reportedDate = "Reported Date is required";
+    if (!header.reportedDate) errors.reportedDate = "Reported Date is required";
 
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
@@ -536,9 +530,7 @@ const MaintenanceServiceRequestForm = ({ onBack, onSave, editData }) => {
     // ---------- Build base payload (no id) ----------
     const payload = {
       active:
-        editData?.active === "Active" ||
-        editData?.active === true ||
-        true,
+        editData?.active === "Active" || editData?.active === true || true,
       approvedBy: header.approvedBy || "NO",
       belongTo: parseInt(header.belongTo) || 0,
       cancel: false,
@@ -569,7 +561,7 @@ const MaintenanceServiceRequestForm = ({ onBack, onSave, editData }) => {
     try {
       const response =
         await maintenanceServiceRequestAPI.updateCreateMaintenanceServiceRequest(
-          payload
+          payload,
         );
       console.log("📥 Response:", response);
 
@@ -586,7 +578,7 @@ const MaintenanceServiceRequestForm = ({ onBack, onSave, editData }) => {
           editData?.id
             ? "Maintenance Service Request updated successfully"
             : "Maintenance Service Request created successfully",
-          "success"
+          "success",
         );
         if (onSave) onSave(payload);
       } else {
@@ -616,17 +608,15 @@ const MaintenanceServiceRequestForm = ({ onBack, onSave, editData }) => {
   const runtimeHeaderFields = useMemo(
     () =>
       HEADER_FIELDS.map((f) => {
-        if (f.name === "belongTo")
-          return { ...f, options: belongToOptions };
-        if (f.name === "priority")
-          return { ...f, options: priorityOptions };
+        if (f.name === "belongTo") return { ...f, options: belongToOptions };
+        if (f.name === "priority") return { ...f, options: priorityOptions };
         if (f.name === "department")
           return { ...f, options: departmentOptions };
         if (f.name === "requestedBy" || f.name === "preparedBy")
           return { ...f, options: employeeOptions };
         return f;
       }),
-    [belongToOptions, priorityOptions, departmentOptions, employeeOptions]
+    [belongToOptions, priorityOptions, departmentOptions, employeeOptions],
   );
 
   if (loading) {
