@@ -3,6 +3,8 @@ import CommonListViewTable from "../../../utils/CommonListViewTable";
 import processSheetCompRoutingAPI from "../../../api/Production/processSheetCompRoutingAPI";
 import { toast } from "../../../utils/toast";
 
+const isActive = (v) => v === true || v === "Active";
+
 const ProcessSheetCompRoutingList = ({
   onAddNew,
   onEdit,
@@ -23,10 +25,20 @@ const ProcessSheetCompRoutingList = ({
         ORG_ID,
         BRANCH_ID,
       );
-      const sorted = [...(Array.isArray(list) ? list : [])].sort(
-        (a, b) => Number(b?.id || 0) - Number(a?.id || 0),
-      );
-      setData(sorted);
+      // normalise to flat, searchable rows
+      const rows = (Array.isArray(list) ? list : []).map((r) => ({
+        ...r,
+        docId: r.docId || r.processSheetCompRoutingDocId || "",
+        plantName: r.branch?.branchName || r.plantName || "",
+        itemCode:
+          r.fgSfgItemCode?.itemCode ??
+          r.itemCode ??
+          (typeof r.fgSfgItemCode !== "object" ? r.fgSfgItemCode : ""),
+        bomDocId: r.bom?.docId ?? r.bomDocId ?? "",
+        statusText: isActive(r.active) ? "Active" : "Inactive",
+      }));
+      rows.sort((a, b) => Number(b?.id || 0) - Number(a?.id || 0));
+      setData(rows);
     } catch (error) {
       console.error("Failed to load process sheet / routing records:", error);
       setData([]);
@@ -40,59 +52,45 @@ const ProcessSheetCompRoutingList = ({
     loadData();
   }, [loadData, refreshTrigger]);
 
-  const headerOf = (row, key, fallback) => row?.header?.[key] ?? row?.[key] ?? fallback;
-
   const columns = [
     {
-      key: "plant",
-      label: "Plant",
-      accessor: (row) =>
-        row?.plantName ||
-        row?.branch?.branchName ||
-        headerOf(row, "plantName", "") ||
-        headerOf(row, "plantId", ""),
+      key: "docId",
+      label: "Doc. No.",
+      accessor: "docId",
       type: "text",
+      noWrap: true,
     },
+    { key: "plantName", label: "Plant", accessor: "plantName", type: "text" },
     {
-      key: "itemType",
+      key: "fgSfgItemType",
       label: "Item Type",
-      accessor: (row) => headerOf(row, "fgSfgItemType", ""),
+      accessor: "fgSfgItemType",
       type: "text",
     },
     {
       key: "itemCode",
       label: "FG/SFG Item Code",
-      accessor: (row) => headerOf(row, "fgSfgItemCode", ""),
+      accessor: "itemCode",
       type: "text",
     },
     {
       key: "itemDescription",
       label: "Item Description",
-      accessor: (row) => headerOf(row, "itemDescription", ""),
+      accessor: "itemDescription",
       type: "text",
     },
+    { key: "bomDocId", label: "BOM ID", accessor: "bomDocId", type: "text" },
     {
-      key: "bomId",
-      label: "BOM ID",
-      accessor: (row) => headerOf(row, "bomId", ""),
+      key: "totalOperationValue",
+      label: "Total Operation Value",
+      accessor: "totalOperationValue",
       type: "text",
+      align: "right",
     },
     {
-      key: "drawingNo",
-      label: "Drawing No",
-      accessor: (row) => headerOf(row, "drawingNo", ""),
-      type: "text",
-    },
-    {
-      key: "costRateId",
-      label: "Cost Rate ID",
-      accessor: (row) => headerOf(row, "costRateId", ""),
-      type: "text",
-    },
-    {
-      key: "active",
+      key: "statusText",
       label: "Status",
-      accessor: "active",
+      accessor: "statusText",
       type: "status",
       statusVariants: {
         Active: {
@@ -117,20 +115,41 @@ const ProcessSheetCompRoutingList = ({
   ];
 
   const searchFields = [
-    "fgSfgItemCode",
+    "docId",
+    "plantName",
+    "fgSfgItemType",
+    "itemCode",
     "itemDescription",
-    "bomId",
-    "drawingNo",
-    "costRateId",
+    "bomDocId",
+  ];
+
+  const filterOptions = [
+    { value: "all", label: "All", field: null },
+    {
+      value: "active",
+      label: "Active",
+      field: "statusText",
+      filterValue: "active",
+      activeValue: "Active",
+    },
+    {
+      value: "inactive",
+      label: "Inactive",
+      field: "statusText",
+      filterValue: "inactive",
+      activeValue: "Inactive",
+    },
   ];
 
   return (
     <CommonListViewTable
-      title="Process Sheet / Component Routing Master"
+      title="Process Sheet / Component Routing"
       data={data}
       loading={loading}
       columns={columns}
       searchFields={searchFields}
+      filterOptions={filterOptions}
+      defaultFilter="all"
       onBack={onBack}
       onAddNew={onAddNew}
       onEdit={onEdit}

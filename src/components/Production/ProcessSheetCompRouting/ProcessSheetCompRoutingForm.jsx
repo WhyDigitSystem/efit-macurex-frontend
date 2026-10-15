@@ -4,20 +4,15 @@ import dayjs from "dayjs";
 import TabComponent from "../../common/TabComponent";
 import processSheetCompRoutingAPI from "../../../api/Production/processSheetCompRoutingAPI";
 import { branchAPI } from "../../../api/branchAPI";
-import bomMasterAPI from "../../../api/PPC/bomMasterAPI";
-import { itemAPI } from "../../../api/itemAPI";
-import { employeeAPI } from "../../../api/employeeAPI";
 import { useToast } from "../../Toast/ToastContext";
 
 /* ---------------------------------------------------------------------------- */
-/* Shared design tokens                                                        */
+/* Design tokens                                                                */
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
-  "bg-white dark:bg-gray-900 " +
-  "border-gray-300 dark:border-gray-600 " +
-  "text-gray-900 dark:text-gray-100 " +
-  "placeholder-gray-400 dark:placeholder-gray-500 " +
+  "bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 " +
+  "text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 " +
   "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
   "dark:focus:ring-blue-400 dark:focus:border-blue-400 " +
   "disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed";
@@ -27,10 +22,8 @@ const controlErrClasses =
 
 const cellInputClasses =
   "w-full h-8 px-2 rounded border text-xs leading-none transition-colors " +
-  "bg-white dark:bg-gray-900 " +
-  "border-gray-300 dark:border-gray-600 " +
-  "text-gray-900 dark:text-gray-100 " +
-  "placeholder-gray-400 dark:placeholder-gray-500 " +
+  "bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 " +
+  "text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 " +
   "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
   "dark:focus:ring-blue-400 dark:focus:border-blue-400";
 
@@ -41,46 +34,24 @@ const cellReadOnlyClasses =
 
 const labelClasses = "block text-[11px] text-gray-500 dark:text-gray-400 mb-1";
 
-// Adequate spacing between header fields for clarity
 const fieldGrid =
   "grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-x-6 gap-y-4 items-start";
 
-const MULTILINE_CLASSES =
-  "w-full px-2 py-1.5 rounded border text-xs leading-relaxed transition-colors " +
-  "bg-white dark:bg-gray-900 " +
-  "border-gray-300 dark:border-gray-600 " +
-  "text-gray-900 dark:text-gray-100 " +
-  "placeholder-gray-400 dark:placeholder-gray-500 " +
-  "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
-  "dark:focus:ring-blue-400 dark:focus:border-blue-400";
-
 /* ---------------------------------------------------------------------------- */
-/* Static option lists (screen design) - wire to backend masters when available  */
+/* Static options                                                               */
 
 const ITEM_TYPE_OPTIONS = [
-  { value: "FG", label: "Finished Good (FG)" },
-  { value: "SFG", label: "Semi Finished Good (SFG)" },
+  { value: "FG", label: "FG" },
+  { value: "SFG", label: "SFG" },
 ];
 
-const COST_RATE_OPTIONS = [
-  { value: "CR001", label: "Cost Rate 1" },
-  { value: "CR002", label: "Cost Rate 2" },
-  { value: "CR003", label: "Cost Rate 3" },
-];
-
-const TOOL_USAGE_TYPE_OPTIONS = [
-  { value: "USED", label: "Used" },
-  { value: "REUSED", label: "Reused" },
-];
-
-const MACHINE_USAGE_OPTIONS = [
-  { value: "OPERATION", label: "Operation" },
-  { value: "SETUP", label: "Setup" },
-  { value: "AUXILIARY", label: "Auxiliary" },
+const USAGE_OPTIONS = [
+  { value: "Regular", label: "Regular" },
+  { value: "Alternative", label: "Alternative" },
 ];
 
 /* ---------------------------------------------------------------------------- */
-/* Shared building blocks                                                      */
+/* Building blocks                                                              */
 
 const Field = ({
   label,
@@ -91,99 +62,48 @@ const Field = ({
   required,
   type = "text",
   options,
-  className = "",
   disabled = false,
   placeholder,
-}) => {
-  if (type === "select") {
-    return (
-      <div className={`w-full ${className}`}>
-        <label className={labelClasses}>
-          {label}
-          {required && <span className="text-red-500"> *</span>}
-        </label>
+}) => (
+  <div className="w-full">
+    <label className={labelClasses}>
+      {label}
+      {required && <span className="text-red-500"> *</span>}
+    </label>
 
-        <select
-          name={name}
-          value={value}
-          onChange={onChange}
-          disabled={disabled}
-          className={`${controlClasses} ${error ? controlErrClasses : ""}`}
-        >
-          <option value="">Select {label}</option>
-          {(options || []).map((opt) => (
-            <option key={opt.value ?? opt} value={opt.value ?? opt}>
-              {opt.label ?? opt}
-            </option>
-          ))}
-        </select>
-
-        {error && (
-          <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
-            {error}
-          </p>
-        )}
-      </div>
-    );
-  }
-
-  if (type === "textarea") {
-    return (
-      <div className={`w-full ${className}`}>
-        <label className={labelClasses}>
-          {label}
-          {required && <span className="text-red-500"> *</span>}
-        </label>
-
-        <textarea
-          name={name}
-          value={value ?? ""}
-          onChange={onChange}
-          disabled={disabled}
-          placeholder={placeholder}
-          rows={3}
-          className={`${MULTILINE_CLASSES} ${error ? controlErrClasses : ""}`}
-        />
-
-        {error && (
-          <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
-            {error}
-          </p>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <div className={`w-full ${className}`}>
-      <label className={labelClasses}>
-        {label}
-        {required && <span className="text-red-500"> *</span>}
-      </label>
-
+    {type === "select" ? (
+      <select
+        name={name}
+        value={value ?? ""}
+        onChange={onChange}
+        disabled={disabled}
+        className={`${controlClasses} ${error ? controlErrClasses : ""}`}
+      >
+        <option value="">Select {label}</option>
+        {(options || []).map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
+    ) : (
       <input
         type={type}
         name={name}
-        value={value}
+        value={value ?? ""}
         onChange={onChange}
         disabled={disabled}
         placeholder={placeholder}
         className={`${controlClasses} ${error ? controlErrClasses : ""}`}
       />
+    )}
 
-      {error && (
-        <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
-          {error}
-        </p>
-      )}
-    </div>
-  );
-};
-
-const SectionHeader = ({ children }) => (
-  <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">
-    {children}
-  </h3>
+    {error && (
+      <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
+        {error}
+      </p>
+    )}
+  </div>
 );
 
 const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
@@ -196,7 +116,6 @@ const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
       <X className="h-3 w-3" />
       Cancel
     </button>
-
     <button
       onClick={onSave}
       disabled={isSubmitting}
@@ -233,8 +152,17 @@ const YesNoToggle = ({ name, value, onChange }) => (
   </div>
 );
 
-/* ---------------------------------------------------------------------------- */
-/* Table building blocks                                                       */
+const AddButton = ({ onClick }) => (
+  <div className="flex justify-end mb-2">
+    <button
+      type="button"
+      onClick={onClick}
+      className="h-6 w-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-colors"
+    >
+      <Plus size={12} />
+    </button>
+  </div>
+);
 
 const TableWrapper = ({ children }) => (
   <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
@@ -248,13 +176,9 @@ const TableHead = ({ headers }) => (
       {headers.map((h, i) => (
         <th
           key={i}
-          className={`p-1 whitespace-nowrap ${
-            i === 0
-              ? "w-8 text-center"
-              : i === headers.length - 1
-                ? "w-20 text-left"
-                : "text-left"
-          } dark:text-white`}
+          className={`p-1 whitespace-nowrap text-left dark:text-white ${
+            i === 0 ? "w-8 text-center" : ""
+          }`}
         >
           {h}
         </th>
@@ -285,7 +209,7 @@ const TableRow = ({ children, index, onRemove, disabled }) => (
 );
 
 const SelectCell = ({ value, onChange, options, error }) => (
-  <td className="p-1 align-top min-w-[120px]">
+  <td className="p-1 align-top min-w-[130px]">
     <select
       value={value ?? ""}
       onChange={onChange}
@@ -293,8 +217,8 @@ const SelectCell = ({ value, onChange, options, error }) => (
     >
       <option value="">-- Select --</option>
       {(options || []).map((opt) => (
-        <option key={opt.value ?? opt} value={opt.value ?? opt}>
-          {opt.label ?? opt}
+        <option key={opt.value} value={opt.value}>
+          {opt.label}
         </option>
       ))}
     </select>
@@ -303,13 +227,7 @@ const SelectCell = ({ value, onChange, options, error }) => (
 
 const InputCell = ({ value, onChange, type = "text", step, error }) => (
   <td
-    className={`p-1 align-top ${
-      type === "date"
-        ? "min-w-[140px]"
-        : type === "number"
-          ? "min-w-[100px]"
-          : "min-w-[120px]"
-    }`}
+    className={`p-1 align-top ${type === "number" ? "min-w-[100px]" : "min-w-[120px]"}`}
   >
     <input
       type={type}
@@ -327,7 +245,7 @@ const TextAreaCell = ({ value, onChange }) => (
       value={value ?? ""}
       onChange={onChange}
       rows={1}
-      className={`${cellInputClasses} h-[30px] min-h-[30px] resize-y`}
+      className={`${cellInputClasses} h-8 min-h-[32px] py-1.5 resize-y`}
     />
   </td>
 );
@@ -339,73 +257,44 @@ const ReadOnlyCell = ({ value }) => (
 );
 
 /* ---------------------------------------------------------------------------- */
-/* Helpers                                                                      */
+/* Helpers + calculations                                                       */
 
-const fmtDate = (value) => (value ? dayjs(value).format("YYYY-MM-DD") : "");
-
-const toNumber = (value) => {
-  const n = Number(value);
+const num = (v) => {
+  const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 };
 
-const round2 = (value) =>
-  Number.isFinite(value) && value !== 0 ? value.toFixed(2) : "";
+const fix2 = (n) => (Number.isFinite(n) ? n.toFixed(2) : "0.00");
 
-// Auto-calculations for the Machine tab.
-// Placeholder formulas - confirm the exact cost basis with the backend.
-const computeMachineRow = (row) => {
-  const machineHours =
-    toNumber(row.setupTime) / 60 +
-    (toNumber(row.outputPerHour) > 0 ? 1 / toNumber(row.outputPerHour) : 0);
-  const activityMachineCost = toNumber(row.machineHourRate) * machineHours;
-  const activityLabourCost =
-    toNumber(row.labourHourRate) * (toNumber(row.labourHour) / 60);
-  return {
-    activityMachineCost: round2(activityMachineCost),
-    activityLabourCost: round2(activityLabourCost),
-    total: round2(activityMachineCost + activityLabourCost),
-  };
+/* Machine tab calculations
+   - Activity M/C Cost   = Machine Hour Rate x (Setup Time/60 + 1/Output per Hour)
+   - Activity Labour Cost = Labour Hour Rate x (Labour Minutes/60)
+   - Total               = Activity M/C Cost + Activity Labour Cost
+   Confirm this basis with the business owner (same as the Axpert screen). */
+const calcMachine = (row) => {
+  const hours =
+    num(row.setupTimeMinutes) / 60 +
+    (num(row.outputPerHour) > 0 ? 1 / num(row.outputPerHour) : 0);
+  const mc = num(row.machineHourRate) * hours;
+  const labour = num(row.labourHourRate) * (num(row.labourHourMinutes) / 60);
+  return { mc, labour, total: mc + labour };
 };
-
-/* ---------------------------------------------------------------------------- */
-/* Empty state builders                                                        */
-
-const emptyHeader = () => ({
-  plantId: "",
-  fgSfgItemType: "",
-  fgSfgItemCode: "",
-  itemDescription: "",
-  bomId: "",
-  drawingNo: "",
-  costRateId: "",
-  active: true,
-});
 
 const emptyRoutingRow = () => ({
   location: "",
   operation: "",
   description: "",
   outputItemCode: "",
-  specification: "",
-  noOfToolsFixtures: "",
+  spec: "",
+  noOfToolsFixture: "",
   sequence: "",
-  activityConsumableCost: "",
-  cumulativeConsumableCost: "",
+  activityConsumCost: "",
   sourceOfVariation: "",
   productCharacteristics: "",
   processCharacteristics: "",
 });
 
-const emptyCharges = () => ({
-  totalMachineValue: "",
-  totalLabourValue: "",
-  totalToolFixtureValue: "",
-  totalConsumablesValue: "",
-  totalOperationValue: "",
-  preparedBy: "",
-});
-
-const emptyToolFixtureRow = () => ({
+const emptyToolRow = () => ({
   usageType: "",
   toolFixtureNo: "",
   toolFixtureName: "",
@@ -413,388 +302,395 @@ const emptyToolFixtureRow = () => ({
 });
 
 const emptyMachineRow = () => ({
-  usage: "",
+  usageMachine: "",
   machineNo: "",
   machineName: "",
-  setupTime: "",
+  setupTimeMinutes: "",
   outputPerHour: "",
   machineHourRate: "",
-  activityMachineCost: "",
-  labourHour: "",
+  labourHourMinutes: "",
   labourHourRate: "",
-  activityLabourCost: "",
-  total: "",
 });
+
+const withRows = (rows, empty) =>
+  Array.isArray(rows) && rows.length
+    ? rows.map((r) => ({ ...empty(), ...r }))
+    : [empty()];
 
 /* ---------------------------------------------------------------------------- */
 
 const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
   const { addToast } = useToast();
   const orgId = Number(localStorage.getItem("orgId"));
-  const branch = Number(localStorage.getItem("branchId")) || 1000000001;
+  const branch = Number(localStorage.getItem("branchId"));
   const usersId = localStorage.getItem("usersId");
+  const finYear =
+    localStorage.getItem("finYear") || String(new Date().getFullYear());
+
+  const isEdit = Boolean(data?.id);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
   const [fieldErrors, setFieldErrors] = useState({});
-  const [tableErrors, setTableErrors] = useState({}); // { routing: bool, toolFixture: bool }
   const [showErrors, setShowErrors] = useState(false);
 
-  /* ---------------- Lookup options ---------------- */
+  /* ---------------- lookups ---------------- */
   const [plantOptions, setPlantOptions] = useState([]);
   const [itemOptions, setItemOptions] = useState([]);
   const [itemMap, setItemMap] = useState({});
   const [bomOptions, setBomOptions] = useState([]);
   const [locationOptions, setLocationOptions] = useState([]);
   const [operationOptions, setOperationOptions] = useState([]);
+  const [operationMap, setOperationMap] = useState({});
   const [machineOptions, setMachineOptions] = useState([]);
+  const [machineMap, setMachineMap] = useState({});
   const [employeeOptions, setEmployeeOptions] = useState([]);
 
-  /* ---------------- Form state ---------------- */
-  const [header, setHeader] = useState(() => {
-    const d = data?.header || data || {};
-    return { ...emptyHeader(), ...d, active: d.active ?? true };
-  });
-
-  const [routingRows, setRoutingRows] = useState(() => {
-    const rows = data?.routingDetails || data?.routingList || [];
-    return rows.length ? rows.map((r) => ({ ...emptyRoutingRow(), ...r })) : [emptyRoutingRow()];
-  });
-
-  const [charges, setCharges] = useState(() => ({
-    ...emptyCharges(),
-    ...(data?.chargesSummary || {}),
+  /* ---------------- form state (pre-filled from `data` in edit mode) ------- */
+  const [header, setHeader] = useState(() => ({
+    docId: data?.docId || "",
+    docDate: data?.docDate
+      ? dayjs(data.docDate).format("YYYY-MM-DD")
+      : dayjs().format("YYYY-MM-DD"),
+    plantId: data?.plantId || (branch ? String(branch) : ""),
+    fgSfgItemType: data?.fgSfgItemType || "",
+    fgSfgItemCode: data?.fgSfgItemCode || "",
+    itemDescription: data?.itemDescription || "",
+    bomId: data?.bomId || "",
+    drawingNo: data?.drawingNo || "",
+    costRateId: data?.costRateId || "",
+    active: data?.active ?? true,
   }));
+  const [preparedBy, setPreparedBy] = useState(data?.preparedBy || "");
+  const [routingRows, setRoutingRows] = useState(() =>
+    withRows(data?.routingRows, emptyRoutingRow),
+  );
+  const [toolRows, setToolRows] = useState(() =>
+    withRows(data?.toolFixtureRows, emptyToolRow),
+  );
+  const [machineRows, setMachineRows] = useState(() =>
+    withRows(data?.machineRows, emptyMachineRow),
+  );
 
-  const [toolFixtureRows, setToolFixtureRows] = useState(() => {
-    const rows = data?.toolFixtureDetails || data?.toolFixtureList || [];
-    return rows.length
-      ? rows.map((r) => ({ ...emptyToolFixtureRow(), ...r }))
-      : [emptyToolFixtureRow()];
-  });
+  /* ---------------- derived values ---------------- */
 
-  const [machineRows, setMachineRows] = useState(() => {
-    const rows = data?.machineDetails || data?.machineList || [];
-    return rows.length ? rows.map((r) => ({ ...emptyMachineRow(), ...r })) : [emptyMachineRow()];
-  });
-
-  /* ---------------- Derived auto-calculations ---------------- */
-
-  // Cumulative consumable cost per routing row (running total)
-  const routingWithCumulative = useMemo(() => {
+  const routingWithCum = useMemo(() => {
     let running = 0;
-    return routingRows.map((row) => {
-      running += toNumber(row.activityConsumableCost);
-      return { ...row, cumulativeConsumableCost: round2(running) };
+    return routingRows.map((r) => {
+      running += num(r.activityConsumCost);
+      return { ...r, cumulativeConsumCost: running };
     });
   }, [routingRows]);
 
-  const chargesTotals = useMemo(() => {
-    const totalConsumablesValue = routingRows.reduce(
-      (acc, r) => acc + toNumber(r.activityConsumableCost),
+  const totals = useMemo(() => {
+    const consumables = routingRows.reduce(
+      (a, r) => a + num(r.activityConsumCost),
       0,
     );
-    const totalToolFixtureValue = toolFixtureRows.reduce(
-      (acc, r) => acc + toNumber(r.activityToolFixtureCost),
+    const tool = toolRows.reduce(
+      (a, r) => a + num(r.activityToolFixtureCost),
       0,
     );
-    const totalMachineValue = machineRows.reduce(
-      (acc, r) => acc + (computeMachineRow(r).activityMachineCost || 0),
-      0,
-    );
-    const totalLabourValue = machineRows.reduce(
-      (acc, r) => acc + (computeMachineRow(r).activityLabourCost || 0),
-      0,
-    );
-    const totalOperationValue =
-      totalMachineValue + totalLabourValue + totalToolFixtureValue + totalConsumablesValue;
+    let mc = 0;
+    let labour = 0;
+    machineRows.forEach((r) => {
+      const c = calcMachine(r);
+      mc += c.mc;
+      labour += c.labour;
+    });
     return {
-      totalConsumablesValue: round2(totalConsumablesValue),
-      totalToolFixtureValue: round2(totalToolFixtureValue),
-      totalMachineValue: round2(totalMachineValue),
-      totalLabourValue: round2(totalLabourValue),
-      totalOperationValue: round2(totalOperationValue),
+      totalMcValue: mc,
+      totalLabourValue: labour,
+      totalToolFixtureValue: tool,
+      totalConsumablesValue: consumables,
+      totalOperationValue: mc + labour + tool + consumables,
     };
-  }, [routingRows, toolFixtureRows, machineRows]);
+  }, [routingRows, toolRows, machineRows]);
 
-  /* ---------------- Lookup loading ---------------- */
+  /* ---------------- load lookups ---------------- */
 
   useEffect(() => {
     if (!orgId) return;
 
-    const loadPlants = async () => {
+    const safe = async (fn, onOk) => {
       try {
-        const res = await branchAPI.getBranchByOrgId(orgId);
+        onOk(await fn());
+      } catch (e) {
+        console.error("Lookup load failed:", e);
+      }
+    };
+
+    safe(
+      () => branchAPI.getBranchByOrgId(orgId),
+      (res) =>
         setPlantOptions(
           (Array.isArray(res) ? res : []).map((b) => ({
-            value: b.id ?? b.branchId,
+            value: String(b.id ?? b.branchId),
             label: b.branchName || b.name || b.branchCode || `Branch ${b.id}`,
           })),
-        );
-      } catch {
-        setPlantOptions([]);
-      }
-    };
+        ),
+    );
 
-    const loadItems = async () => {
-      try {
-        const res = await itemAPI.getItems(orgId, branch);
-        const map = {};
-        const opts = (res || []).map((it) => {
-          const code = it.itemCode || it.code || it.id?.toString() || "";
-          map[code] = it;
-          return { value: code, label: code };
-        });
-        setItemOptions(opts);
-        setItemMap(map);
-      } catch {
-        setItemOptions([]);
-        setItemMap({});
-      }
-    };
-
-    const loadBoms = async () => {
-      try {
-        const res = await bomMasterAPI.getByOrgId(orgId);
+    safe(
+      () => processSheetCompRoutingAPI.getBoms(orgId, branch),
+      (list) =>
         setBomOptions(
-          (Array.isArray(res) ? res : []).map((b) => {
-            const code =
-              b?.header?.fgSfgItemCode || b?.fgSfgItemCode || b?.itemCode || "";
-            return { value: b.id ?? b.bomId, label: `${b.id ?? b.bomId}${code ? ` - ${code}` : ""}` };
+          list.map((b) => ({
+            value: String(b.id),
+            label: b.docId || String(b.id),
+          })),
+        ),
+    );
+
+    safe(
+      () => processSheetCompRoutingAPI.getLocations(orgId, branch),
+      (list) =>
+        setLocationOptions(
+          list.map((l) => ({
+            value: String(l.id),
+            label: `${l.locationId || ""}${l.locationName ? ` - ${l.locationName}` : ""}`,
+          })),
+        ),
+    );
+
+    safe(
+      () => processSheetCompRoutingAPI.getOperations(orgId),
+      (list) => {
+        const map = {};
+        setOperationOptions(
+          list.map((o) => {
+            const v = String(o.operationMasterBasicId);
+            map[v] = o;
+            return { value: v, label: o.operationId };
           }),
         );
-      } catch {
-        setBomOptions([]);
-      }
-    };
+        setOperationMap(map);
+      },
+    );
 
-    const loadLocations = async () => {
-      try {
-        const res = await processSheetCompRoutingAPI.getLocations(orgId, branch);
-        setLocationOptions(
-          (Array.isArray(res) ? res : []).map((loc) => ({
-            value: loc.id ?? loc.locationId ?? loc.code,
-            label:
-              loc.locationName ||
-              loc.name ||
-              loc.location ||
-              loc.code ||
-              `Location ${loc.id ?? loc.locationId}`,
-          })),
-        );
-      } catch {
-        setLocationOptions([]);
-      }
-    };
-
-    const loadOperations = async () => {
-      try {
-        const res = await processSheetCompRoutingAPI.getOperations(orgId, branch);
-        setOperationOptions(
-          (Array.isArray(res) ? res : []).map((op) => ({
-            value: op.id ?? op.operationNo ?? op.operationCode,
-            label: `${op.operationCode || op.operationNo || op.id || ""}${
-              op.operationName ? ` - ${op.operationName}` : ""
-            }`,
-          })),
-        );
-      } catch {
-        setOperationOptions([]);
-      }
-    };
-
-    const loadMachines = async () => {
-      try {
-        const res = await processSheetCompRoutingAPI.getMachines(orgId, branch);
+    safe(
+      () => processSheetCompRoutingAPI.getMachines(orgId, branch),
+      (list) => {
+        const map = {};
         setMachineOptions(
-          (Array.isArray(res) ? res : []).map((m) => ({
-            value: m.id ?? m.machineNo ?? m.machineCode,
-            label: `${m.machineCode || m.machineNo || m.id || ""}${
-              m.machineName ? ` - ${m.machineName}` : ""
-            }`,
-            name: m.machineName || m.name || "",
-          })),
+          list.map((m) => {
+            const v = String(m.MachineId);
+            map[v] = m;
+            return { value: v, label: m.machineInstrumentNo };
+          }),
         );
-      } catch {
-        setMachineOptions([]);
-      }
-    };
+        setMachineMap(map);
+      },
+    );
 
-    const loadEmployees = async () => {
-      try {
-        const res = await employeeAPI.getEmployeeByOrgId(orgId);
+    safe(
+      () => processSheetCompRoutingAPI.getEmployees(orgId),
+      (list) =>
         setEmployeeOptions(
-          (Array.isArray(res) ? res : []).map((emp) => ({
-            value: emp.id ?? emp.employeeCode,
-            label: `${emp.employeeCode || ""}${emp.employeeName || emp.name ? ` - ${emp.employeeName || emp.name}` : ""}`,
+          list.map((e) => ({
+            value: String(e.id),
+            label: `${e.employeeName || ""}${e.employeeId ? ` (${e.employeeId})` : ""}`,
           })),
-        );
-      } catch {
-        setEmployeeOptions([]);
-      }
-    };
-
-    Promise.all([
-      loadPlants(),
-      loadItems(),
-      loadBoms(),
-      loadLocations(),
-      loadOperations(),
-      loadMachines(),
-      loadEmployees(),
-    ]);
+        ),
+    );
   }, [orgId, branch]);
 
-  /* ---------------- Header handlers ---------------- */
+  // Doc No is only generated for a new record
+  useEffect(() => {
+    if (isEdit || !orgId) return;
+    processSheetCompRoutingAPI
+      .getDocId(orgId, finYear)
+      .then((docId) => setHeader((p) => ({ ...p, docId })))
+      .catch((e) => console.error("DocId load failed:", e));
+  }, [isEdit, orgId, finYear]);
+
+  // FG/SFG items depend on the selected type (also runs on edit to resolve the saved item)
+  useEffect(() => {
+    if (!orgId || !header.fgSfgItemType) {
+      setItemOptions([]);
+      setItemMap({});
+      return;
+    }
+    processSheetCompRoutingAPI
+      .getFgSfgItems(orgId, branch, header.fgSfgItemType.toLowerCase())
+      .then((list) => {
+        const map = {};
+        setItemOptions(
+          list.map((it) => {
+            const v = String(it.itemId);
+            map[v] = it;
+            return { value: v, label: it.itemCode };
+          }),
+        );
+        setItemMap(map);
+      })
+      .catch((e) => {
+        console.error("Item load failed:", e);
+        setItemOptions([]);
+        setItemMap({});
+      });
+  }, [orgId, branch, header.fgSfgItemType]);
+
+  /* ---------------- handlers ---------------- */
 
   const handleHeaderChange = (e) => {
     const { name, value } = e.target;
-    if (fieldErrors[name]) setFieldErrors((prev) => ({ ...prev, [name]: "" }));
+    if (fieldErrors[name]) setFieldErrors((p) => ({ ...p, [name]: "" }));
     setHeader((prev) => {
-      let next = { ...prev, [name]: value };
+      const next = { ...prev, [name]: value };
+      if (name === "fgSfgItemType") {
+        // changing the type invalidates the chosen item
+        next.fgSfgItemCode = "";
+        next.itemDescription = "";
+        next.drawingNo = "";
+      }
       if (name === "fgSfgItemCode") {
-        const item = itemMap[value];
-        next.itemDescription = item?.itemDescription || item?.description || "";
+        const it = itemMap[value];
+        next.itemDescription = it?.itemDescription || "";
+        next.drawingNo = it?.drawingNo || "";
       }
       return next;
     });
   };
 
-  const handleActiveToggle = (e) => {
-    const { name, value } = e.target;
-    setHeader((prev) => ({ ...prev, [name]: value }));
+  const updateRow = (setter, idx, patch) =>
+    setter((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+
+  const handleRoutingChange = (idx, key, value) => {
+    const patch = { [key]: value };
+    if (key === "operation") {
+      const op = operationMap[value];
+      if (op?.description) patch.description = op.description;
+    }
+    updateRow(setRoutingRows, idx, patch);
   };
 
-  /* ---------------- Grid row handlers ---------------- */
-
-  const updateRows = (setter) => (idx, key, value) => {
-    setter((prev) =>
-      prev.map((row, i) => {
-        if (i !== idx) return row;
-        let next = { ...row, [key]: value };
-        if (key === "operation") {
-          const op = operationOptions.find((o) => String(o.value) === String(value));
-          if (op?.name) next.description = op.name;
-        }
-        return next;
-      }),
-    );
-  };
-
-  const handleRoutingChange = updateRows(setRoutingRows);
-  const handleToolFixtureChange = updateRows(setToolFixtureRows);
+  const handleToolChange = (idx, key, value) =>
+    updateRow(setToolRows, idx, { [key]: value });
 
   const handleMachineChange = (idx, key, value) => {
-    setMachineRows((prev) =>
-      prev.map((row, i) => {
-        if (i !== idx) return row;
-        let next = { ...row, [key]: value };
-        if (key === "machineNo") {
-          const m = machineOptions.find((o) => String(o.value) === String(value));
-          if (m?.name) next.machineName = m.name;
-        }
-        const calc = computeMachineRow(next);
-        next.activityMachineCost = calc.activityMachineCost;
-        next.activityLabourCost = calc.activityLabourCost;
-        next.total = calc.total;
-        return next;
-      }),
-    );
+    const patch = { [key]: value };
+    if (key === "machineNo") {
+      const m = machineMap[value];
+      patch.machineName = m?.machineInstrumentName || "";
+      patch.machineHourRate = m ? String(m.hourlyRate ?? "") : "";
+    }
+    updateRow(setMachineRows, idx, patch);
   };
 
-  const handleAddRow = (setter) => (emptyRow) =>
-    setter((prev) => [...prev, emptyRow()]);
+  const addRow = (setter, empty) => setter((p) => [...p, empty()]);
+  const removeRow = (setter, idx) =>
+    setter((p) => p.filter((_, i) => i !== idx));
 
-  const handleRemoveRow = (setter) => (idx) =>
-    setter((prev) => prev.filter((_, i) => i !== idx));
+  /* ---------------- validation ---------------- */
 
-  /* ---------------- Charges handlers ---------------- */
-
-  const handleChargesChange = (e) => {
-    const { name, value } = e.target;
-    if (fieldErrors[name]) setFieldErrors((prev) => ({ ...prev, [name]: "" }));
-    setCharges((prev) => ({ ...prev, [name]: value }));
-  };
-
-  /* ---------------- Validation ---------------- */
+  const routingRowErrors = (row) => ({
+    location: !row.location,
+    operation: !row.operation,
+    sequence: !(num(row.sequence) > 0),
+  });
 
   const validate = () => {
     const errors = {};
-
     if (!header.plantId) errors.plantId = "Plant ID is required";
-    if (!header.fgSfgItemType?.trim())
+    if (!header.fgSfgItemType)
       errors.fgSfgItemType = "FG/SFG Item Type is required";
-    if (!header.fgSfgItemCode?.trim())
+    if (!header.fgSfgItemCode)
       errors.fgSfgItemCode = "FG/SFG Item Code is required";
-    if (!header.itemDescription?.trim())
-      errors.itemDescription = "Item Description is required";
-    if (!header.costRateId?.trim()) errors.costRateId = "Cost Rate ID is required";
-    if (!charges.preparedBy?.trim())
-      errors.preparedBy = "Prepared By is required";
-
+    if (!preparedBy) errors.preparedBy = "Prepared By is required";
     setFieldErrors(errors);
 
     const routingOk = routingRows.every(
-      (r) =>
-        r.location?.trim() && r.operation?.trim() && r.sequence !== "" && Number(r.sequence) > 0,
+      (r) => !Object.values(routingRowErrors(r)).some(Boolean),
     );
-    const toolFixtureOk = toolFixtureRows.every((r) => r.usageType?.trim());
+    const toolOk = toolRows.every((r) => r.usageType);
 
-    setTableErrors({
-      routing: !routingOk,
-      toolFixture: !toolFixtureOk,
-    });
-
-    const valid =
-      Object.keys(errors).length === 0 && routingOk && toolFixtureOk;
+    const valid = !Object.keys(errors).length && routingOk && toolOk;
     setShowErrors(!valid);
     return valid;
   };
 
-  /* ---------------- Save ---------------- */
+  /* ---------------- save ---------------- */
 
   const handleSave = async () => {
     if (!validate()) {
       addToast("Please fill all mandatory fields before saving.", "error");
       return;
     }
-
     setIsSubmitting(true);
 
-    const isUpdate = Boolean(data?.id ?? data?.header?.id);
+    const idIf = (r) => (r.id ? { id: r.id } : {});
 
-    // Single-transaction payload: header + routing details + charges summary +
-    // tool/fixture details + machine details. The backend persists all of these
-    // together, links the record to the plant, FG/SFG item, BOM and cost rate
-    // details and keeps the complete routing history with charges, tools and
-    // machine usage (server-side validation).
     const payload = {
-      ...(isUpdate ? { id: data?.id ?? data?.header?.id } : {}),
-      orgId,
-      header: {
-        ...header,
-        plantId: header.plantId,
-        active: header.active,
-      },
-      routingDetails: routingWithCumulative,
-      chargesSummary: {
-        ...chargesTotals,
-        preparedBy: charges.preparedBy,
-      },
-      toolFixtureDetails: toolFixtureRows,
-      machineDetails: machineRows.map((r) => ({ ...r, ...computeMachineRow(r) })),
+      ...(isEdit ? { id: data.id } : {}),
       active: header.active,
-      createdBy: isUpdate ? data?.createdBy || usersId : usersId,
-      ...(isUpdate ? { updatedBy: usersId } : {}),
+      bom: header.bomId ? Number(header.bomId) : null,
+      branch: Number(header.plantId) || branch,
+      cancel: false,
+      cancelRemarks: "",
+      fgSfgItemCode: Number(header.fgSfgItemCode),
+      fgSfgItemType: header.fgSfgItemType,
+      itemDescription: header.itemDescription,
+      orgId,
+      preparedBy: Number(preparedBy),
+      createdBy: isEdit ? data?.createdBy || usersId : usersId,
+      ...(isEdit ? { updatedBy: usersId } : {}),
+
+      processSheetCompRoutingDetailDTO: routingWithCum.map((r) => ({
+        ...idIf(r),
+        activityConsumCost: num(r.activityConsumCost),
+        cumulativeConsumCost: num(r.cumulativeConsumCost),
+        description: r.description,
+        location: Number(r.location),
+        noOfToolsFixture: num(r.noOfToolsFixture),
+        operation: Number(r.operation),
+        outputItemCode: num(r.outputItemCode),
+        processCharacteristics: r.processCharacteristics,
+        productCharacteristics: r.productCharacteristics,
+        sequence: num(r.sequence),
+        sourceOfVariation: r.sourceOfVariation,
+        spec: r.spec,
+      })),
+
+      processSheetToolFixtureDetailsDTO: toolRows.map((r) => ({
+        ...idIf(r),
+        activityToolFixtureCost: num(r.activityToolFixtureCost),
+        toolFixtureName: r.toolFixtureName,
+        toolFixtureNo: num(r.toolFixtureNo),
+        usageType: r.usageType,
+      })),
+
+      processSheetCompRoutingMachineDTO: machineRows.map((r) => {
+        const c = calcMachine(r);
+        return {
+          ...idIf(r),
+          activityLabourCost: Number(c.labour.toFixed(2)),
+          activityMcCost: Number(c.mc.toFixed(2)),
+          labourHourMinutes: num(r.labourHourMinutes),
+          labourHourRate: num(r.labourHourRate),
+          machineHourRate: num(r.machineHourRate),
+          machineName: r.machineName,
+          machineNo: Number(r.machineNo) || 0,
+          outputPerHour: num(r.outputPerHour),
+          setupTimeMinutes: num(r.setupTimeMinutes),
+          total: Number(c.total.toFixed(2)),
+          usageMachine: r.usageMachine,
+        };
+      }),
+
+      totalConsumablesValue: Number(totals.totalConsumablesValue.toFixed(2)),
+      totalLabourValue: Number(totals.totalLabourValue.toFixed(2)),
+      totalMcValue: Number(totals.totalMcValue.toFixed(2)),
+      totalOperationValue: Number(totals.totalOperationValue.toFixed(2)),
+      totalToolFixtureValue: Number(totals.totalToolFixtureValue.toFixed(2)),
     };
 
     try {
       const response = await processSheetCompRoutingAPI.createUpdate(payload);
-
       if (response?.status) {
         addToast(
           response?.paramObjectsMap?.message ||
-            (isUpdate
+            (isEdit
               ? "Process Sheet / Routing updated successfully!"
               : "Process Sheet / Routing created successfully!"),
         );
@@ -803,7 +699,7 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
         addToast(
           response?.errors?.[0]?.shortMessage ||
             response?.errors?.[0]?.longMessage ||
-            response?.message ||
+            response?.paramObjectsMap?.errorMessage ||
             response?.paramObjectsMap?.message ||
             "Failed to save Process Sheet / Routing.",
           "error",
@@ -812,7 +708,9 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
     } catch (err) {
       console.error("Save Process Sheet / Routing Error:", err);
       addToast(
-        err.response?.data?.message || err.response?.data?.error || "Something went wrong.",
+        err.response?.data?.paramObjectsMap?.errorMessage ||
+          err.response?.data?.message ||
+          "Something went wrong.",
         "error",
       );
     } finally {
@@ -820,126 +718,191 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
     }
   };
 
-  /* ---------------- Column configs ---------------- */
+  /* ---------------- columns ---------------- */
 
   const routingColumns = [
-    { key: "location", label: "Location *", type: "select" },
-    { key: "operation", label: "Operation *", type: "select" },
-    { key: "description", label: "Description", type: "textarea", rows: "1" },
-    { key: "outputItemCode", label: "Output Item Code", type: "select" },
-    { key: "specification", label: "Specification", type: "text" },
-    { key: "noOfToolsFixtures", label: "No. of Tools/Fixtures", type: "number", step: "1" },
+    {
+      key: "location",
+      label: "Location *",
+      type: "select",
+      options: locationOptions,
+    },
+    {
+      key: "operation",
+      label: "Operation *",
+      type: "select",
+      options: operationOptions,
+    },
+    { key: "description", label: "Description", type: "textarea" },
+    {
+      key: "outputItemCode",
+      label: "Output Item Code",
+      type: "number",
+      step: "1",
+    },
+    { key: "spec", label: "Spec.", type: "text" },
+    {
+      key: "noOfToolsFixture",
+      label: "No. of Tools/Fixture",
+      type: "number",
+      step: "1",
+    },
     { key: "sequence", label: "Sequence *", type: "number", step: "1" },
-    { key: "activityConsumableCost", label: "Activity Consumable Cost", type: "number", step: "0.01" },
-    { key: "cumulativeConsumableCost", label: "Cumul. Consumable Cost", readOnly: true },
+    {
+      key: "activityConsumCost",
+      label: "Activity Consum. Cost",
+      type: "number",
+      step: "0.01",
+    },
+    {
+      key: "cumulativeConsumCost",
+      label: "Cumulative Consum. Cost",
+      readOnly: true,
+    },
     { key: "sourceOfVariation", label: "Source of Variation", type: "text" },
-    { key: "productCharacteristics", label: "Product Characteristics", type: "textarea", rows: "1" },
-    { key: "processCharacteristics", label: "Process Characteristics", type: "textarea", rows: "4" },
+    {
+      key: "productCharacteristics",
+      label: "Product Characteristics",
+      type: "textarea",
+    },
+    {
+      key: "processCharacteristics",
+      label: "Process Characteristics",
+      type: "textarea",
+    },
   ];
 
-  const toolFixtureColumns = [
-    { key: "usageType", label: "Usage Type *", type: "select" },
-    { key: "toolFixtureNo", label: "Tool/Fixture No", type: "text" },
+  const toolColumns = [
+    {
+      key: "usageType",
+      label: "Usage Type *",
+      type: "select",
+      options: USAGE_OPTIONS,
+    },
+    {
+      key: "toolFixtureNo",
+      label: "Tool/Fixture No",
+      type: "number",
+      step: "1",
+    },
     { key: "toolFixtureName", label: "Tool/Fixture Name", type: "text" },
-    { key: "activityToolFixtureCost", label: "Activity Tool/Fixture Cost", type: "number", step: "0.01" },
+    {
+      key: "activityToolFixtureCost",
+      label: "Activity Tool/Fixture Cost",
+      type: "number",
+      step: "0.01",
+    },
   ];
 
   const machineColumns = [
-    { key: "usage", label: "Usage", type: "select" },
-    { key: "machineNo", label: "Machine No", type: "select" },
+    {
+      key: "usageMachine",
+      label: "Usage",
+      type: "select",
+      options: USAGE_OPTIONS,
+    },
+    {
+      key: "machineNo",
+      label: "Machine No.",
+      type: "select",
+      options: machineOptions,
+    },
     { key: "machineName", label: "Machine Name", readOnly: true },
-    { key: "setupTime", label: "Setup Time (min)", type: "number", step: "1" },
-    { key: "outputPerHour", label: "Output/Hour", type: "number", step: "0.001" },
-    { key: "machineHourRate", label: "Machine Hour Rate", type: "number", step: "0.01" },
-    { key: "activityMachineCost", label: "Activity Machine Cost", readOnly: true },
-    { key: "labourHour", label: "Labour Hour (min)", type: "number", step: "1" },
-    { key: "labourHourRate", label: "Labour Hour Rate", type: "number", step: "0.01" },
-    { key: "activityLabourCost", label: "Activity Labour Cost", readOnly: true },
+    {
+      key: "setupTimeMinutes",
+      label: "Setup Time (Minutes)",
+      type: "number",
+      step: "1",
+    },
+    {
+      key: "outputPerHour",
+      label: "Output/Hour",
+      type: "number",
+      step: "0.001",
+    },
+    {
+      key: "machineHourRate",
+      label: "Machine Hour Rate",
+      type: "number",
+      step: "0.01",
+    },
+    { key: "activityMcCost", label: "Activity M/C Cost", readOnly: true },
+    {
+      key: "labourHourMinutes",
+      label: "Labour Hour (Mins)",
+      type: "number",
+      step: "1",
+    },
+    {
+      key: "labourHourRate",
+      label: "Labour Hour Rate",
+      type: "number",
+      step: "0.01",
+    },
+    {
+      key: "activityLabourCost",
+      label: "Activity Labour Cost",
+      readOnly: true,
+    },
     { key: "total", label: "Total", readOnly: true },
   ];
 
-  const routingRowErrors = showErrors
-    ? routingRows.reduce((acc, row, idx) => {
-        const errs = {};
-        if (!row.location?.trim()) errs.location = true;
-        if (!row.operation?.trim()) errs.operation = true;
-        if (row.sequence === "" || Number(row.sequence) <= 0) errs.sequence = true;
-        if (Object.keys(errs).length > 0) acc[idx] = errs;
-        return acc;
-      }, {})
-    : {};
-
-  const toolFixtureRowErrors = showErrors
-    ? toolFixtureRows.reduce((acc, row, idx) => {
-        if (!row.usageType?.trim()) acc[idx] = { usageType: true };
-        return acc;
-      }, {})
-    : {};
-
-  /* ---------------- Render helpers ---------------- */
+  /* ---------------- tabs ---------------- */
 
   const renderRoutingTab = () => (
     <div>
-      <div className="flex items-center justify-between mb-2">
-        <SectionHeader></SectionHeader>
-        <button
-          type="button"
-          onClick={() => handleAddRow(setRoutingRows)(emptyRoutingRow)}
-          className="h-6 w-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-colors flex-shrink-0"
-        >
-          <Plus size={12} />
-        </button>
-      </div>
-
-      {showErrors && tableErrors.routing && (
-        <p className="text-[11px] text-red-500 dark:text-red-400 mb-2">
-          Complete all mandatory columns in the Routing grid (Location, Operation, Sequence)
-        </p>
-      )}
-
+      <AddButton onClick={() => addRow(setRoutingRows, emptyRoutingRow)} />
+      {showErrors &&
+        routingRows.some((r) =>
+          Object.values(routingRowErrors(r)).some(Boolean),
+        ) && (
+          <p className="text-[11px] text-red-500 dark:text-red-400 mb-2">
+            Complete all mandatory columns in the Routing grid (Location,
+            Operation, Sequence)
+          </p>
+        )}
       <TableWrapper>
-        <TableHead headers={["#", ...routingColumns.map((c) => c.label), "Action"]} />
+        <TableHead
+          headers={["#", ...routingColumns.map((c) => c.label), "Action"]}
+        />
         <tbody>
-          {routingWithCumulative.map((row, idx) => {
-            const errs = routingRowErrors[idx] || {};
+          {routingWithCum.map((row, idx) => {
+            const errs = showErrors ? routingRowErrors(routingRows[idx]) : {};
             return (
               <TableRow
-                key={idx}
+                key={row.id ?? idx}
                 index={idx}
-                onRemove={() => handleRemoveRow(setRoutingRows)(idx)}
+                onRemove={() => removeRow(setRoutingRows, idx)}
                 disabled={routingRows.length <= 1}
               >
                 {routingColumns.map((col) => {
-                  if (col.type === "select") {
-                    let options = itemOptions;
-                    if (col.key === "location") options = locationOptions;
-                    else if (col.key === "operation") options = operationOptions;
+                  const onChange = (e) =>
+                    handleRoutingChange(idx, col.key, e.target.value);
+                  if (col.readOnly)
+                    return (
+                      <ReadOnlyCell
+                        key={col.key}
+                        value={fix2(num(row[col.key]))}
+                      />
+                    );
+                  if (col.type === "select")
                     return (
                       <SelectCell
                         key={col.key}
                         value={row[col.key]}
+                        options={col.options}
                         error={errs[col.key]}
-                        options={options}
-                        onChange={(e) =>
-                          handleRoutingChange(idx, col.key, e.target.value)
-                        }
+                        onChange={onChange}
                       />
                     );
-                  }
-                  if (col.type === "textarea") {
+                  if (col.type === "textarea")
                     return (
                       <TextAreaCell
                         key={col.key}
                         value={row[col.key]}
-                        onChange={(e) =>
-                          handleRoutingChange(idx, col.key, e.target.value)
-                        }
+                        onChange={onChange}
                       />
                     );
-                  }
-                  if (col.readOnly) {
-                    return <ReadOnlyCell key={col.key} value={row[col.key]} />;
-                  }
                   return (
                     <InputCell
                       key={col.key}
@@ -947,9 +910,7 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
                       type={col.type}
                       step={col.step}
                       error={errs[col.key]}
-                      onChange={(e) =>
-                        handleRoutingChange(idx, col.key, e.target.value)
-                      }
+                      onChange={onChange}
                     />
                   );
                 })}
@@ -962,104 +923,81 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
   );
 
   const renderChargesTab = () => {
-    const totals = [
-      { key: "totalMachineValue", label: "Total Machine Value" },
-      { key: "totalLabourValue", label: "Total Labour Value" },
-      { key: "totalToolFixtureValue", label: "Total Tool/Fixture Value" },
-      { key: "totalConsumablesValue", label: "Total Consumables Value" },
-      { key: "totalOperationValue", label: "Total Operation Value" },
+    const items = [
+      ["Total M/C Value", totals.totalMcValue],
+      ["Total Labour Value", totals.totalLabourValue],
+      ["Total Tool/Fixture Value", totals.totalToolFixtureValue],
+      ["Total Consumables Value", totals.totalConsumablesValue],
+      ["Total Operation Value", totals.totalOperationValue],
     ];
     return (
-      <div>
-        <div className={fieldGrid}>
-          {totals.map((t) => (
-            <Field
-              key={t.key}
-              type="number"
-              label={t.label}
-              name={t.key}
-              value={chargesTotals[t.key]}
-              disabled
-            />
-          ))}
-          <Field
-            type="select"
-            label="Prepared By"
-            name="preparedBy"
-            value={charges.preparedBy}
-            onChange={handleChargesChange}
-            error={fieldErrors.preparedBy}
-            options={employeeOptions}
-            required
-          />
-        </div>
+      <div className={fieldGrid}>
+        {items.map(([label, value]) => (
+          <Field key={label} label={label} value={fix2(value)} disabled />
+        ))}
+        <Field
+          type="select"
+          label="Prepared By"
+          name="preparedBy"
+          value={preparedBy}
+          onChange={(e) => {
+            setPreparedBy(e.target.value);
+            if (fieldErrors.preparedBy)
+              setFieldErrors((p) => ({ ...p, preparedBy: "" }));
+          }}
+          options={employeeOptions}
+          error={fieldErrors.preparedBy}
+          required
+        />
       </div>
     );
   };
 
-  const renderToolFixtureTab = () => (
+  const renderToolTab = () => (
     <div>
-      <div className="flex items-center justify-between mb-2">
-        <SectionHeader></SectionHeader>
-        <button
-          type="button"
-          onClick={() => handleAddRow(setToolFixtureRows)(emptyToolFixtureRow)}
-          className="h-6 w-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-colors flex-shrink-0"
-        >
-          <Plus size={12} />
-        </button>
-      </div>
-
-      {showErrors && tableErrors.toolFixture && (
+      <AddButton onClick={() => addRow(setToolRows, emptyToolRow)} />
+      {showErrors && toolRows.some((r) => !r.usageType) && (
         <p className="text-[11px] text-red-500 dark:text-red-400 mb-2">
           Complete all mandatory columns in the Tool/Fixture grid (Usage Type)
         </p>
       )}
-
       <TableWrapper>
-        <TableHead headers={["#", ...toolFixtureColumns.map((c) => c.label), "Action"]} />
+        <TableHead
+          headers={["#", ...toolColumns.map((c) => c.label), "Action"]}
+        />
         <tbody>
-          {toolFixtureRows.map((row, idx) => {
-            const errs = toolFixtureRowErrors[idx] || {};
-            return (
-              <TableRow
-                key={idx}
-                index={idx}
-                onRemove={() => handleRemoveRow(setToolFixtureRows)(idx)}
-                disabled={toolFixtureRows.length <= 1}
-              >
-                {toolFixtureColumns.map((col) => {
-                  if (col.type === "select") {
-                    return (
-                      <SelectCell
-                        key={col.key}
-                        value={row[col.key]}
-                        error={errs[col.key]}
-                        options={
-                          col.key === "usageType" ? TOOL_USAGE_TYPE_OPTIONS : []
-                        }
-                        onChange={(e) =>
-                          handleToolFixtureChange(idx, col.key, e.target.value)
-                        }
-                      />
-                    );
-                  }
+          {toolRows.map((row, idx) => (
+            <TableRow
+              key={row.id ?? idx}
+              index={idx}
+              onRemove={() => removeRow(setToolRows, idx)}
+              disabled={toolRows.length <= 1}
+            >
+              {toolColumns.map((col) => {
+                const onChange = (e) =>
+                  handleToolChange(idx, col.key, e.target.value);
+                if (col.type === "select")
                   return (
-                    <InputCell
+                    <SelectCell
                       key={col.key}
                       value={row[col.key]}
-                      type={col.type}
-                      step={col.step}
-                      error={errs[col.key]}
-                      onChange={(e) =>
-                        handleToolFixtureChange(idx, col.key, e.target.value)
-                      }
+                      options={col.options}
+                      error={showErrors && !row[col.key]}
+                      onChange={onChange}
                     />
                   );
-                })}
-              </TableRow>
-            );
-          })}
+                return (
+                  <InputCell
+                    key={col.key}
+                    value={row[col.key]}
+                    type={col.type}
+                    step={col.step}
+                    onChange={onChange}
+                  />
+                );
+              })}
+            </TableRow>
+          ))}
         </tbody>
       </TableWrapper>
     </div>
@@ -1067,66 +1005,53 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
 
   const renderMachineTab = () => (
     <div>
-      <div className="flex items-center justify-between mb-2">
-        <SectionHeader></SectionHeader>
-        <button
-          type="button"
-          onClick={() => handleAddRow(setMachineRows)(emptyMachineRow)}
-          className="h-6 w-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-colors flex-shrink-0"
-        >
-          <Plus size={12} />
-        </button>
-      </div>
-
+      <AddButton onClick={() => addRow(setMachineRows, emptyMachineRow)} />
       <TableWrapper>
-        <TableHead headers={["#", ...machineColumns.map((c) => c.label), "Action"]} />
+        <TableHead
+          headers={["#", ...machineColumns.map((c) => c.label), "Action"]}
+        />
         <tbody>
           {machineRows.map((row, idx) => {
-            const calc = computeMachineRow(row);
+            const calc = calcMachine(row);
+            const readOnlyValues = {
+              machineName: row.machineName,
+              activityMcCost: fix2(calc.mc),
+              activityLabourCost: fix2(calc.labour),
+              total: fix2(calc.total),
+            };
             return (
               <TableRow
-                key={idx}
+                key={row.id ?? idx}
                 index={idx}
-                onRemove={() => handleRemoveRow(setMachineRows)(idx)}
+                onRemove={() => removeRow(setMachineRows, idx)}
                 disabled={machineRows.length <= 1}
               >
                 {machineColumns.map((col) => {
-                  if (col.type === "select") {
+                  const onChange = (e) =>
+                    handleMachineChange(idx, col.key, e.target.value);
+                  if (col.readOnly)
+                    return (
+                      <ReadOnlyCell
+                        key={col.key}
+                        value={readOnlyValues[col.key]}
+                      />
+                    );
+                  if (col.type === "select")
                     return (
                       <SelectCell
                         key={col.key}
                         value={row[col.key]}
-                        options={
-                          col.key === "usage" ? MACHINE_USAGE_OPTIONS : machineOptions
-                        }
-                        onChange={(e) =>
-                          handleMachineChange(idx, col.key, e.target.value)
-                        }
+                        options={col.options}
+                        onChange={onChange}
                       />
                     );
-                  }
-                  if (col.readOnly) {
-                    const displayValue =
-                      col.key === "activityMachineCost"
-                        ? calc.activityMachineCost
-                        : col.key === "activityLabourCost"
-                          ? calc.activityLabourCost
-                          : col.key === "total"
-                            ? calc.total
-                            : row[col.key];
-                    return (
-                      <ReadOnlyCell key={col.key} value={displayValue} />
-                    );
-                  }
                   return (
                     <InputCell
                       key={col.key}
                       value={row[col.key]}
                       type={col.type}
                       step={col.step}
-                      onChange={(e) =>
-                        handleMachineChange(idx, col.key, e.target.value)
-                      }
+                      onChange={onChange}
                     />
                   );
                 })}
@@ -1147,7 +1072,6 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
 
   return (
     <div className="w-full p-2">
-      {/* Header */}
       <div className="flex items-center gap-2 mb-3">
         <button
           onClick={onBack}
@@ -1155,96 +1079,101 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
-
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-          {data ? "Edit Process Sheet / Component Routing" : "Add Process Sheet / Component Routing"}
+          {isEdit
+            ? "Edit Process Sheet / Component Routing"
+            : "Add Process Sheet / Component Routing"}
         </h2>
       </div>
 
-      {/* Main Card */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
-        {/* ---------------- Header Section ---------------- */}
-        <div>
-          <div className={fieldGrid}>
-            <Field
-              type="select"
-              label="Plant ID"
-              name="plantId"
-              value={header.plantId}
-              onChange={handleHeaderChange}
-              error={fieldErrors.plantId}
-              options={plantOptions}
-              required
-            />
-            <Field
-              type="select"
-              label="FG/SFG Item Type"
-              name="fgSfgItemType"
-              value={header.fgSfgItemType}
-              onChange={handleHeaderChange}
-              error={fieldErrors.fgSfgItemType}
-              options={ITEM_TYPE_OPTIONS}
-              required
-            />
-            <Field
-              type="select"
-              label="FG/SFG Item Code"
-              name="fgSfgItemCode"
-              value={header.fgSfgItemCode}
-              onChange={handleHeaderChange}
-              error={fieldErrors.fgSfgItemCode}
-              options={itemOptions}
-              required
-            />
-            <Field
-              type="text"
-              label="Item Description"
-              name="itemDescription"
-              value={header.itemDescription}
-              onChange={handleHeaderChange}
-              error={fieldErrors.itemDescription}
-              required
-            />
-            <Field
-              type="select"
-              label="BOM ID"
-              name="bomId"
-              value={header.bomId}
-              onChange={handleHeaderChange}
-              options={bomOptions}
-            />
-            <Field
-              type="text"
-              label="Drawing No"
-              name="drawingNo"
-              value={header.drawingNo}
-              onChange={handleHeaderChange}
-            />
-            <Field
-              type="select"
-              label="Cost Rate ID"
-              name="costRateId"
-              value={header.costRateId}
-              onChange={handleHeaderChange}
-              error={fieldErrors.costRateId}
-              options={COST_RATE_OPTIONS}
-              required
-            />
-            <YesNoToggle
-              name="active"
-              value={header.active}
-              onChange={handleActiveToggle}
-            />
-          </div>
+        <div className={fieldGrid}>
+          <Field
+            type="select"
+            label="Plant ID"
+            name="plantId"
+            value={header.plantId}
+            onChange={handleHeaderChange}
+            error={fieldErrors.plantId}
+            options={plantOptions}
+            required
+          />
+          <Field
+            label="Doc. No."
+            name="docId"
+            value={header.docId || "Auto"}
+            disabled
+          />
+          <Field
+            type="select"
+            label="FG/SFG Item Type"
+            name="fgSfgItemType"
+            value={header.fgSfgItemType}
+            onChange={handleHeaderChange}
+            error={fieldErrors.fgSfgItemType}
+            options={ITEM_TYPE_OPTIONS}
+            required
+          />
+          <Field
+            type="date"
+            label="Date"
+            name="docDate"
+            value={header.docDate}
+            onChange={handleHeaderChange}
+          />
+          <Field
+            type="select"
+            label="FG/SFG Item Code"
+            name="fgSfgItemCode"
+            value={header.fgSfgItemCode}
+            onChange={handleHeaderChange}
+            error={fieldErrors.fgSfgItemCode}
+            options={itemOptions}
+            required
+          />
+          <Field
+            label="Item Description"
+            name="itemDescription"
+            value={header.itemDescription}
+            disabled
+          />
+          <Field
+            type="select"
+            label="BOM ID"
+            name="bomId"
+            value={header.bomId}
+            onChange={handleHeaderChange}
+            options={bomOptions}
+          />
+          <Field
+            label="Drawing No."
+            name="drawingNo"
+            value={header.drawingNo}
+            disabled
+          />
+          <Field
+            label="Cost Rate ID"
+            name="costRateId"
+            value={header.costRateId}
+            onChange={handleHeaderChange}
+          />
+          <YesNoToggle
+            name="active"
+            value={header.active}
+            onChange={handleHeaderChange}
+          />
         </div>
 
-        {/* ---------------- Tabbed Sections ---------------- */}
         <div className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-          <TabComponent tabs={tabs} activeTab={activeTab} setActiveTab={setActiveTab} />
+          <TabComponent
+            tabs={tabs}
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+          />
           <div className="p-3">
             {activeTab === 0 && renderRoutingTab()}
             {activeTab === 1 && renderChargesTab()}
-            {activeTab === 2 && renderToolFixtureTab()}
+            {activeTab === 2 && renderToolTab()}
             {activeTab === 3 && renderMachineTab()}
           </div>
         </div>
@@ -1253,7 +1182,7 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
           onCancel={onBack}
           onSave={handleSave}
           isSubmitting={isSubmitting}
-          saveLabel={data ? "Update" : "Save"}
+          saveLabel={isEdit ? "Update" : "Save"}
         />
       </div>
     </div>

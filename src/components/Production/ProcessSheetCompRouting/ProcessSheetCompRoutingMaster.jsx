@@ -16,10 +16,16 @@ const ProcessSheetCompRoutingMaster = () => {
     setView("form");
   };
 
+  // Edit: fetch the full record (header + routing + tool/fixture + machine rows)
+  // by id and hand the normalised object to the form.
   const handleEdit = useCallback(async (row) => {
     try {
       const record = await processSheetCompRoutingAPI.getById(row?.id);
-      setEditData(record || row);
+      if (!record) {
+        toast.error("Process Sheet / Routing details not found");
+        return;
+      }
+      setEditData(record);
       setView("form");
     } catch (error) {
       console.error("Failed to fetch process sheet / routing for edit:", error);
@@ -33,10 +39,6 @@ const ProcessSheetCompRoutingMaster = () => {
     setRefreshTrigger((prev) => prev + 1);
   };
 
-  const handleNavigateHome = () => {
-    navigate("/production");
-  };
-
   if (view === "form") {
     return <ProcessSheetCompRoutingForm data={editData} onBack={handleBack} />;
   }
@@ -45,7 +47,7 @@ const ProcessSheetCompRoutingMaster = () => {
     <ProcessSheetCompRoutingList
       onAddNew={handleAddNew}
       onEdit={handleEdit}
-      onBack={handleNavigateHome}
+      onBack={() => navigate("/production")}
       refreshTrigger={refreshTrigger}
     />
   );
