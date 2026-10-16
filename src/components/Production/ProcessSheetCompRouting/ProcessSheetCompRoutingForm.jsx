@@ -345,6 +345,9 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
   const [machineOptions, setMachineOptions] = useState([]);
   const [machineMap, setMachineMap] = useState({});
   const [employeeOptions, setEmployeeOptions] = useState([]);
+  const [outputItemOptions, setOutputItemOptions] = useState([]);
+  const [toolOptions, setToolOptions] = useState([]);
+  const [toolMap, setToolMap] = useState({});
 
   /* ---------------- form state (pre-filled from `data` in edit mode) ------- */
   const [header, setHeader] = useState(() => ({
@@ -493,7 +496,43 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
           })),
         ),
     );
+
+    // Tool/Fixture No dropdown -> tool master (value = tool id)
+    safe(
+      () => processSheetCompRoutingAPI.getTools(orgId, branch),
+      (list) => {
+        const map = {};
+        setToolOptions(
+          list.map((t) => {
+            const v = String(t.id);
+            map[v] = t;
+            return {
+              value: v,
+              label: `${t.toolNo || ""}${t.toolName ? ` - ${t.toolName}` : ""}`,
+            };
+          }),
+        );
+        setToolMap(map);
+      },
+    );
+
+    // Output Item Code dropdown -> item master (value = item id)
+    safe(
+      () => processSheetCompRoutingAPI.getItemMaster(orgId, branch),
+      (list) =>
+        setOutputItemOptions(
+          list.map((it) => ({
+            value: String(it.id),
+            label: `${it.itemCode || ""}${it.itemDescription ? ` - ${it.itemDescription}` : ""}`,
+          })),
+        ),
+    );
   }, [orgId, branch]);
+
+  // Edit mode: if `data` arrives/changes after mount, keep Doc No in sync
+  useEffect(() => {
+    if (data?.docId) setHeader((p) => ({ ...p, docId: data.docId }));
+  }, [data?.docId]);
 
   // Doc No is only generated for a new record
   useEffect(() => {
@@ -565,8 +604,13 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
     updateRow(setRoutingRows, idx, patch);
   };
 
-  const handleToolChange = (idx, key, value) =>
-    updateRow(setToolRows, idx, { [key]: value });
+  const handleToolChange = (idx, key, value) => {
+    const patch = { [key]: value };
+    if (key === "toolFixtureNo") {
+      patch.toolFixtureName = toolMap[value]?.toolName || "";
+    }
+    updateRow(setToolRows, idx, patch);
+  };
 
   const handleMachineChange = (idx, key, value) => {
     const patch = { [key]: value };
@@ -737,8 +781,8 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
     {
       key: "outputItemCode",
       label: "Output Item Code",
-      type: "number",
-      step: "1",
+      type: "select",
+      options: outputItemOptions,
     },
     { key: "spec", label: "Spec.", type: "text" },
     {
@@ -782,8 +826,8 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
     {
       key: "toolFixtureNo",
       label: "Tool/Fixture No",
-      type: "number",
-      step: "1",
+      type: "select",
+      options: toolOptions,
     },
     { key: "toolFixtureName", label: "Tool/Fixture Name", type: "text" },
     {
@@ -982,7 +1026,9 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
                       key={col.key}
                       value={row[col.key]}
                       options={col.options}
-                      error={showErrors && !row[col.key]}
+                      error={
+                        showErrors && col.key === "usageType" && !row[col.key]
+                      }
                       onChange={onChange}
                     />
                   );
@@ -1065,9 +1111,9 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
 
   const tabs = [
     { label: "Routing" },
-    { label: "Charges Summary" },
     { label: "Tool/Fixture Details" },
     { label: "Machine" },
+    { label: "Charges Summary" },
   ];
 
   return (
@@ -1172,9 +1218,9 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
           />
           <div className="p-3">
             {activeTab === 0 && renderRoutingTab()}
-            {activeTab === 1 && renderChargesTab()}
-            {activeTab === 2 && renderToolTab()}
-            {activeTab === 3 && renderMachineTab()}
+            {activeTab === 1 && renderToolTab()}
+            {activeTab === 2 && renderMachineTab()}
+            {activeTab === 3 && renderChargesTab()}
           </div>
         </div>
 

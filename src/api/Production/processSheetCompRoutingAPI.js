@@ -89,7 +89,7 @@ const normalizeRouting = (res) => {
     toolFixtureRows: tools.map((r) => ({
       id: r.id,
       usageType: r.usageType ?? "",
-      toolFixtureNo: str(r.toolFixtureNo),
+      toolFixtureNo: str(idOf(r.toolFixtureNo)),
       toolFixtureName: r.toolFixtureName ?? "",
       activityToolFixtureCost: str(r.activityToolFixtureCost),
     })),
@@ -196,6 +196,23 @@ const processSheetCompRoutingAPI = {
       `/api/efitmaster/getEmployeeMasterByOrgId?orgId=${orgId}`,
     );
     return pm(res).employeeMasterVO || [];
+  },
+
+  // Tool/Fixture No dropdown -> toolMasterList: [{ id, toolNo, toolName, toolCost, ... }]
+  getTools: async (orgId, branch) => {
+    const res = await apiClient.get(
+      `/api/toolmaster/getToolMasterByOrgId?branch=${branch}&orgId=${orgId}`,
+    );
+    return pm(res).toolMasterList || [];
+  },
+
+  // Output Item Code dropdown -> itemMasterVO: [{ id, itemCode, itemDescription, ... }]
+  // NOTE: this endpoint takes `branchId` (not `branch`)
+  getItemMaster: async (orgId, branch) => {
+    const res = await apiClient.get(
+      `/api/itemMaster/getItemMasterByOrgId?branchId=${branch}&orgId=${orgId}`,
+    );
+    return pm(res).itemMasterVO || [];
   },
 };
 
