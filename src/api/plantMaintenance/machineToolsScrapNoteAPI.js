@@ -9,14 +9,11 @@ const machineToolsScrapNoteAPI = {
         "/api/vendorComplaintEntry/getMachineToolsScrapNoteDocId",
         {
           params: { orgId, financialYear },
-        }
+        },
       );
       return res?.paramObjectsMap?.docId || "";
     } catch (error) {
-      console.error(
-        "Error fetching machine tools scrap note doc id:",
-        error
-      );
+      console.error("Error fetching machine tools scrap note doc id:", error);
       throw error;
     }
   },
@@ -35,14 +32,11 @@ const machineToolsScrapNoteAPI = {
             Accept: "application/json",
             // Content-Type is auto-set for FormData in modern axios
           },
-        }
+        },
       );
       return res;
     } catch (error) {
-      console.error(
-        "Error creating/updating machine tools scrap note:",
-        error
-      );
+      console.error("Error creating/updating machine tools scrap note:", error);
       throw error;
     }
   },
@@ -54,7 +48,7 @@ const machineToolsScrapNoteAPI = {
         "/api/vendorComplaintEntry/getMachineToolsScrapNoteByOrgId",
         {
           params: { branch, orgId },
-        }
+        },
       );
       return (
         res?.paramObjectsMap?.machineToolsScrapNoteVO ||
@@ -62,10 +56,7 @@ const machineToolsScrapNoteAPI = {
         []
       );
     } catch (error) {
-      console.error(
-        "Error fetching machine tools scrap note list:",
-        error
-      );
+      console.error("Error fetching machine tools scrap note list:", error);
       throw error;
     }
   },
@@ -75,18 +66,13 @@ const machineToolsScrapNoteAPI = {
     try {
       const res = await apiClient.get(
         "/api/vendorComplaintEntry/getMachineToolsScrapNoteById",
-        {
-          params: { id },
-        }
+        { params: { id } },
       );
-      return (
-        res?.paramObjectsMap?.machineToolsScrapNoteVO || null
-      );
+      const p = res?.paramObjectsMap || res?.data?.paramObjectsMap || {};
+      const root = p.getMachineToolsScrapNoteById;
+      return Array.isArray(root) ? root[0] || null : root || null;
     } catch (error) {
-      console.error(
-        "Error fetching machine tools scrap note by id:",
-        error
-      );
+      console.error("Error fetching machine tools scrap note by id:", error);
       throw error;
     }
   },
