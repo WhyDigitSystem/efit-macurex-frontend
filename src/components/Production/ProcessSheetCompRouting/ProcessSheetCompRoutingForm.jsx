@@ -6,9 +6,6 @@ import processSheetCompRoutingAPI from "../../../api/Production/processSheetComp
 import { branchAPI } from "../../../api/branchAPI";
 import { useToast } from "../../Toast/ToastContext";
 
-/* ---------------------------------------------------------------------------- */
-/* Design tokens                                                                */
-
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
   "bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 " +
@@ -37,9 +34,6 @@ const labelClasses = "block text-[11px] text-gray-500 dark:text-gray-400 mb-1";
 const fieldGrid =
   "grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-x-6 gap-y-4 items-start";
 
-/* ---------------------------------------------------------------------------- */
-/* Static options                                                               */
-
 const ITEM_TYPE_OPTIONS = [
   { value: "FG", label: "FG" },
   { value: "SFG", label: "SFG" },
@@ -49,9 +43,6 @@ const USAGE_OPTIONS = [
   { value: "Regular", label: "Regular" },
   { value: "Alternative", label: "Alternative" },
 ];
-
-/* ---------------------------------------------------------------------------- */
-/* Building blocks                                                              */
 
 const Field = ({
   label,
@@ -109,6 +100,7 @@ const Field = ({
 const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
   <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
     <button
+      type="button"
       onClick={onCancel}
       disabled={isSubmitting}
       className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
@@ -116,7 +108,9 @@ const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
       <X className="h-3 w-3" />
       Cancel
     </button>
+
     <button
+      type="button"
       onClick={onSave}
       disabled={isSubmitting}
       className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
@@ -133,11 +127,16 @@ const YesNoToggle = ({ name, value, onChange }) => (
     <div className="flex items-center gap-1 h-[30px]">
       {["Yes", "No"].map((opt) => {
         const active = value === (opt === "Yes");
+
         return (
           <button
             key={opt}
             type="button"
-            onClick={() => onChange({ target: { name, value: opt === "Yes" } })}
+            onClick={() =>
+              onChange({
+                target: { name, value: opt === "Yes" },
+              })
+            }
             className={`px-3 rounded text-xs leading-none h-[26px] transition-colors ${
               active
                 ? "bg-blue-600 text-white"
@@ -227,7 +226,9 @@ const SelectCell = ({ value, onChange, options, error }) => (
 
 const InputCell = ({ value, onChange, type = "text", step, error }) => (
   <td
-    className={`p-1 align-top ${type === "number" ? "min-w-[100px]" : "min-w-[120px]"}`}
+    className={`p-1 align-top ${
+      type === "number" ? "min-w-[100px]" : "min-w-[120px]"
+    }`}
   >
     <input
       type={type}
@@ -256,9 +257,6 @@ const ReadOnlyCell = ({ value }) => (
   </td>
 );
 
-/* ---------------------------------------------------------------------------- */
-/* Helpers + calculations                                                       */
-
 const num = (v) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
@@ -266,17 +264,22 @@ const num = (v) => {
 
 const fix2 = (n) => (Number.isFinite(n) ? n.toFixed(2) : "0.00");
 
-/* Machine tab calculations
-   - Activity M/C Cost   = Machine Hour Rate x (Setup Time/60 + 1/Output per Hour)
-   - Activity Labour Cost = Labour Hour Rate x (Labour Minutes/60)
-   - Total               = Activity M/C Cost + Activity Labour Cost
-   Confirm this basis with the business owner (same as the Axpert screen). */
+const idOf = (v) => {
+  if (v === null || v === undefined || v === "") return "";
+  if (typeof v === "object") {
+    return v.id !== undefined && v.id !== null ? String(v.id) : "";
+  }
+  return String(v);
+};
+
 const calcMachine = (row) => {
   const hours =
     num(row.setupTimeMinutes) / 60 +
     (num(row.outputPerHour) > 0 ? 1 / num(row.outputPerHour) : 0);
+
   const mc = num(row.machineHourRate) * hours;
   const labour = num(row.labourHourRate) * (num(row.labourHourMinutes) / 60);
+
   return { mc, labour, total: mc + labour };
 };
 
@@ -312,29 +315,48 @@ const emptyMachineRow = () => ({
   labourHourRate: "",
 });
 
-const withRows = (rows, empty) =>
+const withRows = (rows, empty, mapRow = (r) => r) =>
   Array.isArray(rows) && rows.length
-    ? rows.map((r) => ({ ...empty(), ...r }))
+    ? rows.map((r) => ({ ...empty(), ...mapRow(r) }))
     : [empty()];
 
-/* ---------------------------------------------------------------------------- */
+const mapRoutingRow = (r) => ({
+  ...r,
+  location: idOf(r.location),
+  operation: idOf(r.operation),
+  outputItemCode: idOf(r.outputItemCode),
+});
+
+const mapToolRow = (r) => ({
+  ...r,
+  toolFixtureNo: idOf(r.toolFixtureNo),
+});
+
+const mapMachineRow = (r) => ({
+  ...r,
+  machineNo: idOf(r.machineNo),
+});
 
 const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
   const { addToast } = useToast();
+
   const orgId = Number(localStorage.getItem("orgId"));
   const branch = Number(localStorage.getItem("branchId"));
   const usersId = localStorage.getItem("usersId");
-  const finYear =
-    localStorage.getItem("finYear") || String(new Date().getFullYear());
+  const finYear = localStorage.getItem("finYear");
 
-  const isEdit = Boolean(data?.id);
+  const record =
+    data?.paramObjectsMap?.processSheetCompRoutingResponseVO ?? data;
+
+  const apiCostRate = record?.costRate ?? record?.costRateId;
+
+  const isEdit = Boolean(record?.id);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
   const [fieldErrors, setFieldErrors] = useState({});
   const [showErrors, setShowErrors] = useState(false);
 
-  /* ---------------- lookups ---------------- */
   const [plantOptions, setPlantOptions] = useState([]);
   const [itemOptions, setItemOptions] = useState([]);
   const [itemMap, setItemMap] = useState({});
@@ -349,39 +371,60 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
   const [toolOptions, setToolOptions] = useState([]);
   const [toolMap, setToolMap] = useState({});
 
-  /* ---------------- form state (pre-filled from `data` in edit mode) ------- */
   const [header, setHeader] = useState(() => ({
-    docId: data?.docId || "",
-    docDate: data?.docDate
-      ? dayjs(data.docDate).format("YYYY-MM-DD")
+    docId: record?.docId || "",
+    docDate: record?.docDate
+      ? dayjs(record.docDate).format("YYYY-MM-DD")
       : dayjs().format("YYYY-MM-DD"),
-    plantId: data?.plantId || (branch ? String(branch) : ""),
-    fgSfgItemType: data?.fgSfgItemType || "",
-    fgSfgItemCode: data?.fgSfgItemCode || "",
-    itemDescription: data?.itemDescription || "",
-    bomId: data?.bomId || "",
-    drawingNo: data?.drawingNo || "",
-    costRateId: data?.costRateId || "",
-    active: data?.active ?? true,
+    plantId:
+      idOf(record?.branch ?? record?.plantId) || (branch ? String(branch) : ""),
+    fgSfgItemType: record?.fgSfgItemType || "",
+    fgSfgItemCode: idOf(record?.fgSfgItemCode),
+    itemDescription:
+      record?.itemDescription || record?.fgSfgItemCode?.itemDescription || "",
+    bomId: idOf(record?.bom ?? record?.bomId),
+    drawingNo: record?.drawingNo ?? record?.fgSfgItemCode?.drawingNo ?? "",
+    costRateId: String(apiCostRate ?? ""),
+    active: record?.active ?? true,
   }));
-  const [preparedBy, setPreparedBy] = useState(data?.preparedBy || "");
+
+  const [preparedBy, setPreparedBy] = useState(() => idOf(record?.preparedBy));
+
   const [routingRows, setRoutingRows] = useState(() =>
-    withRows(data?.routingRows, emptyRoutingRow),
-  );
-  const [toolRows, setToolRows] = useState(() =>
-    withRows(data?.toolFixtureRows, emptyToolRow),
-  );
-  const [machineRows, setMachineRows] = useState(() =>
-    withRows(data?.machineRows, emptyMachineRow),
+    withRows(
+      record?.processSheetCompRoutingDetailResponseDTO ?? record?.routingRows,
+      emptyRoutingRow,
+      mapRoutingRow,
+    ),
   );
 
-  /* ---------------- derived values ---------------- */
+  const [toolRows, setToolRows] = useState(() =>
+    withRows(
+      record?.processSheetToolFixtureDetailsResponseDTO ??
+        record?.toolFixtureRows,
+      emptyToolRow,
+      mapToolRow,
+    ),
+  );
+
+  const [machineRows, setMachineRows] = useState(() =>
+    withRows(
+      record?.processSheetCompRoutingMachineResponseDTO ?? record?.machineRows,
+      emptyMachineRow,
+      mapMachineRow,
+    ),
+  );
 
   const routingWithCum = useMemo(() => {
     let running = 0;
+
     return routingRows.map((r) => {
       running += num(r.activityConsumCost);
-      return { ...r, cumulativeConsumCost: running };
+
+      return {
+        ...r,
+        cumulativeConsumCost: running,
+      };
     });
   }, [routingRows]);
 
@@ -390,17 +433,21 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
       (a, r) => a + num(r.activityConsumCost),
       0,
     );
+
     const tool = toolRows.reduce(
       (a, r) => a + num(r.activityToolFixtureCost),
       0,
     );
+
     let mc = 0;
     let labour = 0;
+
     machineRows.forEach((r) => {
       const c = calcMachine(r);
       mc += c.mc;
       labour += c.labour;
     });
+
     return {
       totalMcValue: mc,
       totalLabourValue: labour,
@@ -410,7 +457,14 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
     };
   }, [routingRows, toolRows, machineRows]);
 
-  /* ---------------- load lookups ---------------- */
+  useEffect(() => {
+    if (apiCostRate === null || apiCostRate === undefined) return;
+
+    setHeader((prev) => ({
+      ...prev,
+      costRateId: String(apiCostRate),
+    }));
+  }, [apiCostRate]);
 
   useEffect(() => {
     if (!orgId) return;
@@ -451,7 +505,9 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
         setLocationOptions(
           list.map((l) => ({
             value: String(l.id),
-            label: `${l.locationId || ""}${l.locationName ? ` - ${l.locationName}` : ""}`,
+            label: `${l.locationId || ""}${
+              l.locationName ? ` - ${l.locationName}` : ""
+            }`,
           })),
         ),
     );
@@ -460,13 +516,19 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
       () => processSheetCompRoutingAPI.getOperations(orgId),
       (list) => {
         const map = {};
+
         setOperationOptions(
           list.map((o) => {
             const v = String(o.operationMasterBasicId);
             map[v] = o;
-            return { value: v, label: o.operationId };
+
+            return {
+              value: v,
+              label: o.operationId,
+            };
           }),
         );
+
         setOperationMap(map);
       },
     );
@@ -475,13 +537,19 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
       () => processSheetCompRoutingAPI.getMachines(orgId, branch),
       (list) => {
         const map = {};
+
         setMachineOptions(
           list.map((m) => {
             const v = String(m.MachineId);
             map[v] = m;
-            return { value: v, label: m.machineInstrumentNo };
+
+            return {
+              value: v,
+              label: m.machineInstrumentNo,
+            };
           }),
         );
+
         setMachineMap(map);
       },
     );
@@ -492,75 +560,144 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
         setEmployeeOptions(
           list.map((e) => ({
             value: String(e.id),
-            label: `${e.employeeName || ""}${e.employeeId ? ` (${e.employeeId})` : ""}`,
+            label: `${e.employeeName || ""}${
+              e.employeeId ? ` (${e.employeeId})` : ""
+            }`,
           })),
         ),
     );
 
-    // Tool/Fixture No dropdown -> tool master (value = tool id)
     safe(
       () => processSheetCompRoutingAPI.getTools(orgId, branch),
       (list) => {
         const map = {};
+
         setToolOptions(
           list.map((t) => {
             const v = String(t.id);
             map[v] = t;
+
             return {
               value: v,
               label: `${t.toolNo || ""}${t.toolName ? ` - ${t.toolName}` : ""}`,
             };
           }),
         );
+
         setToolMap(map);
       },
     );
 
-    // Output Item Code dropdown -> item master (value = item id)
     safe(
       () => processSheetCompRoutingAPI.getItemMaster(orgId, branch),
       (list) =>
         setOutputItemOptions(
           list.map((it) => ({
             value: String(it.id),
-            label: `${it.itemCode || ""}${it.itemDescription ? ` - ${it.itemDescription}` : ""}`,
+            label: `${it.itemCode || ""}${
+              it.itemDescription ? ` - ${it.itemDescription}` : ""
+            }`,
           })),
         ),
     );
   }, [orgId, branch]);
 
-  // Edit mode: if `data` arrives/changes after mount, keep Doc No in sync
   useEffect(() => {
-    if (data?.docId) setHeader((p) => ({ ...p, docId: data.docId }));
-  }, [data?.docId]);
+    if (!record) return;
 
-  // Doc No is only generated for a new record
+    setHeader((prev) => ({
+      ...prev,
+      docId: record.docId ?? prev.docId,
+      docDate: record.docDate
+        ? dayjs(record.docDate).format("YYYY-MM-DD")
+        : prev.docDate,
+      plantId: idOf(record.branch ?? record.plantId) || prev.plantId,
+      fgSfgItemType: record.fgSfgItemType ?? prev.fgSfgItemType,
+      fgSfgItemCode: idOf(record.fgSfgItemCode) || prev.fgSfgItemCode,
+      itemDescription:
+        record.itemDescription ??
+        record.fgSfgItemCode?.itemDescription ??
+        prev.itemDescription,
+      bomId: idOf(record.bom ?? record.bomId) || prev.bomId,
+      drawingNo:
+        record.drawingNo ?? record.fgSfgItemCode?.drawingNo ?? prev.drawingNo,
+      active: record.active ?? prev.active,
+    }));
+
+    setPreparedBy((prev) => idOf(record.preparedBy) || prev);
+
+    if (record.processSheetCompRoutingDetailResponseDTO || record.routingRows) {
+      setRoutingRows(
+        withRows(
+          record.processSheetCompRoutingDetailResponseDTO ?? record.routingRows,
+          emptyRoutingRow,
+          mapRoutingRow,
+        ),
+      );
+    }
+
+    if (
+      record.processSheetToolFixtureDetailsResponseDTO ||
+      record.toolFixtureRows
+    ) {
+      setToolRows(
+        withRows(
+          record.processSheetToolFixtureDetailsResponseDTO ??
+            record.toolFixtureRows,
+          emptyToolRow,
+          mapToolRow,
+        ),
+      );
+    }
+
+    if (
+      record.processSheetCompRoutingMachineResponseDTO ||
+      record.machineRows
+    ) {
+      setMachineRows(
+        withRows(
+          record.processSheetCompRoutingMachineResponseDTO ??
+            record.machineRows,
+          emptyMachineRow,
+          mapMachineRow,
+        ),
+      );
+    }
+  }, [record]);
+
   useEffect(() => {
-    if (isEdit || !orgId) return;
+    if (isEdit || !orgId || !finYear) return;
+
     processSheetCompRoutingAPI
       .getDocId(orgId, finYear)
       .then((docId) => setHeader((p) => ({ ...p, docId })))
       .catch((e) => console.error("DocId load failed:", e));
   }, [isEdit, orgId, finYear]);
 
-  // FG/SFG items depend on the selected type (also runs on edit to resolve the saved item)
   useEffect(() => {
     if (!orgId || !header.fgSfgItemType) {
       setItemOptions([]);
       setItemMap({});
       return;
     }
+
     processSheetCompRoutingAPI
       .getFgSfgItems(orgId, branch, header.fgSfgItemType.toLowerCase())
       .then((list) => {
         const map = {};
+
         setItemOptions(
           list.map((it) => {
             const v = String(it.itemId);
             map[v] = it;
-            return { value: v, label: it.itemCode };
+
+            return {
+              value: v,
+              label: it.itemCode,
+            };
           }),
         );
+
         setItemMap(map);
       })
       .catch((e) => {
@@ -570,24 +707,41 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
       });
   }, [orgId, branch, header.fgSfgItemType]);
 
-  /* ---------------- handlers ---------------- */
+  useEffect(() => {
+    if (!header.fgSfgItemCode) return;
+
+    const it = itemMap[header.fgSfgItemCode];
+    if (!it) return;
+
+    setHeader((p) => ({
+      ...p,
+      itemDescription: p.itemDescription || it.itemDescription || "",
+      drawingNo: p.drawingNo || it.drawingNo || "",
+    }));
+  }, [itemMap, header.fgSfgItemCode]);
 
   const handleHeaderChange = (e) => {
     const { name, value } = e.target;
-    if (fieldErrors[name]) setFieldErrors((p) => ({ ...p, [name]: "" }));
+
+    if (fieldErrors[name]) {
+      setFieldErrors((p) => ({ ...p, [name]: "" }));
+    }
+
     setHeader((prev) => {
       const next = { ...prev, [name]: value };
+
       if (name === "fgSfgItemType") {
-        // changing the type invalidates the chosen item
         next.fgSfgItemCode = "";
         next.itemDescription = "";
         next.drawingNo = "";
       }
+
       if (name === "fgSfgItemCode") {
         const it = itemMap[value];
         next.itemDescription = it?.itemDescription || "";
         next.drawingNo = it?.drawingNo || "";
       }
+
       return next;
     });
   };
@@ -597,36 +751,45 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
 
   const handleRoutingChange = (idx, key, value) => {
     const patch = { [key]: value };
+
     if (key === "operation") {
       const op = operationMap[value];
-      if (op?.description) patch.description = op.description;
+
+      if (op?.description) {
+        patch.description = op.description;
+      }
     }
+
     updateRow(setRoutingRows, idx, patch);
   };
 
   const handleToolChange = (idx, key, value) => {
     const patch = { [key]: value };
+
     if (key === "toolFixtureNo") {
       patch.toolFixtureName = toolMap[value]?.toolName || "";
     }
+
     updateRow(setToolRows, idx, patch);
   };
 
   const handleMachineChange = (idx, key, value) => {
     const patch = { [key]: value };
+
     if (key === "machineNo") {
       const m = machineMap[value];
+
       patch.machineName = m?.machineInstrumentName || "";
       patch.machineHourRate = m ? String(m.hourlyRate ?? "") : "";
     }
+
     updateRow(setMachineRows, idx, patch);
   };
 
   const addRow = (setter, empty) => setter((p) => [...p, empty()]);
+
   const removeRow = (setter, idx) =>
     setter((p) => p.filter((_, i) => i !== idx));
-
-  /* ---------------- validation ---------------- */
 
   const routingRowErrors = (row) => ({
     location: !row.location,
@@ -636,48 +799,54 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
 
   const validate = () => {
     const errors = {};
+
     if (!header.plantId) errors.plantId = "Plant ID is required";
     if (!header.fgSfgItemType)
       errors.fgSfgItemType = "FG/SFG Item Type is required";
     if (!header.fgSfgItemCode)
       errors.fgSfgItemCode = "FG/SFG Item Code is required";
     if (!preparedBy) errors.preparedBy = "Prepared By is required";
+
     setFieldErrors(errors);
 
     const routingOk = routingRows.every(
       (r) => !Object.values(routingRowErrors(r)).some(Boolean),
     );
-    const toolOk = toolRows.every((r) => r.usageType);
 
+    const toolOk = toolRows.every((r) => r.usageType);
     const valid = !Object.keys(errors).length && routingOk && toolOk;
+
     setShowErrors(!valid);
     return valid;
   };
-
-  /* ---------------- save ---------------- */
 
   const handleSave = async () => {
     if (!validate()) {
       addToast("Please fill all mandatory fields before saving.", "error");
       return;
     }
+
     setIsSubmitting(true);
 
     const idIf = (r) => (r.id ? { id: r.id } : {});
 
     const payload = {
-      ...(isEdit ? { id: data.id } : {}),
+      ...(isEdit ? { id: record.id } : {}),
+      docId: header.docId,
+      docDate: header.docDate,
+      financialYear: isEdit ? record?.financialYear || finYear : finYear,
       active: header.active,
       bom: header.bomId ? Number(header.bomId) : null,
       branch: Number(header.plantId) || branch,
       cancel: false,
       cancelRemarks: "",
+      costRate: header.costRateId,
       fgSfgItemCode: Number(header.fgSfgItemCode),
       fgSfgItemType: header.fgSfgItemType,
       itemDescription: header.itemDescription,
       orgId,
       preparedBy: Number(preparedBy),
-      createdBy: isEdit ? data?.createdBy || usersId : usersId,
+      createdBy: isEdit ? record?.createdBy || usersId : usersId,
       ...(isEdit ? { updatedBy: usersId } : {}),
 
       processSheetCompRoutingDetailDTO: routingWithCum.map((r) => ({
@@ -706,6 +875,7 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
 
       processSheetCompRoutingMachineDTO: machineRows.map((r) => {
         const c = calcMachine(r);
+
         return {
           ...idIf(r),
           activityLabourCost: Number(c.labour.toFixed(2)),
@@ -731,6 +901,7 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
 
     try {
       const response = await processSheetCompRoutingAPI.createUpdate(payload);
+
       if (response?.status) {
         addToast(
           response?.paramObjectsMap?.message ||
@@ -738,6 +909,7 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
               ? "Process Sheet / Routing updated successfully!"
               : "Process Sheet / Routing created successfully!"),
         );
+
         onBack?.();
       } else {
         addToast(
@@ -751,6 +923,7 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
       }
     } catch (err) {
       console.error("Save Process Sheet / Routing Error:", err);
+
       addToast(
         err.response?.data?.paramObjectsMap?.errorMessage ||
           err.response?.data?.message ||
@@ -761,8 +934,6 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
       setIsSubmitting(false);
     }
   };
-
-  /* ---------------- columns ---------------- */
 
   const routingColumns = [
     {
@@ -891,11 +1062,10 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
     { key: "total", label: "Total", readOnly: true },
   ];
 
-  /* ---------------- tabs ---------------- */
-
   const renderRoutingTab = () => (
     <div>
       <AddButton onClick={() => addRow(setRoutingRows, emptyRoutingRow)} />
+
       {showErrors &&
         routingRows.some((r) =>
           Object.values(routingRowErrors(r)).some(Boolean),
@@ -905,6 +1075,7 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
             Operation, Sequence)
           </p>
         )}
+
       <TableWrapper>
         <TableHead
           headers={["#", ...routingColumns.map((c) => c.label), "Action"]}
@@ -912,6 +1083,7 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
         <tbody>
           {routingWithCum.map((row, idx) => {
             const errs = showErrors ? routingRowErrors(routingRows[idx]) : {};
+
             return (
               <TableRow
                 key={row.id ?? idx}
@@ -922,14 +1094,17 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
                 {routingColumns.map((col) => {
                   const onChange = (e) =>
                     handleRoutingChange(idx, col.key, e.target.value);
-                  if (col.readOnly)
+
+                  if (col.readOnly) {
                     return (
                       <ReadOnlyCell
                         key={col.key}
                         value={fix2(num(row[col.key]))}
                       />
                     );
-                  if (col.type === "select")
+                  }
+
+                  if (col.type === "select") {
                     return (
                       <SelectCell
                         key={col.key}
@@ -939,7 +1114,9 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
                         onChange={onChange}
                       />
                     );
-                  if (col.type === "textarea")
+                  }
+
+                  if (col.type === "textarea") {
                     return (
                       <TextAreaCell
                         key={col.key}
@@ -947,6 +1124,8 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
                         onChange={onChange}
                       />
                     );
+                  }
+
                   return (
                     <InputCell
                       key={col.key}
@@ -974,11 +1153,13 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
       ["Total Consumables Value", totals.totalConsumablesValue],
       ["Total Operation Value", totals.totalOperationValue],
     ];
+
     return (
       <div className={fieldGrid}>
         {items.map(([label, value]) => (
           <Field key={label} label={label} value={fix2(value)} disabled />
         ))}
+
         <Field
           type="select"
           label="Prepared By"
@@ -986,8 +1167,10 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
           value={preparedBy}
           onChange={(e) => {
             setPreparedBy(e.target.value);
-            if (fieldErrors.preparedBy)
+
+            if (fieldErrors.preparedBy) {
               setFieldErrors((p) => ({ ...p, preparedBy: "" }));
+            }
           }}
           options={employeeOptions}
           error={fieldErrors.preparedBy}
@@ -1000,11 +1183,13 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
   const renderToolTab = () => (
     <div>
       <AddButton onClick={() => addRow(setToolRows, emptyToolRow)} />
+
       {showErrors && toolRows.some((r) => !r.usageType) && (
         <p className="text-[11px] text-red-500 dark:text-red-400 mb-2">
           Complete all mandatory columns in the Tool/Fixture grid (Usage Type)
         </p>
       )}
+
       <TableWrapper>
         <TableHead
           headers={["#", ...toolColumns.map((c) => c.label), "Action"]}
@@ -1020,7 +1205,8 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
               {toolColumns.map((col) => {
                 const onChange = (e) =>
                   handleToolChange(idx, col.key, e.target.value);
-                if (col.type === "select")
+
+                if (col.type === "select") {
                   return (
                     <SelectCell
                       key={col.key}
@@ -1032,6 +1218,8 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
                       onChange={onChange}
                     />
                   );
+                }
+
                 return (
                   <InputCell
                     key={col.key}
@@ -1052,6 +1240,7 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
   const renderMachineTab = () => (
     <div>
       <AddButton onClick={() => addRow(setMachineRows, emptyMachineRow)} />
+
       <TableWrapper>
         <TableHead
           headers={["#", ...machineColumns.map((c) => c.label), "Action"]}
@@ -1059,12 +1248,14 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
         <tbody>
           {machineRows.map((row, idx) => {
             const calc = calcMachine(row);
+
             const readOnlyValues = {
               machineName: row.machineName,
               activityMcCost: fix2(calc.mc),
               activityLabourCost: fix2(calc.labour),
               total: fix2(calc.total),
             };
+
             return (
               <TableRow
                 key={row.id ?? idx}
@@ -1075,14 +1266,17 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
                 {machineColumns.map((col) => {
                   const onChange = (e) =>
                     handleMachineChange(idx, col.key, e.target.value);
-                  if (col.readOnly)
+
+                  if (col.readOnly) {
                     return (
                       <ReadOnlyCell
                         key={col.key}
                         value={readOnlyValues[col.key]}
                       />
                     );
-                  if (col.type === "select")
+                  }
+
+                  if (col.type === "select") {
                     return (
                       <SelectCell
                         key={col.key}
@@ -1091,6 +1285,8 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
                         onChange={onChange}
                       />
                     );
+                  }
+
                   return (
                     <InputCell
                       key={col.key}
@@ -1120,11 +1316,13 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
     <div className="w-full p-2">
       <div className="flex items-center gap-2 mb-3">
         <button
+          type="button"
           onClick={onBack}
           className="p-1 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
+
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
           {isEdit
             ? "Edit Process Sheet / Component Routing"
@@ -1144,12 +1342,14 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
             options={plantOptions}
             required
           />
+
           <Field
             label="Doc. No."
             name="docId"
             value={header.docId || "Auto"}
             disabled
           />
+
           <Field
             type="select"
             label="FG/SFG Item Type"
@@ -1160,6 +1360,7 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
             options={ITEM_TYPE_OPTIONS}
             required
           />
+
           <Field
             type="date"
             label="Date"
@@ -1167,6 +1368,7 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
             value={header.docDate}
             onChange={handleHeaderChange}
           />
+
           <Field
             type="select"
             label="FG/SFG Item Code"
@@ -1177,12 +1379,14 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
             options={itemOptions}
             required
           />
+
           <Field
             label="Item Description"
             name="itemDescription"
             value={header.itemDescription}
             disabled
           />
+
           <Field
             type="select"
             label="BOM ID"
@@ -1191,18 +1395,21 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
             onChange={handleHeaderChange}
             options={bomOptions}
           />
+
           <Field
             label="Drawing No."
             name="drawingNo"
             value={header.drawingNo}
             disabled
           />
+
           <Field
             label="Cost Rate ID"
             name="costRateId"
-            value={header.costRateId}
+            value={header.costRateId ?? ""}
             onChange={handleHeaderChange}
           />
+
           <YesNoToggle
             name="active"
             value={header.active}
@@ -1216,11 +1423,16 @@ const ProcessSheetCompRoutingForm = ({ data, onBack }) => {
             activeTab={activeTab}
             setActiveTab={setActiveTab}
           />
+
           <div className="p-3">
             {activeTab === 0 && renderRoutingTab()}
             {activeTab === 1 && renderToolTab()}
             {activeTab === 2 && renderMachineTab()}
-            {activeTab === 3 && renderChargesTab()}
+            {activeTab === 3 && renderChargesTab()
+            
+            
+           
+           }
           </div>
         </div>
 
