@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import dayjs from "dayjs";
 import controlPlanAPI from "../../../api/quality/controlPlanAPI";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import { toast } from "../../../utils/toast";
@@ -17,10 +18,6 @@ const ControlPlanList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     try {
       setLoading(true);
 
-      console.log("Loading Control Plans...");
-      console.log("ORG_ID:", ORG_ID);
-      console.log("BRANCH_ID:", BRANCH_ID);
-
       const response = await controlPlanAPI.getControlPlanByOrgId(
         BRANCH_ID,
         ORG_ID,
@@ -28,28 +25,32 @@ const ControlPlanList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
 
       console.log("Control Plan API Response:", response);
 
-      // Always make sure the table receives an array
-      const list = Array.isArray(response)
-        ? response
-        : response
-          ? [response]
-          : [];
-
-      console.log("Control Plan List:", list);
+      // Extract from nested paramObjectsMap.controlPlanResponseVO
+      let list = [];
+      if (Array.isArray(response)) {
+        list = response;
+      } else if (
+        Array.isArray(response?.paramObjectsMap?.controlPlanResponseVO)
+      ) {
+        list = response.paramObjectsMap.controlPlanResponseVO;
+      } else if (response?.paramObjectsMap?.controlPlanResponseVO) {
+        list = [response.paramObjectsMap.controlPlanResponseVO];
+      } else if (response?.paramObjectsMap?.controlPlanVO) {
+        const vo = response.paramObjectsMap.controlPlanVO;
+        list = Array.isArray(vo) ? vo : [vo];
+      } else if (response) {
+        list = [response];
+      }
 
       // Sort latest ID first
       const sortedPlans = [...list].sort(
         (a, b) => (Number(b?.id) || 0) - (Number(a?.id) || 0),
       );
 
-      console.log("Sorted Control Plans:", sortedPlans);
-
       setPlanData(sortedPlans);
     } catch (error) {
       console.error("Failed to load control plans:", error);
-
       setPlanData([]);
-
       toast.error("Failed to fetch Control Plans");
     } finally {
       setLoading(false);
@@ -71,49 +72,57 @@ const ControlPlanList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
       console.error("Invalid Control Plan selected for edit");
       return;
     }
-
     onEdit(plan);
   };
 
   // ---------------------------------------------------------------------------
-  // Table Columns
+  // Table Columns (accessor functions to handle nested objects)
   // ---------------------------------------------------------------------------
   const columns = [
     {
       key: "planNo",
       label: "Plan No",
-      accessor: "planNo",
+      accessor: (row) => row.planNo || "",
       type: "text",
       noWrap: true,
     },
     {
       key: "controlPlanType",
       label: "Control Plan Type",
-      accessor: "controlPlanType",
+      accessor: (row) =>
+        row.controlPlanType?.description ||
+        row.controlPlanType?.code ||
+        row.controlPlanType ||
+        "",
       type: "text",
     },
     {
       key: "fgItemCode",
       label: "FG Item Code",
-      accessor: "fgItemCode",
+      accessor: (row) =>
+        row.fgItemCode?.itemCode ||
+        row.fgItemCode?.itemDescription ||
+        row.fgItemCode ||
+        "",
       type: "text",
     },
     {
       key: "itemDescription",
       label: "Item Description",
-      accessor: "itemDescription",
+      accessor: (row) => row.itemDescription || "",
       type: "text",
     },
     {
       key: "processSheetNo",
       label: "Process Sheet No",
-      accessor: "processSheetNo",
+      accessor: (row) => row.processSheetNo || "",
       type: "text",
     },
     {
       key: "revisionDate",
       label: "Revision Date",
-      accessor: "revisionDate",
+      accessor: (row) =>
+        row.revisionDate ? dayjs(row.revisionDate).format("YYYY-MM-DD") : "",
       type: "text",
     },
     {
@@ -128,13 +137,7 @@ const ControlPlanList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   // ---------------------------------------------------------------------------
   // Search Fields
   // ---------------------------------------------------------------------------
-  const searchFields = [
-    "planNo",
-    "controlPlanType",
-    "fgItemCode",
-    "itemDescription",
-    "processSheetNo",
-  ];
+  const searchFields = ["planNo", "itemDescription", "processSheetNo"];
 
   // ---------------------------------------------------------------------------
   // Render

@@ -226,9 +226,6 @@ const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
         >
           {columns.map((col) => {
             if (col.type === "select") {
-              // Options can be a static array or a per-row function, since
-              // some columns (e.g. Machine/Device) depend on another cell
-              // in the same row (e.g. the selected Operation No).
               const opts =
                 typeof col.options === "function"
                   ? col.options(row)
@@ -311,7 +308,7 @@ const emptyDetailRow = () => ({
   riskClassSpecialCharacter: "",
   evaluationTechnique: "",
   sampling: "",
-  controlMethod: "", // LOV id (controlMethodOptions)
+  controlMethod: "",
   reactionPlan: "",
   record: "",
 });
@@ -329,6 +326,9 @@ const emptySampleRow = () => ({
   size: "",
 });
 
+// NOTE: `machineFixtureNo` in state now holds the NUMERIC machineFixtureId,
+// because that's what gets sent to the backend. The displayed code
+// (e.g. "MAC1001") is looked up from the dropdown options.
 const emptyFixtureRow = () => ({
   id: 0,
   machineFixtureNo: "",
@@ -336,6 +336,13 @@ const emptyFixtureRow = () => ({
 });
 
 const fmtDate = (value) => (value ? dayjs(value).format("YYYY-MM-DD") : "");
+
+/* Helper: safely extract an id from either a primitive or a nested object */
+const extractId = (val) => {
+  if (val == null) return "";
+  if (typeof val === "object") return val.id != null ? String(val.id) : "";
+  return String(val);
+};
 
 /* ---------------------------------------------------------------------------- */
 
@@ -412,7 +419,7 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
         [];
       setBranchOptions(
         list.map((b) => ({
-          value: b.id,
+          value: String(b.id),
           label: b.branchName || b.name || b.branchCode || `Branch ${b.id}`,
         })),
       );
@@ -425,13 +432,10 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
   const loadEmployees = useCallback(async () => {
     try {
       if (!ORG_ID) return;
-
       const res = await employeeAPI.getEmployeeByOrgId(ORG_ID);
-
       const list = Array.isArray(res)
         ? res
         : res?.paramObjectsMap?.employeeMasterVO || [];
-
       setEmployeeList(list);
     } catch (error) {
       console.error("Failed to load employees:", error);
@@ -448,7 +452,7 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
       const list = Array.isArray(res) ? res : [];
       setPlanTypeOptions(
         list.map((v) => ({
-          value: v.id,
+          value: String(v.id),
           label: v.valuesDescription || v.valueDescription || v.id,
         })),
       );
@@ -458,20 +462,14 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
     }
   }, [ORG_ID]);
 
-  /* -------- Control Method LOV --------
-     Adjust the group string to match the actual LOV group code
-     stored in your backend master. */
   const loadControlMethodOptions = useCallback(async () => {
     try {
       if (!ORG_ID) return;
-
       const res = await listOfValuesAPI.getListValuesGroup(
         "CONTROLPLANTYPE",
         ORG_ID,
       );
-
       const list = Array.isArray(res) ? res : [];
-
       setControlMethodOptions(
         list.map((v) => ({
           value: String(v.id),
@@ -566,35 +564,38 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
   /* ---------------- Derived option lists ---------------- */
 
   const fgItemOptions = fgItemList.map((it) => ({
-    value: it.itemId,
+    value: String(it.itemId),
     label: it.itemCode,
   }));
 
   const employeeOptions = employeeList.map((employee) => ({
-    value: employee.id,
+    value: String(employee.id),
     label: employee.employeeId
       ? `${employee.employeeId} - ${employee.employeeName || ""}`
       : employee.employeeName || "",
   }));
 
+  // IMPORTANT: The submit payload requires machineFixtureNo to be a NUMBER (id).
+  // So the <option> value MUST be the machineFixtureId, and the label shows
+  // the human-readable code ("MAC1001").
   const machineFixtureOptions = machineFixtureList.map((m) => ({
-    value: m.machineFixtureId,
+    value: String(m.machineFixtureId),
     label: m.machineFixtureNo || m.machineFixtureName,
   }));
 
   const parameterOptions = parameterList.map((p) => ({
-    value: p.id,
+    value: String(p.id),
     label: p.parameterCode || p.parameterDescription || p.id,
   }));
 
   const processSheetOptions = locationList.map((loc) => ({
-    value: loc.id,
+    value: String(loc.id),
     label: loc.locationId,
   }));
 
   const operationOptions = operationList
     .filter((op) => op.operationId)
-    .map((op) => ({ value: op.operationId, label: op.operationId }));
+    .map((op) => ({ value: String(op.operationId), label: op.operationId }));
 
   /* ---------------- Doc No generation (add mode only) ---------------- */
 
@@ -636,23 +637,20 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
     setHeader({
       id: data.id || 0,
       plantId:
-        data.branch != null
-          ? String(data.branch)
-          : BRANCH_ID
-            ? String(BRANCH_ID)
-            : "",
-      controlPlanType: data.controlPlanType ?? "",
+        extractId(data.branch) || (BRANCH_ID ? String(BRANCH_ID) : ""),
+      controlPlanType: extractId(data.controlPlanType),
       planNo: data.planNo || "",
-      fgItemCode: data.fgItemCode ?? "",
+      fgItemCode: extractId(data.fgItemCode),
       itemDescription: data.itemDescription || "",
-      itemGrade: data.itemGrade ?? "",
-      itemGradeCode: "",
+      itemGrade: extractId(data.itemGrade),
+      itemGradeCode: data.itemGrade?.gradeCode || "",
       itemSize: data.itemSize || "",
       processSheetNo: data.processSheetNo || "",
-      originDate: "",
+      // API doesn't return originDate; fall back to revisionDate
+      originDate: fmtDate(data.originDate || data.revisionDate) || "",
       revisionDate: fmtDate(data.revisionDate),
-      preparedBy: data.preparedBy ?? "",
-      checkedBy: data.checkedBy ?? "",
+      preparedBy: extractId(data.preparedBy),
+      checkedBy: extractId(data.checkedBy),
       approved: data.approved ? "Yes" : "No",
       active: data.active !== false,
       cancel: Boolean(data.cancel),
@@ -661,43 +659,55 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
       createdBy: data.createdBy || CREATED_BY,
     });
 
+    // Detail rows — API returns controlPlanDetailResponseDTO
+    const detailList =
+      data.controlPlanDetailResponseDTO || data.controlPlanDetailDTO || [];
     setDetailRows(
-      data.controlPlanDetailDTO?.length
-        ? data.controlPlanDetailDTO.map((d) => ({
+      detailList.length
+        ? detailList.map((d) => ({
           id: d.id || 0,
           operationNo: d.operationNo || "",
-          operationDesc: "",
-          machineDevice: d.machineDevice ?? "",
+          operationDesc: d.operationDesc || "",
+          machineDevice: extractId(d.machineDevice),
           machineOptions: [],
-          product: "",
+          product: d.product || "",
           process: d.process || "",
           specification: d.specification || "",
           riskClassSpecialCharacter: d.riskClassSpecialCharacter || "",
           evaluationTechnique: d.evaluationTechnique || "",
-          sampling: "",
-          // Normalize to string so the <select> can match the option value
-          controlMethod:
-            d.controlMethod != null ? String(d.controlMethod) : "",
+          sampling: d.sampling || "",
+          controlMethod: extractId(d.controlMethod),
           reactionPlan: d.reactionPlan || "",
           record: d.record || "",
         }))
         : [emptyDetailRow()],
     );
 
+    // Parameters — API returns controlPlanParameterResponseDTO
+    const paramList =
+      data.controlPlanParameterResponseDTO ||
+      data.controlPlanParameterDTO ||
+      [];
     setParameterRows(
-      data.controlPlanParameterDTO?.length
-        ? data.controlPlanParameterDTO.map((p) => ({
+      paramList.length
+        ? paramList.map((p) => ({
           id: p.id || 0,
-          parameter: p.parameter ?? "",
-          parameterType: p.parameterType || "",
+          parameter: extractId(p.parameter),
+          parameterType:
+            typeof p.parameterType === "object"
+              ? p.parameterType?.description || p.parameterType?.code || ""
+              : p.parameterType || "",
           tol: p.tol ?? "",
         }))
         : [emptyParameterRow()],
     );
 
+    // Samples — API returns controlPlanSampleResponseDTO
+    const sampleList =
+      data.controlPlanSampleResponseDTO || data.controlPlanSampleDTO || [];
     setSampleRows(
-      data.controlPlanSampleDTO?.length
-        ? data.controlPlanSampleDTO.map((s) => ({
+      sampleList.length
+        ? sampleList.map((s) => ({
           id: s.id || 0,
           sampleFrequency: s.sampleFrequency ?? "",
           size: s.size ?? "",
@@ -705,13 +715,40 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
         : [emptySampleRow()],
     );
 
+    // Fixtures — API returns controlPlanMachineFixtureResponseDTO where
+    // machineFixtureNo is a STRING CODE (e.g. "MAC1001"). We need to map it
+    // back to the numeric machineFixtureId so the <select> option matches.
+    const fixtureList =
+      data.controlPlanMachineFixtureResponseDTO ||
+      data.controlPlanMachineFixtureDTO ||
+      [];
     setFixtureRows(
-      data.controlPlanMachineFixtureDTO?.length
-        ? data.controlPlanMachineFixtureDTO.map((f) => ({
-          id: f.id || 0,
-          machineFixtureNo: f.machineFixtureNo ?? "",
-          machineFixtureName: f.machineFixtureName || "",
-        }))
+      fixtureList.length
+        ? fixtureList.map((f) => {
+          const rawNo = f.machineFixtureNo;
+          // If the response already sent a numeric id, use it directly.
+          // Otherwise look it up in the machineFixtureList by code.
+          let resolvedId = "";
+
+          if (rawNo != null) {
+            // Try matching against machineFixtureList by code first
+            const match = machineFixtureList.find(
+              (m) => String(m.machineFixtureNo) === String(rawNo),
+            );
+            if (match) {
+              resolvedId = String(match.machineFixtureId);
+            } else if (typeof rawNo === "number" || !isNaN(Number(rawNo))) {
+              // Fallback: treat it as an id
+              resolvedId = String(rawNo);
+            }
+          }
+
+          return {
+            id: f.id || 0,
+            machineFixtureNo: resolvedId,
+            machineFixtureName: f.machineFixtureName || "",
+          };
+        })
         : [emptyFixtureRow()],
     );
   };
@@ -719,8 +756,26 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
   const loadPlanData = async (planId) => {
     try {
       setLoading(true);
-      const data = await controlPlanAPI.getControlPlanById(planId);
-      if (data) populateFormFromEditData(data);
+      const response = await controlPlanAPI.getControlPlanById(planId);
+
+      console.log("Control Plan by ID response:", response);
+
+      let data = response;
+      if (response?.paramObjectsMap?.controlPlanResponseVO) {
+        data = response.paramObjectsMap.controlPlanResponseVO;
+      } else if (response?.paramObjectsMap?.controlPlanVO) {
+        data = response.paramObjectsMap.controlPlanVO;
+      }
+
+      if (Array.isArray(data)) {
+        data = data[0];
+      }
+
+      if (data) {
+        populateFormFromEditData(data);
+      } else {
+        addToast("No control plan data found", "error");
+      }
     } catch (error) {
       console.error("Error loading control plan data:", error);
       addToast("Failed to load control plan data", "error");
@@ -738,42 +793,124 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editId, editData]);
 
-  // Backfill grade code once FG items load
+  // Backfill grade code + description once FG items load
   useEffect(() => {
     if (!fgItemList.length || !header.fgItemCode) return;
     const match = fgItemList.find(
       (it) => String(it.itemId) === String(header.fgItemCode),
     );
     if (match) {
-      setHeader((prev) => ({ ...prev, itemGradeCode: match.gradeCode || "" }));
+      setHeader((prev) => ({
+        ...prev,
+        itemGrade: match.gradeMasterId
+          ? String(match.gradeMasterId)
+          : prev.itemGrade,
+        itemGradeCode: match.gradeCode || prev.itemGradeCode,
+        itemDescription: match.itemDescription || prev.itemDescription,
+      }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fgItemList]);
+  }, [fgItemList, header.fgItemCode]);
 
-  // Backfill Operation Desc + Machine options once Operation Master loads
+  // ---- Backfill Operation Desc + Machine options ----
+  const operationNoSignature = detailRows.map((r) => r.operationNo).join("|");
+
   useEffect(() => {
     if (!operationList.length) return;
-    setDetailRows((prev) =>
-      prev.map((row) => {
+    if (!detailRows.length) return;
+
+    setDetailRows((prev) => {
+      let changed = false;
+      const next = prev.map((row) => {
         if (!row.operationNo) return row;
+
         const match = operationList.find(
           (op) => String(op.operationId) === String(row.operationNo),
         );
         if (!match) return row;
+
+        const newDesc = match.description || row.operationDesc || "";
+
+        const newMachineOptions = (
+          match.operationMasterMachineDetailsResponseDTO || []
+        ).map((m) => ({
+          value: m.machine?.id != null ? String(m.machine.id) : "",
+          label: m.machine?.machineNo || m.machine?.machineName,
+        }));
+
+        const descChanged = newDesc !== row.operationDesc;
+        const optsChanged =
+          newMachineOptions.length !== (row.machineOptions || []).length;
+
+        if (!descChanged && !optsChanged) return row;
+
+        changed = true;
         return {
           ...row,
-          operationDesc: match.description || row.operationDesc,
-          machineOptions: (
-            match.operationMasterMachineDetailsResponseDTO || []
-          ).map((m) => ({
-            value: m.machine?.id,
-            label: m.machine?.machineNo || m.machine?.machineName,
-          })),
+          operationDesc: newDesc,
+          machineOptions: newMachineOptions,
         };
-      }),
-    );
+      });
+
+      return changed ? next : prev;
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [operationList]);
+  }, [operationList, operationNoSignature]);
+
+  // ---- Backfill Machine/Fixture Name + resolve code → id ----
+  // If fixture rows were populated from edit data BEFORE machineFixtureList
+  // loaded, re-resolve the machineFixtureNo from code → id now.
+  const fixtureNoSignature = fixtureRows
+    .map((r) => r.machineFixtureNo)
+    .join("|");
+
+  useEffect(() => {
+    if (!machineFixtureList.length) return;
+    if (!fixtureRows.length) return;
+
+    setFixtureRows((prev) => {
+      let changed = false;
+      const next = prev.map((row) => {
+        if (!row.machineFixtureNo) return row;
+
+        // Try to find the item whose machineFixtureId === row.machineFixtureNo
+        // (this is the correct case after resolve).
+        let match = machineFixtureList.find(
+          (m) => String(m.machineFixtureId) === String(row.machineFixtureNo),
+        );
+
+        // If not found, try matching by code (in case populate ran before
+        // the list loaded and stored the raw code).
+        if (!match) {
+          match = machineFixtureList.find(
+            (m) => String(m.machineFixtureNo) === String(row.machineFixtureNo),
+          );
+        }
+
+        if (!match) return row;
+
+        const newId = String(match.machineFixtureId);
+        const newName = match.machineFixtureName || row.machineFixtureName || "";
+
+        if (
+          newId === String(row.machineFixtureNo) &&
+          newName === row.machineFixtureName
+        ) {
+          return row;
+        }
+
+        changed = true;
+        return {
+          ...row,
+          machineFixtureNo: newId,
+          machineFixtureName: newName,
+        };
+      });
+
+      return changed ? next : prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [machineFixtureList, fixtureNoSignature]);
 
   /* ---------------- Handlers ---------------- */
 
@@ -790,7 +927,7 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
         ...prev,
         fgItemCode: value,
         itemDescription: item?.itemDescription || "",
-        itemGrade: item?.gradeMasterId ?? "",
+        itemGrade: item?.gradeMasterId ? String(item.gradeMasterId) : "",
         itemGradeCode: item?.gradeCode || "",
       }));
       return;
@@ -814,7 +951,7 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
           next.machineOptions = (
             match?.operationMasterMachineDetailsResponseDTO || []
           ).map((m) => ({
-            value: m.machine?.id,
+            value: m.machine?.id != null ? String(m.machine.id) : "",
             label: m.machine?.machineNo || m.machine?.machineName,
           }));
           next.machineDevice = "";
@@ -851,6 +988,7 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
       prev.map((row, i) => (i === idx ? { ...row, [key]: value } : row)),
     );
 
+  // Match by machineFixtureId (the select value)
   const handleFixtureCellChange = (idx, key, value) =>
     setFixtureRows((prev) => {
       const next = prev.map((row, i) =>
@@ -941,7 +1079,8 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
     if (!header.fgItemCode) errors.fgItemCode = "FG Item Code is required";
     if (!header.processSheetNo)
       errors.processSheetNo = "Process Sheet No is required";
-    if (!header.originDate) errors.originDate = "Origin Date is required";
+    if (!header.originDate && !isEditMode)
+      errors.originDate = "Origin Date is required";
 
     setFieldErrors(errors);
 
@@ -950,7 +1089,9 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
     const validSamples = sampleRows.every(
       (r) => r.sampleFrequency !== "" && r.size !== "",
     );
-    const validFixtures = fixtureRows.every((r) => r.machineFixtureNo?.trim());
+    const validFixtures = fixtureRows.every((r) =>
+      String(r.machineFixtureNo || "").trim(),
+    );
 
     const nextTableErrors = {
       detail: validDetails
@@ -1006,6 +1147,9 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
 
     setIsSubmitting(true);
 
+    // Financial year — used by the backend for doc-no generation
+    const financialYear = String(new Date().getFullYear());
+
     const payload = {
       ...(header.id > 0 && { id: header.id }),
       active: header.active,
@@ -1018,7 +1162,6 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
         .filter((r) => r.operationNo?.trim())
         .map((r) => ({
           ...(r.id > 0 && { id: r.id }),
-          // LOV id from controlMethodOptions
           controlMethod: Number(r.controlMethod) || 0,
           evaluationTechnique: r.evaluationTechnique || "",
           machineDevice: Number(r.machineDevice) || 0,
@@ -1030,10 +1173,11 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
           specification: r.specification || "",
         })),
       controlPlanMachineFixtureDTO: fixtureRows
-        .filter((r) => r.machineFixtureNo?.toString().trim())
+        .filter((r) => String(r.machineFixtureNo || "").trim())
         .map((r) => ({
           ...(r.id > 0 && { id: r.id }),
           machineFixtureName: r.machineFixtureName || "",
+          // Payload spec requires machineFixtureNo to be a NUMBER (id)
           machineFixtureNo: Number(r.machineFixtureNo) || 0,
         })),
       controlPlanParameterDTO: parameterRows
@@ -1055,6 +1199,7 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
       controlPlanType: Number(header.controlPlanType) || 0,
       createdBy: header.createdBy,
       fgItemCode: Number(header.fgItemCode) || 0,
+      financialYear,
       itemDescription: header.itemDescription || "",
       itemGrade: Number(header.itemGrade) || 0,
       itemSize: header.itemSize || "",
@@ -1071,7 +1216,8 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
     try {
       const response = await controlPlanAPI.createUpdateControlPlan(payload);
 
-      const status = response?.status === true || response?.statusFlag === "Ok";
+      const status =
+        response?.status === true || response?.statusFlag === "Ok";
 
       if (status) {
         const successMessage =
@@ -1219,7 +1365,7 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
               value={header.originDate}
               onChange={handleHeaderChange}
               error={fieldErrors.originDate}
-              required
+              required={!isEditMode}
             />
             <Field
               type="date"
@@ -1293,7 +1439,6 @@ const ControlPlanForm = ({ onBack, onSave, editData, editId }) => {
                   { key: "evaluationTechnique", label: "Eval. Technique" },
                   { key: "sampling", label: "Sampling" },
                   {
-                    // LOV-backed select — value is the LOV id
                     key: "controlMethod",
                     label: "Control Method",
                     type: "select",
