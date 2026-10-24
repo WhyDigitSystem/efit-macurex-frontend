@@ -6,9 +6,6 @@ const GateOutward = () => {
   const [screen, setScreen] = useState("list");
   const [editData, setEditData] = useState(null);
 
-  // No API — entries just live in local state for now.
-  const [entries, setEntries] = useState([]);
-
   const addNew = () => {
     setEditData(null);
     setScreen("form");
@@ -19,15 +16,8 @@ const GateOutward = () => {
     setScreen("form");
   };
 
-  const handleSave = (record) => {
-    setEntries((prev) => {
-      if (record.id) {
-        return prev.map((e) => (e.id === record.id ? record : e));
-      }
-      const serialNo = `GO-${String(prev.length + 1).padStart(4, "0")}`;
-      const newRecord = { ...record, id: Date.now(), serialNo };
-      return [newRecord, ...prev];
-    });
+  const backToList = () => {
+    setEditData(null);
     setScreen("list");
   };
 
@@ -35,7 +25,6 @@ const GateOutward = () => {
     <>
       {screen === "list" && (
         <GateOutwardList
-          data={entries}
           onAddNew={addNew}
           onEdit={edit}
           onBack={() => window.history.back()}
@@ -45,9 +34,8 @@ const GateOutward = () => {
       {screen === "form" && (
         <GateOutwardForm
           data={editData}
-          nextSerialNo={`GO-${String(entries.length + 1).padStart(4, "0")}`}
-          onBack={() => setScreen("list")}
-          onSave={handleSave}
+          onBack={backToList}
+          onSave={backToList}
         />
       )}
     </>

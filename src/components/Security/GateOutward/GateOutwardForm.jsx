@@ -1,8 +1,20 @@
-import { ArrowLeft, Save, X, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
+import { ArrowLeft, Save, X, Plus, Trash2, Loader2 } from "lucide-react";
 
-/* ---------------------------------------------------------------------------- */
-/* Shared design tokens - identical to PurchaseIndentForm                      */
+import gateOutwardAPI, {
+  YES_NO_OPTIONS,
+  getCtx,
+  normalizeEntry,
+  nowTime,
+  withCurrent,
+} from "../../../api/Security/Gateoutwardapi";
+import branchAPI from "../../../api/branchAPI";
+import { employeeAPI } from "../../../api/employeeAPI";
+import itemAPI from "../../../api/itemAPI";
+
+/* -------------------------------------------------------------------------- */
+/* Shared styles */
+/* -------------------------------------------------------------------------- */
 
 const controlClasses =
   "w-full h-[30px] px-2 rounded border text-xs leading-none transition-colors " +
@@ -27,10 +39,33 @@ const labelClasses =
   "block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5";
 
 const fieldGrid =
-  "grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-x-3 gap-y-2 items-start";
+  "grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-x-3 gap-y-2 items-start";
 
-/* ---------------------------------------------------------------------------- */
-/* Shared building blocks - identical to PurchaseIndentForm                    */
+/* -------------------------------------------------------------------------- */
+/* Helpers */
+/* -------------------------------------------------------------------------- */
+
+const asId = (value) => {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "object") return value.id ?? "";
+  return value;
+};
+
+const unitLabel = (unit) => {
+  if (!unit) return "";
+  if (typeof unit !== "object") return String(unit);
+  return (
+    unit.primaryUnit ??
+    unit.unitId ??
+    unit.unitName ??
+    unit.unitDescription ??
+    ""
+  );
+};
+
+/* -------------------------------------------------------------------------- */
+/* Field */
+/* -------------------------------------------------------------------------- */
 
 const Field = ({
   label,
@@ -40,38 +75,41 @@ const Field = ({
   error,
   required,
   type = "text",
-  options,
+  options = [],
   className = "",
+  placeholder = "",
   disabled = false,
 }) => {
+  const labelEl = (
+    <label className={labelClasses}>
+      {label}
+      {required && <span className="text-red-500"> *</span>}
+    </label>
+  );
+
+  const errorEl = error && (
+    <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">{error}</p>
+  );
+
   if (type === "select") {
     return (
       <div className={`w-full ${className}`}>
-        <label className={labelClasses}>
-          {label}
-          {required && <span className="text-red-500"> *</span>}
-        </label>
-
+        {labelEl}
         <select
           name={name}
-          value={value}
+          value={value ?? ""}
           onChange={onChange}
+          className={`${controlClasses} ${error ? "border-red-500" : ""}`}
           disabled={disabled}
-          className={controlClasses}
         >
           <option value="">-- Select --</option>
-          {(options || []).map((opt) => (
-            <option key={opt} value={opt}>
-              {opt}
+          {options.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
             </option>
           ))}
         </select>
-
-        {error && (
-          <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
-            {error}
-          </p>
-        )}
+        {errorEl}
       </div>
     );
   }
@@ -79,406 +117,561 @@ const Field = ({
   if (type === "textarea") {
     return (
       <div className={`w-full ${className}`}>
-        <label className={labelClasses}>
-          {label}
-          {required && <span className="text-red-500"> *</span>}
-        </label>
-
+        {labelEl}
         <textarea
           name={name}
-          value={value}
+          value={value ?? ""}
           onChange={onChange}
-          disabled={disabled}
           rows={4}
+          placeholder={placeholder}
+          disabled={disabled}
           className={
             "w-full px-2 py-1.5 rounded border text-xs leading-snug transition-colors resize-none " +
-            "bg-white dark:bg-gray-900 " +
-            "border-gray-300 dark:border-gray-600 " +
-            "text-gray-900 dark:text-gray-100 " +
-            "placeholder-gray-400 dark:placeholder-gray-500 " +
+            "bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 " +
+            "text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 " +
             "focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 " +
-            "dark:focus:ring-blue-400 dark:focus:border-blue-400 " +
-            "disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed"
+            "dark:focus:ring-blue-400 dark:focus:border-blue-400"
           }
         />
-
-        {error && (
-          <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
-            {error}
-          </p>
-        )}
+        {errorEl}
       </div>
     );
   }
 
   return (
     <div className={`w-full ${className}`}>
-      <label className={labelClasses}>
-        {label}
-        {required && <span className="text-red-500"> *</span>}
-      </label>
-
+      {labelEl}
       <input
         type={type}
         name={name}
-        value={value}
+        value={value ?? ""}
         onChange={onChange}
+        className={`${controlClasses} ${error ? "border-red-500" : ""}`}
+        placeholder={placeholder}
         disabled={disabled}
-        className={controlClasses}
       />
-
-      {error && (
-        <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5">
-          {error}
-        </p>
-      )}
+      {errorEl}
     </div>
   );
 };
 
-const SectionHeader = ({ children }) => (
-  <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">
-    {children}
-  </h3>
-);
+/* -------------------------------------------------------------------------- */
+/* Defaults */
+/* -------------------------------------------------------------------------- */
 
-const FormButtons = ({ onCancel, onSave, isSubmitting, saveLabel }) => (
-  <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
-    <button
-      onClick={onCancel}
-      disabled={isSubmitting}
-      className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-    >
-      <X className="h-3 w-3" />
-      Cancel
-    </button>
+const emptyRow = () => ({
+  id: null,
+  itemId: "",
+  itemCode: "",
+  itemDescription: "",
+  toolNo: "",
+  toolDesc: "",
+  unit: "",
+  unitName: "",
+  quantity: "",
+});
 
-    <button
-      onClick={onSave}
-      disabled={isSubmitting}
-      className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-    >
-      <Save className="h-3 w-3" />
-      {isSubmitting ? "Saving..." : saveLabel}
-    </button>
-  </div>
-);
-
-/* ---------------------------------------------------------------------------- */
-/* Table helpers - identical to PurchaseIndentForm                             */
-
-const TableWrapper = ({ children }) => (
-  <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
-    <table className="w-full text-xs">{children}</table>
-  </div>
-);
-
-const TableHead = ({ headers }) => (
-  <thead className="bg-gray-100 dark:bg-gray-700">
-    <tr>
-      {headers.map((h, i) => (
-        <th
-          key={i}
-          className={`p-1 whitespace-nowrap ${
-            i === 0
-              ? "w-8 text-center"
-              : i === headers.length - 1
-                ? "w-20 text-left"
-                : "text-left"
-          } dark:text-white`}
-        >
-          {h}
-        </th>
-      ))}
-    </tr>
-  </thead>
-);
-
-const TableRow = ({ children, index, onRemove, disabled }) => (
-  <tr className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-    <td className="p-1 text-center font-medium dark:text-white">{index + 1}</td>
-    {children}
-    <td className="p-1 text-center">
-      <button
-        type="button"
-        onClick={onRemove}
-        disabled={disabled}
-        className={`h-5 w-5 rounded text-white flex items-center justify-center ${
-          disabled
-            ? "bg-gray-400 cursor-not-allowed"
-            : "bg-red-600 hover:bg-red-700"
-        }`}
-      >
-        <Trash2 size={10} />
-      </button>
-    </td>
-  </tr>
-);
-
-const SelectCell = ({ value, onChange, options }) => (
-  <td className="p-1 align-top">
-    <select value={value} onChange={onChange} className={cellInputClasses}>
-      <option value="">-- Select --</option>
-      {(options || []).map((opt) => (
-        <option key={opt} value={opt}>
-          {opt}
-        </option>
-      ))}
-    </select>
-  </td>
-);
-
-const InputCell = ({ value, onChange, type = "text" }) => (
-  <td className="p-1 align-top">
-    <input
-      type={type}
-      value={value}
-      onChange={onChange}
-      className={cellInputClasses}
-    />
-  </td>
-);
-
-const DynamicTable = ({ columns, rows, onCellChange, onRemoveRow }) => (
-  <TableWrapper>
-    <TableHead headers={["#", ...columns.map((c) => c.label), "Action"]} />
-    <tbody>
-      {rows.map((row, idx) => (
-        <TableRow
-          key={idx}
-          index={idx}
-          onRemove={() => onRemoveRow(idx)}
-          disabled={rows.length <= 1}
-        >
-          {columns.map((col) =>
-            col.type === "select" ? (
-              <SelectCell
-                key={col.key}
-                value={row[col.key]}
-                onChange={(e) => onCellChange(idx, col.key, e.target.value)}
-                options={col.options}
-              />
-            ) : (
-              <InputCell
-                key={col.key}
-                value={row[col.key]}
-                type={
-                  col.type === "number"
-                    ? "number"
-                    : col.type === "date"
-                      ? "date"
-                      : "text"
-                }
-                onChange={(e) => onCellChange(idx, col.key, e.target.value)}
-              />
-            ),
-          )}
-        </TableRow>
-      ))}
-    </tbody>
-  </TableWrapper>
-);
-
-/* ---------------------------------------------------------------------------- */
-/* Options (swap for real API-driven lists)                                    */
-
-const PLANT_IDS = ["BANGALORE", "CHENNAI", "PUNE", "DELHI"];
-const YES_NO = ["YES", "NO"];
-const MATERIAL_TYPES = [
-  "RAW MATERIAL",
-  "FINISHED GOODS",
-  "SCRAP",
-  "TOOLS/MACHINE",
-  "OTHERS",
-];
-const UNITS = ["NOS", "KG", "LTR", "MTR", "SET"];
-const CHARGE_TYPES = ["FREIGHT", "LOADING", "UNLOADING", "OTHERS"];
-
-/* ---------------------------------------------------------------------------- */
-
-const nowTimeLabel = () =>
-  new Date().toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true,
-  });
-
-const emptyHeader = (nextSerialNo) => ({
-  plant: "",
-  serialNo: nextSerialNo || "Auto",
+const emptyHeader = () => ({
+  plantId: "",
+  docId: "",
   breakDown: "NO",
-  date: new Date().toISOString().slice(0, 10),
+  docDate: new Date().toISOString().slice(0, 10),
   breakDownNo: "",
-  outwardTime: nowTimeLabel(),
+  outwardTime: nowTime(),
   materialType: "",
   materialTakenOutBy: "",
   materialSentTo: "",
   challanNo: "",
   vehicleNo: "",
-});
-
-const emptyChargesSummary = () => ({
   remarks: "",
 });
 
-const emptyItemRow = () => ({
-  itemCode: "",
-  itemDescription: "",
-  toolMachineNo: "",
-  toolMachineDesc: "",
-  unit: "",
-  quantity: "",
-});
+/* -------------------------------------------------------------------------- */
+/* Main Form */
+/* -------------------------------------------------------------------------- */
 
-const emptyChargeRow = () => ({
-  chargeType: "",
-  description: "",
-  amount: "",
-});
+const GateOutwardForm = ({ data, onBack, onSave }) => {
+  const editId = data?.id;
+  const isEdit = Boolean(editId);
 
-/* ---------------------------------------------------------------------------- */
-/* Child tabs - Gate Outward Details is a table, Charges Summary has a charges */
-/* table plus remarks, matching PurchaseIndentForm's Item Details/Summary tabs */
+  const ORG_ID = parseInt(localStorage.getItem("orgId"), 10);
+  const BRANCH_ID = localStorage.getItem("branchId");
 
-const CHILD_TABS = [
-  { key: "item", label: "1-Gate Outward Details", type: "table" },
-  { key: "charges", label: "2-Charges Summary", type: "charges" },
-];
-
-const GateOutwardForm = ({ onBack, onSave, editData, nextSerialNo }) => {
-  const ORG_ID = parseInt(localStorage.getItem("orgId"));
-  const [activeChildTab, setActiveChildTab] = useState("item");
+  const [activeTab, setActiveTab] = useState("details");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(isEdit);
+  const [generatingDocId, setGeneratingDocId] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
+  const [saveError, setSaveError] = useState("");
+  const [loadError, setLoadError] = useState("");
 
-  const [header, setHeader] = useState({
-    ...emptyHeader(nextSerialNo),
-    ...editData?.header,
-  });
+  const [form, setForm] = useState(emptyHeader());
+  const [rows, setRows] = useState([emptyRow()]);
 
-  const [summary, setSummary] = useState({
-    ...emptyChargesSummary(),
-    ...editData?.summary,
-  });
+  // master data
+  const [plantData, setPlantData] = useState([]);
+  const [breakdownNos, setBreakdownNos] = useState([]);
+  const [materialTypes, setMaterialTypes] = useState([]);
+  const [employees, setEmployees] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [challanNos, setChallanNos] = useState([]);
+  const [items, setItems] = useState([]);
+  const [units, setUnits] = useState([]);
+  const [machines, setMachines] = useState([]);
+  const [loadingItemRow, setLoadingItemRow] = useState(null);
 
-  const [itemRows, setItemRows] = useState(
-    editData?.itemDetails?.length ? editData.itemDetails : [emptyItemRow()],
-  );
+  /* ---------------------------------------------------------------------- */
+  /* Load master data */
+  /* ---------------------------------------------------------------------- */
 
-  const [chargeRows, setChargeRows] = useState(
-    editData?.charges?.length ? editData.charges : [emptyChargeRow()],
-  );
+  const loadMasterData = useCallback(async () => {
+    if (!ORG_ID) return;
 
-  const handleHeaderChange = (e) => {
+    const branch = BRANCH_ID;
+
+    const results = await Promise.allSettled([
+      branchAPI.getBranchByOrgId(ORG_ID),
+      gateOutwardAPI.getBreakdownNos({ branch, orgId: ORG_ID }),
+      gateOutwardAPI.getMaterialTypes(ORG_ID),
+      employeeAPI.getEmployeeByOrgId(ORG_ID),
+      gateOutwardAPI.getCustomers({ branch, orgId: ORG_ID }),
+      Promise.resolve([]), // challan nos load separately (needs customer + break down)
+      itemAPI.getItems(ORG_ID, branch),
+      gateOutwardAPI.getUnits(ORG_ID),
+    ]);
+
+    const ok = (r) => (r.status === "fulfilled" ? r.value || [] : []);
+
+    setPlantData(
+      ok(results[0]).map((b) => ({ value: String(b.id), label: b.branchName })),
+    );
+    setBreakdownNos(ok(results[1]));
+    setMaterialTypes(ok(results[2]));
+    setEmployees(
+      ok(results[3]).map((e) => ({
+        value: String(e.id),
+        label: e.employeeName,
+      })),
+    );
+    setCustomers(ok(results[4]));
+    setItems(
+      ok(results[6]).map((i) => ({
+        id: String(i.id),
+        code: i.itemCode ?? i.code ?? i.itemName,
+        description: i.itemDescription ?? i.description ?? "",
+      })),
+    );
+    setUnits(ok(results[7]));
+
+    const failed = results.filter((r) => r.status === "rejected");
+
+    if (failed.length) {
+      failed.forEach((r) => console.error("Dropdown load failed:", r.reason));
+      setLoadError("Some dropdown lists failed to load.");
+    }
+  }, [ORG_ID, BRANCH_ID]);
+
+  useEffect(() => {
+    loadMasterData();
+  }, [loadMasterData]);
+
+  /* ---------------------------------------------------------------------- */
+  /* Generate Serial No (new) */
+  /* ---------------------------------------------------------------------- */
+
+  useEffect(() => {
+    if (isEdit || !ORG_ID) return;
+
+    const generateDocId = async () => {
+      setGeneratingDocId(true);
+
+      try {
+        const { finYear } = getCtx();
+
+        if (!finYear) {
+          console.error("finYear not found in localStorage");
+          return;
+        }
+
+        const docId = await gateOutwardAPI.getGateOutwardDocId({
+          financialYear: finYear,
+          orgId: ORG_ID,
+        });
+
+        if (docId) {
+          setForm((prev) => ({ ...prev, docId }));
+        }
+      } catch (error) {
+        console.error("Failed to generate Gate Outward serial no:", error);
+      } finally {
+        setGeneratingDocId(false);
+      }
+    };
+
+    generateDocId();
+  }, [isEdit, ORG_ID]);
+
+  /* ---------------------------------------------------------------------- */
+  /* Load edit record */
+  /* ---------------------------------------------------------------------- */
+
+  useEffect(() => {
+    if (!editId) {
+      setIsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadEntry = async () => {
+      setIsLoading(true);
+      setLoadError("");
+
+      try {
+        const full = await gateOutwardAPI.getGateOutwardById(editId);
+
+        if (cancelled) return;
+
+        const base = normalizeEntry(data);
+        const entry = {
+          ...base,
+          ...full,
+          items: full.items?.length ? full.items : base.items,
+        };
+
+        setForm({
+          plantId: entry.plantId,
+          docId: entry.docId || entry.serialNo,
+          breakDown: entry.breakDown,
+          docDate: entry.docDate,
+          breakDownNo: entry.breakDownNo,
+          outwardTime: entry.outwardTime || nowTime(),
+          materialType: entry.materialType,
+          materialTakenOutBy: entry.materialTakenOutBy,
+          materialSentTo: entry.materialSentTo,
+          challanNo: entry.challanNo,
+          vehicleNo: entry.vehicleNo,
+          remarks: entry.remarks,
+        });
+
+        setRows(entry.items?.length ? entry.items : [emptyRow()]);
+      } catch (error) {
+        if (!cancelled) {
+          console.error("Failed to load Gate Outward:", error);
+          setLoadError(
+            "Failed to load Gate Outward. Please go back and try again.",
+          );
+        }
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    };
+
+    loadEntry();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editId]);
+
+  /* ---------------------------------------------------------------------- */
+  /* Machines depend on Material Type */
+  /* ---------------------------------------------------------------------- */
+
+  useEffect(() => {
+    if (!form.materialType || !ORG_ID) {
+      setMachines([]);
+      return;
+    }
+
+    gateOutwardAPI
+      .getMachines({
+        branch: BRANCH_ID,
+        orgId: ORG_ID,
+        toolCategoryId: form.materialType,
+      })
+      .then(setMachines)
+      .catch((error) => {
+        console.error("Error loading machines:", error);
+        setMachines([]);
+      });
+  }, [form.materialType, ORG_ID, BRANCH_ID]);
+
+  /* ---------------------------------------------------------------------- */
+  /* Challan Nos depend on Break Down ? (NO) and Material Sent To (customer) */
+  /* ---------------------------------------------------------------------- */
+
+  useEffect(() => {
+    if (!ORG_ID || form.breakDown !== "NO" || !form.materialSentTo) {
+      setChallanNos([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    gateOutwardAPI
+      .getChallanNos({
+        branch: BRANCH_ID,
+        orgId: ORG_ID,
+        breakdown: form.breakDown,
+        customer: form.materialSentTo,
+      })
+      .then((list) => {
+        if (!cancelled) setChallanNos(list);
+      })
+      .catch((error) => {
+        console.error("Error loading challan nos:", error);
+        if (!cancelled) setChallanNos([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [form.breakDown, form.materialSentTo, ORG_ID, BRANCH_ID]);
+
+  /* ---------------------------------------------------------------------- */
+  /* Header change */
+  /* ---------------------------------------------------------------------- */
+
+  const handleChange = (e) => {
     const { name, value } = e.target;
-    if (fieldErrors[name]) setFieldErrors((prev) => ({ ...prev, [name]: "" }));
-    setHeader((prev) => ({ ...prev, [name]: value }));
+
+    if (fieldErrors[name]) {
+      setFieldErrors((prev) => ({ ...prev, [name]: "" }));
+    }
+
+    setForm((prev) => {
+      const next = { ...prev, [name]: value };
+      // YES -> only Break Down No. ; NO -> only Challan No.
+      if (name === "breakDown") {
+        if (value === "YES") next.challanNo = "";
+        else next.breakDownNo = "";
+      }
+
+      // challan list depends on the customer, so reset the selection
+      if (name === "materialSentTo") next.challanNo = "";
+
+      return next;
+    });
   };
 
-  const handleSummaryChange = (e) => {
-    const { name, value } = e.target;
-    setSummary((prev) => ({ ...prev, [name]: value }));
-  };
+  /* ---------------------------------------------------------------------- */
+  /* Detail rows */
+  /* ---------------------------------------------------------------------- */
 
-  const makeTableHandlers = (setter, emptyRow) => ({
-    onCellChange: (idx, key, value) =>
-      setter((prev) =>
-        prev.map((row, i) => (i === idx ? { ...row, [key]: value } : row)),
-      ),
-    onAddRow: () => setter((prev) => [...prev, emptyRow()]),
-    onRemoveRow: (idx) => setter((prev) => prev.filter((_, i) => i !== idx)),
-  });
+  const updateRow = (index, patch) =>
+    setRows((prev) =>
+      prev.map((r, i) => (i === index ? { ...r, ...patch } : r)),
+    );
 
-  const itemHandlers = makeTableHandlers(setItemRows, emptyItemRow);
-  const chargeHandlers = makeTableHandlers(setChargeRows, emptyChargeRow);
+  const handleItemChange = async (index, itemId) => {
+    const it = items.find((i) => i.id === itemId);
 
-  const chargesTotal = chargeRows.reduce(
-    (sum, c) => sum + (Number(c.amount) || 0),
-    0,
-  );
+    if (!it) {
+      updateRow(index, {
+        itemId: "",
+        itemCode: "",
+        itemDescription: "",
+        unit: "",
+        unitName: "",
+      });
+      return;
+    }
 
-  // Config-driven lookup, same pattern as PurchaseIndentForm's childTabConfig
-  const childTabConfig = {
-    item: {
-      type: "table",
-      rows: itemRows,
-      handlers: itemHandlers,
-      columns: [
-        { key: "itemCode", label: "Item Code" },
-        { key: "itemDescription", label: "Item Description" },
-        { key: "toolMachineNo", label: "Tool/Machine Instrument No" },
-        {
-          key: "toolMachineDesc",
-          label: "Tool/Machine Instrument No. Desc.",
-        },
-        { key: "unit", label: "Unit", type: "select", options: UNITS },
-        { key: "quantity", label: "Quantity", type: "number" },
-      ],
-    },
-    charges: {
-      type: "charges",
-      rows: chargeRows,
-      handlers: chargeHandlers,
-      columns: [
-        {
-          key: "chargeType",
-          label: "Charge Type",
-          type: "select",
-          options: CHARGE_TYPES,
-        },
-        { key: "description", label: "Description" },
-        { key: "amount", label: "Amount", type: "number" },
-      ],
-    },
-  };
+    updateRow(index, {
+      itemId: it.id,
+      itemCode: it.code,
+      itemDescription: it.description,
+    });
 
-  const activeTabConfig = childTabConfig[activeChildTab];
+    setLoadingItemRow(index);
 
-  const handleAddChildRow = () => {
-    if (
-      activeTabConfig.type === "table" ||
-      activeTabConfig.type === "charges"
-    ) {
-      activeTabConfig.handlers.onAddRow();
+    try {
+      const itemDetail = await itemAPI.getItemById(itemId);
+
+      if (!itemDetail) return;
+
+      const unitObj = itemDetail.primaryUnits ?? itemDetail.primaryUnit;
+
+      updateRow(index, {
+        itemDescription:
+          itemDetail.itemDescription ??
+          itemDetail.description ??
+          it.description,
+        ...(asId(unitObj)
+          ? { unit: String(asId(unitObj)), unitName: unitLabel(unitObj) }
+          : {}),
+      });
+    } catch (error) {
+      console.error("Failed to load item:", error);
+    } finally {
+      setLoadingItemRow(null);
     }
   };
+
+  const handleToolChange = (index, number) => {
+    const m = machines.find((x) => x.number === number);
+    updateRow(index, { toolNo: m?.number || "", toolDesc: m?.name || "" });
+  };
+
+  const handleAddRow = () => setRows((prev) => [...prev, emptyRow()]);
+
+  const handleRemoveRow = (index) =>
+    setRows((prev) =>
+      prev.length > 1 ? prev.filter((_, i) => i !== index) : prev,
+    );
+
+  /* ---------------------------------------------------------------------- */
+  /* Validation */
+  /* ---------------------------------------------------------------------- */
 
   const validate = () => {
     const errors = {};
 
-    if (!header.plant) errors.plant = "Plant ID is required";
-    if (!header.date) errors.date = "Date is required";
-    if (!header.materialType) errors.materialType = "Material Type is required";
-    if (header.breakDown === "YES" && !header.breakDownNo.trim())
+    if (!form.plantId) errors.plantId = "Plant is required";
+    if (!form.docDate) errors.docDate = "Date is required";
+    if (!form.materialType) errors.materialType = "Material Type is required";
+
+    if (form.breakDown === "YES" && !form.breakDownNo) {
       errors.breakDownNo = "Break Down No is required";
+    }
+
+    if (rows.some((r) => !r.itemId || !(Number(r.quantity) > 0))) {
+      errors.items =
+        "Every row needs an Item Code and a Quantity greater than 0";
+    }
 
     setFieldErrors(errors);
+
+    if (errors.items) setActiveTab("details");
 
     return Object.keys(errors).length === 0;
   };
 
-  const handleSave = () => {
+  /* ---------------------------------------------------------------------- */
+  /* Save / Update */
+  /* ---------------------------------------------------------------------- */
+
+  const handleSave = async () => {
     if (!validate()) return;
 
     setIsSubmitting(true);
+    setSaveError("");
+
+    const { finYear, userName } = getCtx();
 
     const payload = {
-      ...(editData?.id && { id: editData.id }),
-      header,
-      summary,
-      itemDetails: itemRows,
-      charges: chargeRows,
-      chargesTotal,
-      active: editData?.active ?? true,
+      ...(isEdit && { id: editId }),
+
+      active: data?.active ?? true,
+      cancel: false,
+
+      breakDown: form.breakDown,
+      breakDownNo: form.breakDown === "YES" ? form.breakDownNo : "",
+      challanNo: form.breakDown === "NO" ? form.challanNo : "",
+      cancelRemarks: "",
+      serialNo: form.docId,
+      financialYear: finYear,
+
+      gateOutwardEntryDetailDTO: rows.map((r) => ({
+        ...(r.id && { id: r.id }),
+        itemCode: Number(r.itemId),
+        itemDescription: r.itemDescription,
+        quantity: Number(r.quantity),
+        toolMachineInstrumentNo: r.toolNo,
+        toolMachineInstrumentNoDesc: r.toolDesc,
+        unit: r.unit ? Number(r.unit) : 0,
+      })),
+
+      materialSentTo: form.materialSentTo ? Number(form.materialSentTo) : 0,
+      materialTakenOutBy: form.materialTakenOutBy
+        ? Number(form.materialTakenOutBy)
+        : 0,
+      materialType: Number(form.materialType),
+
       orgId: ORG_ID,
-      createdBy: localStorage.getItem("userName") || "SYSTEM",
+      // backend LocalTime expects "HH:mm:ss" (not an object)
+      outwardTime: form.outwardTime || nowTime(),
+      plantId: Number(form.plantId),
+      remarks: form.remarks,
+      vehicleNo: form.vehicleNo,
+
+      createdBy: userName,
+      updatedBy: userName,
     };
 
-    // No API — hand the payload straight back to the parent to store locally.
-    onSave?.(payload);
-    setIsSubmitting(false);
+    try {
+      const response = await gateOutwardAPI.createUpdateGateOutward(payload);
+
+      const status = response?.status === true || response?.statusFlag === "Ok";
+
+      if (status) {
+        if (onSave) onSave(response?.paramObjectsMap ?? payload);
+        if (onBack) onBack();
+        return;
+      }
+
+      setSaveError(
+        response?.paramObjectsMap?.message ||
+          response?.paramObjectsMap?.errorMessage ||
+          response?.message ||
+          "Failed to save Gate Outward",
+      );
+    } catch (error) {
+      console.error("Gate Outward Save Error:", error);
+
+      const err = error?.response?.data;
+
+      setSaveError(
+        err?.paramObjectsMap?.message ||
+          err?.errors?.[0]?.longMessage ||
+          err?.errors?.[0]?.shortMessage ||
+          err?.message ||
+          "Failed to save Gate Outward.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
+
+  /* ---------------------------------------------------------------------- */
+  /* Loading */
+  /* ---------------------------------------------------------------------- */
+
+  if (isLoading) {
+    return (
+      <div className="p-6 flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Loading gate outward...
+      </div>
+    );
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* Option lists */
+  /* ---------------------------------------------------------------------- */
+
+  const machineNoOptions = machines.map((m) => ({
+    value: m.number,
+    label: m.number,
+  }));
+
+  const machineDescOptions = machines.map((m) => ({
+    value: m.number,
+    label: m.name,
+  }));
+
+  const tabClass = (key) =>
+    `px-4 py-1.5 text-xs font-semibold rounded-t transition-colors ${
+      activeTab === key
+        ? "bg-blue-600 text-white"
+        : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+    }`;
+
+  /* ---------------------------------------------------------------------- */
+  /* UI */
+  /* ---------------------------------------------------------------------- */
 
   return (
     <div className="p-2 max-w-7xl">
@@ -492,163 +685,388 @@ const GateOutwardForm = ({ onBack, onSave, editData, nextSerialNo }) => {
         </button>
 
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-          {editData ? "Edit Gate Outward" : "Gate Outward"}
+          {isEdit ? "Edit Gate Outward" : "Add Gate Outward"}
         </h2>
       </div>
 
-      {/* Main Card */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-4">
-        {/* ---------------- Header Fields ---------------- */}
-        <div>
-          <SectionHeader>Outward Details</SectionHeader>
-          <div className={fieldGrid}>
-            <Field
-              type="select"
-              label="Plant ID"
-              name="plant"
-              value={header.plant}
-              onChange={handleHeaderChange}
-              error={fieldErrors.plant}
-              options={PLANT_IDS}
-              required
-            />
-            <Field
-              label="Serial No."
-              name="serialNo"
-              value={header.serialNo}
-              disabled
-            />
-            <Field
-              type="select"
-              label="Break Down ?"
-              name="breakDown"
-              value={header.breakDown}
-              onChange={handleHeaderChange}
-              options={YES_NO}
-            />
-            <Field
-              type="date"
-              label="Date"
-              name="date"
-              value={header.date}
-              onChange={handleHeaderChange}
-              error={fieldErrors.date}
-              required
-            />
-            <Field
-              label="Break Down No."
-              name="breakDownNo"
-              value={header.breakDownNo}
-              onChange={handleHeaderChange}
-              error={fieldErrors.breakDownNo}
-              disabled={header.breakDown !== "YES"}
-            />
-            <Field
-              label="Outward Time"
-              name="outwardTime"
-              value={header.outwardTime}
-              disabled
-            />
-            <Field
-              type="select"
-              label="Material Type"
-              name="materialType"
-              value={header.materialType}
-              onChange={handleHeaderChange}
-              error={fieldErrors.materialType}
-              options={MATERIAL_TYPES}
-              required
-            />
-            <Field
-              label="Material Taken Out by"
-              name="materialTakenOutBy"
-              value={header.materialTakenOutBy}
-              onChange={handleHeaderChange}
-            />
-            <Field
-              label="Material Sent To"
-              name="materialSentTo"
-              value={header.materialSentTo}
-              onChange={handleHeaderChange}
-            />
-            <Field
-              label="Challan No."
-              name="challanNo"
-              value={header.challanNo}
-              onChange={handleHeaderChange}
-            />
-            <Field
-              label="Vehicle No."
-              name="vehicleNo"
-              value={header.vehicleNo}
-              onChange={handleHeaderChange}
-            />
-          </div>
+      {/* Card */}
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-3">
+        {loadError && (
+          <p className="text-[11px] text-amber-600 dark:text-amber-400">
+            {loadError}
+          </p>
+        )}
+
+        {/* Form Fields */}
+        <div className={fieldGrid}>
+          <Field
+            type="select"
+            label="Plant"
+            name="plantId"
+            value={form.plantId}
+            onChange={handleChange}
+            error={fieldErrors.plantId}
+            required
+            options={withCurrent(plantData, form.plantId)}
+          />
+          <Field
+            label="Serial No."
+            name="docId"
+            value={generatingDocId ? "Generating..." : form.docId || "Auto"}
+            disabled
+          />
+          <Field
+            type="select"
+            label="Break Down ?"
+            name="breakDown"
+            value={form.breakDown}
+            onChange={handleChange}
+            options={YES_NO_OPTIONS}
+          />
+          <Field
+            type="date"
+            label="Date"
+            name="docDate"
+            value={form.docDate}
+            onChange={handleChange}
+            error={fieldErrors.docDate}
+            required
+          />
+          <Field
+            type="select"
+            label="Break Down No."
+            name="breakDownNo"
+            value={form.breakDownNo}
+            onChange={handleChange}
+            error={fieldErrors.breakDownNo}
+            disabled={form.breakDown !== "YES"}
+            options={withCurrent(breakdownNos, form.breakDownNo)}
+          />
+          <Field
+            label="Outward Time"
+            name="outwardTime"
+            value={form.outwardTime}
+            disabled
+          />
+          <Field
+            type="select"
+            label="Material Type"
+            name="materialType"
+            value={form.materialType}
+            onChange={handleChange}
+            error={fieldErrors.materialType}
+            required
+            options={withCurrent(materialTypes, form.materialType)}
+          />
+          <Field
+            type="select"
+            label="Material Taken Out by"
+            name="materialTakenOutBy"
+            value={form.materialTakenOutBy}
+            onChange={handleChange}
+            options={withCurrent(employees, form.materialTakenOutBy)}
+          />
+          <Field
+            type="select"
+            label="Material Sent To"
+            name="materialSentTo"
+            value={form.materialSentTo}
+            onChange={handleChange}
+            options={withCurrent(customers, form.materialSentTo)}
+          />
+          <Field
+            type="select"
+            label="Challan No."
+            name="challanNo"
+            value={form.challanNo}
+            onChange={handleChange}
+            disabled={form.breakDown !== "NO"}
+            options={withCurrent(challanNos, form.challanNo)}
+          />
+          <Field
+            label="Vehicle No."
+            name="vehicleNo"
+            value={form.vehicleNo}
+            onChange={handleChange}
+            placeholder="Enter Vehicle No."
+          />
         </div>
 
-        {/* ---------------- Child Tabs: Gate Outward Details / Charges Summary ---------------- */}
-        <section className="mt-0 bg-white dark:bg-gray-800">
-          {/* Tabs */}
-          <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 mb-0">
-            <div className="flex overflow-x-auto">
-              {CHILD_TABS.map((tab) => (
-                <button
-                  key={tab.key}
-                  type="button"
-                  onClick={() => setActiveChildTab(tab.key)}
-                  className={`px-4 py-1 text-xs font-semibold rounded-t whitespace-nowrap ${
-                    activeChildTab === tab.key
-                      ? "bg-blue-600 text-white"
-                      : "text-gray-600 dark:text-gray-300"
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
+        {/* Tabs */}
+        <div className="flex items-center border-b border-gray-200 dark:border-gray-700 mt-4">
+          <button
+            type="button"
+            onClick={() => setActiveTab("details")}
+            className={tabClass("details")}
+          >
+            1-Gate Outward Details
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("charges")}
+            className={tabClass("charges")}
+          >
+            2-Charges Summary
+          </button>
+        </div>
 
-            {(activeTabConfig.type === "table" ||
-              activeTabConfig.type === "charges") && (
+        {/* Gate Outward Details */}
+        {activeTab === "details" && (
+          <div className="mt-2">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                Gate Outward Details
+              </h3>
               <button
                 type="button"
-                onClick={handleAddChildRow}
-                className="h-6 w-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-colors flex-shrink-0"
+                onClick={handleAddRow}
+                className="h-6 w-6 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center transition-colors"
               >
                 <Plus size={12} />
               </button>
-            )}
-          </div>
-
-          {/* Active tab's content */}
-          {activeTabConfig.type === "table" && (
-            <DynamicTable
-              columns={activeTabConfig.columns}
-              rows={activeTabConfig.rows}
-              onCellChange={activeTabConfig.handlers.onCellChange}
-              onRemoveRow={activeTabConfig.handlers.onRemoveRow}
-            />
-          )}
-
-          {activeTabConfig.type === "charges" && (
-            <div className="space-y-2">
-              <Field
-                type="textarea"
-                label="Remarks"
-                name="remarks"
-                value={summary.remarks}
-                onChange={handleSummaryChange}
-                className="col-span-2 md:col-span-4 xl:col-span-6"
-              />
             </div>
-          )}
-        </section>
 
-        <FormButtons
-          onCancel={onBack}
-          onSave={handleSave}
-          isSubmitting={isSubmitting}
-          saveLabel={editData ? "Update" : "Save"}
-        />
+            {fieldErrors.items && (
+              <p className="text-[11px] text-red-500 dark:text-red-400 mb-1">
+                {fieldErrors.items}
+              </p>
+            )}
+
+            <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
+              <table className="w-full text-xs min-w-[1100px]">
+                <thead className="bg-gray-100 dark:bg-gray-700">
+                  <tr>
+                    <th className="p-1 text-center w-10 dark:text-gray-200">
+                      S.No
+                    </th>
+                    <th className="p-1 text-left min-w-[130px] dark:text-gray-200">
+                      Item Code *
+                    </th>
+                    <th className="p-1 text-left min-w-[170px] dark:text-gray-200">
+                      Item Description
+                    </th>
+                    <th className="p-1 text-left min-w-[160px] dark:text-gray-200">
+                      Tool/Machine Instrument No
+                    </th>
+                    <th className="p-1 text-left min-w-[170px] dark:text-gray-200">
+                      Tool/Machine Instrument No. Desc.
+                    </th>
+                    <th className="p-1 text-left min-w-[90px] dark:text-gray-200">
+                      Unit
+                    </th>
+                    <th className="p-1 text-left min-w-[100px] dark:text-gray-200">
+                      Quantity *
+                    </th>
+                    <th className="p-1 text-center w-10 dark:text-gray-200">
+                      Action
+                    </th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {rows.map((row, index) => {
+                    const codeOptions = withCurrent(
+                      items.map((i) => ({ value: i.id, label: i.code })),
+                      row.itemId,
+                      row.itemCode,
+                    );
+
+                    const toolNoOptions = withCurrent(
+                      machineNoOptions,
+                      row.toolNo,
+                      row.toolNo,
+                    );
+
+                    const toolDescOptions = withCurrent(
+                      machineDescOptions,
+                      row.toolNo,
+                      row.toolDesc,
+                    );
+
+                    const unitOptions = withCurrent(
+                      units,
+                      row.unit,
+                      row.unitName,
+                    );
+
+                    return (
+                      <tr
+                        key={row.id ?? `new-${index}`}
+                        className="border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+                      >
+                        <td className="p-1 text-center font-medium dark:text-gray-300">
+                          {index + 1}
+                        </td>
+
+                        {/* Item Code */}
+                        <td className="p-1">
+                          <select
+                            value={row.itemId}
+                            onChange={(e) =>
+                              handleItemChange(index, e.target.value)
+                            }
+                            className={cellInputClasses}
+                          >
+                            <option value="">-- Select --</option>
+                            {codeOptions.map((o) => (
+                              <option key={o.value} value={o.value}>
+                                {o.label}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+
+                        {/* Item Description */}
+                        <td className="p-1">
+                          <input
+                            value={
+                              loadingItemRow === index
+                                ? "Loading..."
+                                : row.itemDescription
+                            }
+                            readOnly
+                            className={`${cellInputClasses} bg-gray-100 dark:bg-gray-800`}
+                          />
+                        </td>
+
+                        {/* Tool No */}
+                        <td className="p-1">
+                          <select
+                            value={row.toolNo}
+                            onChange={(e) =>
+                              handleToolChange(index, e.target.value)
+                            }
+                            className={cellInputClasses}
+                          >
+                            <option value="">-- Select --</option>
+                            {toolNoOptions.map((o) => (
+                              <option key={o.value} value={o.value}>
+                                {o.label}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+
+                        {/* Tool Desc */}
+                        <td className="p-1">
+                          <select
+                            value={row.toolNo}
+                            onChange={(e) =>
+                              handleToolChange(index, e.target.value)
+                            }
+                            className={cellInputClasses}
+                          >
+                            <option value="">-- Select --</option>
+                            {toolDescOptions.map((o) => (
+                              <option key={o.value} value={o.value}>
+                                {o.label}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+
+                        {/* Unit */}
+                        <td className="p-1">
+                          <select
+                            value={row.unit}
+                            onChange={(e) => {
+                              const u = unitOptions.find(
+                                (o) => o.value === e.target.value,
+                              );
+                              updateRow(index, {
+                                unit: e.target.value,
+                                unitName: u?.label || "",
+                              });
+                            }}
+                            className={cellInputClasses}
+                          >
+                            <option value="">-- Select --</option>
+                            {unitOptions.map((o) => (
+                              <option key={o.value} value={o.value}>
+                                {o.label}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+
+                        {/* Quantity */}
+                        <td className="p-1">
+                          <input
+                            type="number"
+                            value={row.quantity}
+                            onChange={(e) =>
+                              updateRow(index, { quantity: e.target.value })
+                            }
+                            className={cellInputClasses}
+                            placeholder="0"
+                            step="0.01"
+                          />
+                        </td>
+
+                        {/* Action */}
+                        <td className="p-1 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveRow(index)}
+                            disabled={rows.length <= 1}
+                            className={`h-5 w-5 rounded text-white flex items-center justify-center transition-colors ${
+                              rows.length <= 1
+                                ? "bg-gray-400 dark:bg-gray-600 cursor-not-allowed"
+                                : "bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800"
+                            }`}
+                          >
+                            <Trash2 size={10} />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Charges Summary */}
+        {activeTab === "charges" && (
+          <div className="mt-2">
+            <Field
+              type="textarea"
+              label="Remarks"
+              name="remarks"
+              value={form.remarks}
+              onChange={handleChange}
+              placeholder="Enter Remarks"
+            />
+          </div>
+        )}
+
+        {saveError && (
+          <p className="text-[11px] text-red-500 dark:text-red-400">
+            {saveError}
+          </p>
+        )}
+
+        {/* Buttons */}
+        <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
+          <button
+            onClick={onBack}
+            disabled={isSubmitting}
+            className="flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+          >
+            <X className="h-3 w-3" />
+            Cancel
+          </button>
+
+          <button
+            onClick={handleSave}
+            disabled={isSubmitting}
+            className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+          >
+            <Save className="h-3 w-3" />
+            {isSubmitting ? "Saving..." : isEdit ? "Update" : "Save"}
+          </button>
+        </div>
       </div>
     </div>
   );
