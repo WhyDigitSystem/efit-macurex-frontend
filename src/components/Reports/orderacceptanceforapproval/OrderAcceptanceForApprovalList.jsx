@@ -16,6 +16,7 @@ const getToday = () => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
+
   return `${year}-${month}-${day}`;
 };
 
@@ -23,15 +24,19 @@ const getMonthStart = () => {
   const date = new Date();
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
+
   return `${year}-${month}-01`;
 };
 
 // Converts YYYY-MM-DD (or ISO string) to DD-MM-YYYY
 const formatDate = (value) => {
   if (!value) return "-";
+
   const text = String(value).slice(0, 10);
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+
   if (!match) return String(value);
+
   return `${match[3]}-${match[2]}-${match[1]}`;
 };
 
@@ -78,13 +83,13 @@ const hexToRgb = (hex) => [
 ];
 
 // ============================================================
-// SMALL INLINE ICONS
+// SMALL INLINE SVG ICONS
 // ============================================================
 
 const SheetIcon = () => (
   <svg
-    width="14"
-    height="14"
+    width="13"
+    height="13"
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
@@ -100,8 +105,8 @@ const SheetIcon = () => (
 
 const PdfIcon = () => (
   <svg
-    width="14"
-    height="14"
+    width="13"
+    height="13"
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
@@ -117,8 +122,8 @@ const PdfIcon = () => (
 
 const SearchIcon = () => (
   <svg
-    width="14"
-    height="14"
+    width="13"
+    height="13"
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
@@ -127,7 +132,7 @@ const SearchIcon = () => (
     strokeLinejoin="round"
   >
     <circle cx="11" cy="11" r="7" />
-    <path d="M21 21l-4.3-4.3" />
+    <path d="m21 21-4.3-4.3" />
   </svg>
 );
 
@@ -186,7 +191,9 @@ const OrderAcceptanceForApprovalList = ({ onBack, refreshTrigger }) => {
           "Failed to load Order Acceptance For Approval Report:",
           error,
         );
+
         setRecords([]);
+
         toast.error("Failed to fetch Order Acceptance For Approval Report");
       } finally {
         setLoading(false);
@@ -214,7 +221,7 @@ const OrderAcceptanceForApprovalList = ({ onBack, refreshTrigger }) => {
         return;
       }
 
-      // Browser build of exceljs (avoids bundler / Node polyfill issues)
+      // Browser build of ExcelJS
       const excelModule = await import("exceljs/dist/exceljs.min.js");
       const ExcelJS = excelModule.default || excelModule;
 
@@ -246,6 +253,7 @@ const OrderAcceptanceForApprovalList = ({ onBack, refreshTrigger }) => {
 
       // COLUMN WIDTHS
       const widths = [8, 22, 20, 16, 16, 34, 18, 40];
+
       widths.forEach((w, i) => {
         worksheet.getColumn(i + 1).width = w;
       });
@@ -257,28 +265,44 @@ const OrderAcceptanceForApprovalList = ({ onBack, refreshTrigger }) => {
       });
 
       // ---------- ROW 1 : TITLE ----------
+
       worksheet.mergeCells(1, 1, 1, TOTAL_COLS);
+
       const title = worksheet.getCell(1, 1);
+
       title.value = "ORDER ACCEPTANCE FOR APPROVAL";
+
       title.font = {
         name: "Calibri",
         size: 20,
         bold: true,
         color: { argb: white },
       };
+
       title.fill = solid(navy);
-      title.alignment = { horizontal: "center", vertical: "middle" };
+
+      title.alignment = {
+        horizontal: "center",
+        vertical: "middle",
+      };
+
       worksheet.getRow(1).height = 42;
 
       // ---------- ROW 2 : TEAL ACCENT ----------
+
       worksheet.mergeCells(2, 1, 2, TOTAL_COLS);
+
       worksheet.getCell(2, 1).fill = solid(teal);
+
       worksheet.getRow(2).height = 5;
 
       // ---------- ROW 3 : DATES ----------
+
       worksheet.mergeCells(3, 1, 3, 4);
       worksheet.mergeCells(3, 5, 3, TOTAL_COLS);
+
       worksheet.getCell(3, 1).value = `FROM DATE: ${formatDate(fromDate)}`;
+
       worksheet.getCell(3, 5).value = `TO DATE: ${formatDate(toDate)}`;
 
       [worksheet.getCell(3, 1), worksheet.getCell(3, 5)].forEach((cell) => {
@@ -288,26 +312,45 @@ const OrderAcceptanceForApprovalList = ({ onBack, refreshTrigger }) => {
           size: 11,
           color: { argb: navy },
         };
+
         cell.fill = solid(lightGray);
-        cell.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
+
+        cell.alignment = {
+          vertical: "middle",
+          horizontal: "left",
+          indent: 1,
+        };
       });
+
       worksheet.getRow(3).height = 26;
 
       // ---------- ROW 4 : SUMMARY ----------
+
       worksheet.mergeCells(4, 1, 4, TOTAL_COLS);
+
       const summary = worksheet.getCell(4, 1);
+
       summary.value = `TOTAL RECORDS: ${records.length}     |     GENERATED ON: ${new Date().toLocaleString("en-IN")}`;
+
       summary.font = {
         name: "Calibri",
         size: 10,
         italic: true,
         color: { argb: "FF64748B" },
       };
-      summary.alignment = { horizontal: "left", vertical: "middle", indent: 1 };
+
+      summary.alignment = {
+        horizontal: "left",
+        vertical: "middle",
+        indent: 1,
+      };
+
       worksheet.getRow(4).height = 22;
 
       // ---------- ROW 5 : HEADER ----------
+
       const headerRow = worksheet.getRow(5);
+
       [
         "S.NO",
         "ORDER ACCEPTANCE ID",
@@ -320,37 +363,56 @@ const OrderAcceptanceForApprovalList = ({ onBack, refreshTrigger }) => {
       ].forEach((text, i) => {
         headerRow.getCell(i + 1).value = text;
       });
+
       headerRow.height = 32;
 
       for (let c = 1; c <= TOTAL_COLS; c++) {
         const cell = headerRow.getCell(c);
+
         cell.font = {
           name: "Calibri",
           size: 11,
           bold: true,
           color: { argb: white },
         };
+
         cell.fill = solid(navy);
+
         cell.alignment = {
           horizontal: "center",
           vertical: "middle",
           wrapText: true,
         };
+
         cell.border = {
-          top: { style: "medium", color: { argb: teal } },
-          bottom: { style: "medium", color: { argb: teal } },
-          left: { style: "thin", color: { argb: borderColor } },
-          right: { style: "thin", color: { argb: borderColor } },
+          top: {
+            style: "medium",
+            color: { argb: teal },
+          },
+          bottom: {
+            style: "medium",
+            color: { argb: teal },
+          },
+          left: {
+            style: "thin",
+            color: { argb: borderColor },
+          },
+          right: {
+            style: "thin",
+            color: { argb: borderColor },
+          },
         };
       }
 
       // ---------- DATA ----------
-      // centered columns: 1 (S.NO), 2 (ID), 4 (Date), 5 (Cust ID), 7 (Status)
+
       const centerCols = [1, 2, 4, 5, 7];
 
       records.forEach((row, index) => {
         const status = getApprovalStatus(row.Approved);
+
         const rowNumber = 6 + index;
+
         const dataRow = worksheet.getRow(rowNumber);
 
         const values = [
@@ -364,78 +426,89 @@ const OrderAcceptanceForApprovalList = ({ onBack, refreshTrigger }) => {
           row.note || "-",
         ];
 
-        values.forEach((v, i) => {
-          dataRow.getCell(i + 1).value = v;
+        values.forEach((value, i) => {
+          dataRow.getCell(i + 1).value = value;
         });
 
         dataRow.height = 24;
 
         for (let c = 1; c <= TOTAL_COLS; c++) {
           const cell = dataRow.getCell(c);
+
           cell.font = {
             name: "Calibri",
             size: 11,
             color: { argb: "FF334155" },
           };
+
           cell.fill = solid(index % 2 === 0 ? white : lightGray);
+
           cell.alignment = {
             horizontal: centerCols.includes(c) ? "center" : "left",
             vertical: "middle",
             wrapText: true,
           };
+
           cell.border = {
-            bottom: { style: "thin", color: { argb: borderColor } },
-            left: { style: "thin", color: { argb: borderColor } },
-            right: { style: "thin", color: { argb: borderColor } },
+            bottom: {
+              style: "thin",
+              color: { argb: borderColor },
+            },
+            left: {
+              style: "thin",
+              color: { argb: borderColor },
+            },
+            right: {
+              style: "thin",
+              color: { argb: borderColor },
+            },
           };
         }
 
         // Status colour
+
         const colors = getStatusColors(status);
+
         const statusCell = dataRow.getCell(7);
+
         statusCell.fill = solid(`FF${colors.background}`);
+
         statusCell.font = {
           name: "Calibri",
           bold: true,
           size: 11,
           color: { argb: `FF${colors.text}` },
         };
-        statusCell.alignment = { horizontal: "center", vertical: "middle" };
+
+        statusCell.alignment = {
+          horizontal: "center",
+          vertical: "middle",
+        };
       });
 
-      // ---------- FILTER + PRINT ----------
-      worksheet.autoFilter = {
-        from: { row: 5, column: 1 },
-        to: { row: 5, column: TOTAL_COLS },
-      };
+      // ---------- PRINT SETTINGS ----------
+      // No autoFilter is applied.
+      // Excel will open without filter dropdowns.
 
       worksheet.headerFooter.oddFooter =
         "&LOrder Acceptance Approval Report&CConfidential&RPage &P of &N";
 
       // ---------- DOWNLOAD ----------
+
       const buffer = await workbook.xlsx.writeBuffer();
+
       const blob = new Blob([buffer], {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       });
+
       const fileName = `OrderAcceptanceApproval_${fromDate}_to_${toDate}.xlsx`;
 
-      try {
-        saveAs(blob, fileName);
-      } catch (e) {
-        // fallback download
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-      }
+      saveAs(blob, fileName);
 
       toast.success("Excel downloaded successfully");
     } catch (error) {
       console.error("Excel export error:", error);
+
       toast.error(
         `Failed to download Excel: ${error?.message || "Unknown error"}`,
       );
@@ -481,6 +554,7 @@ const OrderAcceptanceForApprovalList = ({ onBack, refreshTrigger }) => {
 
       autoTable(doc, {
         startY: 40,
+
         head: [
           [
             "S.NO",
@@ -493,9 +567,17 @@ const OrderAcceptanceForApprovalList = ({ onBack, refreshTrigger }) => {
             "NOTE",
           ],
         ],
+
         body: tableData,
+
         theme: "grid",
-        margin: { top: 40, left: 10, right: 10, bottom: 20 },
+
+        margin: {
+          top: 40,
+          left: 10,
+          right: 10,
+          bottom: 20,
+        },
 
         styles: {
           font: "helvetica",
@@ -521,9 +603,10 @@ const OrderAcceptanceForApprovalList = ({ onBack, refreshTrigger }) => {
           lineWidth: 0.4,
         },
 
-        alternateRowStyles: { fillColor: lightGray },
+        alternateRowStyles: {
+          fillColor: lightGray,
+        },
 
-        // total usable width = 297 - 20 = 277mm
         columnStyles: {
           0: { cellWidth: 14, halign: "center" },
           1: { cellWidth: 34, halign: "center" },
@@ -538,59 +621,74 @@ const OrderAcceptanceForApprovalList = ({ onBack, refreshTrigger }) => {
         didParseCell: (data) => {
           if (data.section === "body" && data.column.index === 6) {
             const colors = getStatusColors(data.cell.raw);
+
             data.cell.styles.fillColor = hexToRgb(colors.background);
+
             data.cell.styles.textColor = hexToRgb(colors.text);
+
             data.cell.styles.fontStyle = "bold";
           }
         },
 
         didDrawPage: (data) => {
           // HEADER BAR
+
           doc.setFillColor(...navy);
           doc.rect(0, 0, pageWidth, 27, "F");
 
           doc.setTextColor(255, 255, 255);
           doc.setFont("helvetica", "bold");
           doc.setFontSize(16);
+
           doc.text("ORDER ACCEPTANCE FOR APPROVAL", 12, 12);
 
           doc.setFont("helvetica", "normal");
           doc.setFontSize(8);
           doc.setTextColor(220, 230, 245);
+
           doc.text("APPROVAL MANAGEMENT REPORT", 12, 19);
 
           doc.setFillColor(...teal);
           doc.rect(0, 27, pageWidth, 2, "F");
 
           // REPORT INFO
+
           doc.setTextColor(...darkText);
           doc.setFont("helvetica", "bold");
           doc.setFontSize(8);
+
           doc.text(`From Date: ${formatDate(fromDate)}`, 12, 35);
+
           doc.text(`To Date: ${formatDate(toDate)}`, 75, 35);
+
           doc.text(`Total Records: ${records.length}`, pageWidth - 12, 35, {
             align: "right",
           });
 
           // FOOTER
+
           doc.setDrawColor(...teal);
           doc.setLineWidth(0.5);
+
           doc.line(10, pageHeight - 13, pageWidth - 10, pageHeight - 13);
 
           doc.setFont("helvetica", "normal");
           doc.setFontSize(8);
           doc.setTextColor(...muted);
+
           doc.text(
             "ERP | Order Acceptance Approval Report",
             10,
             pageHeight - 7,
           );
+
           doc.text(
             `Generated: ${new Date().toLocaleDateString("en-IN")}`,
             pageWidth / 2,
             pageHeight - 7,
             { align: "center" },
           );
+
           doc.text(`Page ${data.pageNumber}`, pageWidth - 10, pageHeight - 7, {
             align: "right",
           });
@@ -598,6 +696,7 @@ const OrderAcceptanceForApprovalList = ({ onBack, refreshTrigger }) => {
       });
 
       doc.save(`OrderAcceptanceApproval_${fromDate}_to_${toDate}.pdf`);
+
       toast.success("PDF downloaded successfully");
     } catch (error) {
       console.error("PDF export error:", error);
@@ -670,34 +769,46 @@ const OrderAcceptanceForApprovalList = ({ onBack, refreshTrigger }) => {
   const filterOptions = [{ value: "all", label: "All", field: null }];
 
   // ============================================================
-  // RENDER
+  // COMPACT INPUT AND BUTTON STYLES
   // ============================================================
 
   const inputClass =
-    "h-9 w-40 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-2 text-sm text-gray-700 dark:text-gray-200 outline-none focus:border-blue-500";
+    "h-8 w-32 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-2 text-xs text-gray-700 dark:text-gray-200 outline-none focus:border-blue-500";
 
   const btnBase =
-    "h-9 inline-flex items-center justify-center gap-2 rounded-md px-4 text-sm font-medium text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
+    "h-8 inline-flex items-center justify-center gap-1.5 rounded px-3 text-xs font-medium text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
+
+  // ============================================================
+  // RENDER
+  // ============================================================
 
   return (
     <div className="space-y-3">
-      {/* PAGE TITLE (TOP) */}
+      {/* PAGE TITLE */}
+
       <div className="px-3 pt-2">
         <h1 className="text-xl font-bold text-gray-800 dark:text-gray-100">
           Order Acceptance For Approval
         </h1>
+
         <p className="text-sm text-gray-500 dark:text-gray-400">
           View Order Acceptance Approval Details
         </p>
       </div>
 
       {/* FILTER + EXPORT BAR */}
-      <div className="mx-3 flex flex-wrap items-end justify-between gap-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3">
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-600 dark:text-gray-300">
+
+      <div className="mx-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2">
+        {/* DATE FILTERS + SEARCH */}
+
+        <div className="flex flex-wrap items-center gap-2">
+          {/* FROM DATE */}
+
+          <div className="flex items-center gap-1.5">
+            <label className="text-xs font-medium text-gray-600 dark:text-gray-300 whitespace-nowrap">
               From Date
             </label>
+
             <input
               type="date"
               value={fromDate}
@@ -707,10 +818,13 @@ const OrderAcceptanceForApprovalList = ({ onBack, refreshTrigger }) => {
             />
           </div>
 
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-600 dark:text-gray-300">
+          {/* TO DATE */}
+
+          <div className="flex items-center gap-1.5">
+            <label className="text-xs font-medium text-gray-600 dark:text-gray-300 whitespace-nowrap">
               To Date
             </label>
+
             <input
               type="date"
               value={toDate}
@@ -720,6 +834,8 @@ const OrderAcceptanceForApprovalList = ({ onBack, refreshTrigger }) => {
               className={inputClass}
             />
           </div>
+
+          {/* SEARCH BUTTON */}
 
           <button
             type="button"
@@ -732,7 +848,11 @@ const OrderAcceptanceForApprovalList = ({ onBack, refreshTrigger }) => {
           </button>
         </div>
 
-        <div className="flex items-end gap-3">
+        {/* EXPORT BUTTONS */}
+
+        <div className="flex items-center gap-2">
+          {/* EXCEL */}
+
           <button
             type="button"
             onClick={downloadExcel}
@@ -742,6 +862,8 @@ const OrderAcceptanceForApprovalList = ({ onBack, refreshTrigger }) => {
             <SheetIcon />
             Excel
           </button>
+
+          {/* PDF */}
 
           <button
             type="button"
@@ -756,6 +878,7 @@ const OrderAcceptanceForApprovalList = ({ onBack, refreshTrigger }) => {
       </div>
 
       {/* REPORT TABLE */}
+
       <CommonListViewTable
         title=""
         subtitle=""
