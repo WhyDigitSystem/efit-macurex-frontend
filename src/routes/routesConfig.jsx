@@ -130,6 +130,7 @@ import productionRoutes from "./productionRoutes";
 import PlantMainten from "./plantMaintenanceRoutes";
 import plantMaintenanceRoutes from "./plantMaintenanceRoutes";
 import ShiftMaster from "../components/masters/shiftMaster/ShiftMaster";
+import reportsRoutes from "./reportsRoutes";
 export const routesConfig = [
   { path: "/", label: "Dashboard", element: <Dashboard /> },
 
@@ -694,4 +695,5 @@ export const routesConfig = [
   ...securityRoutes,
   ...productionRoutes,
   ...plantMaintenanceRoutes,
+  ...reportsRoutes,
 ];
