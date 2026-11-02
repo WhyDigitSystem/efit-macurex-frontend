@@ -21,6 +21,12 @@ const SECTIONS = [
         path: "/orderacceptanceforapproval",
         screenCode: "ORDER_ACCEPTANCE_FOR_APPROVAL",
       },
+      {
+        name: "Sales Contract For Approval",
+        icon: FileCheck,
+        path: "/salescontractforapproval",
+        screenCode: "SALES_CONTRACT_FOR_APPROVAL",
+      },
     ],
   },
 ];
@@ -38,6 +44,34 @@ const getColorStyles = (color) => {
       iconBg:
         "bg-purple-100 dark:bg-purple-900/40 group-hover:bg-purple-200 dark:group-hover:bg-purple-800",
     },
+    blue: {
+      hover: "hover:bg-blue-50 dark:hover:bg-blue-900/30",
+      border: "hover:border-blue-300 dark:hover:border-blue-600",
+      text: "text-blue-600 dark:text-blue-400",
+      iconBg:
+        "bg-blue-100 dark:bg-blue-900/40 group-hover:bg-blue-200 dark:group-hover:bg-blue-800",
+    },
+    emerald: {
+      hover: "hover:bg-emerald-50 dark:hover:bg-emerald-900/30",
+      border: "hover:border-emerald-300 dark:hover:border-emerald-600",
+      text: "text-emerald-600 dark:text-emerald-400",
+      iconBg:
+        "bg-emerald-100 dark:bg-emerald-900/40 group-hover:bg-emerald-200 dark:group-hover:bg-emerald-800",
+    },
+    rose: {
+      hover: "hover:bg-rose-50 dark:hover:bg-rose-900/30",
+      border: "hover:border-rose-300 dark:hover:border-rose-600",
+      text: "text-rose-600 dark:text-rose-400",
+      iconBg:
+        "bg-rose-100 dark:bg-rose-900/40 group-hover:bg-rose-200 dark:group-hover:bg-rose-800",
+    },
+    amber: {
+      hover: "hover:bg-amber-50 dark:hover:bg-amber-900/30",
+      border: "hover:border-amber-300 dark:hover:border-amber-600",
+      text: "text-amber-600 dark:text-amber-400",
+      iconBg:
+        "bg-amber-100 dark:bg-amber-900/40 group-hover:bg-amber-200 dark:group-hover:bg-amber-800",
+    },
   };
 
   return colors[color] || colors.purple;
@@ -54,7 +88,7 @@ const ReportsList = () => {
 
   let colorIndex = 0;
 
-  const ITEM_COLOR_PALETTE = ["purple"];
+  const ITEM_COLOR_PALETTE = ["blue", "emerald", "rose", "amber", "purple"];
 
   const filteredSections = SECTIONS.map((section) => ({
     ...section,

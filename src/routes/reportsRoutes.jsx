@@ -1,5 +1,6 @@
 import OrderAcceptanceForApprovalList from "../components/Reports/orderacceptanceforapproval/OrderAcceptanceForApprovalList";
 import ReportsMaster from "../components/Reports/ReportsList";
+import SalesContractForApprovalList from "../components/Reports/SalesContractForApproval/SalesContractForApprovalList";
 
 const reportsRoutes = [
   {
@@ -13,6 +14,12 @@ const reportsRoutes = [
     label: "OrderAcceptanceForApproval",
     keywords: ["Order Acceptance For Approval", "Order Acceptance"],
     element: <OrderAcceptanceForApprovalList />,
+  },
+  {
+    path: "/salescontractforapproval",
+    label: "SalesContractForApproval",
+    keywords: ["Sales Contract For Approval", "Sales Contract"],
+    element: <SalesContractForApprovalList />,
   },
 ];
 
