@@ -131,6 +131,9 @@ import PlantMainten from "./plantMaintenanceRoutes";
 import plantMaintenanceRoutes from "./plantMaintenanceRoutes";
 import ShiftMaster from "../components/masters/shiftMaster/ShiftMaster";
 import reportsRoutes from "./reportsRoutes";
+import labourChargesRoutes from "./LabourChargesRoutes";
+import CostingList from "../components/Costing/CostingList";
+import costingRoutes from "./costingRoutes";
 export const routesConfig = [
   { path: "/", label: "Dashboard", element: <Dashboard /> },
 
@@ -444,6 +447,11 @@ export const routesConfig = [
     label: "Labour Charges",
     element: <LabourChargesList />,
   },
+  {
+    path: "/costing",
+    label: "Costing",
+    element: <CostingList />,
+  },
   { path: "/country", label: "Country Master", element: <CountryMaster /> },
   { path: "/state", label: "State Master", element: <StateMaster /> },
   { path: "/city", label: "City Master", element: <CityMaster /> },
@@ -696,4 +704,6 @@ export const routesConfig = [
   ...productionRoutes,
   ...plantMaintenanceRoutes,
   ...reportsRoutes,
+  ...labourChargesRoutes,
+  ...costingRoutes,
 ];

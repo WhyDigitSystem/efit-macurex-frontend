@@ -13,6 +13,8 @@ import {
   ClipboardCheck,
   Shield,
   ChartNoAxesCombined,
+  HardHat,
+  Calculator,
 } from "lucide-react";
 import { useSelector } from "react-redux";
 import { NavLink } from "react-router-dom";
@@ -171,6 +173,22 @@ const Sidebar = () => {
           bgColor:
             "bg-gradient-to-br from-purple-600 to-pink-500 dark:from-purple-500 dark:to-pink-400",
           screenCode: "REPORTS",
+        },
+        {
+          name: "Labour Charges",
+          href: "/labourcharges",
+          icon: HardHat,
+          bgColor:
+            "bg-gradient-to-br from-blue-600 to-cyan-500 dark:from-blue-500 dark:to-cyan-400",
+          screenCode: "Labour Charges",
+        },
+        {
+          name: "Costing",
+          href: "/costing",
+          icon: Calculator,
+          bgColor:
+            "bg-gradient-to-br from-orange-600 to-amber-500 dark:from-orange-500 dark:to-amber-400",
+          screenCode: "Costing",
         },
       ];
 

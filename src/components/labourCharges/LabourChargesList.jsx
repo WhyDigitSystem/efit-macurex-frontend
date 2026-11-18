@@ -59,12 +59,6 @@ const SECTIONS = [
         path: "/lcdespatchinstruction",
         screenCode: "LC_DESPATCH_INSTRUCTION",
       },
-      {
-        name: "LC Stock Statement",
-        icon: ClipboardList,
-        path: "/lcstockstatement",
-        screenCode: "LC_STOCK_STATEMENT",
-      },
     ],
   },
 ];
