@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import { toast } from "../../../utils/toast";
 import salesInvoiceAPI from "../../../api/Sales/salesInvoiceAPI";
+import generateSalesInvoicePDF from "./SalesInvoicePDF";
+import PDFPreviewModal from "../../../utils/PDFPreviewModal";
 
 const DOC_TYPE_INVOICE = "Invoice";
 const DOC_TYPE_REJECTION = "Rejection";
@@ -13,11 +15,22 @@ const DOC_TYPE_OPTIONS = [
   { key: DOC_TYPE_OTHER_SALES, label: "Other Sales Invoice" },
 ];
 
-// Add "All" option for the filter
 const FILTER_OPTIONS = [
   { key: "all", label: "All" },
   ...DOC_TYPE_OPTIONS,
 ];
+
+const safeStr = (v) => {
+  if (v === undefined || v === null) return "";
+  const s = String(v).trim();
+  return s.length === 0 ? "" : s;
+};
+
+const safeNum = (v) => {
+  if (v === undefined || v === null || v === "") return 0;
+  const n = Number(v);
+  return isNaN(n) ? 0 : n;
+};
 
 /* Column sets mirror what's captured on each side of the form. */
 
@@ -61,7 +74,7 @@ const INVOICE_COLUMNS = [
   {
     key: "stockPosting",
     label: "Stock Posting?",
-    accessor: (row) => row.stockPosting ? "Yes" : "No",
+    accessor: (row) => (row.stockPosting ? "Yes" : "No"),
     type: "badge",
   },
   { key: "active", label: "Status", accessor: "active", type: "status" },
@@ -73,9 +86,6 @@ const INVOICE_COLUMNS = [
     width: "90px",
   },
 ];
-
-// Similar updates for REJECTION_COLUMNS and OTHER_SALES_COLUMNS
-// ... (rest of the column definitions)
 
 const REJECTION_COLUMNS = [
   {
@@ -170,7 +180,7 @@ const OTHER_SALES_COLUMNS = [
   {
     key: "stockPosting",
     label: "Stock Posting?",
-    accessor: (row) => row.stockPosting ? "Yes" : "No",
+    accessor: (row) => (row.stockPosting ? "Yes" : "No"),
     type: "badge",
   },
   { key: "active", label: "Status", accessor: "active", type: "status" },
@@ -189,11 +199,7 @@ const SEARCH_FIELDS_BY_TYPE = {
     "customer.customerName",
     "customer.customerCode",
   ],
-  [DOC_TYPE_REJECTION]: [
-    "docId",
-    "customer.customerName",
-    "refNo",
-  ],
+  [DOC_TYPE_REJECTION]: ["docId", "customer.customerName", "refNo"],
   [DOC_TYPE_OTHER_SALES]: [
     "docId",
     "customer.customerName",
@@ -217,19 +223,22 @@ const SalesInvoiceList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   const [invoiceData, setInvoiceData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [activeDocType, setActiveDocType] = useState("all");
+  const [pdfPreview, setPdfPreview] = useState(null);
 
   const ORG_ID = Number(localStorage.getItem("orgId"));
-  const BRANCH_ID = Number(localStorage.getItem("branchId")); // Add this
+  const BRANCH_ID = Number(localStorage.getItem("branchId"));
 
   const loadSalesInvoices = useCallback(async () => {
     try {
       setLoading(true);
 
-      // Pass both orgId AND branchId
-      const response = await salesInvoiceAPI.getSalesInvoiceByOrgId(ORG_ID, BRANCH_ID);
+      const response = await salesInvoiceAPI.getSalesInvoiceByOrgId(
+        ORG_ID,
+        BRANCH_ID,
+      );
 
-      // Extract the list from the response structure
-      const invoiceList = response?.paramObjectsMap?.salesRejectionInvoiceList || [];
+      const invoiceList =
+        response?.paramObjectsMap?.salesRejectionInvoiceList || [];
 
       const sortedData = invoiceList.sort(
         (a, b) => (b.id || 0) - (a.id || 0),
@@ -249,7 +258,6 @@ const SalesInvoiceList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     loadSalesInvoices();
   }, [loadSalesInvoices, refreshTrigger]);
 
-  // Filter data based on active document type
   const filteredData = useMemo(() => {
     if (activeDocType === "all") {
       return invoiceData;
@@ -259,19 +267,104 @@ const SalesInvoiceList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     );
   }, [invoiceData, activeDocType]);
 
-  // Determine which columns and search fields to use based on active filter
+  /* =========================================================
+     PDF DOWNLOAD
+     ========================================================= */
+  const handleDownloadPDF = async (row) => {
+    try {
+      // The row IS the raw record (data passed directly from invoiceData)
+      const raw = row;
+
+      const items = Array.isArray(raw.salesRejectionInvoiceDetails)
+        ? raw.salesRejectionInvoiceDetails
+        : [];
+
+      const taxDetails = Array.isArray(raw.salesRejectionInvoiceTaxDetails)
+        ? raw.salesRejectionInvoiceTaxDetails
+        : [];
+
+      const result = generateSalesInvoicePDF({
+        company: {
+          name: raw.branch?.branchName || "Company Name",
+        },
+        invoice: {
+          docId: safeStr(raw.docId),
+          docDate: raw.docDate || "",
+          docType: safeStr(raw.docType),
+          branchName: safeStr(raw.branch?.branchName),
+          locationName: safeStr(raw.location?.locationName),
+          vehicle: safeStr(raw.vehicle),
+
+          customerName: safeStr(raw.customer?.customerName),
+          customerCode: safeStr(raw.customer?.customerCode),
+          customerGstNo: safeStr(raw.customer?.gstNo),
+          customerGstState: safeStr(raw.customer?.gstState),
+          customerGstType: safeStr(raw.customer?.gstType),
+          shippingAddress: safeStr(raw.customer?.shippingAddress),
+          shippingCity: safeStr(raw.customer?.shippingCity),
+          shippingPincode: safeStr(raw.customer?.shippingPincode),
+
+          currencyName: safeStr(raw.currency?.currencyName),
+          scheduleNo: safeStr(raw.scheduleNo),
+          scheduleDate: raw.scheduleDate || "",
+          dispatchInstructionNo: safeStr(raw.dispatchInstructionNo),
+          dispatchInstructionDate: raw.dispatchInstructionDate || "",
+          timeOfIssue: safeStr(raw.timeOfIssue),
+          timeOfRemoval: safeStr(raw.timeOfRemoval),
+          modeOfTransport: safeStr(raw.modeOfTransport),
+
+          refNo: safeStr(raw.refNo),
+          supplierInvoiceNo: safeStr(raw.supplierInvoiceNo),
+          kanbanCardNo: safeStr(raw.kanbanCardNo),
+          purchaseOrder: safeStr(raw.purchaseOrder),
+          purchaseOrderDate: raw.purchaseOrderDate || "",
+          deliveryTo: safeStr(raw.deliveryTo),
+          paymentTerms: safeStr(raw.paymentTerms),
+          narration: safeStr(raw.narration),
+
+          totalInsurance: safeNum(raw.totalInsurance),
+          totalFreight: safeNum(raw.totalFreight),
+          totalAssVal: safeNum(raw.totalAssVal),
+          tcsAmount: safeNum(raw.tcsAmount),
+          netAmount: safeNum(raw.netAmount),
+          amountInWords: safeStr(raw.amountInWords),
+          netWeight: safeNum(raw.netWeight),
+          grossWeight: safeNum(raw.grossWeight),
+          financialYear: safeStr(raw.financialYear),
+          createdBy: safeStr(raw.createdBy),
+        },
+        items,
+        taxDetails,
+      });
+
+      if (result?.blobUrl) {
+        setPdfPreview(result);
+      } else {
+        toast.error("Failed to generate PDF preview");
+      }
+    } catch (error) {
+      console.error("PDF generation failed:", error);
+      toast.error("Failed to generate PDF: " + error.message);
+    }
+  };
+
   const getColumns = () => {
     if (activeDocType === "all") {
       return COLUMNS_BY_TYPE[DOC_TYPE_INVOICE];
     }
-    return COLUMNS_BY_TYPE[activeDocType] || COLUMNS_BY_TYPE[DOC_TYPE_INVOICE];
+    return (
+      COLUMNS_BY_TYPE[activeDocType] || COLUMNS_BY_TYPE[DOC_TYPE_INVOICE]
+    );
   };
 
   const getSearchFields = () => {
     if (activeDocType === "all") {
       return SEARCH_FIELDS_BY_TYPE[DOC_TYPE_INVOICE];
     }
-    return SEARCH_FIELDS_BY_TYPE[activeDocType] || SEARCH_FIELDS_BY_TYPE[DOC_TYPE_INVOICE];
+    return (
+      SEARCH_FIELDS_BY_TYPE[activeDocType] ||
+      SEARCH_FIELDS_BY_TYPE[DOC_TYPE_INVOICE]
+    );
   };
 
   const getTitle = () => {
@@ -284,14 +377,12 @@ const SalesInvoiceList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   const columns = getColumns();
   const searchFields = getSearchFields();
 
-  // Build filter options for the document type with "All" option
   const filterOptions = FILTER_OPTIONS.map((option) => ({
     value: option.key,
     label: option.label,
     field: null,
   }));
 
-  // Handle filter change from CommonListViewTable
   const handleFilterChange = (filterValue) => {
     setActiveDocType(filterValue);
   };
@@ -311,6 +402,7 @@ const SalesInvoiceList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
         onBack={onBack}
         onAddNew={onAddNew}
         onEdit={onEdit}
+        onDownload={handleDownloadPDF}
         onView={false}
         showSerialNumber={true}
         itemsPerPageOptions={[5, 10, 20, 50, 100]}
@@ -322,6 +414,18 @@ const SalesInvoiceList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
         enableExport={true}
         exportFileName={`SalesInvoices_${activeDocType.replace(/\s+/g, "")}`}
       />
+
+      {pdfPreview && (
+        <PDFPreviewModal
+          blobUrl={pdfPreview.blobUrl}
+          fileName={pdfPreview.fileName}
+          onClose={() => {
+            if (pdfPreview.blobUrl)
+              URL.revokeObjectURL(pdfPreview.blobUrl);
+            setPdfPreview(null);
+          }}
+        />
+      )}
     </div>
   );
 };

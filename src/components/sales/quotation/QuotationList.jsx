@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import quotationAPI from "../../../api/Sales/quotationAPI";
 import { useToast } from "../../Toast/ToastContext";
-import generateQuotationPDF from "../../../utils/generateQuotationPDF";
+import generateQuotationPDF from "./QuotationPDF";
 import PDFPreviewModal from "../../../utils/PDFPreviewModal";
 
 const QuotationList = ({ onAddNew, onEdit, onBack }) => {
@@ -76,58 +76,92 @@ const QuotationList = ({ onAddNew, onEdit, onBack }) => {
     onEdit(item._raw || item);
   };
 
+  const safeStr = (v) => {
+    if (v === undefined || v === null) return "";
+    const s = String(v).trim();
+    return s.length === 0 ? "" : s;
+  };
+
+  const safeNum = (v) => {
+    if (v === undefined || v === null || v === "") return 0;
+    const n = Number(v);
+    return isNaN(n) ? 0 : n;
+  };
+
   const handleDownloadPDF = (row) => {
     try {
       const raw = row._raw || {};
 
-      const items = (raw.quotationItemDetailsResponseDTO || []).map((item) => ({
-        itemCode: item.itemCodes?.itemCode || item.itemCode || "",
-        itemDescription: item.itemCodes?.itemDescription || item.itemDescription || "",
-        unit: item.unit || "",
-        qtyOffered: item.qtyOffered || 0,
-        basicPrice: item.basicPrice || 0,
-        discPercent: item.discountPercentage || 0,
-        discountAmount: item.discountAmount || 0,
-        quotAmount: item.quotationAmount || 0,
-        qty: item.qtyOffered || 0,
-        currencyName: item.currency?.currency || "",
-        date: item.deliveryDate || "",
-      }));
+      const items = (raw.quotationItemDetailsResponseDTO || []).map((item) => {
+        const itemMaster = item.itemCodes || {};
+
+        // Unit may be nested under itemMaster.unit
+        const unitObj = itemMaster.unit || item.unit || {};
+        const unitLabel =
+          typeof unitObj === "object"
+            ? unitObj.unitId || unitObj.unitDescription || ""
+            : unitObj;
+
+        return {
+          itemCode: safeStr(itemMaster.itemCode || item.itemCode),
+          itemDescription: safeStr(
+            itemMaster.itemDescription || item.itemDescription,
+          ),
+          unit: safeStr(unitLabel),
+          qtyOffered: safeNum(item.qtyOffered),
+          basicPrice: safeNum(item.basicPrice),
+          discPercent: safeNum(item.discountPercentage),
+          discountAmount: safeNum(item.discountAmount),
+          quotAmount: safeNum(item.quotationAmount),
+          currencyName: safeStr(
+            item.currency?.currencyName || item.currency,
+          ),
+          date: item.deliveryDate || "",
+        };
+      });
 
       const taxDetails = (raw.quotationItemTaxDetailsDTO || []).map((tax) => ({
-        particulars: tax.particulars || "",
-        amount: tax.amount || 0,
+        particulars: tax.particulars,
+        amount: safeNum(tax.amount),
       }));
 
+      const attachments = (raw.quotationIemFileUploadDetailsDTO || []).map(
+        (a) => ({
+          fileName: a.fileName,
+          filePath: a.filePath,
+          name: a.name,
+        }),
+      );
+
       const result = generateQuotationPDF({
-        company: { name: row.branchName || "Company Name" },
+        company: { name: raw.branch?.branchName || "Company Name" },
         quotation: {
-          plantId: row.branchName || "",
-          quotationNo: row.quotationNo || "",
-          serialNo: row.quotationSerialNo || "",
-          date: row.date || "",
-          withEnquiry: row.withEnquiry || "",
-          enquiryNo: row.enquiryNo || "",
-          enquiryDate: row.enquiryDate || "",
-          validTill: row.validTill || "",
-          kindAttention: raw.kindAttention || "",
-          customerEnquiryNo: row.customerEnquiryNo || "",
-          customerEnquiryDate: row.customerEnquiryDate || "",
-          partyName: row.partyName || "",
-          branchName: row.branchName || "",
-          preparedBy: row.preparedBy || "",
-          amount: row.amount || 0,
-          freight: row.freight || 0,
-          freightBy: raw.freightBy || "",
-          totalAmount: row.totalAmount || 0,
-          terms: raw.terms || "",
-          remarks: raw.remarks || "",
+          quotationNo: safeStr(raw.docId || row.quotationNo),
+          serialNo: safeStr(raw.quotationSerialNo),
+          date: raw.date || raw.docDate || "",
+          withEnquiry: safeStr(raw.withEnquiry),
+          enquiryNo: safeStr(raw.enquiryNo),
+          enquiryDate: raw.enquiryDate || "",
+          validTill: raw.validTill || "",
+          kindAttention: safeStr(raw.kindAttention),
+          customerEnquiryNo: safeStr(raw.customerEnquiryNo),
+          customerEnquiryDate: raw.customerEnquiryDate || "",
+          partyName: safeStr(raw.customer?.customerName || row.partyName),
+          branchName: safeStr(raw.branch?.branchName || row.branchName),
+          preparedBy: safeStr(raw.preparedBy),
+          amount: safeNum(raw.amount),
+          freight: safeNum(raw.freight),
+          freightBy: safeStr(raw.freightBy),
+          totalAmount: safeNum(raw.totalAmount),
+          terms: safeStr(raw.terms),
+          remarks: safeStr(raw.remarks),
+          attachments,
         },
         items,
         taxDetails,
       });
 
-      if (result && result.blobUrl) {
+      if (result?.blobUrl) {
         setPdfPreview(result);
       } else {
         addToast("Failed to generate PDF preview", "error");
@@ -257,29 +291,29 @@ const QuotationList = ({ onAddNew, onEdit, onBack }) => {
 
   return (
     <>
-    <CommonListViewTable
-      title="Quotation List"
-      data={itemData}
-      loading={loading}
-      columns={columns}
-      searchFields={searchFields}
-      filterOptions={filterOptions}
-      defaultFilter="all"
-      onBack={onBack}
-      onAddNew={onAddNew}
-      onEdit={handleEdit}
-      onDownload={handleDownloadPDF}
-      onView={false}
-      showSerialNumber={true}
-      itemsPerPageOptions={[5, 10, 20, 50, 100]}
-      defaultItemsPerPage={10}
-      emptyMessage="No quotations found"
-      loadingMessage="Loading quotations..."
-      enableRefresh={true}
-      onRefresh={loadItems}
-      enableExport={true}
-      exportFileName="Quotations"
-    />
+      <CommonListViewTable
+        title="Quotation List"
+        data={itemData}
+        loading={loading}
+        columns={columns}
+        searchFields={searchFields}
+        filterOptions={filterOptions}
+        defaultFilter="all"
+        onBack={onBack}
+        onAddNew={onAddNew}
+        onEdit={handleEdit}
+        onDownload={handleDownloadPDF}
+        onView={false}
+        showSerialNumber={true}
+        itemsPerPageOptions={[5, 10, 20, 50, 100]}
+        defaultItemsPerPage={10}
+        emptyMessage="No quotations found"
+        loadingMessage="Loading quotations..."
+        enableRefresh={true}
+        onRefresh={loadItems}
+        enableExport={true}
+        exportFileName="Quotations"
+      />
 
       {pdfPreview && (
         <PDFPreviewModal

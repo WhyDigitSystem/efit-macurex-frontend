@@ -2,10 +2,25 @@ import { useCallback, useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import despatchInstructionAPI from "../../../api/Sales/despatchInstructionAPI";
 import { toast } from "../../../utils/toast";
+import generateDispatchInstructionPDF from "./DispatchInstructionPDF";
+import PDFPreviewModal from "../../../utils/PDFPreviewModal";
+
+const safeStr = (v) => {
+  if (v === undefined || v === null) return "";
+  const s = String(v).trim();
+  return s.length === 0 ? "" : s;
+};
+
+const safeNum = (v) => {
+  if (v === undefined || v === null || v === "") return 0;
+  const n = Number(v);
+  return isNaN(n) ? 0 : n;
+};
 
 const DispatchList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [pdfPreview, setPdfPreview] = useState(null);
 
   const ORG_ID = localStorage.getItem("orgId");
   const BRANCH_ID = localStorage.getItem("branchId");
@@ -17,8 +32,9 @@ const DispatchList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
         ORG_ID,
         BRANCH_ID,
       );
-      data.sort((a, b) => (b.id || 0) - (a.id || 0));
-      setRecords(data);
+      const list = Array.isArray(data) ? data : [];
+      list.sort((a, b) => (b.id || 0) - (a.id || 0));
+      setRecords(list);
     } catch (error) {
       console.error("Failed to load despatch instructions:", error);
       setRecords([]);
@@ -32,16 +48,11 @@ const DispatchList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     loadRecords();
   }, [loadRecords, refreshTrigger]);
 
-  // Handle Edit - fetch the full record by ID
   const handleEdit = async (row) => {
     try {
-      // Show loading toast
       toast.info("Loading record details...");
-
       const record = await despatchInstructionAPI.getDispatchById(row.id);
-
       if (record) {
-        // Pass the full record to the parent for editing
         onEdit(record);
       } else {
         toast.error("Failed to fetch record details");
@@ -49,6 +60,64 @@ const DispatchList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     } catch (error) {
       console.error("Error fetching record for edit:", error);
       toast.error("Failed to fetch record details");
+    }
+  };
+
+  /* =========================================================
+     PDF DOWNLOAD
+     ========================================================= */
+  const handleDownloadPDF = async (row) => {
+    try {
+      // Fetch the full record so we always have details + all fields
+      let raw = row;
+      try {
+        const full = await despatchInstructionAPI.getDispatchById(row.id);
+        if (full) raw = full;
+      } catch {
+        // fall through with row-level data
+      }
+
+      const details = Array.isArray(raw.despatchInstDetailsResponseDTO)
+        ? raw.despatchInstDetailsResponseDTO
+        : [];
+
+      const result = generateDispatchInstructionPDF({
+        company: {
+          name: raw.branch?.branchName || "Company Name",
+        },
+        dispatch: {
+          id: raw.id,
+          docId: safeStr(raw.docId),
+          docDate: raw.docDate || "",
+          scheduleNo: safeStr(raw.schduleNo || raw.scheduleNo),
+          scheduleDate: raw.schduleDate || raw.schDate || "",
+          invoiceType: safeStr(raw.invoiceType),
+          paymentTerms: safeStr(raw.paymentTerms),
+          customerName: safeStr(raw.customer?.customerName),
+          branchName: safeStr(raw.branch?.branchName),
+          locationName: safeStr(raw.location?.locationName),
+          modeOfTransport: safeStr(raw.modeOfTransport),
+          consignee: safeStr(raw.consignee),
+          active:
+            raw.active === "Active" || raw.active === true
+              ? "Active"
+              : "Inactive",
+          netWeight: safeNum(raw.netWeight),
+          grossWeight: safeNum(raw.grossWeight),
+          deliveryInstructions: safeStr(raw.deliveryInstructions),
+          createdBy: safeStr(raw.createdBy),
+        },
+        dispatchDetails: details,
+      });
+
+      if (result?.blobUrl) {
+        setPdfPreview(result);
+      } else {
+        toast.error("Failed to generate PDF preview");
+      }
+    } catch (error) {
+      console.error("PDF generation failed:", error);
+      toast.error("Failed to generate PDF: " + error.message);
     }
   };
 
@@ -205,28 +274,43 @@ const DispatchList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   ];
 
   return (
-    <CommonListViewTable
-      title="Dispatch Instruction List"
-      data={records}
-      loading={loading}
-      columns={columns}
-      searchFields={searchFields}
-      filterOptions={filterOptions}
-      defaultFilter="all"
-      onBack={onBack}
-      onAddNew={onAddNew}
-      onEdit={handleEdit}
-      onView={false}
-      showSerialNumber={true}
-      itemsPerPageOptions={[5, 10, 20, 50, 100]}
-      defaultItemsPerPage={10}
-      emptyMessage="No Dispatch Instructions found"
-      loadingMessage="Loading Dispatch Instructions..."
-      enableRefresh={true}
-      onRefresh={loadRecords}
-      enableExport={true}
-      exportFileName="DispatchInstructions"
-    />
+    <>
+      <CommonListViewTable
+        title="Dispatch Instruction List"
+        data={records}
+        loading={loading}
+        columns={columns}
+        searchFields={searchFields}
+        filterOptions={filterOptions}
+        defaultFilter="all"
+        onBack={onBack}
+        onAddNew={onAddNew}
+        onEdit={handleEdit}
+        onDownload={handleDownloadPDF}
+        onView={false}
+        showSerialNumber={true}
+        itemsPerPageOptions={[5, 10, 20, 50, 100]}
+        defaultItemsPerPage={10}
+        emptyMessage="No Dispatch Instructions found"
+        loadingMessage="Loading Dispatch Instructions..."
+        enableRefresh={true}
+        onRefresh={loadRecords}
+        enableExport={true}
+        exportFileName="DispatchInstructions"
+      />
+
+      {pdfPreview && (
+        <PDFPreviewModal
+          blobUrl={pdfPreview.blobUrl}
+          fileName={pdfPreview.fileName}
+          onClose={() => {
+            if (pdfPreview.blobUrl)
+              URL.revokeObjectURL(pdfPreview.blobUrl);
+            setPdfPreview(null);
+          }}
+        />
+      )}
+    </>
   );
 };
 

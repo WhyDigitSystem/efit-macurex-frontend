@@ -1,10 +1,25 @@
 import React, { useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import salesContractAPI from "../../../api/Sales/salesContract";
+import generateSalesContractPDF from "./SalesContractPDF";
+import PDFPreviewModal from "../../../utils/PDFPreviewModal";
+
+const safeStr = (v) => {
+  if (v === undefined || v === null) return "";
+  const s = String(v).trim();
+  return s.length === 0 ? "" : s;
+};
+
+const safeNum = (v) => {
+  if (v === undefined || v === null || v === "") return 0;
+  const n = Number(v);
+  return isNaN(n) ? 0 : n;
+};
 
 const SalesContractList = ({ onAddNew, onEdit, onBack }) => {
   const [itemData, setItemData] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [pdfPreview, setPdfPreview] = useState(null);
   const [orgId] = useState(localStorage.getItem("orgId"));
   const [branchId] = useState(localStorage.getItem("branchId"));
 
@@ -18,17 +33,18 @@ const SalesContractList = ({ onAddNew, onEdit, onBack }) => {
 
     setLoading(true);
     try {
-      const response = await salesContractAPI.getSalesContracts(orgId, branchId);
-      console.log("Sales Contract List Response:", response);
+      const response = await salesContractAPI.getSalesContracts(
+        orgId,
+        branchId,
+      );
 
       if (response?.status && response?.paramObjectsMap?.salesContract) {
         const salesContracts = response.paramObjectsMap.salesContract;
 
-        // Transform the data for display
-        const transformedData = salesContracts.map(item => ({
+        const transformedData = salesContracts.map((item) => ({
           id: item.id,
           contractNo: item.docId || "-",
-          contractDate: item.docDate || "-",
+          contractDate: item.contractDate || item.docDate || "-",
           branchName: item.branch?.branchName || "-",
           belongsTo: item.belongsTo || "-",
           contractType: item.contractType || "-",
@@ -50,11 +66,9 @@ const SalesContractList = ({ onAddNew, onEdit, onBack }) => {
           notes: item.notes || "-",
           status: item.active ? "Active" : "Inactive",
           active: item.active,
-          // Store the full object for editing
           _raw: item,
         }));
 
-        // Sort by id descending (newest first)
         transformedData.sort((a, b) => b.id - a.id);
         setItemData(transformedData);
       } else {
@@ -73,9 +87,79 @@ const SalesContractList = ({ onAddNew, onEdit, onBack }) => {
   }, [orgId, branchId]);
 
   const handleEdit = (item) => {
-    console.log("Edit item:", item);
-    // Pass the raw data for editing
     onEdit(item._raw || item);
+  };
+
+  /* =========================================================
+     PDF DOWNLOAD
+     ========================================================= */
+  const handleDownloadPDF = async (row) => {
+    try {
+      const raw = row._raw || row;
+
+      const result = generateSalesContractPDF({
+        contract: {
+          id: raw.id,
+          contractNo: safeStr(raw.docId),
+          contractDate: raw.contractDate || raw.docDate || "",
+          branchName: safeStr(raw.branch?.branchName),
+          belongsTo: safeStr(raw.belongsTo),
+          contractType: safeStr(raw.contractType),
+          withQuotation: safeStr(raw.withQuotation),
+          invoiceType: safeStr(raw.invoiceType),
+
+          customerName: safeStr(raw.customer?.customerName),
+          gstnNo: safeStr(
+            raw.customer?.gstnNo || raw.customer?.customerGstNo,
+          ),
+
+          quotationNo: safeStr(raw.quotationNo),
+          quotationDate: raw.quotationDate || "",
+          customerPoNo: safeStr(raw.customerPoNo),
+          customerPoDate: raw.customerPoDate || "",
+          effectiveFrom: raw.effectiveFrom || "",
+          effectiveTo: raw.effectiveTo || "",
+          postRate: safeStr(raw.postRate),
+          isIgstApplicable:
+            raw.customer?.igstApplicable === true ? "Yes" : "No",
+          financialYear: safeStr(raw.financialYear),
+          createdBy: safeStr(raw.createdBy),
+          updatedBy: safeStr(raw.updatedBy),
+          active: raw.active !== false,
+
+          totalAmount: safeNum(raw.totalAmount),
+          amountInWords: safeStr(raw.amountInWords),
+          paymentTerms: safeStr(raw.paymentTerms),
+          priceTerms: safeStr(raw.priceTerms),
+          terms: safeStr(raw.terms),
+          notes: safeStr(raw.notes),
+
+          details: Array.isArray(raw.details) ? raw.details : [],
+
+          taxDetails: Array.isArray(raw.salesContractTaxDetailsDTO)
+            ? raw.salesContractTaxDetailsDTO.map((t) => ({
+              particulars: t.particulars,
+              amount: safeNum(t.amount),
+            }))
+            : Array.isArray(raw.taxDetails)
+              ? raw.taxDetails
+              : [],
+
+          attachments: Array.isArray(raw.attachments)
+            ? raw.attachments
+            : [],
+        },
+      });
+
+      if (result?.blobUrl) {
+        setPdfPreview(result);
+      } else {
+        alert("Failed to generate PDF preview");
+      }
+    } catch (error) {
+      console.error("PDF generation failed:", error);
+      alert("Failed to generate PDF: " + error.message);
+    }
   };
 
   const columns = [
@@ -159,9 +243,9 @@ const SalesContractList = ({ onAddNew, onEdit, onBack }) => {
       type: "currency",
       format: (value) => {
         if (!value) return "-";
-        return new Intl.NumberFormat('en-IN', {
-          style: 'currency',
-          currency: 'INR',
+        return new Intl.NumberFormat("en-IN", {
+          style: "currency",
+          currency: "INR",
           minimumFractionDigits: 0,
           maximumFractionDigits: 0,
         }).format(value);
@@ -234,28 +318,43 @@ const SalesContractList = ({ onAddNew, onEdit, onBack }) => {
   ];
 
   return (
-    <CommonListViewTable
-      title="Sales Contract List"
-      data={itemData}
-      loading={loading}
-      columns={columns}
-      searchFields={searchFields}
-      filterOptions={filterOptions}
-      defaultFilter="all"
-      onBack={onBack}
-      onAddNew={onAddNew}
-      onEdit={handleEdit}
-      onView={false}
-      showSerialNumber={true}
-      itemsPerPageOptions={[5, 10, 20, 50, 100]}
-      defaultItemsPerPage={10}
-      emptyMessage="No Sales Contracts found"
-      loadingMessage="Loading Sales Contracts..."
-      enableRefresh={true}
-      onRefresh={loadItems}
-      enableExport={true}
-      exportFileName="SalesContracts"
-    />
+    <>
+      <CommonListViewTable
+        title="Sales Contract List"
+        data={itemData}
+        loading={loading}
+        columns={columns}
+        searchFields={searchFields}
+        filterOptions={filterOptions}
+        defaultFilter="all"
+        onBack={onBack}
+        onAddNew={onAddNew}
+        onEdit={handleEdit}
+        onDownload={handleDownloadPDF}
+        onView={false}
+        showSerialNumber={true}
+        itemsPerPageOptions={[5, 10, 20, 50, 100]}
+        defaultItemsPerPage={10}
+        emptyMessage="No Sales Contracts found"
+        loadingMessage="Loading Sales Contracts..."
+        enableRefresh={true}
+        onRefresh={loadItems}
+        enableExport={true}
+        exportFileName="SalesContracts"
+      />
+
+      {pdfPreview && (
+        <PDFPreviewModal
+          blobUrl={pdfPreview.blobUrl}
+          fileName={pdfPreview.fileName}
+          onClose={() => {
+            if (pdfPreview.blobUrl)
+              URL.revokeObjectURL(pdfPreview.blobUrl);
+            setPdfPreview(null);
+          }}
+        />
+      )}
+    </>
   );
 };
 

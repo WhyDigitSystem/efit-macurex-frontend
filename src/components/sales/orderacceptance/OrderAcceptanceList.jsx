@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import orderAcceptanceAPI from "../../../api/Sales/orderAcceptanceAPI";
+import generateOrderAcceptancePDF from "./orderAcceptancePDF";
 
 const OrderAcceptanceList = ({ onAddNew, onEdit, onBack }) => {
   const [itemData, setItemData] = useState([]);
@@ -18,16 +19,25 @@ const OrderAcceptanceList = ({ onAddNew, onEdit, onBack }) => {
         return;
       }
 
-      const response = await orderAcceptanceAPI.getOrderAcceptances(orgId, branchId);
+      const response = await orderAcceptanceAPI.getOrderAcceptances(
+        orgId,
+        branchId,
+      );
       console.log("Order Acceptance List Response:", response);
 
-      if (response?.status && response?.paramObjectsMap?.orderAcceptanceResponseVO) {
+      if (
+        response?.status &&
+        response?.paramObjectsMap?.orderAcceptanceResponseVO
+      ) {
         const data = response.paramObjectsMap.orderAcceptanceResponseVO;
 
         // Transform the data for the table
         const transformedData = data.map((item) => ({
           id: item.id,
-          orderNo: item.orderNo || item.docId || `OA/${new Date().getFullYear()}/${String(item.id).padStart(6, "0")}`,
+          orderNo:
+            item.orderNo ||
+            item.docId ||
+            `OA/${new Date().getFullYear()}/${String(item.id).padStart(6, "0")}`,
           docDate: item.docDate || item.orderDate || "",
           belongsTo: item.belongsTo || "",
           soType: item.soType || "",
@@ -52,7 +62,7 @@ const OrderAcceptanceList = ({ onAddNew, onEdit, onBack }) => {
           branchCode: item.branch?.branchCode || "",
           destination: item.destination || "",
           modeOfTransport: item.modeOfTransport || "",
-          grossValue: item.grossalue || 0,
+          grossValue: item.grossalue || item.grossValue || 0,
           freight: item.freight || "",
           deliveryTerms: item.deliveryTerms || "",
           paymentTerms: item.paymentTerms || "",
@@ -83,8 +93,40 @@ const OrderAcceptanceList = ({ onAddNew, onEdit, onBack }) => {
   }, []);
 
   const handleEdit = (item) => {
-    // Pass the full item data for editing
     onEdit(item);
+  };
+
+  /**
+   * PDF download handler — supports both:
+   *  - Row-level download (onDownload receives the row)
+   *  - Table-level export (receives array of rows or nothing → export all)
+   */
+  const handleDownloadPDF = (payload) => {
+    try {
+      // Row-level: a single object with an `id`
+      if (payload && !Array.isArray(payload) && payload.id != null) {
+        generateOrderAcceptancePDF(payload);
+        return;
+      }
+
+      // Array of rows: generate one PDF per row
+      if (Array.isArray(payload) && payload.length > 0) {
+        payload.forEach((row, i) => {
+          // small stagger to avoid browser blocking multiple downloads
+          setTimeout(() => generateOrderAcceptancePDF(row), i * 250);
+        });
+        return;
+      }
+
+      // No payload → export all currently loaded rows
+      if (itemData.length > 0) {
+        itemData.forEach((row, i) => {
+          setTimeout(() => generateOrderAcceptancePDF(row), i * 250);
+        });
+      }
+    } catch (err) {
+      console.error("Failed to generate PDF:", err);
+    }
   };
 
   const columns = [
@@ -222,6 +264,7 @@ const OrderAcceptanceList = ({ onAddNew, onEdit, onBack }) => {
       onBack={onBack}
       onAddNew={onAddNew}
       onEdit={handleEdit}
+      onDownload={handleDownloadPDF}
       onView={false}
       showSerialNumber={true}
       itemsPerPageOptions={[5, 10, 20, 50, 100]}

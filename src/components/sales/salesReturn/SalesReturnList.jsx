@@ -2,8 +2,20 @@ import { useCallback, useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import salesReturnAPI from "../../../api/Sales/salesReturnAPI";
 import { useToast } from "../../Toast/ToastContext";
-import generateSalesReturnPDF from "../../../utils/generateSalesReturnPDF";
+import generateSalesReturnPDF from "./SalesReturnPDF";
 import PDFPreviewModal from "../../../utils/PDFPreviewModal";
+
+const safeStr = (v) => {
+  if (v === undefined || v === null) return "";
+  const s = String(v).trim();
+  return s.length === 0 ? "" : s;
+};
+
+const safeNum = (v) => {
+  if (v === undefined || v === null || v === "") return 0;
+  const n = Number(v);
+  return isNaN(n) ? 0 : n;
+};
 
 const SalesReturnList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   const [itemData, setItemData] = useState([]);
@@ -17,7 +29,10 @@ const SalesReturnList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
   const loadItems = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await salesReturnAPI.getSalesReturnByOrgId(ORG_ID, BRANCH_ID);
+      const response = await salesReturnAPI.getSalesReturnByOrgId(
+        ORG_ID,
+        BRANCH_ID,
+      );
 
       const list =
         response?.paramObjectsMap?.salesReturn ||
@@ -27,19 +42,23 @@ const SalesReturnList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
 
       const transformed = Array.isArray(list)
         ? list.map((item) => ({
-            id: item.id,
-            docNo: item.docNo || item.salesReturnNo || item.docId || "",
-            date: item.date || item.salesReturnDate || item.docDate || "",
-            customerName: item.customerName || item.customer?.customerName || "",
-            customerCode: item.customerCode || item.customer?.customerCode || "",
-            plantName: item.branchName || item.branch?.branchName || "",
-            returnType: item.returnType || "",
-            invoiceNo: item.invoiceNo || "",
-            currency: item.currency?.currencyName || item.currency || "INR",
-            netAmount: item.netAmount || item.totalAmount || 0,
-            active: item.active,
-            _raw: item,
-          }))
+          id: item.id,
+          docNo: item.docId || item.docNo || item.salesReturnNo || "",
+          date: item.date || item.docDate || item.salesReturnDate || "",
+          customerName:
+            item.customer?.customerName || item.customerName || "",
+          customerCode:
+            item.customer?.customerCode || item.customerCode || "",
+          plantName:
+            item.branch?.branchName || item.branchName || "",
+          returnType: item.returnType || "",
+          invoiceNo: item.invoiceNo || "",
+          currency:
+            item.currency?.currencyName || item.currency || "INR",
+          netAmount: safeNum(item.netAmount ?? item.totalAmount),
+          active: item.active,
+          _raw: item,
+        }))
         : [];
 
       transformed.sort((a, b) => (b.id || 0) - (a.id || 0));
@@ -60,46 +79,116 @@ const SalesReturnList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     try {
       const raw = row._raw || {};
 
-      const items = (raw.salesReturnItemDetailsDTO || []).map((item) => ({
-        itemCode: item.item?.itemCode || item.itemCode || "",
-        itemDescription: item.item?.itemDescription || item.itemDescription || "",
-        hsCode: item.hsnCode || item.hsCode || "",
-        taxType: item.taxType || "",
-        taxPercentage: item.taxPercentage || "",
-        unit: item.unit || "",
-        stock: item.stock || 0,
-        qtySold: item.qtySold || 0,
-        receivedQty: item.receivedQty || item.qty || 0,
-        rate: item.rate || 0,
-        rateInCurrency: item.rateInCurrency || 0,
-        amountInCurrency: item.amountInCurrency || 0,
-        amount: item.amount || 0,
-      }));
+      // ✅ Correct key: salesReturnDetails (not salesReturnItemDetailsDTO)
+      const srcItems =
+        raw.salesReturnDetails ||
+        raw.salesReturnItemDetailsDTO ||
+        raw.items ||
+        [];
 
-      const taxDetails = (raw.salesReturnTaxDetailsDTO || []).map((tax) => ({
-        sgstRate: tax.sgstRate || 0,
-        sgstAmount: tax.sgstAmount || 0,
-        cgstRate: tax.cgstRate || 0,
-        cgstAmount: tax.cgstAmount || 0,
-        igstRate: tax.igstRate || 0,
-        igstAmount: tax.igstAmount || 0,
+      const items = srcItems.map((item) => {
+        const itemMaster = item.item || {};
+
+        // Unit: prefer row-level unit, fall back to item-master unit
+        const unitObj =
+          (item.unit && typeof item.unit === "object" ? item.unit : null) ||
+          (itemMaster.unit && typeof itemMaster.unit === "object"
+            ? itemMaster.unit
+            : null);
+        const unitLabel = unitObj
+          ? safeStr(
+            unitObj.unitId || unitObj.unitDescription || unitObj.id,
+          )
+          : typeof item.unit === "string"
+            ? safeStr(item.unit)
+            : safeStr(item.unitId);
+
+        // Tax %: can be a string "12", a number, or an object
+        let taxPct = 0;
+        if (
+          item.taxPercentage &&
+          typeof item.taxPercentage === "object"
+        ) {
+          taxPct = safeNum(item.taxPercentage.taxPercentage);
+        } else {
+          taxPct = safeNum(item.taxPercentage);
+        }
+
+        return {
+          itemCode: safeStr(itemMaster.itemCode || item.itemCode),
+          itemDescription: safeStr(
+            itemMaster.itemDescription || item.itemDescription,
+          ),
+          hsCode: safeStr(
+            item.hsnSacCode || item.hsnCode || item.hsCode,
+          ),
+          taxType: safeStr(item.taxType),
+          taxPercentage: taxPct,
+          unit: unitLabel,
+          stock: safeNum(item.stock),
+          qtySold: safeNum(item.qtySold),
+          receivedQty: safeNum(item.receivedQty || item.qty),
+          rate: safeNum(item.rate),
+          rateInCurrency: safeNum(
+            item.rateInSelectedCurrency || item.rateInCurrency,
+          ),
+          amountInCurrency: safeNum(
+            item.amountInSelectedCurrency || item.amountInCurrency,
+          ),
+          amount: safeNum(item.amount),
+          sgstRate: safeNum(item.sgstRate),
+          sgstAmount: safeNum(item.sgstAmount),
+          cgstRate: safeNum(item.cgstRate),
+          cgstAmount: safeNum(item.cgstAmount),
+          igstRate: safeNum(item.igstRate),
+          igstAmount: safeNum(item.igstAmount),
+        };
+      });
+
+      // ✅ Correct key: salesReturnTaxDetails (not salesReturnTaxDetailsDTO)
+      const srcTax =
+        raw.salesReturnTaxDetails ||
+        raw.salesReturnTaxDetailsDTO ||
+        raw.taxDetails ||
+        [];
+
+      const taxDetails = srcTax.map((tax) => ({
+        particulars: safeStr(tax.particulars),
+        amount: safeNum(tax.amount),
+        glAccountName: safeStr(tax.glAccountName),
+        sgstRate: safeNum(tax.sgstRate),
+        sgstAmount: safeNum(tax.sgstAmount),
+        cgstRate: safeNum(tax.cgstRate),
+        cgstAmount: safeNum(tax.cgstAmount),
+        igstRate: safeNum(tax.igstRate),
+        igstAmount: safeNum(tax.igstAmount),
       }));
 
       const result = generateSalesReturnPDF({
-        company: { name: row.plantName || "Company Name" },
+        company: {
+          name:
+            raw.branch?.branchName || row.plantName || "Company Name",
+        },
         salesReturn: {
-          docNo: row.docNo || "",
-          date: row.date || "",
-          customerName: row.customerName || "",
-          customerCode: row.customerCode || "",
-          plantName: row.plantName || "",
-          returnType: row.returnType || "",
-          invoiceNo: row.invoiceNo || "",
-          currency: row.currency || "INR",
-          netAmount: row.netAmount || 0,
+          docNo: raw.docId || row.docNo || "",
+          date: raw.date || raw.docDate || row.date || "",
+          customerName:
+            raw.customer?.customerName || row.customerName || "",
+          customerCode:
+            raw.customer?.customerCode || row.customerCode || "",
+          plantName: raw.branch?.branchName || row.plantName || "",
+          returnType: raw.returnType || row.returnType || "",
+          invoiceNo: raw.invoiceNo || row.invoiceNo || "",
+          currency:
+            raw.currency?.currencyName || row.currency || "INR",
+          netAmount: safeNum(raw.netAmount ?? row.netAmount),
           belongsTo: raw.belongsTo || "",
-          partyGSTState: raw.partyGSTState || "",
-          isIGSTApplicable: raw.isIgstApplicable || raw.isIGSTApplicable || "No",
+          partyGSTState: raw.customer?.gstState || "",
+          isIGSTApplicable:
+            raw.igstApplicable === true ||
+              raw.customer?.igstApplicable === true
+              ? "Yes"
+              : "No",
           amountInWords: raw.amountInWords || "",
           narration: raw.narration || "",
         },
@@ -176,8 +265,16 @@ const SalesReturnList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
       accessor: "active",
       type: "status",
       statusVariants: {
-        Active: { label: "Active", className: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300" },
-        Inactive: { label: "Inactive", className: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300" },
+        Active: {
+          label: "Active",
+          className:
+            "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+        },
+        Inactive: {
+          label: "Inactive",
+          className:
+            "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+        },
       },
     },
     {
@@ -189,12 +286,31 @@ const SalesReturnList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
     },
   ];
 
-  const searchFields = ["docNo", "customerName", "customerCode", "plantName", "invoiceNo", "returnType"];
+  const searchFields = [
+    "docNo",
+    "customerName",
+    "customerCode",
+    "plantName",
+    "invoiceNo",
+    "returnType",
+  ];
 
   const filterOptions = [
     { value: "all", label: "All", field: null },
-    { value: "active", label: "Active", field: "active", filterValue: "active", activeValue: "Active" },
-    { value: "inactive", label: "Inactive", field: "active", filterValue: "inactive", activeValue: "Active" },
+    {
+      value: "active",
+      label: "Active",
+      field: "active",
+      filterValue: "active",
+      activeValue: "Active",
+    },
+    {
+      value: "inactive",
+      label: "Inactive",
+      field: "active",
+      filterValue: "inactive",
+      activeValue: "Active",
+    },
   ];
 
   return (
@@ -228,7 +344,8 @@ const SalesReturnList = ({ onAddNew, onEdit, onBack, refreshTrigger }) => {
           blobUrl={pdfPreview.blobUrl}
           fileName={pdfPreview.fileName}
           onClose={() => {
-            if (pdfPreview.blobUrl) URL.revokeObjectURL(pdfPreview.blobUrl);
+            if (pdfPreview.blobUrl)
+              URL.revokeObjectURL(pdfPreview.blobUrl);
             setPdfPreview(null);
           }}
         />

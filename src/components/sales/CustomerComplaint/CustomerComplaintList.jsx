@@ -2,6 +2,20 @@ import { useCallback, useEffect, useState } from "react";
 import CommonListViewTable from "../../../utils/CommonListViewTable";
 import { customerComplaintAPI } from "../../../api/Sales/customerComplaintAPI";
 import { toast } from "../../../utils/toast";
+import generateCustomerComplaintPDF from "./CustomerComplaintPDF";
+import PDFPreviewModal from "../../../utils/PDFPreviewModal";
+
+const safeStr = (v) => {
+  if (v === undefined || v === null) return "";
+  const s = String(v).trim();
+  return s.length === 0 ? "" : s;
+};
+
+const safeNum = (v) => {
+  if (v === undefined || v === null || v === "") return 0;
+  const n = Number(v);
+  return isNaN(n) ? 0 : n;
+};
 
 const CustomerComplaintList = ({
   onAddNew,
@@ -11,6 +25,7 @@ const CustomerComplaintList = ({
 }) => {
   const [complaintData, setComplaintData] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [pdfPreview, setPdfPreview] = useState(null);
 
   const ORG_ID = localStorage.getItem("orgId");
   const BRANCH_ID = localStorage.getItem("branchId");
@@ -24,9 +39,12 @@ const CustomerComplaintList = ({
         BRANCH_ID,
       );
 
-      complaints.sort((a, b) => (b.id || 0) - (a.id || 0));
+      const list = Array.isArray(complaints) ? complaints : [];
+      list.sort((a, b) => (b.id || 0) - (a.id || 0));
 
-      setComplaintData(complaints);
+      // Wrap raw for the PDF handler
+      const wrapped = list.map((c) => ({ ...c, _raw: c }));
+      setComplaintData(wrapped);
     } catch (error) {
       console.error("Failed to load customer complaints:", error);
       setComplaintData([]);
@@ -39,6 +57,51 @@ const CustomerComplaintList = ({
   useEffect(() => {
     loadComplaints();
   }, [loadComplaints, refreshTrigger]);
+
+  const handleDownloadPDF = async (row) => {
+    try {
+      const raw = row._raw || row;
+
+      const result = generateCustomerComplaintPDF({
+        company: {
+          name: raw.branch?.branchName || "Company Name",
+        },
+        complaint: {
+          id: raw.id,
+          complaintNo: safeStr(raw.complaintNo),
+          complaintDate: raw.complaintDate || raw.docDate || "",
+          complaintType: safeStr(raw.complaintType),
+          customerRefNo: safeStr(raw.customerRefNo),
+          customerName: safeStr(raw.customer?.customerName),
+          buyerName: safeStr(raw.buyerName),
+          branchName: safeStr(raw.branch?.branchName),
+          departmentName: safeStr(
+            raw.department?.departmentName ||
+            raw.department?.departmentCode,
+          ),
+          userCategory: safeStr(raw.userCategory),
+          itemCode: safeStr(raw.item?.itemCode),
+          itemDescription: safeStr(raw.item?.itemDescription),
+          qtyNo: safeNum(raw.qtyNo),
+          preparedBy: safeStr(raw.preparedBy),
+          financialYear: safeStr(raw.financialYear),
+          active: raw.active !== false,
+          detailsOfComplaint: safeStr(raw.detailsOfComplaint),
+          remarks: safeStr(raw.remarks),
+          image: safeStr(raw.image),
+        },
+      });
+
+      if (result?.blobUrl) {
+        setPdfPreview(result);
+      } else {
+        toast.error("Failed to generate PDF preview");
+      }
+    } catch (error) {
+      console.error("PDF generation failed:", error);
+      toast.error("Failed to generate PDF: " + error.message);
+    }
+  };
 
   const columns = [
     {
@@ -156,28 +219,43 @@ const CustomerComplaintList = ({
   ];
 
   return (
-    <CommonListViewTable
-      title="Customer Complaint Entry"
-      data={complaintData}
-      loading={loading}
-      columns={columns}
-      searchFields={searchFields}
-      filterOptions={filterOptions}
-      defaultFilter="all"
-      onBack={onBack}
-      onAddNew={onAddNew}
-      onEdit={onEdit}
-      onView={false}
-      showSerialNumber={true}
-      itemsPerPageOptions={[5, 10, 20, 50, 100]}
-      defaultItemsPerPage={10}
-      emptyMessage="No Customer Complaints found"
-      loadingMessage="Loading Customer Complaints..."
-      enableRefresh={true}
-      onRefresh={loadComplaints}
-      enableExport={true}
-      exportFileName="CustomerComplaints"
-    />
+    <>
+      <CommonListViewTable
+        title="Customer Complaint Entry"
+        data={complaintData}
+        loading={loading}
+        columns={columns}
+        searchFields={searchFields}
+        filterOptions={filterOptions}
+        defaultFilter="all"
+        onBack={onBack}
+        onAddNew={onAddNew}
+        onEdit={onEdit}
+        onDownload={handleDownloadPDF}
+        onView={false}
+        showSerialNumber={true}
+        itemsPerPageOptions={[5, 10, 20, 50, 100]}
+        defaultItemsPerPage={10}
+        emptyMessage="No Customer Complaints found"
+        loadingMessage="Loading Customer Complaints..."
+        enableRefresh={true}
+        onRefresh={loadComplaints}
+        enableExport={true}
+        exportFileName="CustomerComplaints"
+      />
+
+      {pdfPreview && (
+        <PDFPreviewModal
+          blobUrl={pdfPreview.blobUrl}
+          fileName={pdfPreview.fileName}
+          onClose={() => {
+            if (pdfPreview.blobUrl)
+              URL.revokeObjectURL(pdfPreview.blobUrl);
+            setPdfPreview(null);
+          }}
+        />
+      )}
+    </>
   );
 };
 
